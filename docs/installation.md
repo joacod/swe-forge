@@ -15,6 +15,10 @@ The default mode is `link`. A link installation follows changes in this
 checkout after `git pull`. Use `--mode copy` only when a self-contained snapshot
 is more important than automatic updates.
 
+`--target` always means the exact existing directory supplied. The installer
+does not widen a nested folder to its enclosing Git root. Global installation is
+link-only; `--global --mode copy` is rejected.
+
 If no target is supplied from an interactive terminal, the installer asks for a
 repository, folder, or `global`. Non-interactive callers must use `--target` or
 `--global`.
@@ -87,8 +91,10 @@ The installer also links the requested harness bridge:
 ```
 
 The source checkout path must remain available to the user. Existing conflicting
-files stop the install before anything is written; the installer never merges or
-overwrites project instructions.
+files stop the install before canonical or adapter files are written. A
+compatible prior installation is reused idempotently, but conflicting or stale
+managed files are not overwritten. The installer never merges project
+instructions.
 
 For a reviewed snapshot instead:
 
@@ -96,7 +102,9 @@ For a reviewed snapshot instead:
 ~/tools/swe-forge/scripts/swe-forge install opencode --target . --mode copy
 ```
 
-Copied installations need to be reinstalled after the source checkout changes.
+Copied installations do not update in place. After the source checkout changes,
+review and remove the prior copied installation, then install the new snapshot.
+This explicit replacement avoids silently overwriting locally modified copies.
 
 ## Harness Bridges
 
@@ -140,13 +148,15 @@ Installation runs verification automatically. It can also be run later:
 
 ```bash
 scripts/swe-forge verify opencode --target /path/to/project
+scripts/swe-forge verify opencode --target /path/to/copied-project --mode copy
 scripts/swe-forge verify claude --global
 ```
 
 Verification checks the canonical files, current source contents, harness
 locations, adapter references, explicit invocation settings, and dangling
-links. A successful filesystem check should be followed by the harness smoke
-test:
+links. Verification is mode-specific: link mode requires links to the current
+source, while copy mode rejects symlinks and requires regular matching files.
+A successful filesystem check should be followed by the harness smoke test:
 
 ```text
 /swe-forge <small test ticket>
@@ -168,3 +178,17 @@ When updating an installation:
 
 Keep temporary run state outside the repository or under ignored
 `.swe-forge/runs/`.
+
+## Filesystem Safety
+
+The installer rejects symlinked directories beneath the selected target,
+serializes cooperating installs with a target-local lock, publishes copied
+files without replacing an existing destination leaf, and rolls back files and
+directories created by a failed run. It does not remove or restore pre-existing
+entries.
+
+These checks prevent accidental redirection and cooperating installer races.
+Portable POSIX shell cannot provide descriptor-relative no-follow operations,
+so do not install into a hierarchy concurrently controlled by an untrusted
+process. A stale `.swe-forge-install.lock` may be removed only after confirming
+that no installation is active.

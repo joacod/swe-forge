@@ -12,6 +12,7 @@ version: 1
 run_id: <unique-run-id>
 
 status: planning | running | blocked | reviewing | repairing | accepted | failed
+prior_status: <state before blocked or none>
 requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
 reason: <why this topology was selected>
@@ -20,37 +21,76 @@ fallback_used: no | <requested mode -> selected mode and reason>
 started_at: <ISO-8601 timestamp>
 updated_at: <ISO-8601 timestamp>
 current_wave: research
+ticket_ref: <immutable ticket or external artifact reference>
+acceptance_ref: <acceptance criteria reference>
+checkout:
+  path: <absolute checkout path>
+  head: <revision>
+  branch: <branch>
+  classification: writable | protected | detached | unclassifiable
+  baseline_ref: <working-tree inventory reference>
+authorization_ref: <per-action authorization record or none>
 
 tasks:
   research:
     status: pending | ready | running | blocked | done | failed | skipped
     dependencies: []
-    attempts: 1
   implementation:
     status: ready
     dependencies:
       - research
-    attempts: 0
 
 review:
   status: pending | running | pass | changes-required | skipped
   blocked_by: []
+  attempts: 0
+  retry_ceiling: 2
+  ceiling_provenance: default
+
+validation_ref: <structured validation evidence or none>
+cleanup:
+  status: pending | complete | incomplete | not-needed
+  remaining_resources: []
 
 retries:
-  research: 0
-  implementation: 0
+  research: {attempts: 0, ceiling: 1, ceiling_provenance: default}
+  implementation: {attempts: 0, ceiling: 1, ceiling_provenance: default}
 ```
 
 ## Rules
 
 - keep state temporary by default, outside the repository
 - use an ignored `.swe-forge/runs/` directory only when local state is needed
+- verify a repository-local path is ignored before writing it; do not add ignore
+  rules without explicit scope
 - update task status only from evidence or an explicit orchestrator decision
 - preserve dependency and retry information during recovery
+- treat `retries.<task>.attempts` as the single authoritative attempt counter
+- preserve checkout identity, baseline, authorization, validation, review
+  attempts, prior status, retry ceilings and provenance, and cleanup state
+  during recovery
 - never store credentials, secrets, full transcripts, or private ticket data
 - treat the final repository diff, tests, and review as authoritative over stale
   run state
+- clean external state at completion and record cleanup failures
 
 The implementation may use a more specific timestamp or task schema, but it
 must preserve the workflow version, requested and selected execution modes,
-task status, dependencies, review status, and retry visibility.
+task status, dependencies, review status, retry visibility, checkout identity,
+authorization, validation evidence, and cleanup status.
+It must also preserve the prior status needed to resume a blocked run and every
+task or review retry ceiling, including provenance for an increased ceiling.
+
+## Transitions
+
+- `planning` may become `running`, `blocked`, or `failed`
+- `running` may become `blocked`, `reviewing`, `failed`, or return to `planning`
+  after an explicit topology or contract revision
+- `reviewing` may become `repairing`, `accepted`, `blocked`, or `failed`
+- `repairing` may become `reviewing`, `blocked`, or `failed`
+- `blocked` may resume at its recorded prior state or become `failed`
+- `accepted` and `failed` are terminal
+- only a dependency in `done` satisfies a downstream task; `blocked`, `failed`,
+  and `skipped` require an explicit contract revision before dependents run
+- retries increment attempts without releasing ownership; topology changes must
+  cancel or serialize old ownership before replacement tasks become ready

@@ -19,8 +19,12 @@ FILES_TOUCHED:
 
 TESTS_RUN:
 - command: pnpm test foo
+  requirement: required
+  condition: always
   result: passed
 - command: pnpm typecheck
+  requirement: required
+  condition: always
   result: passed
 
 TEST_RESULTS:
@@ -41,14 +45,23 @@ FOLLOWUPS:
 
 ## Status Rules
 
-- `DONE`: the task acceptance criteria are met and assigned validation ran
+- `DONE`: the task acceptance criteria are met, every required check passed,
+  and every applicable conditional check passed or was explicitly resolved
 - `BLOCKED`: work cannot safely continue without context, access, or a decision
 - `FAILED`: an attempted task did not meet its acceptance criteria or validation
   exposed an unresolved failure
 
-Workers must not use `DONE` when tests were not run merely because the code
-looks correct. Mark unavailable or skipped checks explicitly. A blocked or
-failed result must include evidence and the smallest useful recovery action.
+Required checks may not be skipped, substituted, or marked unavailable under
+`DONE`. An unavailable required check produces `BLOCKED` when a decision or
+environment can resolve it and `FAILED` when the task was attempted but cannot
+meet its acceptance contract. A substitution requires an updated task contract.
+Informational checks may fail without changing task status, but their evidence
+and risk remain visible. Workers must not use `DONE` merely because the code
+looks correct. A blocked or failed result must include evidence and the smallest
+useful recovery action.
+
+For a conditional check, the result must repeat the contract condition, record
+`applies: true | false`, and include the evidence supporting that determination.
 
 ## Result Rules
 

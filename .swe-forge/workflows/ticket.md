@@ -29,6 +29,12 @@ Keep temporary run state outside the repository or under an ignored
 `.swe-forge/runs/` directory. Do not commit transcripts, generated logs,
 credentials, or ticket-specific state.
 
+Before writing repository-local state, verify the exact path is ignored, for
+example with `git check-ignore`. If it is not ignored, use a permission-restricted
+external temporary directory or stop for explicit setup; do not silently modify
+the repository's ignore rules. Clean external state at run completion and
+report any cleanup failure.
+
 ## Procedure
 
 ### 1. Ingest
@@ -124,6 +130,13 @@ Select validation proportional to risk and behavior:
 - avoid ceremonial tests for changes with no meaningful test surface
 
 Record what will be run before implementation when the task is delegated.
+Classify each check as `required`, `conditional`, or `informational`; every
+conditional check must include its observable condition. Inspect
+commands before execution for filesystem mutation, credentials, networking,
+migrations, deployment, publication, production access, or shared-environment
+effects. Normal workflow invocation authorizes local validation, not those
+external or destructive effects; obtain explicit authorization or use a safe
+isolated substitute.
 
 ### 8. Implement
 
@@ -142,6 +155,13 @@ protected branches, the locally known remote default branch, `main`, and
 classified safely. Ask the user to provide a suitable checkout or authorize
 creating one; that authorization does not grant permission to commit or
 publish.
+
+Record a pre-edit baseline with the absolute checkout path, HEAD, branch,
+remote-default evidence, and staged, unstaged, and untracked files. Compare task
+scope to that inventory. Block on overlapping pre-existing changes until the
+user resolves ownership; preserve unrelated changes and do not reset, clean,
+stash, or overwrite them. Use the baseline again during final diff inspection
+so untracked files and user changes are not misattributed to the run.
 
 Workers must run assigned validation, report files touched, and return a
 structured result. They must not claim success from code inspection alone.
@@ -166,10 +186,20 @@ analysis, packaging, or repository-specific checks.
 Report every check as passed, failed, skipped, or unavailable. Explain why a
 check was not applicable or could not run.
 
+Every required check must pass. A conditional check must pass when its condition
+applies or have a recorded evidence-backed determination that it does not apply.
+Informational
+checks never substitute for required evidence. Changing or substituting a
+delegated check requires a revised task contract.
+
 ### 11. Review
 
-Use a fresh context for independent review whenever the task is more than a
-trivial localized change or when risk warrants it. Provide the original ticket,
+Use a fresh context for independent review whenever implementation was
+delegated, the change spans components, risk is medium or higher, or security,
+data integrity, compatibility, concurrency, or external effects are relevant.
+For a trivial localized `SOLO` change, the orchestrator may perform final diff
+review in the active context and record `review: skipped` with the reason.
+Provide the original ticket,
 acceptance criteria, architecture decisions, final diff, and validation
 evidence. Do not provide the implementer's entire conversational history.
 
@@ -177,8 +207,8 @@ Review correctness, missing requirements, regressions, abstractions, scope,
 error handling, compatibility, concurrency, security, performance, tests, and
 unrelated changes. Return findings using `.swe-forge/contracts/review.md`.
 
-Low-confidence stylistic opinions should not block completion. Critical and
-high-confidence correctness findings normally require repair.
+Apply the blocking matrix in `.swe-forge/contracts/review.md`. Low-confidence
+stylistic opinions do not block completion by themselves.
 
 ### 12. Repair
 
@@ -198,10 +228,15 @@ scope creep, unresolved failures, and unreviewed generated files.
 Success requires the acceptance gate in `SWE-FORGE.md`. Do not substitute a
 worker's summary for final inspection.
 
+Map the run to `ACCEPTED` only when the gate passes, `BLOCKED` when a decision,
+authorization, access, or environment change can enable safe continuation, and
+`FAILED` when attempted work remains incorrect or recovery limits are exhausted.
+
 ### 14. Report
 
 Return only the decision-relevant result:
 
+- final status: `ACCEPTED`, `BLOCKED`, or `FAILED`
 - execution mode and reason
 - approach and important decisions
 - files changed
@@ -209,6 +244,7 @@ Return only the decision-relevant result:
 - independent review status
 - assumptions
 - remaining risks or follow-ups
+- cleanup status and remaining resources when applicable
 
 Do not include internal worker transcripts.
 

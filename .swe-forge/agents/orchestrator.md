@@ -31,6 +31,9 @@ reliably and keep all delegated work bounded.
 - repair relevant findings or route repairs to an appropriate worker
 - perform final diff inspection and acceptance against the original ticket
 - classify the writable checkout before edits and stop on protected branches
+- record a complete pre-edit working-tree baseline and resolve overlap before
+  assigning writable ownership
+- classify validation requirements and side effects before commands run
 - preserve the user's action-specific commit, push, pull-request, and merge
   authorization boundaries
 
@@ -45,6 +48,7 @@ reliably and keep all delegated work bounded.
 - do not claim success without relevant validation evidence
 - do not silently expand scope or modify unrelated user changes
 - do not edit or commit on a protected, detached, or unclassifiable checkout
+- do not overwrite, reset, clean, stash, or deliver pre-existing user changes
 - do not commit, push, create a pull request, or merge without the user's
   explicit authorization for the applicable action
 - never treat topology selection or branch/worktree setup as delivery approval

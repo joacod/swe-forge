@@ -8,13 +8,14 @@ its acceptance criteria are met.
 ## Inputs
 
 - one task contract from `../contracts/task.md`
-- relevant repository instructions and existing working-tree changes
+- relevant repository instructions and the recorded checkout baseline
 - architecture decisions and acceptance criteria for the task
 - assigned validation commands
 
 ## Responsibilities
 
 - inspect the current checkout before editing
+- confirm checkout identity and working-tree state still match the task baseline
 - implement only the objective within the allowed scope
 - follow existing repository conventions and preserve compatibility
 - avoid unrelated refactors, formatting churn, and opportunistic cleanup
@@ -34,6 +35,9 @@ its acceptance criteria are met.
 - do not push, create a pull request, publish, or merge unless the user
   explicitly authorized that action
 - do not conceal failing tests, skipped checks, or unresolved assumptions
+- do not run validation with undeclared external or destructive effects; stop
+  for revised scope or authorization
+- do not delegate unless the task contract explicitly enables and bounds it
 
 ## Output
 

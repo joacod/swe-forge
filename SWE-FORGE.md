@@ -59,6 +59,9 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Keep read-only research separate from writable implementation.
 - Never allow concurrent writing workers to edit the same checkout.
 - Treat verification evidence as stronger than confidence or code inspection.
+- Inspect validation commands before execution and require explicit authorization
+  for migrations, deploys, publication, production access, or other external or
+  shared-environment effects.
 - Do not expand scope through opportunistic refactoring.
 - Do not create commits, push, publish, or modify global configuration unless the
   user explicitly authorizes it; a task contract may only transmit that
@@ -137,6 +140,7 @@ orchestrator: strongest-reasoning
 architect: strongest-reasoning
 researcher: fast-capable
 implementer: strong-coding
+refactor-specialist: strong-coding
 test-engineer: strong-coding
 reviewer: strong-independent-reasoning
 debugger: strongest-reasoning
@@ -193,6 +197,12 @@ as protected. If the checkout is protected, detached, or cannot be classified
 safely, ask the user to provide a suitable checkout or authorize creating one.
 Do not edit or commit on a protected branch.
 
+Also record a pre-edit baseline containing the checkout path, HEAD, branch,
+remote-default evidence, and staged, unstaged, and untracked files. Do not edit
+an in-scope path with pre-existing changes until ownership is resolved. Never
+reset, clean, stash, overwrite, or include pre-existing user changes in delivery
+without explicit authorization.
+
 Normal SWE Forge invocation authorizes implementation in the suitable checkout,
 not delivery actions. Unless the user explicitly authorizes each applicable
 action, do not commit, push, create a pull request, or merge. Authorization to
@@ -219,24 +229,31 @@ Declare success only when all applicable conditions are met:
 - original acceptance criteria are accounted for
 - relevant tests pass
 - relevant typecheck, lint, build, and repository checks pass
-- critical reviewer findings are resolved
-- high-confidence correctness findings are resolved
+- no blocking review finding under `.swe-forge/contracts/review.md` remains
 - no unintended changes remain
 - the final integrated diff has been inspected
 
 Do not claim a check passed when it was not run. Distinguish skipped checks,
 unavailable tooling, and failures from successful validation.
 
+Final status is deterministic: use `ACCEPTED` only when this gate passes, use
+`BLOCKED` when a user decision, authorization, access, or environment change
+can enable safe continuation, and use `FAILED` when attempted work remains
+incorrect or the gate cannot be met within the ticket and recovery limits.
+
 ## Final Report
 
 Return a concise report containing:
 
+- final status: `ACCEPTED`, `BLOCKED`, or `FAILED`
 - selected execution mode and reason
 - implementation approach and important decisions
 - files changed
 - tests and validation performed with results
 - reviewer result and repaired findings
 - assumptions and remaining risks
+- cleanup status and remaining resources when temporary state, processes, or
+  worktrees were used
 
 Do not dump internal agent conversations. Report structured evidence and
 decision-relevant summaries.

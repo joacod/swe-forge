@@ -49,6 +49,9 @@ justified unless repository instructions require it for formatter changes.
 
 ## Implementation Result
 
+The following is hypothetical expected output. Replace the command placeholder
+with the repository command and run it before returning `DONE`:
+
 ```text
 STATUS: DONE
 TASK_ID: receipt-discount-placeholder
@@ -58,6 +61,8 @@ FILES_TOUCHED:
 - src/receipts/format-total.test.ts
 TESTS_RUN:
 - command: <receipt test command>
+  requirement: required
+  condition: always
   result: passed
 TEST_RESULTS: Missing, zero, and non-zero discount cases pass.
 EVIDENCE:
@@ -72,5 +77,6 @@ FOLLOWUPS: none.
 ## Final Acceptance
 
 The acceptance gate passes because all ticket criteria are covered, the focused
-tests pass, the final diff was inspected, and no independent worker or review
-loop would improve reliability enough to justify its cost.
+tests pass, and the final diff was inspected. The report records
+`review: skipped` because this is a trivial localized `SOLO` change below the
+independent-review trigger.

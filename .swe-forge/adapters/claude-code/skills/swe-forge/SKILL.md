@@ -11,6 +11,9 @@ The user explicitly invoked SWE Forge.
 Read `AGENTS.md`, `SWE-FORGE.md`, and `.swe-forge/workflows/ticket.md`. Follow
 the canonical workflow, choose the smallest useful execution topology, and
 load only the required role, contract, and policy files.
+Parse and honor an explicit topology token using the canonical fallback rules.
+Before the first write-tool call, complete the canonical checkout baseline and
+protected-branch gate.
 
 Raw invocation arguments (`<ticket>` or `<solo|subagents|herdr> <ticket>`):
 

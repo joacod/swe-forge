@@ -35,7 +35,8 @@ Do not hide a failure by changing the status to `DONE`.
 - record each attempt and its reason
 - default to at most two review-repair cycles
 - stop when the same evidence recurs without a changed hypothesis or approach
-- require an explicit orchestrator decision to exceed defaults
+- require an explicit orchestrator decision recorded in run state to exceed
+  defaults, and set a hard run-specific ceiling before continuing
 
 Retries must not overwrite unrelated user changes or create unbounded worker
 activity.
@@ -66,9 +67,9 @@ allowing concurrent writers in one checkout.
 
 ### Review Finding
 
-Classify the finding by severity and confidence. Repair critical and
-high-confidence correctness findings, rerun affected checks, and request a
-focused re-review. Do not loop on low-confidence style opinions.
+Classify the finding using the blocking matrix in `../contracts/review.md`.
+Repair blocking findings, rerun affected checks, and request a focused
+re-review. Do not loop on nonblocking low-confidence style opinions.
 
 ## Final Failure Reporting
 

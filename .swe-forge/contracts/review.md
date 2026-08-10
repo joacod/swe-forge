@@ -23,7 +23,8 @@ findings:
       Describe the smallest safe repair or validation needed.
 ```
 
-Use an empty `findings` list for a passing review:
+`PASS` may include explicitly nonblocking findings. Use an empty list when no
+findings remain:
 
 ```yaml
 status: PASS
@@ -48,5 +49,12 @@ findings: []
 - `low`: uncertain suggestion requiring confirmation
 
 Critical and high-severity findings with high confidence normally require
-repair. Low-confidence stylistic opinions do not block acceptance by
-themselves.
+repair. Apply this blocking matrix consistently:
+
+- every critical finding blocks until resolved or reclassified with evidence
+- a high-severity finding with high or medium confidence blocks
+- any high-confidence correctness, security, data-integrity, or compatibility
+  finding blocks regardless of severity
+- medium and low findings outside those rules may remain under `PASS` as
+  explicit risks
+- low-confidence stylistic opinions do not block acceptance by themselves

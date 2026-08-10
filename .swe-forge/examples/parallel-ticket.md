@@ -124,10 +124,25 @@ The implementation worker receives a bounded contract:
 task_id: orders-pagination
 objective: Implement the API and admin UI pagination behavior described above.
 reason: Research and test strategy are complete; one writer can preserve the API/UI contract safely.
+owner_role: implementer
 dependencies:
   - api-research
   - ui-research
   - test-strategy
+execution_mode: SUBAGENTS
+write_access: read-write
+worktree: shared
+checkout_baseline:
+  path: <absolute checkout path>
+  head: <revision>
+  branch: <branch>
+  classification: writable
+  remote_default_evidence: <reference>
+  staged: []
+  unstaged: []
+  untracked: []
+delegation:
+  allowed: false
 allowed_scope:
   - services/orders/src/http/admin-orders.ts
   - services/orders/src/repositories/order-repository.ts
@@ -139,17 +154,33 @@ forbidden_scope:
 acceptance:
   - all ticket criteria pass
 validation:
-  - <orders API focused tests>
-  - <admin orders focused tests>
+  - command: <orders API focused tests>
+    requirement: required
+    condition: always
+    side_effects: local-only
+  - command: <admin orders focused tests>
+    requirement: required
+    condition: always
+    side_effects: local-only
 risk: medium
 expected_output:
   - implementation
   - focused test evidence
   - structured worker result
-commit_policy: none
+authorization:
+  create_branch: {status: not-authorized, provenance: none, scope: none}
+  create_worktree: {status: not-authorized, provenance: none, scope: none}
+  commit: {status: not-authorized, provenance: none, scope: none}
+  push: {status: not-authorized, provenance: none, scope: none}
+  create_pull_request: {status: not-authorized, provenance: none, scope: none}
+  publish: {status: not-authorized, provenance: none, scope: none}
+  merge: {status: not-authorized, provenance: none, scope: none}
 ```
 
 ## 8. Implementation Result
+
+This block is hypothetical expected output after replacing and running the
+repository-specific command placeholders:
 
 ```text
 STATUS: DONE
@@ -164,8 +195,12 @@ FILES_TOUCHED:
 - apps/admin/src/orders/OrdersTable.test.tsx
 TESTS_RUN:
 - command: <orders API focused tests>
+  requirement: required
+  condition: always
   result: passed
 - command: <admin orders focused tests>
+  requirement: required
+  condition: always
   result: passed
 TEST_RESULTS: Invalid limits, filtering, cursor continuation, compatibility, URL state, and reset behavior pass.
 EVIDENCE:

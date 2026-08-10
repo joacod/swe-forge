@@ -86,15 +86,18 @@ herdr agent start <worker-name> --kind <harness-kind> --pane <pane-id>
 Pass native harness arguments only after `--`. Start the worker in its isolated
 worktree when it is a concurrent writer.
 
-Send only the bounded task contract, relevant architecture evidence, and
-validation commands:
+Send only the assigned canonical role path, bounded task contract, relevant
+architecture evidence, and validation commands. Require the worker to load the
+role and result contract before acting:
 
 ```bash
-herdr agent prompt <worker-name> "<bounded task contract>" --wait --timeout 120000
+herdr agent prompt <worker-name> "Read <resolved-canonical-role-path> and <resolved-canonical-result-contract-path>, then execute <bounded-task-contract>." --wait --timeout 120000
 ```
 
-The prompt must require a result matching `.swe-forge/contracts/result.md`.
-Do not pass the entire orchestrator transcript.
+Resolve both canonical paths from the active installation root; a global run
+must not resolve them against the project checkout. The prompt must require a
+result matching that resolved result contract. Do not pass the entire
+orchestrator transcript.
 
 ## 5. Inspect and Wait
 
@@ -139,6 +142,11 @@ request, publish, or merge without explicit authorization for that action.
 Close or remove only workspaces, panes, and worktrees created for this run.
 Do not close user-owned sessions, stop the Herdr server, or delete branches
 unless the user explicitly requests it.
+
+Before removing a writable worktree, require either a clean status or evidence
+that every tracked and untracked change is represented in the integrated
+checkout or a preserved external patch. If that proof is incomplete, leave the
+worktree in place and report it rather than risking data loss.
 
 Record cleanup status and any remaining worktree or process in the final report.
 
