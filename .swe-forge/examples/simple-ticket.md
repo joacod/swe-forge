@@ -32,6 +32,7 @@ distinguishes a missing optional field from existing numeric cases.
 ## Architecture and Route
 
 ```text
+requested_mode: AUTO
 execution_mode: SOLO
 reason: One localized formatter change with tightly coupled tests and no useful independent ownership.
 ```

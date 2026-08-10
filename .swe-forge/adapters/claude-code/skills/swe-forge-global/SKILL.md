@@ -2,7 +2,7 @@
 name: swe-forge
 description: Explicitly activate the portable SWE Forge workflow for a user-supplied software ticket.
 disable-model-invocation: true
-argument-hint: "[ticket]"
+argument-hint: "[solo|subagents|herdr] <ticket>"
 compatibility: Claude Code global skill
 ---
 
@@ -13,6 +13,6 @@ Read `~/.claude/swe-forge/AGENTS.md`, `~/.claude/swe-forge/SWE-FORGE.md`, and
 workflow, choose the smallest useful execution topology, and load only the
 required role, contract, and policy files.
 
-Ticket:
+Raw invocation arguments (`<ticket>` or `<solo|subagents|herdr> <ticket>`):
 
 $ARGUMENTS

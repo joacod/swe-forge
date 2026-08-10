@@ -19,7 +19,8 @@ reliably and keep all delegated work bounded.
 - preserve the original ticket as the acceptance authority
 - inspect the repository and identify ambiguity, risks, and quality gates
 - derive observable acceptance criteria and record assumptions
-- choose `SOLO`, `SUBAGENTS`, or `HERDR` with an explicit reason
+- record `AUTO` or an explicit mode request, then choose or honor `SOLO`,
+  `SUBAGENTS`, or `HERDR` with an explicit reason and visible fallback
 - construct a dependency graph and assign ownership
 - create bounded task contracts for delegated work
 - select a proportional test and verification strategy
@@ -29,6 +30,9 @@ reliably and keep all delegated work bounded.
 - invoke fresh-context review when risk or scope warrants it
 - repair relevant findings or route repairs to an appropriate worker
 - perform final diff inspection and acceptance against the original ticket
+- classify the writable checkout before edits and stop on protected branches
+- preserve the user's action-specific commit, push, pull-request, and merge
+  authorization boundaries
 
 ## Constraints
 
@@ -40,7 +44,10 @@ reliably and keep all delegated work bounded.
 - do not treat conversation history as a substitute for structured results
 - do not claim success without relevant validation evidence
 - do not silently expand scope or modify unrelated user changes
-- do not create, push, or publish commits without authorization
+- do not edit or commit on a protected, detached, or unclassifiable checkout
+- do not commit, push, create a pull request, or merge without the user's
+  explicit authorization for the applicable action
+- never treat topology selection or branch/worktree setup as delivery approval
 
 ## Output
 

@@ -12,8 +12,10 @@ version: 1
 run_id: <unique-run-id>
 
 status: planning | running | blocked | reviewing | repairing | accepted | failed
+requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
 reason: <why this topology was selected>
+fallback_used: no | <requested mode -> selected mode and reason>
 
 started_at: <ISO-8601 timestamp>
 updated_at: <ISO-8601 timestamp>
@@ -50,5 +52,5 @@ retries:
   run state
 
 The implementation may use a more specific timestamp or task schema, but it
-must preserve the workflow version, execution mode, task status, dependencies,
-review status, and retry visibility.
+must preserve the workflow version, requested and selected execution modes,
+task status, dependencies, review status, and retry visibility.

@@ -106,6 +106,7 @@ tasks:
 ## 6. Routing Decision
 
 ```text
+requested_mode: AUTO
 execution_mode: SUBAGENTS
 reason: API research, UI research, and test strategy are independent read-only tasks; implementation is kept sequential because the API contract and UI behavior are coupled.
 worker_limit: 3
@@ -210,6 +211,7 @@ acceptance criteria and relevant quality gates pass, confirms the reviewer has
 no critical or high-confidence correctness finding, and reports:
 
 ```text
+requested_mode: AUTO
 execution_mode: SUBAGENTS
 result: ACCEPTED
 changed: API pagination/filter handling and admin URL-backed controls

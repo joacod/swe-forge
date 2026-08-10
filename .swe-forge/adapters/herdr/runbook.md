@@ -48,6 +48,13 @@ resources. Preserve the user's focus with `--no-focus` for background work.
 Use a shared workspace only for read-only research or when one writer owns the
 checkout. Concurrent writable workers require separate Git worktrees.
 
+Selecting `HERDR` does not authorize branch or worktree creation. Before using
+`worktree.create`, obtain explicit user authorization for that setup action.
+Opening an existing checkout does not need creation authorization, but before
+any edit classify the integration checkout and every writable worker checkout
+under the canonical protected-branch gate. Each must be dedicated,
+non-protected, attached, and safely classifiable.
+
 The current Herdr worktree surface includes these operations:
 
 - create a worktree from a source workspace
@@ -118,13 +125,14 @@ The orchestrator owns integration. For each isolated worker:
 
 1. inspect its result and task scope
 2. inspect the worktree diff and validation evidence
-3. integrate its commit or patch into the central checkout sequentially
+3. integrate its patch into the central checkout sequentially
 4. resolve conflicts centrally
 5. rerun affected validation
 
 Do not let Herdr workers modify the central checkout concurrently. A temporary
-worker commit may be used only when the task contract allows it. Do not push or
-publish without explicit authorization.
+worker commit may be used only when the user explicitly authorized commits and
+the task contract transmits that authorization. Do not push, create a pull
+request, publish, or merge without explicit authorization for that action.
 
 ## 7. Clean Up Safely
 
@@ -144,3 +152,5 @@ or isolation no longer provides value:
 3. use `SOLO` when one context is safest
 
 Record the original mode, the failure evidence, and the fallback mode.
+If isolation remains necessary for safe execution, or the user prohibited
+fallback, return `BLOCKED` instead of reducing the topology.

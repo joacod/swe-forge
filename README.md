@@ -32,7 +32,15 @@ Harnesses that support custom commands may expose:
 
 ```text
 /swe-forge <ticket>
+/swe-forge solo <ticket>
+/swe-forge subagents <ticket>
+/swe-forge herdr <ticket>
 ```
+
+The first form is automatic: the existing orchestrator inspects the ticket and
+repository, then selects the smallest useful topology. The other forms request
+a topology explicitly. Explicit selection does not bypass safety or validation,
+and any fallback is reported.
 
 ## With SWE Forge
 
@@ -65,6 +73,20 @@ reliability per unit of cost and complexity.
 Native subagents are preferred over external orchestration when they are
 enough. Herdr is optional and SWE Forge falls back when it is unavailable.
 
+## Safe Working And Handoff
+
+Writable work must use a dedicated, non-protected branch or worktree. SWE Forge
+does not edit or commit on repository-protected branches, the locally known
+remote default branch, `main`, or `master`. If the current checkout is not safe
+for writing, it asks the user to provide one or authorize creating one.
+
+A normal invocation stops after implementation, verification, independent
+review, and final diff inspection. It does not commit, push, create a pull
+request, or merge without explicit user authorization. An explicit instruction
+to continue through pull-request creation may authorize commit, branch push,
+and pull-request creation after review, but never merge. Merge always requires
+a separate explicit instruction.
+
 ## Canonical Source
 
 `SWE-FORGE.md` is the canonical workflow specification. The portable role
@@ -80,7 +102,8 @@ not redefine the workflow or become a second source of truth.
 1. Place `AGENTS.md`, `SWE-FORGE.md`, and `.swe-forge/` in a repository.
 2. Open that repository in a capable coding harness.
 3. Explicitly write `Use SWE Forge` and provide the ticket.
-4. Let the orchestrator choose `SOLO`, `SUBAGENTS`, or `HERDR`.
+4. Let automatic routing choose `SOLO`, `SUBAGENTS`, or `HERDR`, or request one
+   of those modes explicitly.
 
 ## Install Into A Harness
 

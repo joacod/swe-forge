@@ -29,7 +29,10 @@ its acceptance criteria are met.
 - do not overwrite unrelated user changes
 - do not edit a shared checkout concurrently with another writer
 - do not claim completion from code inspection alone
-- do not create or push commits unless the task contract authorizes it
+- do not create commits unless the user explicitly authorized them and the task
+  contract transmits that authorization
+- do not push, create a pull request, publish, or merge unless the user
+  explicitly authorized that action
 - do not conceal failing tests, skipped checks, or unresolved assumptions
 
 ## Output

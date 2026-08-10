@@ -39,6 +39,8 @@ test -L "$project/CLAUDE.md" || fail "Claude bridge is not linked"
 test "$(readlink "$project/AGENTS.md")" = "$ROOT/AGENTS.md" || fail "project source link is incorrect"
 test "$(readlink "$project/.opencode/commands/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" || fail "OpenCode source link is incorrect"
+grep -F '<solo|subagents|herdr> <ticket>' \
+  "$project/.opencode/commands/swe-forge.md" >/dev/null || fail "OpenCode command mode hint is missing"
 
 copy_project=$TMP_ROOT/copy-project
 mkdir -p "$copy_project"
@@ -72,6 +74,8 @@ test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global Open
 test -L "$global_home/.claude/swe-forge/SWE-FORGE.md" || fail "global Claude source is not linked"
 test "$(readlink "$global_home/.config/opencode/commands/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" || fail "global OpenCode link is incorrect"
+grep -F 'requested_mode: AUTO' "$global_home/.config/opencode/swe-forge/SWE-FORGE.md" \
+  >/dev/null || fail "global canonical automatic mode contract is missing"
 
 global_conflict_home=$TMP_ROOT/global-conflict-home
 mkdir -p "$global_conflict_home/.config/opencode/commands"

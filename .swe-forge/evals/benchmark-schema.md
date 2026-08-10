@@ -16,6 +16,7 @@ ticket:
 condition:
   name: baseline | swe-forge
   invocation: normal | explicit-swe-forge
+  requested_mode: AUTO | SOLO | SUBAGENTS | HERDR | unknown
   execution_mode: SOLO | SUBAGENTS | HERDR | unknown
   capability_classes:
     orchestrator: <class or unknown>

@@ -35,6 +35,18 @@ credentials, or ticket-specific state.
 
 Read the ticket without designing the solution immediately.
 
+For harness commands, parse the raw arguments before ingesting the ticket:
+
+- if the first whitespace-delimited token is lowercase `solo`, `subagents`, or
+  `herdr`, record the corresponding explicit `requested_mode` and use the
+  non-empty remainder as the ticket
+- otherwise preserve all arguments as the ticket and record
+  `requested_mode: AUTO`
+- a mode token without a ticket is incomplete input; ask for the missing ticket
+
+The lowercase mode words are reserved only as the first command token. Natural
+language activation without a command may state a mode preference directly.
+
 Record the requested behavior, explicit constraints, affected users or
 systems, non-goals, and any requested validation. Preserve important wording
 from the original ticket.
@@ -82,6 +94,7 @@ and outputs can be independently evaluated. Otherwise use sequential waves or
 Record exactly one execution mode and its reason:
 
 ```text
+requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
 reason: ...
 ```
@@ -93,6 +106,11 @@ execution.
 
 Never choose a mode merely because the task is difficult or a tool is
 available.
+
+For `AUTO`, apply the routing policy after discovery. An explicit mode bypasses
+topology preference but not safety or validation. Use the policy fallback when
+the requested mode is unavailable, report it, and block if fallback would
+remove isolation required for safe execution or the user prohibited fallback.
 
 ### 7. Test Strategy
 
@@ -117,6 +135,14 @@ Two writing workers must never edit the same checkout concurrently. Read-only
 workers may inspect the integration checkout. Herdr writing workers require
 separate worktrees.
 
+Before the first edit, confirm that writable work is on a dedicated,
+non-protected branch or worktree. Protected branches include repository-declared
+protected branches, the locally known remote default branch, `main`, and
+`master`. Do not write when the checkout is protected, detached, or cannot be
+classified safely. Ask the user to provide a suitable checkout or authorize
+creating one; that authorization does not grant permission to commit or
+publish.
+
 Workers must run assigned validation, report files touched, and return a
 structured result. They must not claim success from code inspection alone.
 
@@ -127,7 +153,9 @@ before combining it with other work.
 
 For isolated worktrees, integrate commits or patches sequentially in a central
 checkout, resolve conflicts centrally, and rerun affected validation. Do not
-push or publish changes unless explicitly authorized.
+commit, push, create a pull request, or merge unless the user explicitly
+authorized the applicable action. Task contracts may carry user-granted
+authorization but cannot create it.
 
 ### 10. Verify
 
@@ -183,6 +211,12 @@ Return only the decision-relevant result:
 - remaining risks or follow-ups
 
 Do not include internal worker transcripts.
+
+Normal completion stops with the reviewed diff and validation evidence for
+human approval. A separate explicit instruction to continue through pull-request
+creation may authorize committing the reviewed diff, pushing its non-protected
+branch, and creating the pull request. It never authorizes merge; merging needs
+a separate explicit instruction outside the normal lifecycle.
 
 ## Blocking and Recovery
 

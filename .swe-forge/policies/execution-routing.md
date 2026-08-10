@@ -5,11 +5,17 @@
 Select the smallest execution topology that provides a meaningful reliability
 benefit for the ticket. More agents are not evidence of better engineering.
 
+Automatic routing is the default for `/swe-forge <ticket>`. Explicit command
+forms may request `solo`, `subagents`, or `herdr`; no separate routing worker is
+required because the orchestrator already owns discovery and topology choice.
+
 Every run records:
 
 ```text
+requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
 reason: <specific evidence for the choice>
+fallback_used: no | <requested mode -> selected mode and reason>
 ```
 
 ## Decision Factors
@@ -74,13 +80,18 @@ has multiple files.
 
 ## Routing Procedure
 
-1. Identify the smallest unit that can be solved and verified together.
-2. Estimate whether independent reasoning or ownership is real, not imagined.
-3. Reject parallelization when writable scopes overlap dangerously.
-4. Prefer native subagents when they satisfy the independence requirement.
-5. Select Herdr only when process or checkout isolation is the requirement.
-6. Record the mode, reason, worker limit, and fallback plan.
-7. Re-evaluate the mode if evidence shows the topology is causing conflicts or
+1. Record the requested mode; use `AUTO` when no explicit mode was supplied.
+2. Identify the smallest unit that can be solved and verified together.
+3. For `AUTO`, estimate whether independent reasoning or ownership is real, not
+   imagined, and select the smallest useful topology.
+4. For an explicit request, use that topology when available without treating
+   it as permission to bypass safety, scope, or validation.
+5. Reject parallelization when writable scopes overlap dangerously.
+6. Prefer native subagents when they satisfy the independence requirement.
+7. Select Herdr automatically only when process or checkout isolation is the
+   requirement.
+8. Record the mode, reason, worker limit, and fallback plan.
+9. Re-evaluate the mode if evidence shows the topology is causing conflicts or
    unnecessary overhead.
 
 ## Safety Rules
@@ -100,6 +111,9 @@ When the selected mode is unavailable or ineffective:
 3. use `SOLO` when one context is the safest execution unit
 
 Record the original decision, the observed limitation, and the fallback.
+For an unavailable explicit mode, use the same order and make the fallback
+visible. If required isolation would be lost, or the user prohibited fallback,
+block instead of selecting an unsafe or unwanted topology.
 
 ## Examples
 

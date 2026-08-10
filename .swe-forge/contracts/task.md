@@ -72,7 +72,9 @@ research or review. Use `isolated` worktrees for concurrent writing tasks.
 - allowed scopes must not overlap dangerously with another writing task
 - a worker must ask for a revised contract before expanding scope
 - validation must be realistic for the worker's checkout and environment
-- commit requirements must be explicit; no task inherits permission to push or
-  publish
+- commit requirements may only transmit explicit user authorization; a task
+  contract cannot grant that authority itself
+- commit authorization does not imply permission to push, create a pull
+  request, publish, or merge
 - the orchestrator evaluates the result against this contract before
   integration

@@ -36,6 +36,7 @@ The shared contract is:
 ## Routing Decision
 
 ```text
+requested_mode: AUTO
 execution_mode: HERDR
 reason: API and web are independent writable packages with separate worktrees and long-running development servers.
 ```
@@ -73,7 +74,7 @@ validation:
   - <orders API tests>
 risk: high
 worktree: isolated
-commit_policy: temporary
+commit_policy: none
 ```
 
 ```yaml
@@ -92,15 +93,18 @@ validation:
   - <storefront order tests>
 risk: medium
 worktree: isolated
-commit_policy: temporary
+commit_policy: none
 ```
 
 ## Herdr Execution
 
-After verifying `test "${HERDR_ENV:-}" = 1`, the orchestrator uses Herdr to
-create or open the two worktree-backed workspaces. It starts one harness agent
-in each worktree, sends only the corresponding task contract, and keeps user
-focus unchanged with background panes.
+After the user authorizes creation of the planned worktrees, the orchestrator
+verifies `test "${HERDR_ENV:-}" = 1` and uses Herdr to create or open the two
+worktree-backed workspaces. Before edits, it confirms the integration checkout
+and both worker checkouts are dedicated, non-protected, attached, and safely
+classifiable. It starts one harness agent in each worktree, sends only the
+corresponding task contract, and keeps user focus unchanged with background
+panes.
 
 The orchestrator waits for semantic agent states, reads each structured result,
 and does not treat terminal output alone as completion. It may inspect each
@@ -112,9 +116,9 @@ worktree independently while the workers run.
    `services/orders/**`.
 2. Confirm the web worker's result and isolated diff stay within
    `apps/storefront/**`.
-3. Integrate the API worktree commit into the central checkout.
+3. Integrate the API worktree patch into the central checkout.
 4. Run API validation and confirm the shared contract.
-5. Integrate the web worktree commit into the central checkout.
+5. Integrate the web worktree patch into the central checkout.
 6. Run UI validation and the relevant cross-package checks.
 7. Resolve any conflict centrally; never ask both workers to edit the central
    checkout.
@@ -132,6 +136,7 @@ User-owned sessions, branches, and the Herdr server are left untouched.
 The final report records:
 
 ```text
+requested_mode: AUTO
 execution_mode: HERDR
 result: ACCEPTED | BLOCKED | FAILED
 worktrees: api, web

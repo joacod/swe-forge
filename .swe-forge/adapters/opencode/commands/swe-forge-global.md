@@ -1,5 +1,5 @@
 ---
-description: Explicitly activate the SWE Forge ticket workflow
+description: Run SWE Forge with automatic or explicit topology routing
 agent: build
 ---
 
@@ -11,6 +11,6 @@ Read @~/.config/opencode/swe-forge/AGENTS.md and
 canonical workflow and load only the role, contract, and policy files required
 by the selected topology and ticket risks.
 
-Ticket:
+Raw invocation arguments (`<ticket>` or `<solo|subagents|herdr> <ticket>`):
 
 $ARGUMENTS

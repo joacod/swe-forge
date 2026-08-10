@@ -61,16 +61,35 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Treat verification evidence as stronger than confidence or code inspection.
 - Do not expand scope through opportunistic refactoring.
 - Do not create commits, push, publish, or modify global configuration unless the
-  user or an explicit task contract authorizes it.
+  user explicitly authorizes it; a task contract may only transmit that
+  authorization.
 
 ## Execution Topology
 
-Every run must record one of these modes and a reason:
+`/swe-forge <ticket>` uses automatic routing by default. The orchestrator
+discovers enough repository evidence to choose the smallest useful topology;
+it does not need a separate decision agent.
+
+Harness commands may also accept an explicit topology as the first argument:
 
 ```text
+/swe-forge solo <ticket>
+/swe-forge subagents <ticket>
+/swe-forge herdr <ticket>
+```
+
+Every run must record the request, selected mode, and reason:
+
+```text
+requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
 reason: <why this is the smallest useful topology>
 ```
+
+An explicit mode overrides topology preference, not safety, validation, scope,
+or delivery authorization. Apply the fallback policy when the requested
+topology is unavailable and report the fallback. Block instead when falling
+back would make required isolation unsafe or the user prohibited fallback.
 
 ### SOLO
 
@@ -164,6 +183,24 @@ $TMPDIR/swe-forge/<run-id>/run-state.yaml
 If repository-local state is necessary, use an ignored path such as
 `.swe-forge/runs/`. Never commit ticket-specific state, worker transcripts,
 credentials, or generated logs.
+
+## Checkout And Delivery Safety
+
+Before writable implementation, confirm that the checkout is on a dedicated,
+non-protected branch or worktree. Treat repository-declared protected branches,
+the locally known remote default branch, and conventional `main` and `master`
+as protected. If the checkout is protected, detached, or cannot be classified
+safely, ask the user to provide a suitable checkout or authorize creating one.
+Do not edit or commit on a protected branch.
+
+Normal SWE Forge invocation authorizes implementation in the suitable checkout,
+not delivery actions. Unless the user explicitly authorizes each applicable
+action, do not commit, push, create a pull request, or merge. Authorization to
+create a branch or worktree grants only that setup action. Authorization to
+continue through pull-request creation may cover commit, branch push, and pull
+request creation after verification and review; it never authorizes merge.
+Merging requires a separate explicit instruction and is not part of the normal
+ticket lifecycle.
 
 ## Failure Handling
 
