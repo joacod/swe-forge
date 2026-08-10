@@ -29,6 +29,7 @@ Use `.swe-forge/adapters/<harness>/` for:
 
 - a short discovery and installation README
 - an explicit command or skill loader when supported
+- a source-linked global loader when the harness has a documented user scope
 - optional thin native role bridges
 - permission and model mapping guidance
 - isolation and fallback notes
@@ -70,6 +71,8 @@ Test an adapter in a disposable project or controlled fixture:
 5. permissions match the role's intended access
 6. model mappings contain no hardcoded private configuration
 7. unavailable optional tooling falls back cleanly
+8. the repository installer can install and verify the adapter in a temporary
+   project without overwriting collisions
 
 Update the adapter when official harness behavior changes, but do not change
 the canonical architecture to match one vendor's terminology.

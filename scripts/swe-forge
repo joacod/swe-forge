@@ -1,0 +1,737 @@
+#!/bin/sh
+
+set -eu
+
+PROGRAM=${0##*/}
+SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
+SOURCE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd -P)
+RUN_TMP=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge.XXXXXX")
+CONFLICTS=0
+VERIFY_FAILURES=0
+MODE=link
+SCOPE=project
+TARGET=
+
+cleanup() {
+  rm -rf "$RUN_TMP"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+info() {
+  printf '%s\n' "$*"
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/swe-forge install <opencode|claude|all> [options]
+  scripts/swe-forge verify <opencode|claude|all> [options]
+
+Options:
+  --target PATH       Install into this repository or folder.
+  --global            Install into the harness user-level directories.
+  --mode link|copy    Link to this checkout (default) or copy a snapshot.
+
+If --target and --global are omitted, install asks for a target when used from
+an interactive terminal. Non-interactive callers must provide one explicitly.
+EOF
+}
+
+conflict() {
+  printf 'conflict: %s\n' "$*" >&2
+  CONFLICTS=$((CONFLICTS + 1))
+}
+
+verify_failure() {
+  printf 'FAIL: %s\n' "$*" >&2
+  VERIFY_FAILURES=$((VERIFY_FAILURES + 1))
+}
+
+path_exists() {
+  [ -e "$1" ] || [ -L "$1" ]
+}
+
+resolve_path() {
+  current=$1
+  count=0
+
+  while [ -L "$current" ]; do
+    count=$((count + 1))
+    [ "$count" -lt 40 ] || return 1
+    link_target=$(readlink "$current") || return 1
+    case "$link_target" in
+      /*) current=$link_target ;;
+      *) current=$(dirname "$current")/$link_target ;;
+    esac
+  done
+
+  if [ -d "$current" ]; then
+    CDPATH= cd "$current" && pwd -P
+  else
+    parent=$(CDPATH= cd "$(dirname "$current")" && pwd -P) || return 1
+    printf '%s/%s\n' "$parent" "$(basename "$current")"
+  fi
+}
+
+same_path() {
+  first=$(resolve_path "$1") || return 1
+  second=$(resolve_path "$2") || return 1
+  [ "$first" = "$second" ]
+}
+
+prepare_manifests() {
+  canonical_files=$RUN_TMP/canonical-files
+  canonical_dirs=$RUN_TMP/canonical-dirs
+
+  find "$SOURCE_ROOT/.swe-forge" -type f \
+    ! -path "$SOURCE_ROOT/.swe-forge/runs/*" \
+    ! -path "$SOURCE_ROOT/.swe-forge/.runs/*" \
+    ! -path "$SOURCE_ROOT/.swe-forge/generated/*" \
+    -print >"$canonical_files"
+
+  : >"$canonical_dirs"
+  for source_entry in "$SOURCE_ROOT/.swe-forge"/*; do
+    [ -d "$source_entry" ] || continue
+    entry_name=${source_entry##*/}
+    case "$entry_name" in
+      runs|.runs|generated) continue ;;
+    esac
+    printf '%s\n' "$source_entry" >>"$canonical_dirs"
+  done
+}
+
+preflight_container() {
+  destination=$1
+  if path_exists "$destination" && { [ ! -d "$destination" ] || [ -L "$destination" ]; }; then
+    conflict "$destination must be a real directory"
+  fi
+}
+
+preflight_file() {
+  source=$1
+  destination=$2
+
+  if ! path_exists "$destination"; then
+    return
+  fi
+
+  if same_path "$source" "$destination"; then
+    return
+  fi
+
+  if [ -d "$destination" ] && [ ! -L "$destination" ]; then
+    conflict "$destination exists as a directory"
+    return
+  fi
+
+  if [ -L "$destination" ]; then
+    if ! same_path "$source" "$destination"; then
+      conflict "$destination is a symlink to a different source"
+    fi
+    return
+  fi
+
+  if [ "$MODE" = link ]; then
+    conflict "$destination exists as a regular file; remove it after review or use --mode copy"
+    return
+  fi
+
+  if ! cmp -s "$source" "$destination"; then
+    conflict "$destination differs from the SWE Forge source"
+  fi
+}
+
+preflight_dir_link() {
+  source=$1
+  destination=$2
+
+  if ! path_exists "$destination"; then
+    return
+  fi
+
+  if same_path "$source" "$destination"; then
+    return
+  fi
+
+  conflict "$destination already exists and is not linked to the SWE Forge source"
+}
+
+preflight_tree_copy() {
+  source_root=$1
+  destination_root=$2
+  tree_files=$RUN_TMP/tree-files
+
+  find "$source_root" -type f -print >"$tree_files"
+  while IFS= read -r source_file; do
+    relative=${source_file#"$source_root/"}
+    preflight_file "$source_file" "$destination_root/$relative"
+  done <"$tree_files"
+}
+
+preflight_canonical() {
+  destination_root=$1
+
+  preflight_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
+  preflight_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
+  preflight_container "$destination_root/.swe-forge"
+
+  if [ "$MODE" = link ]; then
+    while IFS= read -r source_dir; do
+      entry_name=${source_dir##*/}
+      preflight_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
+    done <"$RUN_TMP/canonical-dirs"
+
+    while IFS= read -r source_file; do
+      relative=${source_file#"$SOURCE_ROOT/"}
+      preflight_file "$source_file" "$destination_root/$relative"
+    done <"$RUN_TMP/canonical-files"
+  else
+    while IFS= read -r source_file; do
+      relative=${source_file#"$SOURCE_ROOT/"}
+      preflight_file "$source_file" "$destination_root/$relative"
+    done <"$RUN_TMP/canonical-files"
+  fi
+}
+
+preflight_adapter_tree() {
+  source_root=$1
+  destination_root=$2
+
+  if [ "$MODE" = link ]; then
+    preflight_dir_link "$source_root" "$destination_root"
+  else
+    if path_exists "$destination_root"; then
+      if [ ! -d "$destination_root" ] || [ -L "$destination_root" ]; then
+        conflict "$destination_root must be a real directory for copy mode"
+      else
+        preflight_tree_copy "$source_root" "$destination_root"
+      fi
+    fi
+  fi
+}
+
+preflight_bridge() {
+  destination=$1
+  agents_destination=$2
+
+  if ! path_exists "$destination"; then
+    return
+  fi
+
+  if same_path "$SOURCE_ROOT/CLAUDE.md" "$destination"; then
+    return
+  fi
+
+  if [ -L "$destination" ]; then
+    if ! same_path "$agents_destination" "$destination"; then
+      conflict "$destination is not linked to AGENTS.md"
+    fi
+    return
+  fi
+
+  if [ "$MODE" = link ]; then
+    conflict "$destination exists as a regular file; remove it after review or use --mode copy"
+    return
+  fi
+
+  if ! cmp -s "$RUN_TMP/claude-bridge" "$destination"; then
+    conflict "$destination must be the minimal @AGENTS.md bridge or be reviewed manually"
+  fi
+}
+
+preflight_project_opencode() {
+  preflight_container "$TARGET/.opencode"
+  preflight_container "$TARGET/.opencode/commands"
+  preflight_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" \
+    "$TARGET/.opencode/commands/swe-forge.md"
+}
+
+preflight_project_claude() {
+  preflight_container "$TARGET/.claude"
+  preflight_container "$TARGET/.claude/skills"
+  preflight_adapter_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge" \
+    "$TARGET/.claude/skills/swe-forge"
+  preflight_bridge "$TARGET/CLAUDE.md" "$TARGET/AGENTS.md"
+}
+
+global_opencode_root() {
+  printf '%s/.config/opencode\n' "$HOME"
+}
+
+global_claude_root() {
+  printf '%s/.claude\n' "$HOME"
+}
+
+preflight_global_opencode() {
+  opencode_root=$(global_opencode_root)
+  preflight_container "$opencode_root"
+  preflight_container "$opencode_root/commands"
+  preflight_container "$opencode_root/swe-forge"
+  preflight_canonical "$opencode_root/swe-forge"
+  preflight_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" \
+    "$opencode_root/commands/swe-forge.md"
+}
+
+preflight_global_claude() {
+  claude_root=$(global_claude_root)
+  preflight_container "$claude_root"
+  preflight_container "$claude_root/skills"
+  preflight_container "$claude_root/swe-forge"
+  preflight_canonical "$claude_root/swe-forge"
+  preflight_adapter_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge-global" \
+    "$claude_root/skills/swe-forge"
+}
+
+preflight_install() {
+  CONFLICTS=0
+
+  if [ "$SCOPE" = global ]; then
+    case "$HARNESS" in
+      opencode) preflight_global_opencode ;;
+      claude) preflight_global_claude ;;
+      all)
+        preflight_global_opencode
+        preflight_global_claude
+        ;;
+    esac
+  else
+    preflight_canonical "$TARGET"
+    case "$HARNESS" in
+      opencode) preflight_project_opencode ;;
+      claude) preflight_project_claude ;;
+      all)
+        preflight_project_opencode
+        preflight_project_claude
+        ;;
+    esac
+  fi
+
+  [ "$CONFLICTS" -eq 0 ] || die "installation stopped before writing; review the conflicts above"
+}
+
+install_file() {
+  source=$1
+  destination=$2
+
+  path_exists "$destination" && return
+  mkdir -p "$(dirname "$destination")"
+  if [ "$MODE" = link ]; then
+    ln -s "$source" "$destination"
+  else
+    cp "$source" "$destination"
+  fi
+}
+
+install_dir_container() {
+  destination=$1
+  path_exists "$destination" && return
+  mkdir -p "$destination"
+}
+
+install_dir_link() {
+  source=$1
+  destination=$2
+
+  path_exists "$destination" && return
+  mkdir -p "$(dirname "$destination")"
+  ln -s "$source" "$destination"
+}
+
+install_tree() {
+  source_root=$1
+  destination_root=$2
+  tree_files=$RUN_TMP/tree-files
+
+  if [ "$MODE" = link ]; then
+    install_dir_link "$source_root" "$destination_root"
+    return
+  fi
+
+  install_dir_container "$destination_root"
+  find "$source_root" -type f -print >"$tree_files"
+  while IFS= read -r source_file; do
+    relative=${source_file#"$source_root/"}
+    install_file "$source_file" "$destination_root/$relative"
+  done <"$tree_files"
+}
+
+install_canonical() {
+  destination_root=$1
+
+  install_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
+  install_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
+  install_dir_container "$destination_root/.swe-forge"
+
+  if [ "$MODE" = link ]; then
+    while IFS= read -r source_dir; do
+      entry_name=${source_dir##*/}
+      install_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
+    done <"$RUN_TMP/canonical-dirs"
+
+    while IFS= read -r source_file; do
+      relative=${source_file#"$SOURCE_ROOT/"}
+      install_file "$source_file" "$destination_root/$relative"
+    done <"$RUN_TMP/canonical-files"
+  else
+    while IFS= read -r source_file; do
+      relative=${source_file#"$SOURCE_ROOT/"}
+      install_file "$source_file" "$destination_root/$relative"
+    done <"$RUN_TMP/canonical-files"
+  fi
+}
+
+install_bridge() {
+  destination=$1
+
+  path_exists "$destination" && return
+  mkdir -p "$(dirname "$destination")"
+  if [ "$MODE" = link ]; then
+    ln -s AGENTS.md "$destination"
+  else
+    cp "$RUN_TMP/claude-bridge" "$destination"
+  fi
+}
+
+install_project_opencode() {
+  install_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" \
+    "$TARGET/.opencode/commands/swe-forge.md"
+}
+
+install_project_claude() {
+  install_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge" \
+    "$TARGET/.claude/skills/swe-forge"
+  install_bridge "$TARGET/CLAUDE.md"
+}
+
+install_global_opencode() {
+  opencode_root=$(global_opencode_root)
+  install_canonical "$opencode_root/swe-forge"
+  install_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" \
+    "$opencode_root/commands/swe-forge.md"
+}
+
+install_global_claude() {
+  claude_root=$(global_claude_root)
+  install_canonical "$claude_root/swe-forge"
+  install_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge-global" \
+    "$claude_root/skills/swe-forge"
+}
+
+install_requested() {
+  if [ "$SCOPE" = global ]; then
+    case "$HARNESS" in
+      opencode) install_global_opencode ;;
+      claude) install_global_claude ;;
+      all)
+        install_global_opencode
+        install_global_claude
+        ;;
+    esac
+  else
+    install_canonical "$TARGET"
+    case "$HARNESS" in
+      opencode) install_project_opencode ;;
+      claude) install_project_claude ;;
+      all)
+        install_project_opencode
+        install_project_claude
+        ;;
+    esac
+  fi
+}
+
+verify_file() {
+  source=$1
+  destination=$2
+
+  if ! path_exists "$destination"; then
+    verify_failure "$destination is missing"
+    return
+  fi
+  if [ -d "$destination" ] && [ ! -L "$destination" ]; then
+    verify_failure "$destination is a directory, expected a file"
+    return
+  fi
+  if ! cmp -s "$source" "$destination"; then
+    verify_failure "$destination does not match the current SWE Forge source"
+  fi
+}
+
+verify_tree() {
+  source_root=$1
+  destination_root=$2
+  tree_files=$RUN_TMP/verify-tree-files
+
+  if ! path_exists "$destination_root" || [ ! -d "$destination_root" ]; then
+    verify_failure "$destination_root is missing"
+    return
+  fi
+
+  find "$source_root" -type f -print >"$tree_files"
+  while IFS= read -r source_file; do
+    relative=${source_file#"$source_root/"}
+    verify_file "$source_file" "$destination_root/$relative"
+  done <"$tree_files"
+}
+
+verify_canonical() {
+  destination_root=$1
+
+  verify_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
+  verify_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
+
+  if ! path_exists "$destination_root/.swe-forge" || [ ! -d "$destination_root/.swe-forge" ]; then
+    verify_failure "$destination_root/.swe-forge is missing"
+    return
+  fi
+
+  while IFS= read -r source_file; do
+    relative=${source_file#"$SOURCE_ROOT/"}
+    verify_file "$source_file" "$destination_root/$relative"
+  done <"$RUN_TMP/canonical-files"
+}
+
+verify_contains() {
+  needle=$1
+  file=$2
+  if ! grep -F "$needle" "$file" >/dev/null 2>&1; then
+    verify_failure "$file does not contain: $needle"
+  fi
+}
+
+verify_bridge() {
+  destination=$1
+  agents_destination=$2
+
+  if ! path_exists "$destination"; then
+    verify_failure "$destination is missing"
+    return
+  fi
+
+  if [ -L "$destination" ]; then
+    if ! same_path "$agents_destination" "$destination"; then
+      verify_failure "$destination is not linked to AGENTS.md"
+    fi
+  elif ! cmp -s "$RUN_TMP/claude-bridge" "$destination"; then
+    verify_failure "$destination is not the minimal @AGENTS.md bridge"
+  fi
+}
+
+verify_project_opencode() {
+  command_file=$TARGET/.opencode/commands/swe-forge.md
+  verify_file "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" "$command_file"
+  [ -f "$command_file" ] && {
+    verify_contains '$ARGUMENTS' "$command_file"
+    verify_contains 'SWE-FORGE.md' "$command_file"
+  }
+}
+
+verify_project_claude() {
+  skill="$TARGET/.claude/skills/swe-forge"
+  verify_tree "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge" "$skill"
+  verify_bridge "$TARGET/CLAUDE.md" "$TARGET/AGENTS.md"
+}
+
+verify_global_opencode() {
+  opencode_root=$(global_opencode_root)
+  verify_canonical "$opencode_root/swe-forge"
+  command_file=$opencode_root/commands/swe-forge.md
+  verify_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" \
+    "$command_file"
+  [ -f "$command_file" ] && {
+    verify_contains '$ARGUMENTS' "$command_file"
+    verify_contains '~/.config/opencode/swe-forge' "$command_file"
+  }
+}
+
+verify_global_claude() {
+  claude_root=$(global_claude_root)
+  verify_canonical "$claude_root/swe-forge"
+  verify_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge-global" \
+    "$claude_root/skills/swe-forge"
+}
+
+verify_requested() {
+  VERIFY_FAILURES=0
+
+  if [ "$SCOPE" = global ]; then
+    case "$HARNESS" in
+      opencode)
+        verify_global_opencode
+        ;;
+      claude)
+        verify_global_claude
+        ;;
+      all)
+        verify_global_opencode
+        verify_global_claude
+        ;;
+    esac
+  else
+    verify_canonical "$TARGET"
+    case "$HARNESS" in
+      opencode)
+        verify_project_opencode
+        ;;
+      claude)
+        verify_project_claude
+        ;;
+      all)
+        verify_project_opencode
+        verify_project_claude
+        ;;
+    esac
+  fi
+
+  if [ "$VERIFY_FAILURES" -ne 0 ]; then
+    return 1
+  fi
+
+  info "PASS: SWE Forge $HARNESS installation is valid"
+}
+
+choose_destination() {
+  if [ "$SCOPE" = global ]; then
+    [ -z "$TARGET" ] || die "--target cannot be combined with --global"
+    return
+  fi
+
+  if [ -z "$TARGET" ]; then
+    if [ ! -t 0 ]; then
+      die "no target supplied; use --target PATH or --global"
+    fi
+    printf 'Install SWE Forge into a repository/folder, or type global: '
+    IFS= read -r TARGET || die "no installation target supplied"
+    case "$TARGET" in
+      global|globally)
+        TARGET=
+        SCOPE=global
+        return
+        ;;
+      '')
+        die "no installation target supplied"
+        ;;
+    esac
+  fi
+
+  [ -d "$TARGET" ] || die "target directory does not exist: $TARGET"
+  TARGET=$(CDPATH= cd "$TARGET" && pwd -P)
+
+  repo_root=$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$repo_root" ]; then
+    TARGET=$(CDPATH= cd "$repo_root" && pwd -P)
+  fi
+}
+
+parse_args() {
+  if [ "$#" -eq 1 ] && { [ "$1" = -h ] || [ "$1" = --help ]; }; then
+    usage
+    exit 0
+  fi
+
+  [ "$#" -ge 2 ] || {
+    usage >&2
+    exit 2
+  }
+
+  ACTION=$1
+  HARNESS=$2
+  shift 2
+
+  case "$ACTION" in
+    install|verify) ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown action: $ACTION" ;;
+  esac
+
+  case "$HARNESS" in
+    opencode|claude|claude-code|all)
+      [ "$HARNESS" != claude-code ] || HARNESS=claude
+      ;;
+    *) die "unsupported harness: $HARNESS (use opencode, claude, or all)" ;;
+  esac
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --target)
+        [ "$#" -ge 2 ] || die "--target requires a path"
+        TARGET=$2
+        shift 2
+        ;;
+      --global)
+        SCOPE=global
+        shift
+        ;;
+      --mode)
+        [ "$#" -ge 2 ] || die "--mode requires link or copy"
+        MODE=$2
+        case "$MODE" in
+          link|copy) ;;
+          *) die "unsupported mode: $MODE (use link or copy)" ;;
+        esac
+        shift 2
+        ;;
+      global|globally)
+        SCOPE=global
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      -*)
+        die "unknown option: $1"
+        ;;
+      *)
+        [ -z "$TARGET" ] || die "multiple target paths supplied"
+        TARGET=$1
+        shift
+        ;;
+    esac
+  done
+}
+
+main() {
+  parse_args "$@"
+  [ -n "${HOME:-}" ] || die "HOME must be set"
+  prepare_manifests
+  printf '%s\n' '@AGENTS.md' >"$RUN_TMP/claude-bridge"
+  choose_destination
+
+  if [ "$ACTION" = install ]; then
+    preflight_install
+    install_requested
+    if verify_requested; then
+      info "source: $SOURCE_ROOT"
+      if [ "$SCOPE" = global ]; then
+        info "scope: global harness configuration"
+      else
+        info "target: $TARGET"
+      fi
+      info "mode: $MODE"
+      info "invoke with: /swe-forge <ticket>"
+    else
+      die "installation completed but verification failed"
+    fi
+  else
+    verify_requested || die "verification failed"
+  fi
+}
+
+main "$@"

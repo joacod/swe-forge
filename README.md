@@ -82,6 +82,33 @@ not redefine the workflow or become a second source of truth.
 3. Explicitly write `Use SWE Forge` and provide the ticket.
 4. Let the orchestrator choose `SOLO`, `SUBAGENTS`, or `HERDR`.
 
+## Install Into A Harness
+
+Keep a stable clone of this repository as the source of truth. The installer
+links the canonical files by default, so updating this checkout with `git pull`
+updates project and global installations without copying the workflow again.
+
+When using an agent from this checkout, an explicit request such as:
+
+```text
+Install SWE Forge for OpenCode in /path/to/project.
+```
+
+causes the agent to ask for a target when none is supplied, install only the
+requested harness bridge, and verify the result. The direct commands are:
+
+```bash
+scripts/swe-forge install opencode --target /path/to/project
+scripts/swe-forge install claude --target /path/to/project
+scripts/swe-forge install all --global
+scripts/swe-forge verify opencode --target /path/to/project
+```
+
+Use `--mode copy` for a reviewed snapshot instead of source-linked files. A
+global installation only adds the harness command or skill and a private
+source-linked support directory; it does not edit model, permission, or JSON
+configuration.
+
 For a normal task, do not invoke SWE Forge:
 
 ```text
@@ -93,10 +120,11 @@ That request should continue to behave like ordinary harness usage.
 ## Installation Modes
 
 - Standalone: clone and version this repository independently.
-- Project-local: copy or link `AGENTS.md`, `SWE-FORGE.md`, and `.swe-forge/` into
-  a software repository.
-- Global or personal: configure a harness to reference these canonical files
-  without silently copying or modifying global configuration.
+- Project-local: use the installer to link `AGENTS.md`, `SWE-FORGE.md`, and
+  `.swe-forge/` into a software repository.
+- Global or personal: use the installer to add a harness command or skill that
+  references the stable canonical checkout without changing model or permission
+  configuration.
 
 See [installation.md](docs/installation.md) for the full installation
 guidance.
@@ -164,5 +192,12 @@ Keep the canonical workflow in `SWE-FORGE.md` and keep `AGENTS.md` small. Add
 new harness behavior only as an adapter. Add a role only when a bounded
 specialization is useful in real tickets. Prefer evidence from evaluation over
 more orchestration.
+
+Validate installer changes with:
+
+```bash
+sh -n scripts/swe-forge scripts/test-swe-forge
+scripts/test-swe-forge
+```
 
 See the contributor guides in [docs/](docs/) before extending the repository.

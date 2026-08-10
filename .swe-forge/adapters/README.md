@@ -25,6 +25,11 @@ not discovered automatically by a harness while they remain here. Installation
 means copying or linking only the adapter files appropriate for a target
 repository or user configuration.
 
+For the supported V1 harnesses, prefer `scripts/swe-forge install` and
+`scripts/swe-forge verify`. The installer links adapters to the canonical
+checkout by default and accepts `--global` only when the user explicitly asks
+for user-level harness access.
+
 Do not modify global harness configuration as part of installing SWE Forge
 unless the user explicitly requests it. Prefer project-local files or links
 that can be reviewed and versioned.

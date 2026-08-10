@@ -1,0 +1,87 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+INSTALL=$ROOT/scripts/swe-forge
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-test.XXXXXX")
+
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+fail() {
+  printf 'test failure: %s\n' "$*" >&2
+  exit 1
+}
+
+expect_failure() {
+  if "$@" >/dev/null 2>&1; then
+    fail "expected command to fail: $*"
+  fi
+}
+
+project=$TMP_ROOT/project
+mkdir -p "$project"
+
+"$INSTALL" install all --target "$project" >/dev/null
+"$INSTALL" install all --target "$project" >/dev/null
+"$INSTALL" verify all --target "$project" >/dev/null
+
+test -L "$project/AGENTS.md" || fail "project AGENTS.md is not linked"
+test -L "$project/SWE-FORGE.md" || fail "project SWE-FORGE.md is not linked"
+test -L "$project/.swe-forge/agents" || fail "canonical agent directory is not linked"
+test -L "$project/.opencode/commands/swe-forge.md" || fail "OpenCode command is not linked"
+test -L "$project/.claude/skills/swe-forge" || fail "Claude skill directory is not linked"
+test -L "$project/CLAUDE.md" || fail "Claude bridge is not linked"
+test "$(readlink "$project/AGENTS.md")" = "$ROOT/AGENTS.md" || fail "project source link is incorrect"
+test "$(readlink "$project/.opencode/commands/swe-forge.md")" = \
+  "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" || fail "OpenCode source link is incorrect"
+
+copy_project=$TMP_ROOT/copy-project
+mkdir -p "$copy_project"
+"$INSTALL" install all --target "$copy_project" --mode copy >/dev/null
+"$INSTALL" verify all --target "$copy_project" >/dev/null
+test ! -L "$copy_project/AGENTS.md" || fail "copy mode linked AGENTS.md"
+test ! -L "$copy_project/.swe-forge/agents" || fail "copy mode linked canonical files"
+test ! -L "$copy_project/.opencode/commands/swe-forge.md" || fail "copy mode linked OpenCode command"
+test ! -L "$copy_project/.claude/skills/swe-forge" || fail "copy mode linked Claude skill"
+
+repo=$TMP_ROOT/repo
+mkdir -p "$repo/nested"
+git -C "$repo" init >/dev/null 2>&1
+"$INSTALL" install opencode --target "$repo/nested" >/dev/null
+test -L "$repo/AGENTS.md" || fail "Git target was not normalized to its root"
+
+conflict_project=$TMP_ROOT/conflict-project
+mkdir -p "$conflict_project"
+printf '%s\n' 'project instructions' >"$conflict_project/AGENTS.md"
+expect_failure "$INSTALL" install opencode --target "$conflict_project"
+
+global_home=$TMP_ROOT/home
+mkdir -p "$global_home"
+HOME="$global_home" \
+  "$INSTALL" install all --global >/dev/null
+HOME="$global_home" \
+  "$INSTALL" verify all --global >/dev/null
+test -L "$global_home/.config/opencode/commands/swe-forge.md" || fail "global OpenCode command is not linked"
+test -L "$global_home/.claude/skills/swe-forge" || fail "global Claude skill is not linked"
+test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global OpenCode source is not linked"
+test -L "$global_home/.claude/swe-forge/SWE-FORGE.md" || fail "global Claude source is not linked"
+test "$(readlink "$global_home/.config/opencode/commands/swe-forge.md")" = \
+  "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" || fail "global OpenCode link is incorrect"
+
+global_conflict_home=$TMP_ROOT/global-conflict-home
+mkdir -p "$global_conflict_home/.config/opencode/commands"
+printf '%s\n' 'existing command' >"$global_conflict_home/.config/opencode/commands/swe-forge.md"
+expect_failure env HOME="$global_conflict_home" \
+  "$INSTALL" install opencode --global
+test ! -e "$global_conflict_home/.config/opencode/swe-forge/AGENTS.md" || \
+  fail "global conflict partially wrote files"
+
+expect_failure "$INSTALL" install unknown --target "$project"
+expect_failure "$INSTALL" install opencode
+
+printf '%s\n' 'PASS: installer fixture tests'

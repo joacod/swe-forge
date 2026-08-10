@@ -1,7 +1,49 @@
 # Installation
 
-SWE Forge is a portable repository first. Installation into another project or
-global harness configuration is an explicit user action.
+SWE Forge is a portable repository first. Keep one stable clone as the source
+of truth and install links to that checkout. Installation into another project
+or global harness configuration is always an explicit user action.
+
+The repository includes a dependency-free installer:
+
+```bash
+scripts/swe-forge install <opencode|claude|all> [options]
+scripts/swe-forge verify <opencode|claude|all> [options]
+```
+
+The default mode is `link`. A link installation follows changes in this
+checkout after `git pull`. Use `--mode copy` only when a self-contained snapshot
+is more important than automatic updates.
+
+If no target is supplied from an interactive terminal, the installer asks for a
+repository, folder, or `global`. Non-interactive callers must use `--target` or
+`--global`.
+
+## Recommended Installation
+
+Keep the source checkout at a stable path:
+
+```bash
+git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
+cd ~/tools/swe-forge
+git pull
+```
+
+Install into a project or folder:
+
+```bash
+scripts/swe-forge install opencode --target /path/to/project
+scripts/swe-forge install claude --target /path/to/project
+```
+
+Install both harness bridges for the current user:
+
+```bash
+scripts/swe-forge install all --global
+```
+
+The installer never guesses a global installation. `global` must be explicitly
+requested.
 
 ## Mode A: Standalone Repository
 
@@ -13,12 +55,12 @@ cd swe-forge
 ```
 
 The repository's canonical source is `SWE-FORGE.md` plus the `.swe-forge/`
-directory. Harness adapters are templates and are not installed globally by
-default.
+directory. Harness adapters are templates until the installer links the
+requested bridge.
 
 ## Mode B: Project-Local Installation
 
-Copy or link these portable files into the target software repository:
+The installer links these portable files into the target software repository:
 
 ```text
 AGENTS.md
@@ -26,37 +68,44 @@ SWE-FORGE.md
 .swe-forge/
 ```
 
-Review collisions before replacing an existing `AGENTS.md`, `SWE-FORGE.md`, or
-`.swe-forge/` directory. Merge repository-specific instructions into
-`AGENTS.md` while preserving its small optional-activation section. Do not
-overwrite unrelated project instructions.
+Review collisions before installing over an existing `AGENTS.md`,
+`SWE-FORGE.md`, or `.swe-forge/` directory. The installer stops on a conflict so
+repository-specific instructions can be merged manually without risking an
+overwrite.
 
-For a reviewed copy:
-
-```bash
-cp /path/to/swe-forge/AGENTS.md ./AGENTS.md
-cp /path/to/swe-forge/SWE-FORGE.md ./SWE-FORGE.md
-cp -R /path/to/swe-forge/.swe-forge ./
-```
-
-For a versioned link in a controlled environment:
+For a source-linked installation:
 
 ```bash
-ln -s /path/to/swe-forge/SWE-FORGE.md ./SWE-FORGE.md
-ln -s /path/to/swe-forge/.swe-forge ./.swe-forge
+~/tools/swe-forge/scripts/swe-forge install opencode --target .
 ```
 
-Use links only when every contributor can resolve the target path. A copied
-version is usually easier to review and publish with the project.
+The installer also links the requested harness bridge:
+
+```bash
+# OpenCode: .opencode/commands/swe-forge.md
+# Claude Code: CLAUDE.md and .claude/skills/swe-forge/
+```
+
+The source checkout path must remain available to the user. Existing conflicting
+files stop the install before anything is written; the installer never merges or
+overwrites project instructions.
+
+For a reviewed snapshot instead:
+
+```bash
+~/tools/swe-forge/scripts/swe-forge install opencode --target . --mode copy
+```
+
+Copied installations need to be reinstalled after the source checkout changes.
 
 ## Harness Bridges
 
 Add only the bridge needed by the target harness:
 
-- Claude Code: keep or add a tiny `CLAUDE.md` containing `@AGENTS.md`; link or
-  copy the optional skill from `.swe-forge/adapters/claude-code/`.
-- OpenCode: copy the explicit command to `.opencode/commands/swe-forge.md` and
-  optionally add thin native-agent bridges under `.opencode/agents/`.
+- Claude Code: the project installer links a tiny `CLAUDE.md` bridge and the
+  explicit skill from `.swe-forge/adapters/claude-code/`.
+- OpenCode: the project installer links the explicit command to
+  `.opencode/commands/swe-forge.md` and does not add model or permission config.
 - Herdr: use `.swe-forge/adapters/herdr/` only when an execution decision
   selects isolated work; install Herdr's own official skill separately if
   needed.
@@ -67,24 +116,55 @@ Do not copy the full canonical workflow into a harness-specific file.
 
 ## Mode C: Global or Personal Installation
 
-Global installation is optional and must be user-controlled. A harness may
-reference a canonical checkout from its user-level configuration, or a user may
-link a skill or instruction shim into a personal directory. Keep the canonical
-repository independently versioned and use a stable, user-controlled path.
+Global installation is optional and must be explicitly requested. The installer
+creates source-linked harness entries in these locations:
 
-Do not silently modify directories such as `~/.config/opencode/` or `~/.claude/`.
-Do not commit machine-specific paths, credentials, local model IDs, or personal
-run state.
+- OpenCode: `~/.config/opencode/commands/swe-forge.md` and
+  `~/.config/opencode/swe-forge/`
+- Claude Code: `~/.claude/skills/swe-forge/` and `~/.claude/swe-forge/`
+
+The global loaders point back to the support directory, which points back to
+the canonical checkout. This makes `/swe-forge <ticket>` available across
+projects without copying canonical files into every project.
+
+The installer does not modify `opencode.json`, `~/.config/opencode/AGENTS.md`,
+`~/.claude/CLAUDE.md`, permissions, models, credentials, or other personal
+configuration. It stops on conflicts instead of replacing them.
+
+Do not commit generated global support directories, machine-specific paths,
+credentials, local model IDs, or personal run state.
+
+## Verification
+
+Installation runs verification automatically. It can also be run later:
+
+```bash
+scripts/swe-forge verify opencode --target /path/to/project
+scripts/swe-forge verify claude --global
+```
+
+Verification checks the canonical files, current source contents, harness
+locations, adapter references, explicit invocation settings, and dangling
+links. A successful filesystem check should be followed by the harness smoke
+test:
+
+```text
+/swe-forge <small test ticket>
+```
+
+Ordinary prompts must continue to behave normally; SWE Forge remains explicitly
+invoked.
 
 ## Updating
 
 When updating an installation:
 
-1. compare the canonical repository revision with the project copy or link
-2. review changes to activation, contracts, policies, and adapters
-3. preserve project-specific `AGENTS.md` instructions
-4. remove stale generated adapter files only after review
-5. run the repository's documentation and structural checks
+1. run `git pull` in the stable source checkout
+2. run the matching `verify` command for each installation
+3. review changes to activation, contracts, policies, and adapters
+4. preserve project-specific `AGENTS.md` instructions
+5. remove stale generated adapter files only after review
+6. run the repository's documentation and structural checks
 
 Keep temporary run state outside the repository or under ignored
 `.swe-forge/runs/`.

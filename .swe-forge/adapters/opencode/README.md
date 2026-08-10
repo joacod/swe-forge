@@ -21,6 +21,12 @@ load the canonical instructions only when the user types `/swe-forge`.
 
 Do not install a command that auto-runs the workflow for ordinary prompts.
 
+The global installer links the global loader to
+`~/.config/opencode/commands/swe-forge.md` and exposes the canonical source
+through `~/.config/opencode/swe-forge/`. The loader uses OpenCode's supported
+home-relative file references, so projects do not need local canonical copies
+for `/swe-forge`.
+
 ## Native Subagents
 
 OpenCode provides native primary and subagent modes. Use them when the routing
@@ -79,3 +85,4 @@ References checked on 2026-08-10:
 - https://opencode.ai/docs/agents/
 - https://opencode.ai/docs/commands/
 - https://opencode.ai/docs/skills/
+- https://opencode.ai/docs/rules/

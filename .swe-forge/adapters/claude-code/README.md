@@ -23,6 +23,9 @@ Claude can run it only when the user explicitly invokes it. The skill body is a
 loader that reads `AGENTS.md`, `SWE-FORGE.md`, and the V1 workflow; it does not
 duplicate them.
 
+In the default link mode, the project `CLAUDE.md` is a relative symlink to the
+project `AGENTS.md`. Copy mode writes the equivalent `@AGENTS.md` bridge.
+
 Natural-language activation remains available without installing the skill:
 
 ```text
@@ -46,9 +49,18 @@ chooses a model mapping.
 
 ## Global Installation
 
-Do not modify `~/.claude/` automatically. If a user requests a personal
-installation, they can link the skill or a reference file into their own
-configuration and keep the repository's canonical files versioned separately.
+When the user explicitly requests a global installation, the installer links:
+
+```text
+~/.claude/skills/swe-forge/SKILL.md
+~/.claude/swe-forge/AGENTS.md
+~/.claude/swe-forge/SWE-FORGE.md
+~/.claude/swe-forge/.swe-forge/
+```
+
+The global skill reads the canonical files through that stable support path, so
+`git pull` in the source checkout updates future sessions. Existing global
+files are never overwritten.
 
 ## References
 

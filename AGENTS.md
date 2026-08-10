@@ -18,3 +18,19 @@ Activate it only when the user explicitly:
 - invokes a harness-specific SWE Forge command such as `/swe-forge`
 
 When activated, read `SWE-FORGE.md` and follow the workflow it defines.
+
+## Installation Requests
+
+Installation is separate from workflow activation. When the user explicitly
+asks to install SWE Forge for a harness, for example `install swe-forge
+opencode`, read `docs/installation.md` and the requested adapter README.
+
+- Ask where to install it when the user did not provide a repository, folder, or
+  `global` scope.
+- Use `scripts/swe-forge install <harness> --target <path>` for a project or
+  `scripts/swe-forge install <harness> --global` for user-level harness access.
+- Run the matching `scripts/swe-forge verify` command after installation.
+- Never modify global harness configuration unless the user explicitly chose
+  `global`.
+- Do not overwrite or merge conflicting instruction files without showing the
+  user the conflict first.
