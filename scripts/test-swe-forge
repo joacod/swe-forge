@@ -171,6 +171,24 @@ test ! -e "$rollback_project/SWE-FORGE.md" || fail "rollback left SWE-FORGE.md"
 test ! -e "$rollback_project/.swe-forge" || fail "rollback left canonical files"
 test ! -e "$rollback_project/.swe-forge-install.lock" || fail "rollback left installer lock"
 
+copy_rollback_project=$TMP_ROOT/copy-rollback-project
+copy_fake_bin=$TMP_ROOT/copy-fake-bin
+mkdir -p "$copy_rollback_project" "$copy_fake_bin"
+cat >"$copy_fake_bin/cp" <<'EOF'
+#!/bin/sh
+printf '%s\n' partial >"$2"
+exit 74
+EOF
+chmod +x "$copy_fake_bin/cp"
+expect_failure "could not stage copied file" env PATH="$copy_fake_bin:$PATH" \
+  "$INSTALL" install opencode --target "$copy_rollback_project" --mode copy
+test ! -e "$copy_rollback_project/AGENTS.md" || fail "copy rollback left AGENTS.md"
+test ! -e "$copy_rollback_project/.swe-forge" || fail "copy rollback left canonical files"
+test ! -e "$copy_rollback_project/.swe-forge-install.lock" || fail "copy rollback left installer lock"
+if find "$copy_rollback_project" -name '.swe-forge-stage.*' -print | grep . >/dev/null; then
+  fail "copy rollback left a staging directory"
+fi
+
 signal_project=$TMP_ROOT/signal-project
 signal_bin=$TMP_ROOT/signal-bin
 mkdir -p "$signal_project" "$signal_bin"

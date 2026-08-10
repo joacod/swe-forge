@@ -522,8 +522,11 @@ install_file() {
     record_dir "$stage_dir"
     end_create
     begin_create
-    cp "$source" "$stage_dir/file"
     record_file "$stage_dir/file"
+    if ! cp "$source" "$stage_dir/file"; then
+      end_create
+      die "could not stage copied file: $destination"
+    fi
     end_create
     begin_create
     if ! ln "$stage_dir/file" "$destination"; then
