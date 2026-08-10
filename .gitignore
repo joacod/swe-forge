@@ -1,0 +1,51 @@
+# macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+.DocumentRevisions-V100/
+.TemporaryItems/
+.apdisk
+
+# Editor and personal workspace files
+*~
+*.swp
+*.swo
+.idea/
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/agent-memory-local/
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Common generated output and caches
+node_modules/
+coverage/
+dist/
+build/
+out/
+.cache/
+.turbo/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+target/
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Temporary SWE Forge execution state
+.swe-forge/runs/
+.swe-forge/.runs/
+.swe-forge/generated/
+.swe-forge/run-state*.yml
+.swe-forge/run-state*.yaml
