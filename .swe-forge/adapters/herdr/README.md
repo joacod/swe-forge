@@ -44,3 +44,9 @@ integration, and cleanup procedure.
 The runbook uses the current Herdr CLI first. The raw socket API is an advanced
 option for custom tools and event subscribers. Check the installed binary's
 help output before relying on a command or response shape.
+
+References checked on 2026-08-10:
+
+- https://herdr.dev/docs/agent-skill/
+- https://herdr.dev/docs/socket-api/
+- https://herdr.dev/docs/quick-start/

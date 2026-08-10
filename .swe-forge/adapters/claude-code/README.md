@@ -58,3 +58,9 @@ The adapter follows current Claude Code conventions for:
 - project skills under `.claude/skills/<name>/SKILL.md`
 - user-invoked skills with `disable-model-invocation: true`
 - project subagents under `.claude/agents/`
+
+References checked on 2026-08-10:
+
+- https://code.claude.com/docs/en/memory
+- https://code.claude.com/docs/en/sub-agents
+- https://code.claude.com/docs/en/skills

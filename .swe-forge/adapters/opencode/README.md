@@ -73,3 +73,9 @@ The adapter was designed against the current OpenCode documentation for:
 - project commands in `.opencode/commands/`
 - `$ARGUMENTS` and file references in command templates
 - permission-based agent tool control
+
+References checked on 2026-08-10:
+
+- https://opencode.ai/docs/agents/
+- https://opencode.ai/docs/commands/
+- https://opencode.ai/docs/skills/
