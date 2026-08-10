@@ -60,12 +60,13 @@ Contracts make coordination explicit without using agent conversation as shared
 state:
 
 - task contracts bound objective, ownership, scope, dependencies, acceptance,
-  validation, and commit policy
+  checkout baseline, validation criticality, recursive delegation, and
+  per-action authorization provenance
 - worker results expose status, files, tests, evidence, assumptions, risks, and
   follow-ups
 - review results expose severity, confidence, location, evidence, and action
-- run state records temporary topology, task statuses, dependencies, review,
-  and retries
+- run state records temporary topology, checkout identity, task statuses,
+  dependencies, authorization, validation, review, retries, and cleanup
 
 Run state is external or ignored by default. It is not application source and
 must not contain secrets or full transcripts.

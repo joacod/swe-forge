@@ -5,6 +5,7 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 INSTALL=$ROOT/scripts/swe-forge
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-test.XXXXXX")
+TMP_ROOT=$(CDPATH= cd "$TMP_ROOT" && pwd -P)
 
 cleanup() {
   rm -rf "$TMP_ROOT"
@@ -18,9 +19,15 @@ fail() {
 }
 
 expect_failure() {
-  if "$@" >/dev/null 2>&1; then
+  expected=$1
+  shift
+  if output=$("$@" 2>&1); then
     fail "expected command to fail: $*"
   fi
+  case "$output" in
+    *"$expected"*) ;;
+    *) fail "failure did not contain '$expected': $output" ;;
+  esac
 }
 
 project=$TMP_ROOT/project
@@ -45,22 +52,187 @@ grep -F '<solo|subagents|herdr> <ticket>' \
 copy_project=$TMP_ROOT/copy-project
 mkdir -p "$copy_project"
 "$INSTALL" install all --target "$copy_project" --mode copy >/dev/null
-"$INSTALL" verify all --target "$copy_project" >/dev/null
+"$INSTALL" verify all --target "$copy_project" --mode copy >/dev/null
+expect_failure "is not a source link" "$INSTALL" verify all --target "$copy_project"
 test ! -L "$copy_project/AGENTS.md" || fail "copy mode linked AGENTS.md"
 test ! -L "$copy_project/.swe-forge/agents" || fail "copy mode linked canonical files"
 test ! -L "$copy_project/.opencode/commands/swe-forge.md" || fail "copy mode linked OpenCode command"
 test ! -L "$copy_project/.claude/skills/swe-forge" || fail "copy mode linked Claude skill"
+rm "$copy_project/.swe-forge/contracts/task.md"
+expect_failure "existing copied snapshot missing" \
+  "$INSTALL" install all --target "$copy_project" --mode copy
+cp "$ROOT/.swe-forge/contracts/task.md" "$copy_project/.swe-forge/contracts/task.md"
+printf '%s\n' stale >"$copy_project/.swe-forge/stale.md"
+expect_failure "is not managed by the current SWE Forge source" \
+  "$INSTALL" verify all --target "$copy_project" --mode copy
+expect_failure "installation stopped before writing" \
+  "$INSTALL" install all --target "$copy_project" --mode copy
+rm "$copy_project/.swe-forge/stale.md"
+ln -s "$ROOT/README.md" "$copy_project/.swe-forge/stale-link"
+expect_failure "copy mode requires real entries" \
+  "$INSTALL" verify all --target "$copy_project" --mode copy
+rm "$copy_project/.swe-forge/stale-link"
+mkdir "$copy_project/.swe-forge/stale-directory"
+expect_failure "is not managed by the current SWE Forge source" \
+  "$INSTALL" verify all --target "$copy_project" --mode copy
+rmdir "$copy_project/.swe-forge/stale-directory"
+printf '%s\n' stale >"$copy_project/.claude/skills/swe-forge/stale.md"
+expect_failure "is not managed by the current SWE Forge source" \
+  "$INSTALL" verify claude --target "$copy_project" --mode copy
+expect_failure "installation stopped before writing" \
+  "$INSTALL" install claude --target "$copy_project" --mode copy
+rm "$copy_project/.claude/skills/swe-forge/stale.md"
 
 repo=$TMP_ROOT/repo
 mkdir -p "$repo/nested"
 git -C "$repo" init >/dev/null 2>&1
 "$INSTALL" install opencode --target "$repo/nested" >/dev/null
-test -L "$repo/AGENTS.md" || fail "Git target was not normalized to its root"
+test -L "$repo/nested/AGENTS.md" || fail "nested target was not preserved"
+test ! -e "$repo/AGENTS.md" || fail "nested target escaped to the Git root"
 
 conflict_project=$TMP_ROOT/conflict-project
 mkdir -p "$conflict_project"
 printf '%s\n' 'project instructions' >"$conflict_project/AGENTS.md"
-expect_failure "$INSTALL" install opencode --target "$conflict_project"
+expect_failure "installation stopped before writing" \
+  "$INSTALL" install opencode --target "$conflict_project"
+test ! -e "$conflict_project/SWE-FORGE.md" || fail "project conflict partially wrote files"
+
+symlink_target_root=$TMP_ROOT/symlink-target-root
+mkdir -p "$symlink_target_root/real"
+ln -s "$symlink_target_root/real" "$symlink_target_root/target"
+expect_failure "target directory must not be a symlink" \
+  "$INSTALL" install opencode --target "$symlink_target_root/target"
+
+symlink_path_root=$TMP_ROOT/symlink-path-root
+mkdir -p "$symlink_path_root/real/project"
+ln -s "$symlink_path_root/real" "$symlink_path_root/alias"
+expect_failure "destination path contains a symlinked directory" \
+  "$INSTALL" install opencode --target "$symlink_path_root/alias/project"
+
+symlink_component=$TMP_ROOT/symlink-component
+external_component=$TMP_ROOT/external-component
+mkdir -p "$symlink_component/.opencode" "$external_component"
+ln -s "$external_component" "$symlink_component/.opencode/commands"
+expect_failure "destination path contains a symlinked directory" \
+  "$INSTALL" install opencode --target "$symlink_component"
+test ! -e "$external_component/swe-forge.md" || fail "symlinked component received installer output"
+
+copy_symlink_component=$TMP_ROOT/copy-symlink-component
+copy_external_component=$TMP_ROOT/copy-external-component
+mkdir -p "$copy_symlink_component/.swe-forge" "$copy_external_component"
+ln -s "$copy_external_component" "$copy_symlink_component/.swe-forge/contracts"
+expect_failure "destination path contains a symlinked directory" \
+  "$INSTALL" install opencode --target "$copy_symlink_component" --mode copy
+test ! -e "$copy_external_component/task.md" || fail "copy escaped through a symlinked component"
+
+wrong_link_type=$TMP_ROOT/wrong-link-type
+mkdir -p "$wrong_link_type"
+"$INSTALL" install opencode --target "$wrong_link_type" >/dev/null
+rm "$wrong_link_type/.opencode/commands/swe-forge.md"
+cp "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" \
+  "$wrong_link_type/.opencode/commands/swe-forge.md"
+expect_failure "is not a source link" \
+  "$INSTALL" verify opencode --target "$wrong_link_type"
+
+wrong_copy_type=$TMP_ROOT/wrong-copy-type
+mkdir -p "$wrong_copy_type"
+"$INSTALL" install opencode --target "$wrong_copy_type" --mode copy >/dev/null
+rm "$wrong_copy_type/.opencode/commands/swe-forge.md"
+ln -s "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" \
+  "$wrong_copy_type/.opencode/commands/swe-forge.md"
+expect_failure "is not a regular copied file" \
+  "$INSTALL" verify opencode --target "$wrong_copy_type" --mode copy
+
+locked_project=$TMP_ROOT/locked-project
+mkdir -p "$locked_project/.swe-forge-install.lock"
+expect_failure "another installation may be active" \
+  "$INSTALL" install opencode --target "$locked_project"
+test -d "$locked_project/.swe-forge-install.lock" || fail "rejected install removed another installer's lock"
+
+rollback_project=$TMP_ROOT/rollback-project
+fake_bin=$TMP_ROOT/fake-bin
+ln_count=$TMP_ROOT/ln-count
+mkdir -p "$rollback_project" "$fake_bin"
+real_ln=$(command -v ln)
+cat >"$fake_bin/ln" <<EOF
+#!/bin/sh
+count=0
+test ! -f "$ln_count" || count=\$(cat "$ln_count")
+count=\$((count + 1))
+printf '%s\n' "\$count" >"$ln_count"
+test "\$count" -lt 3 || exit 73
+exec "$real_ln" "\$@"
+EOF
+chmod +x "$fake_bin/ln"
+expect_failure "could not install" env PATH="$fake_bin:$PATH" \
+  "$INSTALL" install opencode --target "$rollback_project"
+test ! -e "$rollback_project/AGENTS.md" || fail "rollback left AGENTS.md"
+test ! -e "$rollback_project/SWE-FORGE.md" || fail "rollback left SWE-FORGE.md"
+test ! -e "$rollback_project/.swe-forge" || fail "rollback left canonical files"
+test ! -e "$rollback_project/.swe-forge-install.lock" || fail "rollback left installer lock"
+
+copy_rollback_project=$TMP_ROOT/copy-rollback-project
+copy_fake_bin=$TMP_ROOT/copy-fake-bin
+mkdir -p "$copy_rollback_project" "$copy_fake_bin"
+cat >"$copy_fake_bin/cp" <<'EOF'
+#!/bin/sh
+printf '%s\n' partial >"$2"
+exit 74
+EOF
+chmod +x "$copy_fake_bin/cp"
+expect_failure "could not stage copied file" env PATH="$copy_fake_bin:$PATH" \
+  "$INSTALL" install opencode --target "$copy_rollback_project" --mode copy
+test ! -e "$copy_rollback_project/AGENTS.md" || fail "copy rollback left AGENTS.md"
+test ! -e "$copy_rollback_project/.swe-forge" || fail "copy rollback left canonical files"
+test ! -e "$copy_rollback_project/.swe-forge-install.lock" || fail "copy rollback left installer lock"
+if find "$copy_rollback_project" -name '.swe-forge-stage.*' -print | grep . >/dev/null; then
+  fail "copy rollback left a staging directory"
+fi
+
+signal_project=$TMP_ROOT/signal-project
+signal_bin=$TMP_ROOT/signal-bin
+mkdir -p "$signal_project" "$signal_bin"
+cat >"$signal_bin/ln" <<EOF
+#!/bin/sh
+"$real_ln" "\$@" || exit
+kill -TERM "\$PPID"
+exit 0
+EOF
+chmod +x "$signal_bin/ln"
+if env PATH="$signal_bin:$PATH" "$INSTALL" install opencode --target "$signal_project" >/dev/null 2>&1; then
+  fail "signal-injected install unexpectedly passed"
+else
+  signal_status=$?
+fi
+test "$signal_status" -eq 143 || fail "signal-injected install returned $signal_status instead of 143"
+test ! -e "$signal_project/AGENTS.md" || fail "signal rollback left AGENTS.md"
+test ! -e "$signal_project/.swe-forge-install.lock" || fail "signal rollback left installer lock"
+
+mkdir_signal_project=$TMP_ROOT/mkdir-signal-project
+mkdir_signal_bin=$TMP_ROOT/mkdir-signal-bin
+mkdir_count=$TMP_ROOT/mkdir-count
+mkdir -p "$mkdir_signal_project" "$mkdir_signal_bin"
+real_mkdir=$(command -v mkdir)
+cat >"$mkdir_signal_bin/mkdir" <<EOF
+#!/bin/sh
+count=0
+test ! -f "$mkdir_count" || count=\$(cat "$mkdir_count")
+count=\$((count + 1))
+printf '%s\n' "\$count" >"$mkdir_count"
+"$real_mkdir" "\$@" || exit
+test "\$count" -ne 2 || kill -TERM "\$PPID"
+exit 0
+EOF
+chmod +x "$mkdir_signal_bin/mkdir"
+if env PATH="$mkdir_signal_bin:$PATH" "$INSTALL" install opencode --target "$mkdir_signal_project" >/dev/null 2>&1; then
+  fail "directory-signal install unexpectedly passed"
+else
+  mkdir_signal_status=$?
+fi
+test "$mkdir_signal_status" -eq 143 || fail "directory-signal install returned $mkdir_signal_status instead of 143"
+test ! -e "$mkdir_signal_project/AGENTS.md" || fail "directory-signal rollback left AGENTS.md"
+test ! -e "$mkdir_signal_project/.swe-forge" || fail "directory-signal rollback left canonical directory"
+test ! -e "$mkdir_signal_project/.swe-forge-install.lock" || fail "directory-signal rollback left installer lock"
 
 global_home=$TMP_ROOT/home
 mkdir -p "$global_home"
@@ -80,12 +252,52 @@ grep -F 'requested_mode: AUTO' "$global_home/.config/opencode/swe-forge/SWE-FORG
 global_conflict_home=$TMP_ROOT/global-conflict-home
 mkdir -p "$global_conflict_home/.config/opencode/commands"
 printf '%s\n' 'existing command' >"$global_conflict_home/.config/opencode/commands/swe-forge.md"
-expect_failure env HOME="$global_conflict_home" \
+expect_failure "installation stopped before writing" env HOME="$global_conflict_home" \
   "$INSTALL" install opencode --global
 test ! -e "$global_conflict_home/.config/opencode/swe-forge/AGENTS.md" || \
   fail "global conflict partially wrote files"
 
-expect_failure "$INSTALL" install unknown --target "$project"
-expect_failure "$INSTALL" install opencode
+expect_failure "HOME must be an absolute path" env HOME=relative \
+  "$INSTALL" install opencode --global
+global_symlink_root=$TMP_ROOT/global-symlink-root
+mkdir -p "$global_symlink_root/real/home"
+ln -s "$global_symlink_root/real" "$global_symlink_root/alias"
+expect_failure "destination path contains a symlinked directory" env \
+  HOME="$global_symlink_root/alias/home" "$INSTALL" install opencode --global
+expect_failure "--mode copy is not supported with --global" \
+  "$INSTALL" install opencode --global --mode copy
+interactive_global_home=$TMP_ROOT/interactive-global-home
+mkdir -p "$interactive_global_home"
+if command -v expect >/dev/null 2>&1; then
+  expect <<EOF >/dev/null
+set timeout 10
+spawn env HOME="$interactive_global_home" "$INSTALL" install opencode --mode copy
+expect {
+  "*type global:*" { send "global\r" }
+  timeout { exit 90 }
+}
+expect {
+  "*--mode copy is not supported with --global*" { exit 0 }
+  timeout { exit 91 }
+}
+EOF
+else
+  grep -F 'choose_destination' "$INSTALL" >/dev/null || fail "interactive scope test prerequisite missing"
+  grep -F 'validate_scope' "$INSTALL" >/dev/null || fail "interactive scope validation missing"
+fi
+test ! -e "$interactive_global_home/.config/opencode/swe-forge" || \
+  fail "interactive global copy wrote support files"
+expect_failure "target supplied more than once" \
+  "$INSTALL" install opencode --target "$project" --target "$project"
+expect_failure "target supplied more than once" \
+  "$INSTALL" install opencode "$project" --target "$project"
+expect_failure "global scope supplied more than once" \
+  "$INSTALL" install opencode --global globally
+expect_failure "--mode supplied more than once" \
+  "$INSTALL" install opencode --target "$project" --mode link --mode copy
+expect_failure "unsupported harness" "$INSTALL" install unknown --target "$project"
+expect_failure "no target supplied" "$INSTALL" install opencode
+
+"$ROOT/scripts/check-swe-forge" >/dev/null
 
 printf '%s\n' 'PASS: installer fixture tests'

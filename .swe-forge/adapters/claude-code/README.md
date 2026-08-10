@@ -46,6 +46,9 @@ Use read-only tool lists for researchers, architects, reviewers, security
 reviewers, and performance reviewers. Give write tools only to a bounded task
 whose contract authorizes them. Omit model fields unless the user explicitly
 chooses a model mapping.
+Writable native subagents in one checkout must run sequentially. Concurrent
+writers require separate dedicated, classified worktrees; non-overlapping file
+scope alone does not make a shared checkout safe.
 
 ## Global Installation
 

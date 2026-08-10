@@ -11,12 +11,67 @@ VERIFY_FAILURES=0
 MODE=link
 SCOPE=project
 TARGET=
+TRANSACTION_ACTIVE=0
+LOCK_DIR=
+LOCK_OWNED=0
+STAGE_COUNTER=0
+CRITICAL_SECTION=0
+PENDING_SIGNAL=0
+CREATED_FILES=$RUN_TMP/created-files
+CREATED_DIRS=$RUN_TMP/created-dirs
+: >"$CREATED_FILES"
+: >"$CREATED_DIRS"
 
-cleanup() {
-  rm -rf "$RUN_TMP"
+rollback() {
+  while IFS= read -r created_file; do
+    rm -f "$created_file"
+  done <"$CREATED_FILES"
+
+  sort -r "$CREATED_DIRS" | while IFS= read -r created_dir; do
+    rmdir "$created_dir" 2>/dev/null || true
+  done
 }
 
-trap cleanup EXIT HUP INT TERM
+on_exit() {
+  status=$1
+  trap - 0 HUP INT TERM
+  set +e
+  if [ "$TRANSACTION_ACTIVE" -eq 1 ] && [ "$status" -ne 0 ]; then
+    rollback
+  fi
+  if [ "$LOCK_OWNED" -eq 1 ]; then
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+  fi
+  rm -rf "$RUN_TMP"
+  exit "$status"
+}
+
+handle_signal() {
+  signal_status=$1
+  if [ "$CRITICAL_SECTION" -eq 1 ]; then
+    PENDING_SIGNAL=$signal_status
+  else
+    exit "$signal_status"
+  fi
+}
+
+begin_create() {
+  CRITICAL_SECTION=1
+}
+
+end_create() {
+  CRITICAL_SECTION=0
+  if [ "$PENDING_SIGNAL" -ne 0 ]; then
+    signal_status=$PENDING_SIGNAL
+    PENDING_SIGNAL=0
+    exit "$signal_status"
+  fi
+}
+
+trap 'handle_signal 129' HUP
+trap 'handle_signal 130' INT
+trap 'handle_signal 143' TERM
+trap 'on_exit $?' 0
 
 die() {
   printf 'error: %s\n' "$*" >&2
@@ -55,6 +110,68 @@ verify_failure() {
 
 path_exists() {
   [ -e "$1" ] || [ -L "$1" ]
+}
+
+reject_unsupported_path() {
+  checked_path=$1
+  newline='
+'
+  tab=$(printf '\t')
+  case "$checked_path" in
+    *"$newline"*|*"$tab"*) die "paths containing tabs or newlines are not supported: $checked_path" ;;
+  esac
+}
+
+assert_real_ancestors() {
+  checked_path=$(dirname "$1")
+  while [ "$checked_path" != / ] && [ "$checked_path" != . ]; do
+    if [ -L "$checked_path" ]; then
+      die "destination path contains a symlinked directory: $checked_path"
+    fi
+    checked_path=$(dirname "$checked_path")
+  done
+}
+
+record_file() {
+  printf '%s\n' "$1" >>"$CREATED_FILES"
+}
+
+record_dir() {
+  printf '%s\n' "$1" >>"$CREATED_DIRS"
+}
+
+ensure_dir() {
+  ensure_current=$1
+  assert_real_ancestors "$ensure_current"
+
+  if path_exists "$ensure_current"; then
+    [ -d "$ensure_current" ] && [ ! -L "$ensure_current" ] || die "$ensure_current must be a real directory"
+    return
+  fi
+
+  ensure_parent=$(dirname "$ensure_current")
+  [ "$ensure_parent" = "$ensure_current" ] || ensure_dir "$ensure_parent"
+  ensure_current=$1
+  begin_create
+  mkdir "$ensure_current"
+  record_dir "$ensure_current"
+  end_create
+}
+
+acquire_lock() {
+  if [ "$SCOPE" = global ]; then
+    LOCK_DIR=$HOME/.swe-forge-install.lock
+  else
+    LOCK_DIR=$TARGET/.swe-forge-install.lock
+  fi
+  assert_real_ancestors "$LOCK_DIR"
+  begin_create
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    end_create
+    die "another installation may be active; remove stale lock after review: $LOCK_DIR"
+  fi
+  LOCK_OWNED=1
+  end_create
 }
 
 resolve_path() {
@@ -108,6 +225,7 @@ prepare_manifests() {
 
 preflight_container() {
   destination=$1
+  assert_real_ancestors "$destination"
   if path_exists "$destination" && { [ ! -d "$destination" ] || [ -L "$destination" ]; }; then
     conflict "$destination must be a real directory"
   fi
@@ -116,12 +234,13 @@ preflight_container() {
 preflight_file() {
   source=$1
   destination=$2
+  assert_real_ancestors "$destination"
 
   if ! path_exists "$destination"; then
     return
   fi
 
-  if same_path "$source" "$destination"; then
+  if [ "$MODE" = link ] && same_path "$source" "$destination"; then
     return
   fi
 
@@ -131,6 +250,10 @@ preflight_file() {
   fi
 
   if [ -L "$destination" ]; then
+    if [ "$MODE" = copy ]; then
+      conflict "$destination is a symlink; copy mode requires a regular file"
+      return
+    fi
     if ! same_path "$source" "$destination"; then
       conflict "$destination is a symlink to a different source"
     fi
@@ -150,6 +273,7 @@ preflight_file() {
 preflight_dir_link() {
   source=$1
   destination=$2
+  assert_real_ancestors "$destination"
 
   if ! path_exists "$destination"; then
     return
@@ -171,31 +295,87 @@ preflight_tree_copy() {
   while IFS= read -r source_file; do
     relative=${source_file#"$source_root/"}
     preflight_file "$source_file" "$destination_root/$relative"
+    if ! path_exists "$destination_root/$relative"; then
+      conflict "$destination_root is an existing copied tree missing $relative; replace the snapshot after review"
+    fi
   done <"$tree_files"
+
+  if [ -d "$destination_root" ] && [ ! -L "$destination_root" ]; then
+    destination_entries=$RUN_TMP/preflight-tree-destination-entries
+    find "$destination_root" -print >"$destination_entries"
+    while IFS= read -r destination_entry; do
+      [ "$destination_entry" != "$destination_root" ] || continue
+      relative=${destination_entry#"$destination_root/"}
+      source_entry=$source_root/$relative
+      if [ -L "$destination_entry" ]; then
+        conflict "$destination_entry is a symlink; copy mode requires real entries"
+      elif [ -d "$destination_entry" ]; then
+        [ -d "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
+      elif [ -f "$destination_entry" ]; then
+        [ -f "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
+      else
+        conflict "$destination_entry has an unsupported file type"
+      fi
+    done <"$destination_entries"
+  fi
 }
 
 preflight_canonical() {
   destination_root=$1
+  existing_copy=0
+  if [ "$MODE" = copy ] && {
+    path_exists "$destination_root/AGENTS.md" ||
+    path_exists "$destination_root/SWE-FORGE.md" ||
+    path_exists "$destination_root/.swe-forge"
+  }; then
+    existing_copy=1
+  fi
 
   preflight_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
   preflight_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
   preflight_container "$destination_root/.swe-forge"
+  if [ "$existing_copy" -eq 1 ]; then
+    path_exists "$destination_root/AGENTS.md" || \
+      conflict "$destination_root is an existing copied snapshot missing AGENTS.md; replace it after review"
+    path_exists "$destination_root/SWE-FORGE.md" || \
+      conflict "$destination_root is an existing copied snapshot missing SWE-FORGE.md; replace it after review"
+  fi
 
   if [ "$MODE" = link ]; then
     while IFS= read -r source_dir; do
       entry_name=${source_dir##*/}
       preflight_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
     done <"$RUN_TMP/canonical-dirs"
-
-    while IFS= read -r source_file; do
-      relative=${source_file#"$SOURCE_ROOT/"}
-      preflight_file "$source_file" "$destination_root/$relative"
-    done <"$RUN_TMP/canonical-files"
   else
     while IFS= read -r source_file; do
       relative=${source_file#"$SOURCE_ROOT/"}
       preflight_file "$source_file" "$destination_root/$relative"
+      if [ "$existing_copy" -eq 1 ] && ! path_exists "$destination_root/$relative"; then
+        conflict "$destination_root is an existing copied snapshot missing $relative; replace it after review"
+      fi
     done <"$RUN_TMP/canonical-files"
+
+    if [ -d "$destination_root/.swe-forge" ] && [ ! -L "$destination_root/.swe-forge" ]; then
+      destination_entries=$RUN_TMP/destination-canonical-entries
+      find "$destination_root/.swe-forge" -print >"$destination_entries"
+      while IFS= read -r destination_entry; do
+        [ "$destination_entry" != "$destination_root/.swe-forge" ] || continue
+        relative=${destination_entry#"$destination_root/"}
+        case "$relative" in
+          .swe-forge/runs|.swe-forge/runs/*|.swe-forge/.runs|.swe-forge/.runs/*|.swe-forge/generated|.swe-forge/generated/*) continue ;;
+        esac
+        source_entry=$SOURCE_ROOT/$relative
+        if [ -L "$destination_entry" ]; then
+          conflict "$destination_entry is a symlink; copy mode requires real entries"
+        elif [ -d "$destination_entry" ]; then
+          [ -d "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
+        elif [ -f "$destination_entry" ]; then
+          [ -f "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
+        else
+          conflict "$destination_entry has an unsupported file type"
+        fi
+      done <"$destination_entries"
+    fi
   fi
 }
 
@@ -324,18 +504,45 @@ install_file() {
   destination=$2
 
   path_exists "$destination" && return
-  mkdir -p "$(dirname "$destination")"
+  assert_real_ancestors "$destination"
+  ensure_dir "$(dirname "$destination")"
   if [ "$MODE" = link ]; then
-    ln -s "$source" "$destination"
+    begin_create
+    if ! ln -s "$source" "$destination"; then
+      end_create
+      die "could not install source link: $destination"
+    fi
+    record_file "$destination"
+    end_create
   else
-    cp "$source" "$destination"
+    STAGE_COUNTER=$((STAGE_COUNTER + 1))
+    stage_dir=$(dirname "$destination")/.swe-forge-stage.$$.$STAGE_COUNTER
+    begin_create
+    mkdir "$stage_dir" || die "could not create staging directory: $stage_dir"
+    record_dir "$stage_dir"
+    end_create
+    begin_create
+    record_file "$stage_dir/file"
+    if ! cp "$source" "$stage_dir/file"; then
+      end_create
+      die "could not stage copied file: $destination"
+    fi
+    end_create
+    begin_create
+    if ! ln "$stage_dir/file" "$destination"; then
+      end_create
+      die "destination appeared during installation: $destination"
+    fi
+    record_file "$destination"
+    end_create
+    rm -f "$stage_dir/file"
+    rmdir "$stage_dir"
   fi
 }
 
 install_dir_container() {
   destination=$1
-  path_exists "$destination" && return
-  mkdir -p "$destination"
+  ensure_dir "$destination"
 }
 
 install_dir_link() {
@@ -343,8 +550,15 @@ install_dir_link() {
   destination=$2
 
   path_exists "$destination" && return
-  mkdir -p "$(dirname "$destination")"
-  ln -s "$source" "$destination"
+  assert_real_ancestors "$destination"
+  ensure_dir "$(dirname "$destination")"
+  begin_create
+  if ! ln -s "$source" "$destination"; then
+    end_create
+    die "could not install source directory link: $destination"
+  fi
+  record_file "$destination"
+  end_create
 }
 
 install_tree() {
@@ -377,11 +591,6 @@ install_canonical() {
       entry_name=${source_dir##*/}
       install_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
     done <"$RUN_TMP/canonical-dirs"
-
-    while IFS= read -r source_file; do
-      relative=${source_file#"$SOURCE_ROOT/"}
-      install_file "$source_file" "$destination_root/$relative"
-    done <"$RUN_TMP/canonical-files"
   else
     while IFS= read -r source_file; do
       relative=${source_file#"$SOURCE_ROOT/"}
@@ -394,11 +603,18 @@ install_bridge() {
   destination=$1
 
   path_exists "$destination" && return
-  mkdir -p "$(dirname "$destination")"
+  assert_real_ancestors "$destination"
+  ensure_dir "$(dirname "$destination")"
   if [ "$MODE" = link ]; then
-    ln -s AGENTS.md "$destination"
+    begin_create
+    if ! ln -s AGENTS.md "$destination"; then
+      end_create
+      die "could not install CLAUDE.md bridge: $destination"
+    fi
+    record_file "$destination"
+    end_create
   else
-    cp "$RUN_TMP/claude-bridge" "$destination"
+    install_file "$RUN_TMP/claude-bridge" "$destination"
   fi
 }
 
@@ -462,12 +678,40 @@ verify_file() {
     verify_failure "$destination is missing"
     return
   fi
-  if [ -d "$destination" ] && [ ! -L "$destination" ]; then
-    verify_failure "$destination is a directory, expected a file"
-    return
+  if [ "$MODE" = link ]; then
+    if [ ! -L "$destination" ]; then
+      verify_failure "$destination is not a source link"
+    elif ! same_path "$source" "$destination"; then
+      verify_failure "$destination does not link to the current SWE Forge source"
+    fi
+  else
+    if [ ! -f "$destination" ] || [ -L "$destination" ]; then
+      verify_failure "$destination is not a regular copied file"
+    elif ! cmp -s "$source" "$destination"; then
+      verify_failure "$destination does not match the current SWE Forge source"
+    fi
   fi
-  if ! cmp -s "$source" "$destination"; then
+}
+
+verify_content_file() {
+  source=$1
+  destination=$2
+  if [ ! -f "$destination" ] || ! cmp -s "$source" "$destination"; then
     verify_failure "$destination does not match the current SWE Forge source"
+  fi
+}
+
+verify_dir_mapping() {
+  source=$1
+  destination=$2
+  if [ "$MODE" = link ]; then
+    if [ ! -L "$destination" ]; then
+      verify_failure "$destination is not a source directory link"
+    elif ! same_path "$source" "$destination"; then
+      verify_failure "$destination does not link to the current SWE Forge source"
+    fi
+  elif [ ! -d "$destination" ] || [ -L "$destination" ]; then
+    verify_failure "$destination is not a real copied directory"
   fi
 }
 
@@ -476,8 +720,8 @@ verify_tree() {
   destination_root=$2
   tree_files=$RUN_TMP/verify-tree-files
 
-  if ! path_exists "$destination_root" || [ ! -d "$destination_root" ]; then
-    verify_failure "$destination_root is missing"
+  verify_dir_mapping "$source_root" "$destination_root"
+  if [ "$MODE" = link ]; then
     return
   fi
 
@@ -486,6 +730,23 @@ verify_tree() {
     relative=${source_file#"$source_root/"}
     verify_file "$source_file" "$destination_root/$relative"
   done <"$tree_files"
+
+  destination_entries=$RUN_TMP/verify-tree-destination-entries
+  find "$destination_root" -print >"$destination_entries"
+  while IFS= read -r destination_entry; do
+    [ "$destination_entry" != "$destination_root" ] || continue
+    relative=${destination_entry#"$destination_root/"}
+    source_entry=$source_root/$relative
+    if [ -L "$destination_entry" ]; then
+      verify_failure "$destination_entry is a symlink; copy mode requires real entries"
+    elif [ -d "$destination_entry" ]; then
+      [ -d "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
+    elif [ -f "$destination_entry" ]; then
+      [ -f "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
+    else
+      verify_failure "$destination_entry has an unsupported file type"
+    fi
+  done <"$destination_entries"
 }
 
 verify_canonical() {
@@ -498,11 +759,47 @@ verify_canonical() {
     verify_failure "$destination_root/.swe-forge is missing"
     return
   fi
+  if [ -L "$destination_root/.swe-forge" ]; then
+    verify_failure "$destination_root/.swe-forge must be a real directory"
+    return
+  fi
 
-  while IFS= read -r source_file; do
-    relative=${source_file#"$SOURCE_ROOT/"}
-    verify_file "$source_file" "$destination_root/$relative"
-  done <"$RUN_TMP/canonical-files"
+  if [ "$MODE" = link ]; then
+    while IFS= read -r source_dir; do
+      entry_name=${source_dir##*/}
+      verify_dir_mapping "$source_dir" "$destination_root/.swe-forge/$entry_name"
+    done <"$RUN_TMP/canonical-dirs"
+
+    while IFS= read -r source_file; do
+      relative=${source_file#"$SOURCE_ROOT/"}
+      verify_content_file "$source_file" "$destination_root/$relative"
+    done <"$RUN_TMP/canonical-files"
+  else
+    while IFS= read -r source_file; do
+      relative=${source_file#"$SOURCE_ROOT/"}
+      verify_file "$source_file" "$destination_root/$relative"
+    done <"$RUN_TMP/canonical-files"
+
+    destination_entries=$RUN_TMP/verify-destination-canonical-entries
+    find "$destination_root/.swe-forge" -print >"$destination_entries"
+    while IFS= read -r destination_entry; do
+      [ "$destination_entry" != "$destination_root/.swe-forge" ] || continue
+      relative=${destination_entry#"$destination_root/"}
+      case "$relative" in
+        .swe-forge/runs|.swe-forge/runs/*|.swe-forge/.runs|.swe-forge/.runs/*|.swe-forge/generated|.swe-forge/generated/*) continue ;;
+      esac
+      source_entry=$SOURCE_ROOT/$relative
+      if [ -L "$destination_entry" ]; then
+        verify_failure "$destination_entry is a symlink; copy mode requires real entries"
+      elif [ -d "$destination_entry" ]; then
+        [ -d "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
+      elif [ -f "$destination_entry" ]; then
+        [ -f "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
+      else
+        verify_failure "$destination_entry has an unsupported file type"
+      fi
+    done <"$destination_entries"
+  fi
 }
 
 verify_contains() {
@@ -522,10 +819,14 @@ verify_bridge() {
     return
   fi
 
-  if [ -L "$destination" ]; then
-    if ! same_path "$agents_destination" "$destination"; then
+  if [ "$MODE" = link ]; then
+    if [ ! -L "$destination" ]; then
+      verify_failure "$destination is not linked to AGENTS.md"
+    elif ! same_path "$agents_destination" "$destination"; then
       verify_failure "$destination is not linked to AGENTS.md"
     fi
+  elif [ ! -f "$destination" ] || [ -L "$destination" ]; then
+    verify_failure "$destination is not a regular copied bridge"
   elif ! cmp -s "$RUN_TMP/claude-bridge" "$destination"; then
     verify_failure "$destination is not the minimal @AGENTS.md bridge"
   fi
@@ -631,15 +932,37 @@ choose_destination() {
   fi
 
   [ -d "$TARGET" ] || die "target directory does not exist: $TARGET"
+  reject_unsupported_path "$TARGET"
+  case "$TARGET" in
+    /*) ;;
+    *) TARGET=$PWD/$TARGET ;;
+  esac
+  [ ! -L "$TARGET" ] || die "target directory must not be a symlink: $TARGET"
+  assert_real_ancestors "$TARGET/child"
   TARGET=$(CDPATH= cd "$TARGET" && pwd -P)
+}
 
-  repo_root=$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null || true)
-  if [ -n "$repo_root" ]; then
-    TARGET=$(CDPATH= cd "$repo_root" && pwd -P)
+validate_scope() {
+  if [ "$SCOPE" != global ]; then
+    return
   fi
+
+  [ -n "${HOME:-}" ] || die "HOME must be set for --global"
+  case "$HOME" in
+    /*) ;;
+    *) die "HOME must be an absolute path for --global" ;;
+  esac
+  reject_unsupported_path "$HOME"
+  [ -d "$HOME" ] && [ ! -L "$HOME" ] || die "HOME must be a real directory for --global: $HOME"
+  assert_real_ancestors "$HOME/child"
+  HOME=$(CDPATH= cd "$HOME" && pwd -P)
+  [ "$MODE" = link ] || die "--mode copy is not supported with --global"
 }
 
 parse_args() {
+  SEEN_TARGET=0
+  SEEN_GLOBAL=0
+  SEEN_MODE=0
   if [ "$#" -eq 1 ] && { [ "$1" = -h ] || [ "$1" = --help ]; }; then
     usage
     exit 0
@@ -671,15 +994,22 @@ parse_args() {
     case "$1" in
       --target)
         [ "$#" -ge 2 ] || die "--target requires a path"
+        [ "$SEEN_TARGET" -eq 0 ] || die "target supplied more than once"
+        [ -n "$2" ] || die "--target requires a non-empty path"
+        SEEN_TARGET=1
         TARGET=$2
         shift 2
         ;;
       --global)
+        [ "$SEEN_GLOBAL" -eq 0 ] || die "global scope supplied more than once"
+        SEEN_GLOBAL=1
         SCOPE=global
         shift
         ;;
       --mode)
         [ "$#" -ge 2 ] || die "--mode requires link or copy"
+        [ "$SEEN_MODE" -eq 0 ] || die "--mode supplied more than once"
+        SEEN_MODE=1
         MODE=$2
         case "$MODE" in
           link|copy) ;;
@@ -688,6 +1018,8 @@ parse_args() {
         shift 2
         ;;
       global|globally)
+        [ "$SEEN_GLOBAL" -eq 0 ] || die "global scope supplied more than once"
+        SEEN_GLOBAL=1
         SCOPE=global
         shift
         ;;
@@ -699,7 +1031,8 @@ parse_args() {
         die "unknown option: $1"
         ;;
       *)
-        [ -z "$TARGET" ] || die "multiple target paths supplied"
+        [ "$SEEN_TARGET" -eq 0 ] || die "target supplied more than once"
+        SEEN_TARGET=1
         TARGET=$1
         shift
         ;;
@@ -709,15 +1042,18 @@ parse_args() {
 
 main() {
   parse_args "$@"
-  [ -n "${HOME:-}" ] || die "HOME must be set"
   prepare_manifests
   printf '%s\n' '@AGENTS.md' >"$RUN_TMP/claude-bridge"
   choose_destination
+  validate_scope
 
   if [ "$ACTION" = install ]; then
+    acquire_lock
     preflight_install
+    TRANSACTION_ACTIVE=1
     install_requested
     if verify_requested; then
+      TRANSACTION_ACTIVE=0
       info "source: $SOURCE_ROOT"
       if [ "$SCOPE" = global ]; then
         info "scope: global harness configuration"

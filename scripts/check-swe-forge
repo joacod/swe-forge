@@ -1,0 +1,46 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+
+fail() {
+  printf 'check failure: %s\n' "$*" >&2
+  exit 1
+}
+
+require_text() {
+  needle=$1
+  file=$2
+  grep -F "$needle" "$ROOT/$file" >/dev/null 2>&1 || \
+    fail "$file does not contain required text: $needle"
+}
+
+reject_text() {
+  needle=$1
+  file=$2
+  if grep -F "$needle" "$ROOT/$file" >/dev/null 2>&1; then
+    fail "$file contains obsolete text: $needle"
+  fi
+}
+
+sh -n "$ROOT/scripts/swe-forge" "$ROOT/scripts/test-swe-forge"
+
+require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
+require_text 'pre-edit baseline' SWE-FORGE.md
+require_text 'side effects' .swe-forge/policies/verification.md
+require_text 'requirement: required' .swe-forge/contracts/task.md
+require_text 'create_pull_request: {status: not-authorized' .swe-forge/contracts/task.md
+require_text 'delegation.allowed' .swe-forge/contracts/task.md
+require_text 'only a dependency in `done`' .swe-forge/contracts/run-state.md
+require_text 'every critical finding blocks' .swe-forge/contracts/review.md
+require_text 'review: skipped' .swe-forge/examples/simple-ticket.md
+require_text 'checkout_baseline:' .swe-forge/examples/parallel-ticket.md
+require_text 'checkout_baseline:' .swe-forge/examples/herdr-ticket.md
+require_text 'Resolve every canonical relative' .swe-forge/adapters/opencode/commands/swe-forge-global.md
+require_text 'Resolve every canonical relative' .swe-forge/adapters/claude-code/skills/swe-forge-global/SKILL.md
+require_text 'clean status' .swe-forge/adapters/herdr/runbook.md
+reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
+reject_text 'commit_policy:' .swe-forge/examples/herdr-ticket.md
+
+printf '%s\n' 'PASS: SWE Forge structural checks'

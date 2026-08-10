@@ -35,6 +35,7 @@ execution:
 
 outcome:
   completed: true | false | unknown
+  final_status: ACCEPTED | BLOCKED | FAILED | unknown
   acceptance_tests_passed: true | false | not-run | unknown
   quality_gates_passed: true | false | partial | not-run | unknown
   regressions: <integer or unknown>

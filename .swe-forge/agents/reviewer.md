@@ -39,6 +39,7 @@ Read-only. Do not modify the checkout, tests, configuration, or run state.
 ## Output
 
 Return `../contracts/review.md`. Use `PASS` only when no critical or
-high-confidence correctness issue remains. Use `CHANGES_REQUIRED` for findings
-that must be repaired before acceptance, with severity, confidence, location,
-evidence, and recommended action for each finding.
+blocking finding under that contract's severity and confidence matrix remains.
+Use `CHANGES_REQUIRED` for findings that must be repaired before acceptance,
+with severity, confidence, location, evidence, and recommended action for each
+finding. `PASS` may retain explicitly nonblocking risks.

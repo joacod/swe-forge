@@ -88,3 +88,10 @@ workflow ceremony.
 Publish aggregate results with ticket segments, sample size, missing data,
 confidence limitations, and orchestration overhead. Keep raw proprietary ticket
 data outside this public repository unless it is safe to share.
+
+## Conformance
+
+Benchmarks measure effectiveness; they do not replace safety conformance. Run
+the adversarial scenarios in `conformance-scenarios.md` after changing canonical
+workflow rules or harness adapters, and run `scripts/check-swe-forge` for
+structural drift checks.

@@ -61,7 +61,23 @@ Each writable task receives a separate task contract:
 ```yaml
 task_id: cancel-order-api
 objective: Implement the authorized, idempotent cancellation endpoint.
+reason: The API work is independently owned in an isolated worktree.
+owner_role: implementer
 dependencies: []
+execution_mode: HERDR
+write_access: read-write
+worktree: isolated
+checkout_baseline:
+  path: <absolute API worktree path>
+  head: <revision>
+  branch: <branch>
+  classification: writable
+  remote_default_evidence: <reference>
+  staged: []
+  unstaged: []
+  untracked: []
+delegation:
+  allowed: false
 allowed_scope:
   - services/orders/**
 forbidden_scope:
@@ -71,16 +87,44 @@ acceptance:
   - invalid state is rejected with the established error shape
   - repeated cancellation is idempotent
 validation:
-  - <orders API tests>
+  - command: <orders API tests>
+    requirement: required
+    condition: always
+    side_effects: local-only
 risk: high
-worktree: isolated
-commit_policy: none
+expected_output:
+  - bounded implementation and test evidence
+  - structured worker result
+authorization:
+  create_branch: {status: not-authorized, provenance: none, scope: none}
+  create_worktree: {status: not-authorized, provenance: none, scope: none}
+  commit: {status: not-authorized, provenance: none, scope: none}
+  push: {status: not-authorized, provenance: none, scope: none}
+  create_pull_request: {status: not-authorized, provenance: none, scope: none}
+  publish: {status: not-authorized, provenance: none, scope: none}
+  merge: {status: not-authorized, provenance: none, scope: none}
 ```
 
 ```yaml
 task_id: cancel-order-web
 objective: Add the customer cancellation action, confirmation UI, and refresh behavior.
+reason: The storefront work is independently owned in an isolated worktree.
+owner_role: implementer
 dependencies: []
+execution_mode: HERDR
+write_access: read-write
+worktree: isolated
+checkout_baseline:
+  path: <absolute storefront worktree path>
+  head: <revision>
+  branch: <branch>
+  classification: writable
+  remote_default_evidence: <reference>
+  staged: []
+  unstaged: []
+  untracked: []
+delegation:
+  allowed: false
 allowed_scope:
   - apps/storefront/**
 forbidden_scope:
@@ -90,10 +134,22 @@ acceptance:
   - success refreshes the order
   - API rejection uses the established error presentation
 validation:
-  - <storefront order tests>
+  - command: <storefront order tests>
+    requirement: required
+    condition: always
+    side_effects: local-only
 risk: medium
-worktree: isolated
-commit_policy: none
+expected_output:
+  - bounded implementation and test evidence
+  - structured worker result
+authorization:
+  create_branch: {status: not-authorized, provenance: none, scope: none}
+  create_worktree: {status: not-authorized, provenance: none, scope: none}
+  commit: {status: not-authorized, provenance: none, scope: none}
+  push: {status: not-authorized, provenance: none, scope: none}
+  create_pull_request: {status: not-authorized, provenance: none, scope: none}
+  publish: {status: not-authorized, provenance: none, scope: none}
+  merge: {status: not-authorized, provenance: none, scope: none}
 ```
 
 ## Herdr Execution
@@ -105,6 +161,11 @@ and both worker checkouts are dedicated, non-protected, attached, and safely
 classifiable. It starts one harness agent in each worktree, sends only the
 corresponding task contract, and keeps user focus unchanged with background
 panes.
+
+The orchestrator records the user's worktree-creation authorization in run
+state. The worker contracts keep `create_worktree` as `not-authorized` because
+the workers receive already-created checkouts and must not create additional
+ones.
 
 The orchestrator waits for semantic agent states, reads each structured result,
 and does not treat terminal output alone as completion. It may inspect each
@@ -131,7 +192,9 @@ authorization, state transitions, idempotency, UI gating, error handling,
 concurrency, and accidental cross-scope changes.
 
 Herdr workspaces and panes created for the run are cleaned up after integration.
-User-owned sessions, branches, and the Herdr server are left untouched.
+Before worktree removal, each worker status is clean or its tracked and untracked
+changes are proven integrated or preserved. User-owned sessions, branches, and
+the Herdr server are left untouched.
 
 The final report records:
 

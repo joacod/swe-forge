@@ -45,9 +45,16 @@ Before writable delegation, create a task contract using
 - observable acceptance criteria
 - assigned validation
 - risk and write/isolation requirements
-- expected result and commit policy
+- checkout baseline and expected result
+- per-action authorization with user-message provenance
+- recursive delegation disabled by default or explicitly bounded
 
 Workers must request a contract update before expanding scope.
+Writable tasks must classify validation requirements and side effects. Workers
+may not substitute required checks or infer one authorized action from another.
+Recursive delegation depth is measured from the original owner and worker limits
+are total descendant budgets. Child contracts must carry the root task ID and
+reduced remaining budgets; they cannot reset limits.
 
 ## Dependency Waves
 

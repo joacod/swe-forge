@@ -81,8 +81,10 @@ remote default branch, `main`, or `master`. If the current checkout is not safe
 for writing, it asks the user to provide one or authorize creating one.
 
 A normal invocation stops after implementation, verification, independent
-review, and final diff inspection. It does not commit, push, create a pull
-request, or merge without explicit user authorization. An explicit instruction
+review when the canonical risk trigger applies, and final diff inspection. A
+trivial localized `SOLO` run may record why fresh review was skipped. It does
+not commit, push, create a pull request, or merge without explicit user
+authorization. An explicit instruction
 to continue through pull-request creation may authorize commit, branch push,
 and pull-request creation after review, but never merge. Merge always requires
 a separate explicit instruction.
@@ -127,8 +129,10 @@ scripts/swe-forge install all --global
 scripts/swe-forge verify opencode --target /path/to/project
 ```
 
-Use `--mode copy` for a reviewed snapshot instead of source-linked files. A
-global installation only adds the harness command or skill and a private
+Use `--mode copy` for a reviewed project snapshot instead of source-linked
+files. Global installation is link-only. `--target` is always the exact folder
+supplied and is never widened to an enclosing Git root. A global installation
+only adds the harness command or skill and a private
 source-linked support directory; it does not edit model, permission, or JSON
 configuration.
 
@@ -220,6 +224,7 @@ Validate installer changes with:
 
 ```bash
 sh -n scripts/swe-forge scripts/test-swe-forge
+scripts/check-swe-forge
 scripts/test-swe-forge
 ```
 

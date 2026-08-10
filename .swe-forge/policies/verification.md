@@ -46,6 +46,19 @@ The orchestrator must choose the checks based on repository instructions and
 ticket risk. Do not run expensive checks without a reason, but do not omit a
 relevant gate merely for speed.
 
+Classify each check before execution:
+
+- `required`: acceptance cannot succeed unless it passes
+- `conditional`: required when its recorded observable condition applies
+- `informational`: useful evidence that does not gate acceptance
+
+Inspect each command for side effects. Local test artifacts and build output are
+normal validation effects. Migrations, deployment, publication, production or
+shared-service access, outbound messages, credential use beyond the local test
+environment, and destructive cleanup require isolation or explicit user
+authorization. A repository script name is not evidence that these effects are
+authorized.
+
 ## Reporting
 
 For each check, report:
@@ -60,9 +73,15 @@ Skipped and unavailable checks are not passes. A failed check remains part of
 the final report even after a later repair unless the repaired run supersedes
 it with clear evidence.
 
+A required check that is skipped or unavailable blocks acceptance. A substitute
+check is allowed only after the validation plan or delegated task contract is
+updated with the reason. Conditional and informational outcomes remain visible
+even when they do not block acceptance.
+
 ## Independent Review
 
-After verification, provide a fresh-context reviewer with the original ticket,
+After verification, provide a fresh-context reviewer when the trigger in the
+ticket workflow applies. Give the reviewer the original ticket,
 acceptance criteria, relevant architecture, final diff, and evidence. The
 reviewer must use `../contracts/review.md` and assess correctness, regressions,
 scope, error handling, compatibility, concurrency, security, performance, and
@@ -74,7 +93,7 @@ Accept only when:
 
 - every original acceptance criterion is addressed
 - relevant quality gates pass
-- critical and high-confidence correctness findings are resolved
+- no blocking finding under `../contracts/review.md` remains
 - unintended changes are absent
 - the final integrated diff has been inspected
 

@@ -53,6 +53,9 @@ instructions here.
 Choose permissions for each role deliberately. Read-only researchers and
 reviewers should not receive edit access. Writable implementers need explicit
 scope from a task contract.
+Writable native subagents in one checkout must run sequentially. Concurrent
+writers require separate dedicated, classified worktrees; non-overlapping file
+scope alone does not make a shared checkout safe.
 
 ## Models and Permissions
 
