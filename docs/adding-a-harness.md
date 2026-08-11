@@ -25,11 +25,28 @@ old examples or infer undocumented paths.
 
 ## Adapter Contents
 
-Use `.swe-forge/adapters/<harness>/` for:
+Use `.swe-forge/adapters/<harness>/` for harness-specific documentation and
+payloads. Register installable artifacts in
+`.swe-forge/adapters/registry.tsv` instead of adding harness branches to the
+installer. Each registry row declares:
+
+```text
+harness | scope | kind | source | destination | support
+```
+
+Use `file`, `tree`, or `bridge` for `kind`. `support` is the optional global
+canonical support directory. Keep project and global payloads separate only
+when their canonical paths or host syntax differ.
+
+Prefer an existing shared projection when the harness supports the same
+standard. For example, Codex and Cursor use the shared Agent Skill payload in
+`.swe-forge/adapters/shared/agent-skill/`; their adapter directories only
+provide compatibility documentation.
+
+An adapter may still contain:
 
 - a short discovery and installation README
-- an explicit command or skill loader when supported
-- a source-linked global loader when the harness has a documented user scope
+- an explicit command, skill, or prompt loader
 - optional thin native role bridges
 - permission and model mapping guidance
 - isolation and fallback notes
@@ -61,6 +78,11 @@ When native role registration is useful:
 Do not copy portable role instructions into native definitions.
 
 ## Validation
+
+The installer handles preflight, link/copy, verification, and `install`/`verify`
+for one explicitly selected harness at a time. There is intentionally no
+multi-harness install shortcut; callers can invoke the command once per desired
+harness.
 
 Test an adapter in a disposable project or controlled fixture:
 

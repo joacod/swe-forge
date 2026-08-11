@@ -90,17 +90,26 @@ one checkout. Herdr workers use separate worktrees and integrate centrally.
 ## Adapter Boundary
 
 Adapters under `.swe-forge/adapters/` expose canonical behavior through current
-harness features:
+harness features. The `registry.tsv` file is the installation source of truth:
+it maps one harness and scope to an artifact kind, source payload, destination,
+and optional global canonical support directory.
 
-- explicit commands or skills load the canonical workflow
-- native role bridges load one portable role
-- permissions are mapped by adapter and user configuration
-- capability classes are mapped to user-selected models
-- Herdr runbooks control isolation without becoming the workflow
+The installer consumes the registry generically for preflight, link/copy,
+verification, and collision handling. Adding a harness should normally add a
+payload folder and registry rows rather than new installer branches.
 
-An adapter may be incomplete without affecting natural-language activation.
-This makes the portable repository usable in a harness with no native command,
-skill, or subagent support.
+Adapter artifacts may be:
+
+- explicit commands, skills, or prompt templates that load the canonical workflow
+- native role bridges that load one portable role
+- shared projections such as the Agent Skill package used by Codex and Cursor
+- optional runbooks such as Herdr's isolated execution procedure
+
+Permissions, models, and capability mappings remain host-owned. An adapter may
+be incomplete without affecting natural-language activation, which keeps the
+portable repository usable in a harness with no native command, skill, or
+subagent support. The adapter catalog is source-only; project installations
+receive only the selected projection.
 
 ## State Flow
 
@@ -128,3 +137,7 @@ V1 has one general ticket workflow. Future workflows should reuse the existing
 contracts and policies, add only workflow-specific decisions, and remain
 explicitly invoked. New roles and adapters require evidence that the
 specialization improves outcomes enough to justify its maintenance cost.
+
+Harness compatibility should prefer a shared projection when vendors support
+the same standard. Keep vendor-specific files only for native syntax or
+behavior that cannot be represented by the shared artifact.

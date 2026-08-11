@@ -33,18 +33,22 @@ expect_failure() {
 project=$TMP_ROOT/project
 mkdir -p "$project"
 
-"$INSTALL" install all --target "$project" >/dev/null
-"$INSTALL" install all --target "$project" >/dev/null
-"$INSTALL" verify all --target "$project" >/dev/null
+for harness in opencode claude codex cursor; do
+  "$INSTALL" install "$harness" --target "$project" >/dev/null
+  "$INSTALL" install "$harness" --target "$project" >/dev/null
+  "$INSTALL" verify "$harness" --target "$project" >/dev/null
+done
 
 test -L "$project/AGENTS.md" || fail "project AGENTS.md is not linked"
 test -L "$project/SWE-FORGE.md" || fail "project SWE-FORGE.md is not linked"
 test -L "$project/.swe-forge/agents" || fail "canonical agent directory is not linked"
 test -L "$project/.opencode/commands/swe-forge.md" || fail "OpenCode command is not linked"
 test -L "$project/.claude/skills/swe-forge" || fail "Claude skill directory is not linked"
-test -L "$project/.agents/skills/swe-forge" || fail "Codex skill directory is not linked"
-test -L "$project/.cursor/skills/swe-forge" || fail "Cursor skill directory is not linked"
+test -L "$project/.agents/skills/swe-forge" || fail "shared Agent Skill directory is not linked"
+test ! -e "$project/.swe-forge/adapters" || fail "adapter catalog was installed into the project"
 test -L "$project/CLAUDE.md" || fail "Claude bridge is not linked"
+test "$(readlink "$project/.agents/skills/swe-forge")" = \
+  "$ROOT/.swe-forge/adapters/shared/agent-skill/project" || fail "shared skill source link is incorrect"
 test "$(readlink "$project/AGENTS.md")" = "$ROOT/AGENTS.md" || fail "project source link is incorrect"
 test "$(readlink "$project/.opencode/commands/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" || fail "OpenCode source link is incorrect"
@@ -53,32 +57,34 @@ grep -F '<solo|subagents|herdr> <ticket>' \
 
 copy_project=$TMP_ROOT/copy-project
 mkdir -p "$copy_project"
-"$INSTALL" install all --target "$copy_project" --mode copy >/dev/null
-"$INSTALL" verify all --target "$copy_project" --mode copy >/dev/null
-expect_failure "is not a source link" "$INSTALL" verify all --target "$copy_project"
+for harness in opencode claude codex cursor; do
+  "$INSTALL" install "$harness" --target "$copy_project" --mode copy >/dev/null
+  "$INSTALL" verify "$harness" --target "$copy_project" --mode copy >/dev/null
+done
+expect_failure "is not a source link" "$INSTALL" verify opencode --target "$copy_project"
 test ! -L "$copy_project/AGENTS.md" || fail "copy mode linked AGENTS.md"
 test ! -L "$copy_project/.swe-forge/agents" || fail "copy mode linked canonical files"
 test ! -L "$copy_project/.opencode/commands/swe-forge.md" || fail "copy mode linked OpenCode command"
 test ! -L "$copy_project/.claude/skills/swe-forge" || fail "copy mode linked Claude skill"
-test ! -L "$copy_project/.agents/skills/swe-forge" || fail "copy mode linked Codex skill"
-test ! -L "$copy_project/.cursor/skills/swe-forge" || fail "copy mode linked Cursor skill"
+test ! -L "$copy_project/.agents/skills/swe-forge" || fail "copy mode linked shared Agent Skill"
+test ! -e "$copy_project/.swe-forge/adapters" || fail "copy mode installed adapter catalog"
 rm "$copy_project/.swe-forge/contracts/task.md"
 expect_failure "existing copied snapshot missing" \
-  "$INSTALL" install all --target "$copy_project" --mode copy
+  "$INSTALL" install opencode --target "$copy_project" --mode copy
 cp "$ROOT/.swe-forge/contracts/task.md" "$copy_project/.swe-forge/contracts/task.md"
 printf '%s\n' stale >"$copy_project/.swe-forge/stale.md"
 expect_failure "is not managed by the current SWE Forge source" \
-  "$INSTALL" verify all --target "$copy_project" --mode copy
+  "$INSTALL" verify opencode --target "$copy_project" --mode copy
 expect_failure "installation stopped before writing" \
-  "$INSTALL" install all --target "$copy_project" --mode copy
+  "$INSTALL" install opencode --target "$copy_project" --mode copy
 rm "$copy_project/.swe-forge/stale.md"
 ln -s "$ROOT/README.md" "$copy_project/.swe-forge/stale-link"
 expect_failure "copy mode requires real entries" \
-  "$INSTALL" verify all --target "$copy_project" --mode copy
+  "$INSTALL" verify opencode --target "$copy_project" --mode copy
 rm "$copy_project/.swe-forge/stale-link"
 mkdir "$copy_project/.swe-forge/stale-directory"
 expect_failure "is not managed by the current SWE Forge source" \
-  "$INSTALL" verify all --target "$copy_project" --mode copy
+  "$INSTALL" verify opencode --target "$copy_project" --mode copy
 rmdir "$copy_project/.swe-forge/stale-directory"
 printf '%s\n' stale >"$copy_project/.claude/skills/swe-forge/stale.md"
 expect_failure "is not managed by the current SWE Forge source" \
@@ -240,10 +246,11 @@ test ! -e "$mkdir_signal_project/.swe-forge-install.lock" || fail "directory-sig
 
 global_home=$TMP_ROOT/home
 mkdir -p "$global_home"
-HOME="$global_home" \
-  "$INSTALL" install all --global >/dev/null
-HOME="$global_home" \
-  "$INSTALL" verify all --global >/dev/null
+for harness in opencode claude codex cursor; do
+  HOME="$global_home" "$INSTALL" install "$harness" --global >/dev/null
+  HOME="$global_home" "$INSTALL" install "$harness" --global >/dev/null
+  HOME="$global_home" "$INSTALL" verify "$harness" --global >/dev/null
+done
 HOME="$global_home" \
   "$INSTALL" install pi --global >/dev/null
 HOME="$global_home" \
@@ -252,24 +259,27 @@ HOME="$global_home" \
   "$INSTALL" verify pi --global >/dev/null
 test -L "$global_home/.config/opencode/commands/swe-forge.md" || fail "global OpenCode command is not linked"
 test -L "$global_home/.claude/skills/swe-forge" || fail "global Claude skill is not linked"
-test -L "$global_home/.agents/skills/swe-forge" || fail "global Codex skill is not linked"
-test -L "$global_home/.cursor/skills/swe-forge" || fail "global Cursor skill is not linked"
+test -L "$global_home/.agents/skills/swe-forge" || fail "global shared Agent Skill is not linked"
 test -L "$global_home/.pi/agent/prompts/swe-forge.md" || fail "global Pi prompt is not linked"
 test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global OpenCode source is not linked"
 test -L "$global_home/.claude/swe-forge/SWE-FORGE.md" || fail "global Claude source is not linked"
-test -L "$global_home/.codex/swe-forge/AGENTS.md" || fail "global Codex source is not linked"
-test -L "$global_home/.cursor/swe-forge/AGENTS.md" || fail "global Cursor source is not linked"
+test -L "$global_home/.agents/swe-forge/AGENTS.md" || fail "global shared source is not linked"
 test -L "$global_home/.pi/agent/swe-forge/AGENTS.md" || fail "global Pi source is not linked"
+for support in \
+  "$global_home/.config/opencode/swe-forge" \
+  "$global_home/.claude/swe-forge" \
+  "$global_home/.agents/swe-forge" \
+  "$global_home/.pi/agent/swe-forge"; do
+  test ! -e "$support/.swe-forge/adapters" || fail "adapter catalog was installed in $support"
+done
 test "$(readlink "$global_home/.config/opencode/commands/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" || fail "global OpenCode link is incorrect"
 test "$(readlink "$global_home/.pi/agent/prompts/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" || fail "global Pi prompt link is incorrect"
 grep -F 'requested_mode: AUTO' "$global_home/.config/opencode/swe-forge/SWE-FORGE.md" \
   >/dev/null || fail "global canonical automatic mode contract is missing"
-grep -F '~/.codex/swe-forge' "$global_home/.agents/skills/swe-forge/SKILL.md" \
-  >/dev/null || fail "global Codex canonical source path is missing"
-grep -F '~/.cursor/swe-forge' "$global_home/.cursor/skills/swe-forge/SKILL.md" \
-  >/dev/null || fail "global Cursor canonical source path is missing"
+grep -F '~/.agents/swe-forge' "$global_home/.agents/skills/swe-forge/SKILL.md" \
+  >/dev/null || fail "global shared canonical source path is missing"
 grep -F '~/.pi/agent/swe-forge' "$global_home/.pi/agent/prompts/swe-forge.md" \
   >/dev/null || fail "global Pi canonical source path is missing"
 
@@ -321,7 +331,7 @@ expect_failure "--mode supplied more than once" \
   "$INSTALL" install opencode --target "$project" --mode link --mode copy
 expect_failure "unsupported harness" "$INSTALL" install unknown --target "$project"
 expect_failure "no target supplied" "$INSTALL" install opencode
-expect_failure "pi installation currently requires --global" \
+expect_failure "pi installation does not support project scope" \
   "$INSTALL" install pi --target "$project"
 
 "$ROOT/scripts/check-swe-forge" >/dev/null

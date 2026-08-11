@@ -1,0 +1,11 @@
+# harness|scope|kind|source|destination|support
+opencode|project|file|opencode/commands/swe-forge.md|.opencode/commands/swe-forge.md|-
+opencode|global|file|opencode/commands/swe-forge-global.md|.config/opencode/commands/swe-forge.md|.config/opencode/swe-forge
+claude|project|tree|claude-code/skills/swe-forge|.claude/skills/swe-forge|-
+claude|project|bridge|-|CLAUDE.md|-
+claude|global|tree|claude-code/skills/swe-forge-global|.claude/skills/swe-forge|.claude/swe-forge
+codex|project|tree|shared/agent-skill/project|.agents/skills/swe-forge|-
+codex|global|tree|shared/agent-skill/global|.agents/skills/swe-forge|.agents/swe-forge
+cursor|project|tree|shared/agent-skill/project|.agents/skills/swe-forge|-
+cursor|global|tree|shared/agent-skill/global|.agents/skills/swe-forge|.agents/swe-forge
+pi|global|file|pi/prompts/swe-forge-global.md|.pi/agent/prompts/swe-forge.md|.pi/agent/swe-forge

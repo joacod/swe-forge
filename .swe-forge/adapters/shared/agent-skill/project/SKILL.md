@@ -4,7 +4,8 @@ description: Explicitly activate the portable SWE Forge ticket workflow for a us
 disable-model-invocation: true
 ---
 
-The user explicitly invoked SWE Forge through Cursor's `/swe-forge` skill.
+The user explicitly invoked SWE Forge through the host's explicit skill entry.
+Use `$swe-forge` in Codex or `/swe-forge` in Cursor.
 
 Read `AGENTS.md` and `SWE-FORGE.md`, then read the V1 procedure at
 `.swe-forge/workflows/ticket.md`. Follow the canonical workflow and load only
@@ -14,6 +15,6 @@ fallback rules. Before the first write-tool call, complete the canonical
 checkout baseline and protected-branch gate. Keep repository discovery rooted
 in the active project.
 
-Treat the user's request after `/swe-forge` as the raw invocation arguments
-(`<ticket>` or `<solo|subagents|herdr> <ticket>`). The original ticket remains
-authoritative.
+Treat the user's request after the explicit skill entry as the raw invocation
+arguments (`<ticket>` or `<solo|subagents|herdr> <ticket>`). The original ticket
+remains authoritative.

@@ -7,8 +7,8 @@ or global harness configuration is always an explicit user action.
 The repository includes a dependency-free installer:
 
 ```bash
-scripts/swe-forge install <opencode|claude|codex|cursor|pi|all> [options]
-scripts/swe-forge verify <opencode|claude|codex|cursor|pi|all> [options]
+scripts/swe-forge install <opencode|claude|codex|cursor|pi> [options]
+scripts/swe-forge verify <opencode|claude|codex|cursor|pi> [options]
 ```
 
 The default mode is `link`. A link installation follows changes in this
@@ -42,10 +42,11 @@ scripts/swe-forge install codex --target /path/to/project
 scripts/swe-forge install cursor --target /path/to/project
 ```
 
-Install the OpenCode, Claude Code, Codex, and Cursor bridges for the current user:
+Install each requested harness explicitly. For example:
 
 ```bash
-scripts/swe-forge install all --global
+scripts/swe-forge install opencode --global
+scripts/swe-forge install codex --global
 ```
 
 Install the Pi global prompt-template bridge separately:
@@ -55,9 +56,9 @@ scripts/swe-forge install pi --global
 scripts/swe-forge verify pi --global
 ```
 
-`all` installs the OpenCode, Claude Code, Codex, and Cursor bridges; Pi is
-installed separately because its V1 adapter is global-only. The installer never
-guesses a global installation. `global` must be explicitly requested.
+There is no multi-harness install command. The installer deliberately handles
+one harness per invocation, and never guesses a global installation. `global`
+must be explicitly requested.
 
 ## Mode A: Standalone Repository
 
@@ -79,7 +80,7 @@ The installer links these portable files into the target software repository:
 ```text
 AGENTS.md
 SWE-FORGE.md
-.swe-forge/
+.swe-forge/                 canonical core only; adapter catalog stays in source checkout
 ```
 
 Review collisions before installing over an existing `AGENTS.md`,
@@ -98,12 +99,11 @@ The installer also links the requested harness bridge:
 ```bash
 # OpenCode: .opencode/commands/swe-forge.md
 # Claude Code: CLAUDE.md and .claude/skills/swe-forge/
-# Codex: .agents/skills/swe-forge/
-# Cursor: .cursor/skills/swe-forge/
+# Codex and Cursor: .agents/skills/swe-forge/
 ```
 
 The source checkout path must remain available to the user. Existing conflicting
-files stop the install before canonical or adapter files are written. A
+files stop the install before canonical or selected adapter files are written. A
 compatible prior installation is reused idempotently, but conflicting or stale
 managed files are not overwritten. The installer never merges project
 instructions.
@@ -126,13 +126,10 @@ Add only the bridge needed by the target harness:
   explicit skill from `.swe-forge/adapters/claude-code/`.
 - OpenCode: the project installer links the explicit command to
   `.opencode/commands/swe-forge.md` and does not add model or permission config.
-- Codex: the project installer links the explicit skill to
+- Codex and Cursor: use the shared Agent Skill projection at
   `.agents/skills/swe-forge/`; the global installer uses
-  `~/.agents/skills/swe-forge/` and `~/.codex/swe-forge/`. It does not modify
-  `~/.codex/AGENTS.md` or Codex configuration.
-- Cursor: the project installer links the explicit skill to
-  `.cursor/skills/swe-forge/`; the global installer uses
-  `~/.cursor/skills/swe-forge/` and `~/.cursor/swe-forge/`.
+  `~/.agents/skills/swe-forge/` and `~/.agents/swe-forge/`. Codex installation
+  does not modify `~/.codex/AGENTS.md` or Codex configuration.
 - Pi: the global installer links the explicit prompt template to
   `~/.pi/agent/prompts/swe-forge.md` and does not modify Pi settings or install
   an extension.
@@ -152,8 +149,8 @@ creates source-linked harness entries in these locations:
 - OpenCode: `~/.config/opencode/commands/swe-forge.md` and
   `~/.config/opencode/swe-forge/`
 - Claude Code: `~/.claude/skills/swe-forge/` and `~/.claude/swe-forge/`
-- Codex: `~/.agents/skills/swe-forge/` and `~/.codex/swe-forge/`
-- Cursor: `~/.cursor/skills/swe-forge/` and `~/.cursor/swe-forge/`
+- Codex and Cursor: `~/.agents/skills/swe-forge/` and
+  `~/.agents/swe-forge/`
 - Pi: `~/.pi/agent/prompts/swe-forge.md` and `~/.pi/agent/swe-forge/`
 
 The global loaders point back to the support directory, which points back to
