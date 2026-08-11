@@ -43,6 +43,12 @@ require_text 'Resolve every canonical relative' .swe-forge/adapters/pi/prompts/s
 require_text '$ARGUMENTS' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text '~/.pi/agent/swe-forge' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text 'clean status' .swe-forge/adapters/herdr/runbook.md
+require_text 'https://developers.openai.com/learn/codex' .swe-forge/adapters/codex/README.md
+require_text 'allow_implicit_invocation: false' .swe-forge/adapters/codex/skills/swe-forge/agents/openai.yaml
+require_text '~/.codex/swe-forge' .swe-forge/adapters/codex/skills/swe-forge-global/SKILL.md
+require_text 'https://cursor.com/docs' .swe-forge/adapters/cursor/README.md
+require_text 'disable-model-invocation: true' .swe-forge/adapters/cursor/skills/swe-forge/SKILL.md
+require_text '~/.cursor/swe-forge' .swe-forge/adapters/cursor/skills/swe-forge-global/SKILL.md
 reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
 reject_text 'commit_policy:' .swe-forge/examples/herdr-ticket.md
 

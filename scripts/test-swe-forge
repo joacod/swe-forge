@@ -42,6 +42,8 @@ test -L "$project/SWE-FORGE.md" || fail "project SWE-FORGE.md is not linked"
 test -L "$project/.swe-forge/agents" || fail "canonical agent directory is not linked"
 test -L "$project/.opencode/commands/swe-forge.md" || fail "OpenCode command is not linked"
 test -L "$project/.claude/skills/swe-forge" || fail "Claude skill directory is not linked"
+test -L "$project/.agents/skills/swe-forge" || fail "Codex skill directory is not linked"
+test -L "$project/.cursor/skills/swe-forge" || fail "Cursor skill directory is not linked"
 test -L "$project/CLAUDE.md" || fail "Claude bridge is not linked"
 test "$(readlink "$project/AGENTS.md")" = "$ROOT/AGENTS.md" || fail "project source link is incorrect"
 test "$(readlink "$project/.opencode/commands/swe-forge.md")" = \
@@ -58,6 +60,8 @@ test ! -L "$copy_project/AGENTS.md" || fail "copy mode linked AGENTS.md"
 test ! -L "$copy_project/.swe-forge/agents" || fail "copy mode linked canonical files"
 test ! -L "$copy_project/.opencode/commands/swe-forge.md" || fail "copy mode linked OpenCode command"
 test ! -L "$copy_project/.claude/skills/swe-forge" || fail "copy mode linked Claude skill"
+test ! -L "$copy_project/.agents/skills/swe-forge" || fail "copy mode linked Codex skill"
+test ! -L "$copy_project/.cursor/skills/swe-forge" || fail "copy mode linked Cursor skill"
 rm "$copy_project/.swe-forge/contracts/task.md"
 expect_failure "existing copied snapshot missing" \
   "$INSTALL" install all --target "$copy_project" --mode copy
@@ -248,9 +252,13 @@ HOME="$global_home" \
   "$INSTALL" verify pi --global >/dev/null
 test -L "$global_home/.config/opencode/commands/swe-forge.md" || fail "global OpenCode command is not linked"
 test -L "$global_home/.claude/skills/swe-forge" || fail "global Claude skill is not linked"
+test -L "$global_home/.agents/skills/swe-forge" || fail "global Codex skill is not linked"
+test -L "$global_home/.cursor/skills/swe-forge" || fail "global Cursor skill is not linked"
 test -L "$global_home/.pi/agent/prompts/swe-forge.md" || fail "global Pi prompt is not linked"
 test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global OpenCode source is not linked"
 test -L "$global_home/.claude/swe-forge/SWE-FORGE.md" || fail "global Claude source is not linked"
+test -L "$global_home/.codex/swe-forge/AGENTS.md" || fail "global Codex source is not linked"
+test -L "$global_home/.cursor/swe-forge/AGENTS.md" || fail "global Cursor source is not linked"
 test -L "$global_home/.pi/agent/swe-forge/AGENTS.md" || fail "global Pi source is not linked"
 test "$(readlink "$global_home/.config/opencode/commands/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" || fail "global OpenCode link is incorrect"
@@ -258,6 +266,10 @@ test "$(readlink "$global_home/.pi/agent/prompts/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" || fail "global Pi prompt link is incorrect"
 grep -F 'requested_mode: AUTO' "$global_home/.config/opencode/swe-forge/SWE-FORGE.md" \
   >/dev/null || fail "global canonical automatic mode contract is missing"
+grep -F '~/.codex/swe-forge' "$global_home/.agents/skills/swe-forge/SKILL.md" \
+  >/dev/null || fail "global Codex canonical source path is missing"
+grep -F '~/.cursor/swe-forge' "$global_home/.cursor/skills/swe-forge/SKILL.md" \
+  >/dev/null || fail "global Cursor canonical source path is missing"
 grep -F '~/.pi/agent/swe-forge' "$global_home/.pi/agent/prompts/swe-forge.md" \
   >/dev/null || fail "global Pi canonical source path is missing"
 

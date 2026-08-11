@@ -30,6 +30,8 @@ opencode`, read `docs/installation.md` and the requested adapter README.
 - Use `scripts/swe-forge install <harness> --target <path>` for a project or
   `scripts/swe-forge install <harness> --global` for user-level harness access.
 - Pi's V1 adapter is global-only: use `scripts/swe-forge install pi --global`.
+- Codex and Cursor support project and global skill installations through the
+  matching `scripts/swe-forge install` command.
 - Run the matching `scripts/swe-forge verify` command after installation.
 - Never modify global harness configuration unless the user explicitly chose
   `global`.

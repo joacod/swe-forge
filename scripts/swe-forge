@@ -82,11 +82,19 @@ info() {
   printf '%s\n' "$*"
 }
 
+invocation_hint() {
+  case "$HARNESS" in
+    codex) info 'invoke with: $swe-forge <ticket>' ;;
+    all) info 'invoke with: see the selected harness adapter README' ;;
+    *) info 'invoke with: /swe-forge <ticket>' ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/swe-forge install <opencode|claude|pi|all> [options]
-  scripts/swe-forge verify <opencode|claude|pi|all> [options]
+  scripts/swe-forge install <opencode|claude|codex|cursor|pi|all> [options]
+  scripts/swe-forge verify <opencode|claude|codex|cursor|pi|all> [options]
 
 Options:
   --target PATH       Install into this repository or folder.
@@ -207,6 +215,7 @@ prepare_manifests() {
   canonical_dirs=$RUN_TMP/canonical-dirs
 
   find "$SOURCE_ROOT/.swe-forge" -type f \
+    ! -name '.DS_Store' \
     ! -path "$SOURCE_ROOT/.swe-forge/runs/*" \
     ! -path "$SOURCE_ROOT/.swe-forge/.runs/*" \
     ! -path "$SOURCE_ROOT/.swe-forge/generated/*" \
@@ -454,6 +463,18 @@ global_pi_root() {
   printf '%s/.pi/agent\n' "$HOME"
 }
 
+global_codex_root() {
+  printf '%s/.codex\n' "$HOME"
+}
+
+global_agents_root() {
+  printf '%s/.agents\n' "$HOME"
+}
+
+global_cursor_root() {
+  printf '%s/.cursor\n' "$HOME"
+}
+
 preflight_global_opencode() {
   opencode_root=$(global_opencode_root)
   preflight_container "$opencode_root"
@@ -487,6 +508,46 @@ preflight_global_pi() {
     "$pi_root/prompts/swe-forge.md"
 }
 
+preflight_project_codex() {
+  preflight_container "$TARGET/.agents"
+  preflight_container "$TARGET/.agents/skills"
+  preflight_adapter_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/codex/skills/swe-forge" \
+    "$TARGET/.agents/skills/swe-forge"
+}
+
+preflight_global_codex() {
+  codex_root=$(global_codex_root)
+  agents_root=$(global_agents_root)
+  preflight_container "$codex_root"
+  preflight_container "$codex_root/swe-forge"
+  preflight_canonical "$codex_root/swe-forge"
+  preflight_container "$agents_root"
+  preflight_container "$agents_root/skills"
+  preflight_adapter_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/codex/skills/swe-forge-global" \
+    "$agents_root/skills/swe-forge"
+}
+
+preflight_project_cursor() {
+  preflight_container "$TARGET/.cursor"
+  preflight_container "$TARGET/.cursor/skills"
+  preflight_adapter_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/cursor/skills/swe-forge" \
+    "$TARGET/.cursor/skills/swe-forge"
+}
+
+preflight_global_cursor() {
+  cursor_root=$(global_cursor_root)
+  preflight_container "$cursor_root"
+  preflight_container "$cursor_root/swe-forge"
+  preflight_canonical "$cursor_root/swe-forge"
+  preflight_container "$cursor_root/skills"
+  preflight_adapter_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/cursor/skills/swe-forge-global" \
+    "$cursor_root/skills/swe-forge"
+}
+
 preflight_install() {
   CONFLICTS=0
 
@@ -494,10 +555,14 @@ preflight_install() {
     case "$HARNESS" in
       opencode) preflight_global_opencode ;;
       claude) preflight_global_claude ;;
+      codex) preflight_global_codex ;;
+      cursor) preflight_global_cursor ;;
       pi) preflight_global_pi ;;
       all)
         preflight_global_opencode
         preflight_global_claude
+        preflight_global_codex
+        preflight_global_cursor
         ;;
     esac
   else
@@ -505,9 +570,13 @@ preflight_install() {
     case "$HARNESS" in
       opencode) preflight_project_opencode ;;
       claude) preflight_project_claude ;;
+      codex) preflight_project_codex ;;
+      cursor) preflight_project_cursor ;;
       all)
         preflight_project_opencode
         preflight_project_claude
+        preflight_project_codex
+        preflight_project_cursor
         ;;
     esac
   fi
@@ -671,15 +740,48 @@ install_global_pi() {
     "$pi_root/prompts/swe-forge.md"
 }
 
+install_project_codex() {
+  install_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/codex/skills/swe-forge" \
+    "$TARGET/.agents/skills/swe-forge"
+}
+
+install_global_codex() {
+  codex_root=$(global_codex_root)
+  agents_root=$(global_agents_root)
+  install_canonical "$codex_root/swe-forge"
+  install_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/codex/skills/swe-forge-global" \
+    "$agents_root/skills/swe-forge"
+}
+
+install_project_cursor() {
+  install_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/cursor/skills/swe-forge" \
+    "$TARGET/.cursor/skills/swe-forge"
+}
+
+install_global_cursor() {
+  cursor_root=$(global_cursor_root)
+  install_canonical "$cursor_root/swe-forge"
+  install_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/cursor/skills/swe-forge-global" \
+    "$cursor_root/skills/swe-forge"
+}
+
 install_requested() {
   if [ "$SCOPE" = global ]; then
     case "$HARNESS" in
       opencode) install_global_opencode ;;
       claude) install_global_claude ;;
+      codex) install_global_codex ;;
+      cursor) install_global_cursor ;;
       pi) install_global_pi ;;
       all)
         install_global_opencode
         install_global_claude
+        install_global_codex
+        install_global_cursor
         ;;
     esac
   else
@@ -687,9 +789,13 @@ install_requested() {
     case "$HARNESS" in
       opencode) install_project_opencode ;;
       claude) install_project_claude ;;
+      codex) install_project_codex ;;
+      cursor) install_project_cursor ;;
       all)
         install_project_opencode
         install_project_claude
+        install_project_codex
+        install_project_cursor
         ;;
     esac
   fi
@@ -906,6 +1012,55 @@ verify_global_pi() {
   }
 }
 
+verify_project_codex() {
+  verify_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/codex/skills/swe-forge" \
+    "$TARGET/.agents/skills/swe-forge"
+  skill_file=$TARGET/.agents/skills/swe-forge/SKILL.md
+  [ -f "$skill_file" ] && {
+    verify_contains 'SWE-FORGE.md' "$skill_file"
+    verify_contains 'swe-forge' "$skill_file"
+  }
+}
+
+verify_global_codex() {
+  codex_root=$(global_codex_root)
+  agents_root=$(global_agents_root)
+  verify_canonical "$codex_root/swe-forge"
+  verify_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/codex/skills/swe-forge-global" \
+    "$agents_root/skills/swe-forge"
+  skill_file=$agents_root/skills/swe-forge/SKILL.md
+  [ -f "$skill_file" ] && {
+    verify_contains '~/.codex/swe-forge' "$skill_file"
+    verify_contains 'SWE-FORGE.md' "$skill_file"
+  }
+}
+
+verify_project_cursor() {
+  verify_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/cursor/skills/swe-forge" \
+    "$TARGET/.cursor/skills/swe-forge"
+  skill_file=$TARGET/.cursor/skills/swe-forge/SKILL.md
+  [ -f "$skill_file" ] && {
+    verify_contains 'disable-model-invocation: true' "$skill_file"
+    verify_contains 'SWE-FORGE.md' "$skill_file"
+  }
+}
+
+verify_global_cursor() {
+  cursor_root=$(global_cursor_root)
+  verify_canonical "$cursor_root/swe-forge"
+  verify_tree \
+    "$SOURCE_ROOT/.swe-forge/adapters/cursor/skills/swe-forge-global" \
+    "$cursor_root/skills/swe-forge"
+  skill_file=$cursor_root/skills/swe-forge/SKILL.md
+  [ -f "$skill_file" ] && {
+    verify_contains '~/.cursor/swe-forge' "$skill_file"
+    verify_contains 'disable-model-invocation: true' "$skill_file"
+  }
+}
+
 verify_requested() {
   VERIFY_FAILURES=0
 
@@ -917,12 +1072,20 @@ verify_requested() {
       claude)
         verify_global_claude
         ;;
+      codex)
+        verify_global_codex
+        ;;
+      cursor)
+        verify_global_cursor
+        ;;
       pi)
         verify_global_pi
         ;;
       all)
         verify_global_opencode
         verify_global_claude
+        verify_global_codex
+        verify_global_cursor
         ;;
     esac
   else
@@ -934,9 +1097,17 @@ verify_requested() {
       claude)
         verify_project_claude
         ;;
+      codex)
+        verify_project_codex
+        ;;
+      cursor)
+        verify_project_cursor
+        ;;
       all)
         verify_project_opencode
         verify_project_claude
+        verify_project_codex
+        verify_project_cursor
         ;;
     esac
   fi
@@ -1031,10 +1202,10 @@ parse_args() {
   esac
 
   case "$HARNESS" in
-    opencode|claude|claude-code|pi|all)
+    opencode|claude|claude-code|codex|cursor|pi|all)
       [ "$HARNESS" != claude-code ] || HARNESS=claude
       ;;
-    *) die "unsupported harness: $HARNESS (use opencode, claude, pi, or all)" ;;
+    *) die "unsupported harness: $HARNESS (use opencode, claude, codex, cursor, pi, or all)" ;;
   esac
 
   while [ "$#" -gt 0 ]; do
@@ -1109,7 +1280,7 @@ main() {
         info "target: $TARGET"
       fi
       info "mode: $MODE"
-      info "invoke with: /swe-forge <ticket>"
+      invocation_hint
     else
       die "installation completed but verification failed"
     fi
