@@ -43,6 +43,19 @@ require_text 'Resolve every canonical relative' .swe-forge/adapters/pi/prompts/s
 require_text '$ARGUMENTS' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text '~/.pi/agent/swe-forge' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text 'clean status' .swe-forge/adapters/herdr/runbook.md
+require_text 'ADAPTER_REGISTRY' scripts/swe-forge
+require_text 'codex|project|tree|shared/agent-skill/project' .swe-forge/adapters/registry.tsv
+require_text 'cursor|global|tree|shared/agent-skill/global' .swe-forge/adapters/registry.tsv
+require_text 'https://developers.openai.com/learn/codex' .swe-forge/adapters/shared/agent-skill/README.md
+require_text 'https://cursor.com/docs' .swe-forge/adapters/shared/agent-skill/README.md
+require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/project/agents/openai.yaml
+require_text '~/.agents/swe-forge' .swe-forge/adapters/shared/agent-skill/global/SKILL.md
+require_text 'disable-model-invocation: true' .swe-forge/adapters/shared/agent-skill/project/SKILL.md
+require_text 'shared/agent-skill/project' .swe-forge/adapters/registry.tsv
+reject_text 'install all' README.md
+reject_text 'install all' docs/installation.md
+reject_text 'install all' scripts/swe-forge
+reject_text 'verify all' scripts/test-swe-forge
 reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
 reject_text 'commit_policy:' .swe-forge/examples/herdr-ticket.md
 

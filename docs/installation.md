@@ -7,8 +7,8 @@ or global harness configuration is always an explicit user action.
 The repository includes a dependency-free installer:
 
 ```bash
-scripts/swe-forge install <opencode|claude|pi|all> [options]
-scripts/swe-forge verify <opencode|claude|pi|all> [options]
+scripts/swe-forge install <opencode|claude|codex|cursor|pi> [options]
+scripts/swe-forge verify <opencode|claude|codex|cursor|pi> [options]
 ```
 
 The default mode is `link`. A link installation follows changes in this
@@ -38,12 +38,15 @@ Install into a project or folder:
 ```bash
 scripts/swe-forge install opencode --target /path/to/project
 scripts/swe-forge install claude --target /path/to/project
+scripts/swe-forge install codex --target /path/to/project
+scripts/swe-forge install cursor --target /path/to/project
 ```
 
-Install both harness bridges for the current user:
+Install each requested harness explicitly. For example:
 
 ```bash
-scripts/swe-forge install all --global
+scripts/swe-forge install opencode --global
+scripts/swe-forge install codex --global
 ```
 
 Install the Pi global prompt-template bridge separately:
@@ -53,8 +56,9 @@ scripts/swe-forge install pi --global
 scripts/swe-forge verify pi --global
 ```
 
-The installer never guesses a global installation. `global` must be explicitly
-requested.
+There is no multi-harness install command. The installer deliberately handles
+one harness per invocation, and never guesses a global installation. `global`
+must be explicitly requested.
 
 ## Mode A: Standalone Repository
 
@@ -76,7 +80,7 @@ The installer links these portable files into the target software repository:
 ```text
 AGENTS.md
 SWE-FORGE.md
-.swe-forge/
+.swe-forge/                 canonical core only; adapter catalog stays in source checkout
 ```
 
 Review collisions before installing over an existing `AGENTS.md`,
@@ -95,10 +99,11 @@ The installer also links the requested harness bridge:
 ```bash
 # OpenCode: .opencode/commands/swe-forge.md
 # Claude Code: CLAUDE.md and .claude/skills/swe-forge/
+# Codex and Cursor: .agents/skills/swe-forge/
 ```
 
 The source checkout path must remain available to the user. Existing conflicting
-files stop the install before canonical or adapter files are written. A
+files stop the install before canonical or selected adapter files are written. A
 compatible prior installation is reused idempotently, but conflicting or stale
 managed files are not overwritten. The installer never merges project
 instructions.
@@ -121,6 +126,10 @@ Add only the bridge needed by the target harness:
   explicit skill from `.swe-forge/adapters/claude-code/`.
 - OpenCode: the project installer links the explicit command to
   `.opencode/commands/swe-forge.md` and does not add model or permission config.
+- Codex and Cursor: use the shared Agent Skill projection at
+  `.agents/skills/swe-forge/`; the global installer uses
+  `~/.agents/skills/swe-forge/` and `~/.agents/swe-forge/`. Codex installation
+  does not modify `~/.codex/AGENTS.md` or Codex configuration.
 - Pi: the global installer links the explicit prompt template to
   `~/.pi/agent/prompts/swe-forge.md` and does not modify Pi settings or install
   an extension.
@@ -140,15 +149,18 @@ creates source-linked harness entries in these locations:
 - OpenCode: `~/.config/opencode/commands/swe-forge.md` and
   `~/.config/opencode/swe-forge/`
 - Claude Code: `~/.claude/skills/swe-forge/` and `~/.claude/swe-forge/`
+- Codex and Cursor: `~/.agents/skills/swe-forge/` and
+  `~/.agents/swe-forge/`
 - Pi: `~/.pi/agent/prompts/swe-forge.md` and `~/.pi/agent/swe-forge/`
 
 The global loaders point back to the support directory, which points back to
-the canonical checkout. This makes `/swe-forge <ticket>` available across
+the canonical checkout. This makes the explicit harness entry available across
 projects without copying canonical files into every project.
 
 The installer does not modify `opencode.json`, `~/.config/opencode/AGENTS.md`,
-`~/.claude/CLAUDE.md`, permissions, models, credentials, or other personal
-configuration. It stops on conflicts instead of replacing them.
+`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, permissions, models, credentials,
+or other personal configuration. It stops on conflicts instead of replacing
+them.
 
 Do not commit generated global support directories, machine-specific paths,
 credentials, local model IDs, or personal run state.
@@ -160,7 +172,11 @@ Installation runs verification automatically. It can also be run later:
 ```bash
 scripts/swe-forge verify opencode --target /path/to/project
 scripts/swe-forge verify opencode --target /path/to/copied-project --mode copy
+scripts/swe-forge verify codex --target /path/to/project
+scripts/swe-forge verify cursor --target /path/to/project
 scripts/swe-forge verify claude --global
+scripts/swe-forge verify codex --global
+scripts/swe-forge verify cursor --global
 scripts/swe-forge verify pi --global
 ```
 
@@ -172,6 +188,12 @@ A successful filesystem check should be followed by the harness smoke test:
 
 ```text
 /swe-forge <small test ticket>
+```
+
+For Codex, invoke the installed skill explicitly:
+
+```text
+$swe-forge <small test ticket>
 ```
 
 Ordinary prompts must continue to behave normally; SWE Forge remains explicitly

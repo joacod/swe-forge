@@ -23,8 +23,8 @@ Other useful requests:
 ```text
 Install SWE Forge for OpenCode in this project.
 Install SWE Forge for Claude Code globally.
-Install SWE Forge for Pi globally.
-Install SWE Forge for OpenCode and Claude Code globally.
+Install SWE Forge for Codex in this project.
+Install SWE Forge for Cursor globally.
 ```
 
 The agent should read `AGENTS.md`, [the installation guide](docs/installation.md),
@@ -49,8 +49,9 @@ scripts/swe-forge install opencode --global
 scripts/swe-forge verify opencode --global
 ```
 
-Replace `opencode` with `claude` for Claude Code, or with `all` to install both
-OpenCode and Claude Code. Pi uses its own global command:
+Replace `opencode` with `claude`, `codex`, or `cursor` for the corresponding
+harness. Install each requested harness separately; Pi uses its own global
+command:
 
 ```bash
 scripts/swe-forge install pi --global
@@ -64,10 +65,11 @@ scripts/swe-forge install opencode --target /path/to/project
 scripts/swe-forge verify opencode --target /path/to/project
 ```
 
-`all` is a shortcut for OpenCode and Claude Code. Pi is installed separately
-and currently supports global installation only. Link mode is the default;
-global installation is link-only. See [Installation](docs/installation.md) for
-copy mode, collisions, paths, updates, and filesystem safety.
+There is no multi-harness install command: installation is deliberately
+explicit and scoped to one harness at a time. Pi currently supports global
+installation only. Link mode is the default; global installation is link-only.
+See [Installation](docs/installation.md) for copy mode, collisions, paths,
+updates, and filesystem safety.
 
 ## Use It Explicitly
 
@@ -85,13 +87,20 @@ Use SWE Forge for this ticket:
 <ticket>
 ```
 
-Installed OpenCode, Claude Code, and Pi integrations also support:
+Installed OpenCode, Claude Code, Pi, and Cursor integrations support:
 
 ```text
 /swe-forge <ticket>
 /swe-forge solo <ticket>
 /swe-forge subagents <ticket>
 /swe-forge herdr <ticket>
+```
+
+Codex exposes the same workflow as an explicit skill:
+
+```text
+$swe-forge <ticket>
+$swe-forge solo <ticket>
 ```
 
 If no native integration is available, place `AGENTS.md`, `SWE-FORGE.md`, and
@@ -104,7 +113,8 @@ If no native integration is available, place `AGENTS.md`, `SWE-FORGE.md`, and
 | [OpenCode](.swe-forge/adapters/opencode/README.md) | Yes | Yes | `/swe-forge` command |
 | [Claude Code](.swe-forge/adapters/claude-code/README.md) | Yes | Yes | `/swe-forge` skill |
 | [Pi](.swe-forge/adapters/pi/README.md) | No in V1 | Yes | `/swe-forge` prompt template |
-| [Codex and other harnesses](.swe-forge/adapters/codex/README.md) | Portable fallback | No native V1 adapter | `Use SWE Forge` |
+| [Codex](.swe-forge/adapters/codex/README.md) | Yes | Yes | `$swe-forge` shared skill |
+| [Cursor](.swe-forge/adapters/cursor/README.md) | Yes | Yes | `/swe-forge` shared skill |
 
 Herdr is an optional execution-isolation layer for `HERDR` mode, not a harness
 target for `scripts/swe-forge install`. See the [Herdr adapter](.swe-forge/adapters/herdr/README.md)
@@ -140,6 +150,7 @@ rules live in [SWE-FORGE.md](SWE-FORGE.md).
 - [Architecture](docs/architecture.md): how canonical files, roles, contracts, policies, and adapters fit together.
 - [Adding a harness](docs/adding-a-harness.md): how to research and build a thin adapter.
 - [Adapter index](.swe-forge/adapters/README.md): harness-specific installation and integration notes.
+- [Adapter registry](.swe-forge/adapters/registry.tsv): declarative installation targets used by the installer.
 
 Harness adapters are thin projections of the canonical files. They must not
 become a second source of workflow truth.

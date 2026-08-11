@@ -19,6 +19,8 @@ CRITICAL_SECTION=0
 PENDING_SIGNAL=0
 CREATED_FILES=$RUN_TMP/created-files
 CREATED_DIRS=$RUN_TMP/created-dirs
+ADAPTER_REGISTRY=$SOURCE_ROOT/.swe-forge/adapters/registry.tsv
+ADAPTER_ROWS=$RUN_TMP/adapter-rows
 : >"$CREATED_FILES"
 : >"$CREATED_DIRS"
 
@@ -82,11 +84,15 @@ info() {
   printf '%s\n' "$*"
 }
 
+invocation_hint() {
+  info 'invoke with: see the selected harness adapter README'
+}
+
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/swe-forge install <opencode|claude|pi|all> [options]
-  scripts/swe-forge verify <opencode|claude|pi|all> [options]
+  scripts/swe-forge install <harness> [options]
+  scripts/swe-forge verify <harness> [options]
 
 Options:
   --target PATH       Install into this repository or folder.
@@ -207,6 +213,9 @@ prepare_manifests() {
   canonical_dirs=$RUN_TMP/canonical-dirs
 
   find "$SOURCE_ROOT/.swe-forge" -type f \
+    ! -name '.DS_Store' \
+    ! -path "$SOURCE_ROOT/.swe-forge/adapters" \
+    ! -path "$SOURCE_ROOT/.swe-forge/adapters/*" \
     ! -path "$SOURCE_ROOT/.swe-forge/runs/*" \
     ! -path "$SOURCE_ROOT/.swe-forge/.runs/*" \
     ! -path "$SOURCE_ROOT/.swe-forge/generated/*" \
@@ -217,10 +226,23 @@ prepare_manifests() {
     [ -d "$source_entry" ] || continue
     entry_name=${source_entry##*/}
     case "$entry_name" in
-      runs|.runs|generated) continue ;;
+      adapters|runs|.runs|generated) continue ;;
     esac
     printf '%s\n' "$source_entry" >>"$canonical_dirs"
   done
+
+  : >"$ADAPTER_ROWS"
+  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+    case "$adapter_harness" in
+      ''|\#*) continue ;;
+    esac
+    [ "$adapter_harness" = "$HARNESS" ] || continue
+    printf '%s|%s|%s|%s|%s|%s\n' \
+      "$adapter_harness" "$adapter_scope" "$adapter_kind" \
+      "$adapter_source_rel" "$adapter_destination_rel" "$adapter_support_rel" \
+      >>"$ADAPTER_ROWS"
+  done <"$ADAPTER_REGISTRY"
+  [ -s "$ADAPTER_ROWS" ] || die "no adapter targets registered for harness: $HARNESS"
 }
 
 preflight_container() {
@@ -425,92 +447,118 @@ preflight_bridge() {
   fi
 }
 
-preflight_project_opencode() {
-  preflight_container "$TARGET/.opencode"
-  preflight_container "$TARGET/.opencode/commands"
-  preflight_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" \
-    "$TARGET/.opencode/commands/swe-forge.md"
+adapter_parent_containers() {
+  adapter_base=$1
+  adapter_relative=$2
+  [ "$adapter_relative" != . ] || return 0
+
+  adapter_old_ifs=$IFS
+  IFS=/
+  set -- $adapter_relative
+  IFS=$adapter_old_ifs
+  adapter_current=$adapter_base
+  for adapter_part do
+    [ -n "$adapter_part" ] || continue
+    adapter_current=$adapter_current/$adapter_part
+    preflight_container "$adapter_current"
+  done
 }
 
-preflight_project_claude() {
-  preflight_container "$TARGET/.claude"
-  preflight_container "$TARGET/.claude/skills"
-  preflight_adapter_tree \
-    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge" \
-    "$TARGET/.claude/skills/swe-forge"
-  preflight_bridge "$TARGET/CLAUDE.md" "$TARGET/AGENTS.md"
+adapter_destination() {
+  if [ "$SCOPE" = global ]; then
+    printf '%s/%s\n' "$HOME" "$1"
+  else
+    printf '%s/%s\n' "$TARGET" "$1"
+  fi
 }
 
-global_opencode_root() {
-  printf '%s/.config/opencode\n' "$HOME"
+adapter_source() {
+  printf '%s/.swe-forge/adapters/%s\n' "$SOURCE_ROOT" "$1"
 }
 
-global_claude_root() {
-  printf '%s/.claude\n' "$HOME"
+adapter_is_registered() {
+  adapter_requested=$1
+  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+    case "$adapter_harness" in
+      ''|\#*) continue ;;
+    esac
+    if [ "$adapter_harness" = "$adapter_requested" ]; then
+      return 0
+    fi
+  done <"$ADAPTER_REGISTRY"
+  return 1
 }
 
-global_pi_root() {
-  printf '%s/.pi/agent\n' "$HOME"
+adapter_supports_scope() {
+  adapter_requested_scope=$1
+  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+    case "$adapter_harness" in
+      ''|\#*) continue ;;
+    esac
+    if [ "$adapter_harness" = "$HARNESS" ] && [ "$adapter_scope" = "$adapter_requested_scope" ]; then
+      return 0
+    fi
+  done <"$ADAPTER_REGISTRY"
+  return 1
 }
 
-preflight_global_opencode() {
-  opencode_root=$(global_opencode_root)
-  preflight_container "$opencode_root"
-  preflight_container "$opencode_root/commands"
-  preflight_container "$opencode_root/swe-forge"
-  preflight_canonical "$opencode_root/swe-forge"
-  preflight_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" \
-    "$opencode_root/commands/swe-forge.md"
+preflight_adapter_support() {
+  adapter_support=$1
+  [ "$adapter_support" != - ] || return 0
+  adapter_support_path=$(adapter_destination "$adapter_support")
+  adapter_parent_containers \
+    "$HOME" \
+    "$(dirname "$adapter_support")"
+  preflight_canonical "$adapter_support_path"
 }
 
-preflight_global_claude() {
-  claude_root=$(global_claude_root)
-  preflight_container "$claude_root"
-  preflight_container "$claude_root/skills"
-  preflight_container "$claude_root/swe-forge"
-  preflight_canonical "$claude_root/swe-forge"
-  preflight_adapter_tree \
-    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge-global" \
-    "$claude_root/skills/swe-forge"
-}
+preflight_adapter_artifact() {
+  adapter_kind=$1
+  adapter_source_path=$2
+  adapter_destination_path=$3
+  adapter_destination_rel=$4
 
-preflight_global_pi() {
-  pi_root=$(global_pi_root)
-  preflight_container "$pi_root"
-  preflight_container "$pi_root/prompts"
-  preflight_container "$pi_root/swe-forge"
-  preflight_canonical "$pi_root/swe-forge"
-  preflight_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" \
-    "$pi_root/prompts/swe-forge.md"
+  if [ "$SCOPE" = global ]; then
+    adapter_parent_base=$HOME
+  else
+    adapter_parent_base=$TARGET
+  fi
+  adapter_parent_containers \
+    "$adapter_parent_base" \
+    "$(dirname "$adapter_destination_rel")"
+
+  case "$adapter_kind" in
+    file) preflight_file "$adapter_source_path" "$adapter_destination_path" ;;
+    tree) preflight_adapter_tree "$adapter_source_path" "$adapter_destination_path" ;;
+    bridge) preflight_bridge "$adapter_destination_path" "$TARGET/AGENTS.md" ;;
+    *) die "unsupported adapter artifact kind: $adapter_kind" ;;
+  esac
 }
 
 preflight_install() {
   CONFLICTS=0
 
-  if [ "$SCOPE" = global ]; then
-    case "$HARNESS" in
-      opencode) preflight_global_opencode ;;
-      claude) preflight_global_claude ;;
-      pi) preflight_global_pi ;;
-      all)
-        preflight_global_opencode
-        preflight_global_claude
-        ;;
-    esac
-  else
+  if [ "$SCOPE" != global ]; then
     preflight_canonical "$TARGET"
-    case "$HARNESS" in
-      opencode) preflight_project_opencode ;;
-      claude) preflight_project_claude ;;
-      all)
-        preflight_project_opencode
-        preflight_project_claude
-        ;;
-    esac
   fi
+
+  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+    case "$adapter_harness" in
+      ''|\#*) continue ;;
+    esac
+    [ "$adapter_scope" = "$SCOPE" ] || continue
+
+    adapter_source_path=$(adapter_source "$adapter_source_rel")
+    adapter_destination_path=$(adapter_destination "$adapter_destination_rel")
+    if [ "$SCOPE" = global ]; then
+      preflight_adapter_support "$adapter_support_rel"
+    fi
+    preflight_adapter_artifact \
+      "$adapter_kind" \
+      "$adapter_source_path" \
+      "$adapter_destination_path" \
+      "$adapter_destination_rel"
+  done <"$ADAPTER_ROWS"
 
   [ "$CONFLICTS" -eq 0 ] || die "installation stopped before writing; review the conflicts above"
 }
@@ -634,65 +682,38 @@ install_bridge() {
   fi
 }
 
-install_project_opencode() {
-  install_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" \
-    "$TARGET/.opencode/commands/swe-forge.md"
-}
+install_adapter_artifact() {
+  adapter_kind=$1
+  adapter_source_path=$2
+  adapter_destination_path=$3
 
-install_project_claude() {
-  install_tree \
-    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge" \
-    "$TARGET/.claude/skills/swe-forge"
-  install_bridge "$TARGET/CLAUDE.md"
-}
-
-install_global_opencode() {
-  opencode_root=$(global_opencode_root)
-  install_canonical "$opencode_root/swe-forge"
-  install_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" \
-    "$opencode_root/commands/swe-forge.md"
-}
-
-install_global_claude() {
-  claude_root=$(global_claude_root)
-  install_canonical "$claude_root/swe-forge"
-  install_tree \
-    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge-global" \
-    "$claude_root/skills/swe-forge"
-}
-
-install_global_pi() {
-  pi_root=$(global_pi_root)
-  install_canonical "$pi_root/swe-forge"
-  install_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" \
-    "$pi_root/prompts/swe-forge.md"
+  case "$adapter_kind" in
+    file) install_file "$adapter_source_path" "$adapter_destination_path" ;;
+    tree) install_tree "$adapter_source_path" "$adapter_destination_path" ;;
+    bridge) install_bridge "$adapter_destination_path" ;;
+    *) die "unsupported adapter artifact kind: $adapter_kind" ;;
+  esac
 }
 
 install_requested() {
-  if [ "$SCOPE" = global ]; then
-    case "$HARNESS" in
-      opencode) install_global_opencode ;;
-      claude) install_global_claude ;;
-      pi) install_global_pi ;;
-      all)
-        install_global_opencode
-        install_global_claude
-        ;;
-    esac
-  else
+  if [ "$SCOPE" != global ]; then
     install_canonical "$TARGET"
-    case "$HARNESS" in
-      opencode) install_project_opencode ;;
-      claude) install_project_claude ;;
-      all)
-        install_project_opencode
-        install_project_claude
-        ;;
-    esac
   fi
+
+  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+    case "$adapter_harness" in
+      ''|\#*) continue ;;
+    esac
+    [ "$adapter_scope" = "$SCOPE" ] || continue
+
+    if [ "$SCOPE" = global ] && [ "$adapter_support_rel" != - ]; then
+      install_canonical "$(adapter_destination "$adapter_support_rel")"
+    fi
+    install_adapter_artifact \
+      "$adapter_kind" \
+      "$(adapter_source "$adapter_source_rel")" \
+      "$(adapter_destination "$adapter_destination_rel")"
+  done <"$ADAPTER_ROWS"
 }
 
 verify_file() {
@@ -827,14 +848,6 @@ verify_canonical() {
   fi
 }
 
-verify_contains() {
-  needle=$1
-  file=$2
-  if ! grep -F "$needle" "$file" >/dev/null 2>&1; then
-    verify_failure "$file does not contain: $needle"
-  fi
-}
-
 verify_bridge() {
   destination=$1
   agents_destination=$2
@@ -857,89 +870,40 @@ verify_bridge() {
   fi
 }
 
-verify_project_opencode() {
-  command_file=$TARGET/.opencode/commands/swe-forge.md
-  verify_file "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" "$command_file"
-  [ -f "$command_file" ] && {
-    verify_contains '$ARGUMENTS' "$command_file"
-    verify_contains 'SWE-FORGE.md' "$command_file"
-  }
-}
+verify_adapter_artifact() {
+  adapter_kind=$1
+  adapter_source_path=$2
+  adapter_destination_path=$3
 
-verify_project_claude() {
-  skill="$TARGET/.claude/skills/swe-forge"
-  verify_tree "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge" "$skill"
-  verify_bridge "$TARGET/CLAUDE.md" "$TARGET/AGENTS.md"
-}
-
-verify_global_opencode() {
-  opencode_root=$(global_opencode_root)
-  verify_canonical "$opencode_root/swe-forge"
-  command_file=$opencode_root/commands/swe-forge.md
-  verify_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" \
-    "$command_file"
-  [ -f "$command_file" ] && {
-    verify_contains '$ARGUMENTS' "$command_file"
-    verify_contains '~/.config/opencode/swe-forge' "$command_file"
-  }
-}
-
-verify_global_claude() {
-  claude_root=$(global_claude_root)
-  verify_canonical "$claude_root/swe-forge"
-  verify_tree \
-    "$SOURCE_ROOT/.swe-forge/adapters/claude-code/skills/swe-forge-global" \
-    "$claude_root/skills/swe-forge"
-}
-
-verify_global_pi() {
-  pi_root=$(global_pi_root)
-  verify_canonical "$pi_root/swe-forge"
-  prompt_file=$pi_root/prompts/swe-forge.md
-  verify_file \
-    "$SOURCE_ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" \
-    "$prompt_file"
-  [ -f "$prompt_file" ] && {
-    verify_contains '$ARGUMENTS' "$prompt_file"
-    verify_contains '~/.pi/agent/swe-forge' "$prompt_file"
-  }
+  case "$adapter_kind" in
+    file) verify_file "$adapter_source_path" "$adapter_destination_path" ;;
+    tree) verify_tree "$adapter_source_path" "$adapter_destination_path" ;;
+    bridge) verify_bridge "$adapter_destination_path" "$TARGET/AGENTS.md" ;;
+    *) die "unsupported adapter artifact kind: $adapter_kind" ;;
+  esac
 }
 
 verify_requested() {
   VERIFY_FAILURES=0
 
-  if [ "$SCOPE" = global ]; then
-    case "$HARNESS" in
-      opencode)
-        verify_global_opencode
-        ;;
-      claude)
-        verify_global_claude
-        ;;
-      pi)
-        verify_global_pi
-        ;;
-      all)
-        verify_global_opencode
-        verify_global_claude
-        ;;
-    esac
-  else
+  if [ "$SCOPE" != global ]; then
     verify_canonical "$TARGET"
-    case "$HARNESS" in
-      opencode)
-        verify_project_opencode
-        ;;
-      claude)
-        verify_project_claude
-        ;;
-      all)
-        verify_project_opencode
-        verify_project_claude
-        ;;
-    esac
   fi
+
+  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+    case "$adapter_harness" in
+      ''|\#*) continue ;;
+    esac
+    [ "$adapter_scope" = "$SCOPE" ] || continue
+
+    if [ "$SCOPE" = global ] && [ "$adapter_support_rel" != - ]; then
+      verify_canonical "$(adapter_destination "$adapter_support_rel")"
+    fi
+    verify_adapter_artifact \
+      "$adapter_kind" \
+      "$(adapter_source "$adapter_source_rel")" \
+      "$(adapter_destination "$adapter_destination_rel")"
+  done <"$ADAPTER_ROWS"
 
   if [ "$VERIFY_FAILURES" -ne 0 ]; then
     return 1
@@ -1001,9 +965,8 @@ validate_scope() {
 }
 
 validate_harness_scope() {
-  if [ "$HARNESS" = pi ] && [ "$SCOPE" != global ]; then
-    die "pi installation currently requires --global"
-  fi
+  adapter_supports_scope "$SCOPE" || \
+    die "$HARNESS installation does not support $SCOPE scope"
 }
 
 parse_args() {
@@ -1030,12 +993,9 @@ parse_args() {
     *) die "unknown action: $ACTION" ;;
   esac
 
-  case "$HARNESS" in
-    opencode|claude|claude-code|pi|all)
-      [ "$HARNESS" != claude-code ] || HARNESS=claude
-      ;;
-    *) die "unsupported harness: $HARNESS (use opencode, claude, pi, or all)" ;;
-  esac
+  [ "$HARNESS" != claude-code ] || HARNESS=claude
+  adapter_is_registered "$HARNESS" || \
+    die "unsupported harness: $HARNESS (see .swe-forge/adapters/registry.tsv)"
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1109,7 +1069,7 @@ main() {
         info "target: $TARGET"
       fi
       info "mode: $MODE"
-      info "invoke with: /swe-forge <ticket>"
+      invocation_hint
     else
       die "installation completed but verification failed"
     fi

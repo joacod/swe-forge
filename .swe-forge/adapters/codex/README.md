@@ -1,17 +1,27 @@
 # Codex Adapter
 
-V1 does not require Codex-specific configuration. Use the portable discovery
-path directly:
+Codex uses the shared Agent Skill projection at
+[`../shared/agent-skill/`](../shared/agent-skill/). The Codex-specific directory
+contains these installation notes; the skill payload lives only in the shared
+projection.
 
-1. place `AGENTS.md`, `SWE-FORGE.md`, and `.swe-forge/` in the repository
-2. explicitly write `Use SWE Forge` or reference `SWE-FORGE.md`
-3. let the available harness choose the smallest supported topology
+Install explicitly:
 
-This directory is reserved for a future thin Codex adapter if a native command,
-skill, agent, or permission mechanism provides a useful projection. Such an
-adapter must reference the canonical files and must not duplicate the
-workflow.
+```bash
+scripts/swe-forge install codex --target /path/to/project
+scripts/swe-forge verify codex --target /path/to/project
+scripts/swe-forge install codex --global
+scripts/swe-forge verify codex --global
+```
 
-Reference checked on 2026-08-10:
+The project skill is installed at `.agents/skills/swe-forge/`. The global skill
+is installed at `~/.agents/skills/swe-forge/` and reads canonical support files
+from `~/.agents/swe-forge/`. The installer does not modify `~/.codex/AGENTS.md`,
+`config.toml`, permissions, models, credentials, or other personal Codex
+configuration.
 
-- https://agents.md/
+Invoke it explicitly with `$swe-forge <ticket>`. Natural-language activation
+through the project's `AGENTS.md` remains the fallback.
+
+See the [shared Agent Skill adapter](../shared/agent-skill/README.md) for the
+current Codex and Cursor documentation references.
