@@ -3,39 +3,89 @@
 Portable, opt-in workflow orchestration for AI coding harnesses.
 
 SWE Forge helps an AI coding agent turn a software ticket into a bounded,
-evidence-backed change: inspect the repository, choose the smallest useful
+evidence-backed change: inspect the repository, choose a proportionate
 execution mode, implement, verify, review, and report.
 
-It is a workflow specification layer, not a coding harness, model provider, or
-always-on multi-agent swarm.
+It is a workflow layer, not a coding harness, model provider, or always-on
+multi-agent swarm.
+
+## Install
+
+The easiest way to install SWE Forge is to open this repository in a coding
+harness and ask the agent in plain language:
+
+```text
+Install SWE Forge for OpenCode globally.
+```
+
+Other useful requests:
+
+```text
+Install SWE Forge for OpenCode in this project.
+Install SWE Forge for Claude Code globally.
+Install SWE Forge for Pi globally.
+Install SWE Forge for OpenCode and Claude Code globally.
+```
+
+The agent should read `AGENTS.md`, [the installation guide](docs/installation.md),
+and the requested harness adapter documentation. It should run the installer
+and matching verification command, then report any conflicts. Say `global`
+explicitly; if no project or folder is named, the agent should ask where to
+install.
+
+The installer runs from this repository. Keep one stable checkout if you want
+link installations to follow updates:
+
+```bash
+git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
+cd ~/tools/swe-forge
+git pull
+```
+
+For deterministic shell commands, use the installer directly:
+
+```bash
+scripts/swe-forge install opencode --global
+scripts/swe-forge verify opencode --global
+```
+
+Replace `opencode` with `claude` for Claude Code, or with `all` to install both
+OpenCode and Claude Code. Pi uses its own global command:
+
+```bash
+scripts/swe-forge install pi --global
+scripts/swe-forge verify pi --global
+```
+
+For a project-local installation:
+
+```bash
+scripts/swe-forge install opencode --target /path/to/project
+scripts/swe-forge verify opencode --target /path/to/project
+```
+
+`all` is a shortcut for OpenCode and Claude Code. Pi is installed separately
+and currently supports global installation only. Link mode is the default;
+global installation is link-only. See [Installation](docs/installation.md) for
+copy mode, collisions, paths, updates, and filesystem safety.
 
 ## Use It Explicitly
 
-Use the coding harness normally unless the user explicitly invokes SWE Forge:
+Installation makes the integration available; it does not activate SWE Forge.
+Ordinary prompts continue to use the harness normally:
 
 ```text
 Fix this typo.
 ```
+
+Explicitly invoke the workflow:
 
 ```text
 Use SWE Forge for this ticket:
 <ticket>
 ```
 
-This natural-language path works in a harness that supports repository
-instructions and file access. Installed OpenCode and Claude Code integrations
-also expose `/swe-forge`.
-
-## Execution Modes
-
-| Mode | Use when |
-| --- | --- |
-| `SOLO` | The work is localized, tightly coupled, or naturally sequential. |
-| `SUBAGENTS` | Independent research, implementation, testing, or review provides real value. |
-| `HERDR` | Separate worktrees, harness sessions, or execution environments are needed. |
-
-Automatic routing chooses the smallest useful mode by default. A user may
-request one explicitly:
+Installed OpenCode, Claude Code, and Pi integrations also support:
 
 ```text
 /swe-forge <ticket>
@@ -44,122 +94,55 @@ request one explicitly:
 /swe-forge herdr <ticket>
 ```
 
-An explicit mode does not bypass safety, validation, scope, or delivery
-authorization. Native subagents are preferred when they are enough; Herdr is
-optional and has a documented fallback.
+If no native integration is available, place `AGENTS.md`, `SWE-FORGE.md`, and
+`.swe-forge/` in the target repository and use the natural-language request.
 
-## Quick Start
+## Supported Harnesses
 
-Keep a stable clone of this repository as the source of truth:
+| Harness | Project scope | Global scope | Entry point |
+| --- | --- | --- | --- |
+| [OpenCode](.swe-forge/adapters/opencode/README.md) | Yes | Yes | `/swe-forge` command |
+| [Claude Code](.swe-forge/adapters/claude-code/README.md) | Yes | Yes | `/swe-forge` skill |
+| [Pi](.swe-forge/adapters/pi/README.md) | No in V1 | Yes | `/swe-forge` prompt template |
+| [Codex and other harnesses](.swe-forge/adapters/codex/README.md) | Portable fallback | No native V1 adapter | `Use SWE Forge` |
 
-```bash
-git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
-cd ~/tools/swe-forge
-git pull
-```
+Herdr is an optional execution-isolation layer for `HERDR` mode, not a harness
+target for `scripts/swe-forge install`. See the [Herdr adapter](.swe-forge/adapters/herdr/README.md)
+when separate worktrees, harness sessions, or execution environments provide
+real value.
 
-Install the integration you use. For a global OpenCode installation:
+## How It Works
 
-```bash
-scripts/swe-forge install opencode --global
-scripts/swe-forge verify opencode --global
-```
+For each explicit ticket, SWE Forge automatically chooses the smallest useful
+execution mode: `SOLO`, `SUBAGENTS`, or `HERDR`. It adapts the amount of
+planning, delegation, validation, and review to the ticket instead of adding
+ceremony to trivial work.
 
-For a project-local OpenCode installation:
+An explicit mode can be requested with the `/swe-forge` forms above, but it does
+not bypass safety, validation, scope, or delivery authorization. See the
+[workflow specification](SWE-FORGE.md) for the complete rules.
 
-```bash
-scripts/swe-forge install opencode --target /path/to/project
-scripts/swe-forge verify opencode --target /path/to/project
-```
+## Safety
 
-Claude Code is also supported:
-
-```bash
-scripts/swe-forge install claude --global
-scripts/swe-forge verify claude --global
-```
-
-The `all` harness is an explicit shortcut for installing or verifying both
-OpenCode and Claude Code. It does not mean "the current harness":
-
-```bash
-scripts/swe-forge install all --global
-scripts/swe-forge verify all --global
-```
-
-After installation, run a small smoke test:
-
-```text
-/swe-forge <small test ticket>
-```
-
-If no native integration is available, use the natural-language activation
-request after placing `AGENTS.md`, `SWE-FORGE.md`, and `.swe-forge/` in the
-target repository.
-
-See [docs/installation.md](docs/installation.md) for project-local, global,
-link, copy, collision, verification, and update details.
-
-## Installation Behavior
-
-- Link mode is the default and follows updates to this source checkout.
-- Copy mode creates a reviewed project-local snapshot; global installation is link-only.
-- `--target` always means the exact existing directory supplied.
-- Existing conflicting files stop the installation instead of being overwritten.
-- Global installation adds only the requested command or skill and a private source-linked support directory.
-- Global installation does not modify OpenCode or Claude configuration, models, permissions, credentials, or JSON files.
-
-## Workflow At A Glance
-
-For an explicitly invoked ticket, SWE Forge progressively:
-
-1. inspects the ticket, repository, constraints, and available tooling
-2. defines observable acceptance criteria and assumptions
-3. chooses and records the smallest useful execution mode
-4. performs bounded implementation and proportional validation
-5. reviews the result with fresh context when the risk warrants it
-6. repairs relevant findings and reports evidence-backed acceptance
-
-Trivial work stays lightweight. The workflow does not require an architect,
-delegation, Herdr, or ceremonial test plan when the ticket does not justify it.
-
-## Safety And Delivery
-
-- Writable work uses a dedicated, non-protected branch or worktree.
-- Concurrent writing workers never share one checkout.
+- SWE Forge activates only after an explicit user request.
+- Existing conflicting files stop installation instead of being overwritten.
+- Global installation changes only the requested harness entry and its private support path; it does not modify settings, models, permissions, credentials, or JSON files.
 - Normal completion stops at the reviewed, verified diff.
 - Commit, push, pull-request creation, and merge require explicit authorization.
-- An instruction to continue through pull-request creation may authorize commit, push, and pull-request creation after review, but never merge.
 
 The complete activation, checkout, authorization, verification, and acceptance
 rules live in [SWE-FORGE.md](SWE-FORGE.md).
 
-## Supported Integrations
+## Documentation
 
-- **OpenCode:** project and global `/swe-forge` command, with native subagents available to the routing policy.
-- **Claude Code:** project and global `/swe-forge` skill with explicit user invocation.
-- **Codex and other harnesses:** portable `AGENTS.md` activation; no V1-specific native configuration is required.
-- **Herdr:** optional execution isolation for `HERDR` mode, not a replacement for the coding harness.
+- [Installation guide](docs/installation.md): scopes, modes, collisions, verification, updates, and filesystem safety.
+- [Workflow specification](SWE-FORGE.md): canonical activation, execution, safety, and acceptance rules.
+- [Architecture](docs/architecture.md): how canonical files, roles, contracts, policies, and adapters fit together.
+- [Adding a harness](docs/adding-a-harness.md): how to research and build a thin adapter.
+- [Adapter index](.swe-forge/adapters/README.md): harness-specific installation and integration notes.
 
-## Source And Documentation
-
-| Path | Purpose |
-| --- | --- |
-| `README.md` | Human-facing overview and getting started guide. |
-| `AGENTS.md` | Minimal discovery, activation, and installation guidance for agents. |
-| `SWE-FORGE.md` | Canonical workflow specification and safety contract. |
-| `.swe-forge/` | Workflows, roles, contracts, policies, adapters, examples, and evaluations. |
-| `docs/` | Architecture, installation, and extension guidance. |
-
-Adapters are thin projections of the canonical files. They must not become a
-second source of workflow truth.
-
-## V1 Scope
-
-V1 implements one general software-ticket workflow. Its depth adapts to the
-ticket instead of forcing planning or delegation ceremony onto trivial work.
-Future workflows may be added under `.swe-forge/workflows/`, but they are not
-part of the V1 contract.
+Harness adapters are thin projections of the canonical files. They must not
+become a second source of workflow truth.
 
 ## Contributing
 

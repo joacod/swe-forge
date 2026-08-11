@@ -240,14 +240,26 @@ HOME="$global_home" \
   "$INSTALL" install all --global >/dev/null
 HOME="$global_home" \
   "$INSTALL" verify all --global >/dev/null
+HOME="$global_home" \
+  "$INSTALL" install pi --global >/dev/null
+HOME="$global_home" \
+  "$INSTALL" install pi --global >/dev/null
+HOME="$global_home" \
+  "$INSTALL" verify pi --global >/dev/null
 test -L "$global_home/.config/opencode/commands/swe-forge.md" || fail "global OpenCode command is not linked"
 test -L "$global_home/.claude/skills/swe-forge" || fail "global Claude skill is not linked"
+test -L "$global_home/.pi/agent/prompts/swe-forge.md" || fail "global Pi prompt is not linked"
 test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global OpenCode source is not linked"
 test -L "$global_home/.claude/swe-forge/SWE-FORGE.md" || fail "global Claude source is not linked"
+test -L "$global_home/.pi/agent/swe-forge/AGENTS.md" || fail "global Pi source is not linked"
 test "$(readlink "$global_home/.config/opencode/commands/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md" || fail "global OpenCode link is incorrect"
+test "$(readlink "$global_home/.pi/agent/prompts/swe-forge.md")" = \
+  "$ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" || fail "global Pi prompt link is incorrect"
 grep -F 'requested_mode: AUTO' "$global_home/.config/opencode/swe-forge/SWE-FORGE.md" \
   >/dev/null || fail "global canonical automatic mode contract is missing"
+grep -F '~/.pi/agent/swe-forge' "$global_home/.pi/agent/prompts/swe-forge.md" \
+  >/dev/null || fail "global Pi canonical source path is missing"
 
 global_conflict_home=$TMP_ROOT/global-conflict-home
 mkdir -p "$global_conflict_home/.config/opencode/commands"
@@ -297,6 +309,8 @@ expect_failure "--mode supplied more than once" \
   "$INSTALL" install opencode --target "$project" --mode link --mode copy
 expect_failure "unsupported harness" "$INSTALL" install unknown --target "$project"
 expect_failure "no target supplied" "$INSTALL" install opencode
+expect_failure "pi installation currently requires --global" \
+  "$INSTALL" install pi --target "$project"
 
 "$ROOT/scripts/check-swe-forge" >/dev/null
 

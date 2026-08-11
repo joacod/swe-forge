@@ -85,8 +85,8 @@ info() {
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/swe-forge install <opencode|claude|all> [options]
-  scripts/swe-forge verify <opencode|claude|all> [options]
+  scripts/swe-forge install <opencode|claude|pi|all> [options]
+  scripts/swe-forge verify <opencode|claude|pi|all> [options]
 
 Options:
   --target PATH       Install into this repository or folder.
@@ -450,6 +450,10 @@ global_claude_root() {
   printf '%s/.claude\n' "$HOME"
 }
 
+global_pi_root() {
+  printf '%s/.pi/agent\n' "$HOME"
+}
+
 preflight_global_opencode() {
   opencode_root=$(global_opencode_root)
   preflight_container "$opencode_root"
@@ -472,6 +476,17 @@ preflight_global_claude() {
     "$claude_root/skills/swe-forge"
 }
 
+preflight_global_pi() {
+  pi_root=$(global_pi_root)
+  preflight_container "$pi_root"
+  preflight_container "$pi_root/prompts"
+  preflight_container "$pi_root/swe-forge"
+  preflight_canonical "$pi_root/swe-forge"
+  preflight_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" \
+    "$pi_root/prompts/swe-forge.md"
+}
+
 preflight_install() {
   CONFLICTS=0
 
@@ -479,6 +494,7 @@ preflight_install() {
     case "$HARNESS" in
       opencode) preflight_global_opencode ;;
       claude) preflight_global_claude ;;
+      pi) preflight_global_pi ;;
       all)
         preflight_global_opencode
         preflight_global_claude
@@ -647,11 +663,20 @@ install_global_claude() {
     "$claude_root/skills/swe-forge"
 }
 
+install_global_pi() {
+  pi_root=$(global_pi_root)
+  install_canonical "$pi_root/swe-forge"
+  install_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" \
+    "$pi_root/prompts/swe-forge.md"
+}
+
 install_requested() {
   if [ "$SCOPE" = global ]; then
     case "$HARNESS" in
       opencode) install_global_opencode ;;
       claude) install_global_claude ;;
+      pi) install_global_pi ;;
       all)
         install_global_opencode
         install_global_claude
@@ -868,6 +893,19 @@ verify_global_claude() {
     "$claude_root/skills/swe-forge"
 }
 
+verify_global_pi() {
+  pi_root=$(global_pi_root)
+  verify_canonical "$pi_root/swe-forge"
+  prompt_file=$pi_root/prompts/swe-forge.md
+  verify_file \
+    "$SOURCE_ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" \
+    "$prompt_file"
+  [ -f "$prompt_file" ] && {
+    verify_contains '$ARGUMENTS' "$prompt_file"
+    verify_contains '~/.pi/agent/swe-forge' "$prompt_file"
+  }
+}
+
 verify_requested() {
   VERIFY_FAILURES=0
 
@@ -878,6 +916,9 @@ verify_requested() {
         ;;
       claude)
         verify_global_claude
+        ;;
+      pi)
+        verify_global_pi
         ;;
       all)
         verify_global_opencode
@@ -959,6 +1000,12 @@ validate_scope() {
   [ "$MODE" = link ] || die "--mode copy is not supported with --global"
 }
 
+validate_harness_scope() {
+  if [ "$HARNESS" = pi ] && [ "$SCOPE" != global ]; then
+    die "pi installation currently requires --global"
+  fi
+}
+
 parse_args() {
   SEEN_TARGET=0
   SEEN_GLOBAL=0
@@ -984,10 +1031,10 @@ parse_args() {
   esac
 
   case "$HARNESS" in
-    opencode|claude|claude-code|all)
+    opencode|claude|claude-code|pi|all)
       [ "$HARNESS" != claude-code ] || HARNESS=claude
       ;;
-    *) die "unsupported harness: $HARNESS (use opencode, claude, or all)" ;;
+    *) die "unsupported harness: $HARNESS (use opencode, claude, pi, or all)" ;;
   esac
 
   while [ "$#" -gt 0 ]; do
@@ -1046,6 +1093,7 @@ main() {
   printf '%s\n' '@AGENTS.md' >"$RUN_TMP/claude-bridge"
   choose_destination
   validate_scope
+  validate_harness_scope
 
   if [ "$ACTION" = install ]; then
     acquire_lock
