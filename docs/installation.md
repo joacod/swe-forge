@@ -7,8 +7,8 @@ or global harness configuration is always an explicit user action.
 The repository includes a dependency-free installer:
 
 ```bash
-scripts/swe-forge install <opencode|claude|all> [options]
-scripts/swe-forge verify <opencode|claude|all> [options]
+scripts/swe-forge install <opencode|claude|pi|all> [options]
+scripts/swe-forge verify <opencode|claude|pi|all> [options]
 ```
 
 The default mode is `link`. A link installation follows changes in this
@@ -44,6 +44,13 @@ Install both harness bridges for the current user:
 
 ```bash
 scripts/swe-forge install all --global
+```
+
+Install the Pi global prompt-template bridge separately:
+
+```bash
+scripts/swe-forge install pi --global
+scripts/swe-forge verify pi --global
 ```
 
 The installer never guesses a global installation. `global` must be explicitly
@@ -114,6 +121,9 @@ Add only the bridge needed by the target harness:
   explicit skill from `.swe-forge/adapters/claude-code/`.
 - OpenCode: the project installer links the explicit command to
   `.opencode/commands/swe-forge.md` and does not add model or permission config.
+- Pi: the global installer links the explicit prompt template to
+  `~/.pi/agent/prompts/swe-forge.md` and does not modify Pi settings or install
+  an extension.
 - Herdr: use `.swe-forge/adapters/herdr/` only when an execution decision
   selects isolated work; install Herdr's own official skill separately if
   needed.
@@ -130,6 +140,7 @@ creates source-linked harness entries in these locations:
 - OpenCode: `~/.config/opencode/commands/swe-forge.md` and
   `~/.config/opencode/swe-forge/`
 - Claude Code: `~/.claude/skills/swe-forge/` and `~/.claude/swe-forge/`
+- Pi: `~/.pi/agent/prompts/swe-forge.md` and `~/.pi/agent/swe-forge/`
 
 The global loaders point back to the support directory, which points back to
 the canonical checkout. This makes `/swe-forge <ticket>` available across
@@ -150,6 +161,7 @@ Installation runs verification automatically. It can also be run later:
 scripts/swe-forge verify opencode --target /path/to/project
 scripts/swe-forge verify opencode --target /path/to/copied-project --mode copy
 scripts/swe-forge verify claude --global
+scripts/swe-forge verify pi --global
 ```
 
 Verification checks the canonical files, current source contents, harness

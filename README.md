@@ -23,8 +23,8 @@ Use SWE Forge for this ticket:
 ```
 
 This natural-language path works in a harness that supports repository
-instructions and file access. Installed OpenCode and Claude Code integrations
-also expose `/swe-forge`.
+instructions and file access. Installed OpenCode, Claude Code, and Pi
+integrations also expose `/swe-forge`.
 
 ## Execution Modes
 
@@ -79,8 +79,16 @@ scripts/swe-forge install claude --global
 scripts/swe-forge verify claude --global
 ```
 
+Pi is supported through its global prompt-template directory:
+
+```bash
+scripts/swe-forge install pi --global
+scripts/swe-forge verify pi --global
+```
+
 The `all` harness is an explicit shortcut for installing or verifying both
-OpenCode and Claude Code. It does not mean "the current harness":
+OpenCode and Claude Code. Pi is installed separately. It does not mean "the
+current harness":
 
 ```bash
 scripts/swe-forge install all --global
@@ -106,8 +114,8 @@ link, copy, collision, verification, and update details.
 - Copy mode creates a reviewed project-local snapshot; global installation is link-only.
 - `--target` always means the exact existing directory supplied.
 - Existing conflicting files stop the installation instead of being overwritten.
-- Global installation adds only the requested command or skill and a private source-linked support directory.
-- Global installation does not modify OpenCode or Claude configuration, models, permissions, credentials, or JSON files.
+- Global installation adds only the requested command, prompt template, or skill and a private source-linked support directory.
+- Global installation does not modify harness settings, models, permissions, credentials, or JSON files.
 
 ## Workflow At A Glance
 
@@ -138,6 +146,7 @@ rules live in [SWE-FORGE.md](SWE-FORGE.md).
 
 - **OpenCode:** project and global `/swe-forge` command, with native subagents available to the routing policy.
 - **Claude Code:** project and global `/swe-forge` skill with explicit user invocation.
+- **Pi:** global `/swe-forge` prompt template with explicit user invocation.
 - **Codex and other harnesses:** portable `AGENTS.md` activation; no V1-specific native configuration is required.
 - **Herdr:** optional execution isolation for `HERDR` mode, not a replacement for the coding harness.
 

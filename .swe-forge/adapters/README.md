@@ -39,6 +39,7 @@ that can be reviewed and versioned.
 - [OpenCode](opencode/README.md): project command and optional native-agent
   bridge pattern
 - [Claude Code](claude-code/README.md): project skill and `CLAUDE.md` bridge
+- [Pi](pi/README.md): global prompt-template bridge
 - [Herdr](herdr/README.md): optional isolated execution runbook
 - [Codex](codex/README.md): portable `AGENTS.md` path with no V1-specific native
   configuration
