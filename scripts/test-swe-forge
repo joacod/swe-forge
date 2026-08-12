@@ -45,6 +45,8 @@ test -L "$project/AGENTS.md" || fail "project AGENTS.md is not linked"
 test -L "$project/SWE-FORGE.md" || fail "project SWE-FORGE.md is not linked"
 test -L "$project/.swe-forge/agents" || fail "canonical agent directory is not linked"
 test -L "$project/.swe-forge/providers" || fail "execution providers directory is not linked"
+test -L "$project/.swe-forge/tools" || fail "evidence tools directory is not linked"
+test -x "$project/.swe-forge/tools/swe-forge-gate" || fail "evidence gate is not executable"
 test -d "$project/.swe-forge/providers/herdr" || fail "Herdr provider directory is missing"
 test -f "$project/.swe-forge/providers/herdr/README.md" || fail "Herdr provider README is missing"
 test -f "$project/.swe-forge/providers/herdr/runbook.md" || fail "Herdr provider runbook is missing"
@@ -93,6 +95,8 @@ done
 expect_failure "is not a source link" "$INSTALL" verify opencode --target "$copy_project"
 test ! -L "$copy_project/AGENTS.md" || fail "copy mode linked AGENTS.md"
 test ! -L "$copy_project/.swe-forge/agents" || fail "copy mode linked canonical files"
+test ! -L "$copy_project/.swe-forge/tools" || fail "copy mode linked evidence tools"
+test -x "$copy_project/.swe-forge/tools/swe-forge-gate" || fail "copy mode evidence gate is not executable"
 test ! -L "$copy_project/.opencode/commands/swe-forge.md" || fail "copy mode linked OpenCode command"
 for command in $DELIVERY_COMMANDS; do
   test ! -L "$copy_project/.opencode/commands/$command.md" || fail "copy mode linked OpenCode $command command"
@@ -309,6 +313,8 @@ for support in \
   "$global_home/.agents/swe-forge" \
   "$global_home/.pi/agent/swe-forge"; do
   test -L "$support/.swe-forge/providers" || fail "execution providers directory is not linked in $support"
+  test -L "$support/.swe-forge/tools" || fail "evidence tools directory is not linked in $support"
+  test -x "$support/.swe-forge/tools/swe-forge-gate" || fail "evidence gate is not executable in $support"
   test -d "$support/.swe-forge/providers/herdr" || fail "Herdr provider is missing in $support"
   test -f "$support/.swe-forge/providers/herdr/README.md" || fail "Herdr provider README is missing in $support"
   test -f "$support/.swe-forge/providers/herdr/runbook.md" || fail "Herdr provider runbook is missing in $support"

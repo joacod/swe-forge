@@ -59,13 +59,20 @@ validate_registry() {
   done <"$ROOT/.swe-forge/adapters/registry.tsv"
 }
 
-sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" "$ROOT/scripts/test-swe-forge"
+sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
+  "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
+  "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
+  "$ROOT/.swe-forge/tools/swe-forge-gate"
+[ -x "$ROOT/.swe-forge/tools/swe-forge-gate" ] || fail "evidence gate is not executable"
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
 validate_registry
 
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
 require_text 'actions/workflows/ci.yml' README.md
 require_text 'Run the repository checks' CONTRIBUTING.md
+require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md
+require_text 'evidence ledger' .swe-forge/policies/evidence.md
+require_text 'Final status: ACCEPTED | BLOCKED | FAILED' .swe-forge/contracts/receipt.md
 require_text 'pre-edit baseline' SWE-FORGE.md
 require_text 'delivery_mode: GUIDED | PR' SWE-FORGE.md
 require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' SWE-FORGE.md
@@ -162,6 +169,8 @@ require_text 'worker-local transfer commit' .swe-forge/workflows/isolated-execut
 require_text 'Completion order never determines integration order' .swe-forge/workflows/isolated-execution.md
 require_text 'integrated-state validation' .swe-forge/workflows/isolated-execution.md
 require_text 'never use forced removal automatically' .swe-forge/workflows/isolated-execution.md
+require_text 'evidence_ledger_ref:' .swe-forge/contracts/run-state.md
+require_text 'receipt_ref:' .swe-forge/contracts/run-state.md
 
 while IFS='|' read -r file action; do
   require_text "\`$action\` action only" "$file"

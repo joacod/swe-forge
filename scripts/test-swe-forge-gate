@@ -1,0 +1,154 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+GATE=$ROOT/scripts/swe-forge-gate
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-gate-test.XXXXXX")
+
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+fail() {
+  printf 'test failure: %s\n' "$*" >&2
+  exit 1
+}
+
+expect_failure() {
+  expected=$1
+  shift
+  if output=$("$@" 2>&1); then
+    fail "expected command to fail: $*"
+  fi
+  case "$output" in
+    *"$expected"*) ;;
+    *) fail "failure did not contain '$expected': $output" ;;
+  esac
+}
+
+expect_repo_failure() {
+  expected=$1
+  repo=$2
+  shift 2
+  if output=$(cd "$repo" && "$@" 2>&1); then
+    fail "expected command to fail: $*"
+  fi
+  case "$output" in
+    *"$expected"*) ;;
+    *) fail "failure did not contain '$expected': $output" ;;
+  esac
+}
+
+make_repo() {
+  name=$1
+  repo=$TMP_ROOT/$name
+  mkdir -p "$repo"
+  git -C "$repo" init -q
+  git -C "$repo" config user.email test@example.com
+  git -C "$repo" config user.name "SWE Forge Test"
+  printf 'base\n' >"$repo/README.md"
+  git -C "$repo" add README.md
+  git -C "$repo" commit -qm 'Initial commit'
+  git -C "$repo" branch -M main
+  printf '%s\n' "$repo"
+}
+
+clean_feature_state() {
+  repo=$1
+  git -C "$repo" checkout -qb feature
+  state=$TMP_ROOT/$(basename "$repo").state
+  printf '%s\n' "$state"
+}
+
+repo=$(make_repo clean)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  printf 'changed\n' >>README.md
+  "$GATE" validate --state "$state" --requirement required --name smoke -- \
+    sh -c 'grep -q changed README.md' >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  "$GATE" commit-slice --state "$state" --checkpoint 1 \
+    --message 'Record gate evidence' --authorized-by PR >/dev/null
+  "$GATE" validate --state "$state" --requirement required --name final-smoke \
+    --final -- sh -c 'grep -q changed README.md' >/dev/null
+  "$GATE" review --state "$state" --result PASS --source fresh-context \
+    --findings 1 --repaired 1 >/dev/null
+  "$GATE" deliver-pr --state "$state" >/dev/null
+  "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
+    --pr-url https://github.com/example/repo/pull/1 \
+    --output "$TMP_ROOT/receipt.md" >/dev/null
+)
+grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "accepted receipt is missing final status"
+grep -F 'Fresh review: PASS — 1 findings, 1 repaired' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "receipt is missing review summary"
+if grep -F 'grep -q' "$TMP_ROOT/receipt.md" >/dev/null; then
+  fail "receipt leaked validation command output"
+fi
+
+repo=$(make_repo dirty)
+git -C "$repo" checkout -qb feature
+printf 'uncommitted\n' >>"$repo/README.md"
+state=$TMP_ROOT/dirty.state
+expect_repo_failure 'checkout is not clean' "$repo" "$GATE" preflight --state "$state"
+test ! -e "$state/meta.env" || fail "dirty preflight wrote a baseline"
+
+repo=$(make_repo protected)
+state=$TMP_ROOT/protected.state
+expect_repo_failure 'protected branch is not writable' "$repo" "$GATE" preflight --state "$state"
+test ! -e "$state/meta.env" || fail "protected preflight wrote a baseline"
+
+repo=$(make_repo detached)
+git -C "$repo" checkout -q --detach HEAD
+state=$TMP_ROOT/detached.state
+expect_repo_failure 'checkout is detached' "$repo" "$GATE" preflight --state "$state"
+test ! -e "$state/meta.env" || fail "detached preflight wrote a baseline"
+
+repo=$(make_repo scope)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  printf 'allowed\n' >>README.md
+  printf 'forbidden\n' >OTHER.md
+  "$GATE" validate --state "$state" --requirement required --name scope-smoke -- \
+    sh -c 'test -f OTHER.md' >/dev/null
+)
+expect_failure 'outside checkpoint scope' "$GATE" checkpoint --state "$state" --scope README.md
+
+repo=$(make_repo authorization)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  printf 'change\n' >>README.md
+  "$GATE" validate --state "$state" --requirement required --name smoke -- \
+    sh -c 'grep -q change README.md' >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+)
+expect_failure 'requires explicit PR or GO authorization' \
+  "$GATE" commit-slice --state "$state" --checkpoint 1 \
+  --message 'Record gate evidence' --authorized-by NONE
+
+repo=$(make_repo final-evidence)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  printf 'change\n' >>README.md
+  "$GATE" validate --state "$state" --requirement required --name smoke -- \
+    sh -c 'grep -q change README.md' >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  "$GATE" commit-slice --state "$state" --checkpoint 1 \
+    --message 'Record gate evidence' --authorized-by PR >/dev/null
+  "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
+)
+expect_failure 'current HEAD' "$GATE" receipt --state "$state" \
+  --execution SOLO --delivery PR --pr-url https://github.com/example/repo/pull/2
+
+printf '%s\n' 'PASS: executable gate tests'

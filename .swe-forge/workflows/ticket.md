@@ -247,8 +247,12 @@ validation. When test-first is selected, work in vertical red-green-refactor
 slices rather than writing a speculative test suite upfront.
 
 Record what will be run before implementation when the task is delegated.
-Classify each check as `required`, `conditional`, or `informational`; every
-conditional check must include its observable condition. Inspect commands
+When `.swe-forge/tools/swe-forge-gate` is available, use its evidence ledger
+for preflight, inspected validation commands, checkpoints, and current-HEAD
+final checks; keep that ledger outside the repository or under an already
+ignored path. Classify each check as `required`, `conditional`, or
+`informational`; every conditional check must include its observable condition.
+Inspect commands
 before execution for filesystem mutation, credentials, networking, migrations,
 deployment, publication, production access, or shared-environment effects.
 Classify delivery commands separately: local commit, branch push, PR creation,
@@ -340,10 +344,13 @@ cleanup against ambiguous state.
 
 ### 10. Verify
 
-Run the relevant repository quality gates after integration. In `PR` mode,
-each slice or integration unit's required targeted checks must pass before its
-local integration commit, and final verification and fresh review must pass
-before push or PR creation. In `GUIDED`, a checkpoint may report a passing
+Run the relevant repository quality gates after integration. When using the
+executable evidence gate, mark every required or applicable conditional final
+check with `--final` against the final HEAD. In `PR` mode, each slice or
+integration unit's required targeted checks must pass before its local
+integration commit, and final verification and fresh review must pass before
+push or PR creation. Run `deliver-pr` before external push or PR actions when
+the executable gate is available. In `GUIDED`, a checkpoint may report a passing
 slice while final acceptance remains pending. Checks may include targeted
 tests, the complete test suite, typecheck, lint, build, static analysis,
 packaging, or repository-specific structural and installer checks.
@@ -427,6 +434,7 @@ Return only the decision-relevant result:
 - remaining risks or follow-ups
 - delivery result (checkpoint, commits, push, PR URL, or explicit blocked or
   not-authorized status)
+- receipt result or explicit not-generated status
 - cleanup status and remaining resources when applicable
 
 Do not include internal worker transcripts.

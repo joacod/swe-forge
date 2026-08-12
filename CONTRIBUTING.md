@@ -21,7 +21,8 @@ Run the repository checks from the project root:
 ```sh
 ./scripts/check-swe-forge
 ./scripts/test-swe-forge
-sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge
+./scripts/test-swe-forge-gate
+sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/swe-forge-gate scripts/test-swe-forge-gate
 git diff --check
 ```
 

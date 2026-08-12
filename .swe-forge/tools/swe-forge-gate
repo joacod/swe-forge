@@ -1,0 +1,755 @@
+#!/bin/sh
+
+# Dependency-free evidence and delivery guard for SWE Forge runs.
+# The state directory is an evidence ledger, not a replacement for the
+# canonical run-state contract. Keep it outside the repository or ignored.
+
+set -eu
+
+PROGRAM=${0##*/}
+STATE=
+CHECKOUT=
+SCOPE_TMP=
+CHANGED_TMP=
+TAB=$(printf '\t')
+NEWLINE='
+'
+UMASK_SET=0
+
+cleanup() {
+  [ -z "$SCOPE_TMP" ] || rm -f "$SCOPE_TMP"
+  [ -z "$CHANGED_TMP" ] || rm -f "$CHANGED_TMP"
+}
+
+trap 'status=$?; cleanup; exit "$status"' 0 HUP INT TERM
+
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/swe-forge-gate preflight --state DIR [--branch BRANCH]
+  scripts/swe-forge-gate validate --state DIR --requirement TYPE --name NAME [--final] -- COMMAND [ARGS...]
+  scripts/swe-forge-gate checkpoint --state DIR --scope PATH [--scope PATH...]
+  scripts/swe-forge-gate commit-slice --state DIR --checkpoint ID --message MESSAGE --authorized-by PR|GO
+  scripts/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED --source SOURCE [options]
+  scripts/swe-forge-gate deliver-pr --state DIR
+  scripts/swe-forge-gate receipt --state DIR --execution MODE --delivery GUIDED|PR [--pr-url URL] [--output FILE]
+
+The state directory is temporary evidence. Keep it outside the repository or
+under an already ignored path. The guard never pushes, creates a pull request,
+or merges.
+EOF
+}
+
+reject_control_chars() {
+  value=$1
+  case "$value" in
+    *"$TAB"*|*"$NEWLINE"*)
+      fail "values containing tabs or newlines are not supported" ;;
+  esac
+}
+
+absolute_path() {
+  path=$1
+  reject_control_chars "$path"
+  case "$path" in
+    /*) printf '%s\n' "$path" ;;
+    *) printf '%s/%s\n' "$PWD" "$path" ;;
+  esac
+}
+
+state_path() {
+  path=$(absolute_path "$1")
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    [ -d "$path" ] && [ ! -L "$path" ] || fail "state path must be a real directory: $path"
+    CDPATH= cd "$path" && pwd -P
+    return
+  fi
+  parent=$(dirname "$path")
+  [ -d "$parent" ] && [ ! -L "$parent" ] || fail "state parent must be a real directory: $parent"
+  CDPATH= cd "$parent" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$path")"
+}
+
+git_root_from_cwd() {
+  git rev-parse --show-toplevel 2>/dev/null || fail "not inside a Git checkout"
+}
+
+meta_value() {
+  key=$1
+  file=$2
+  awk -F= -v wanted="$key" '$1 == wanted { sub(/^[^=]*=/, ""); print; exit }' "$file"
+}
+
+state_meta() {
+  [ -n "$STATE" ] || fail "--state is required"
+  [ -f "$STATE/meta.env" ] || fail "state has not been initialized: $STATE"
+  CHECKOUT=$(meta_value checkout_path "$STATE/meta.env")
+  [ -n "$CHECKOUT" ] || fail "state is missing checkout_path"
+  [ -d "$CHECKOUT" ] || fail "recorded checkout no longer exists: $CHECKOUT"
+}
+
+state_file() {
+  state_meta
+  printf '%s\n' "$STATE/$1"
+}
+
+ensure_safe_state_location() {
+  root=$1
+  case "$STATE" in
+    "$root") fail "state directory must not be the checkout root" ;;
+    "$root"/*)
+      relative=${STATE#"$root"/}
+      git -C "$root" check-ignore -q --no-index "$relative" || \
+        fail "state inside checkout must already be ignored: $STATE"
+      ;;
+  esac
+}
+
+current_branch() {
+  git -C "$CHECKOUT" symbolic-ref --quiet --short HEAD 2>/dev/null || true
+}
+
+remote_default_branch() {
+  remote_head=$(git -C "$CHECKOUT" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+  case "$remote_head" in
+    */*) printf '%s\n' "${remote_head#*/}" ;;
+    *) printf '%s\n' '' ;;
+  esac
+}
+
+assert_not_protected() {
+  branch=$1
+  remote_default=$2
+  [ "$branch" != main ] || fail "protected branch is not writable: $branch"
+  [ "$branch" != master ] || fail "protected branch is not writable: $branch"
+  [ -z "$remote_default" ] || [ "$branch" != "$remote_default" ] || \
+    fail "remote default branch is not writable: $branch"
+}
+
+status_porcelain() {
+  git -C "$CHECKOUT" status --porcelain=v1 --untracked-files=all
+}
+
+identity_safe() {
+  actual_root=$(git -C "$CHECKOUT" rev-parse --show-toplevel 2>/dev/null || true)
+  [ "$actual_root" = "$CHECKOUT" ] || return 1
+  branch=$(current_branch)
+  [ -n "$branch" ] || return 1
+  baseline_branch=$(meta_value baseline_branch "$STATE/meta.env")
+  [ "$branch" = "$baseline_branch" ] || return 1
+  remote_default=$(meta_value remote_default "$STATE/meta.env")
+  [ "$branch" != main ] || return 1
+  [ "$branch" != master ] || return 1
+  [ -z "$remote_default" ] || [ "$branch" != "$remote_default" ] || return 1
+}
+
+assert_identity() {
+  state_meta
+  identity_safe || fail "checkout identity, branch, or protection state changed"
+}
+
+ensure_meta_state() {
+  state_meta
+  [ -f "$STATE/validations.tsv" ] || : >"$STATE/validations.tsv"
+  [ -f "$STATE/checkpoints.tsv" ] || : >"$STATE/checkpoints.tsv"
+}
+
+write_meta() {
+  meta_tmp=$STATE/meta.env.tmp.$$
+  {
+    printf 'state_version=1\n'
+    printf 'checkout_path=%s\n' "$CHECKOUT"
+    printf 'baseline_head=%s\n' "$1"
+    printf 'baseline_branch=%s\n' "$2"
+    printf 'remote_default=%s\n' "$3"
+    printf 'created_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } >"$meta_tmp"
+  mv "$meta_tmp" "$STATE/meta.env"
+}
+
+preflight() {
+  expected_branch=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --branch)
+        [ "$#" -ge 2 ] || fail "--branch requires a name"
+        expected_branch=$2
+        reject_control_chars "$expected_branch"
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown preflight option: $1" ;;
+    esac
+  done
+
+  [ -n "$STATE" ] || fail "--state is required"
+  CHECKOUT=$(git_root_from_cwd)
+  ensure_safe_state_location "$CHECKOUT"
+  [ ! -e "$STATE/meta.env" ] || fail "state is already initialized: $STATE"
+  umask 077
+  UMASK_SET=1
+
+  branch=$(current_branch)
+  [ -n "$branch" ] || fail "checkout is detached"
+  [ -z "$expected_branch" ] || [ "$branch" = "$expected_branch" ] || \
+    fail "current branch $branch does not match expected branch $expected_branch"
+  remote_default=$(remote_default_branch)
+  assert_not_protected "$branch" "$remote_default"
+  status=$(status_porcelain)
+  [ -z "$status" ] || fail "checkout is not clean before writable work"
+  head=$(git -C "$CHECKOUT" rev-parse HEAD 2>/dev/null || fail "checkout has no commit baseline")
+  mkdir -p "$STATE"
+  write_meta "$head" "$branch" "$remote_default"
+  : >"$STATE/validations.tsv"
+  : >"$STATE/checkpoints.tsv"
+  printf 'PASS: preflight baseline recorded at %s\n' "$STATE"
+  printf 'BASELINE_HEAD: %s\n' "$head"
+  printf 'BRANCH: %s\n' "$branch"
+}
+
+join_command() {
+  command_display=
+  for command_arg do
+    reject_control_chars "$command_arg"
+    if [ -n "$command_display" ]; then
+      command_display="$command_display $command_arg"
+    else
+      command_display=$command_arg
+    fi
+  done
+  printf '%s\n' "$command_display"
+}
+
+validate_run() {
+  requirement=
+  name=
+  final_run=no
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --requirement)
+        [ "$#" -ge 2 ] || fail "--requirement requires required, conditional, or informational"
+        requirement=$2
+        shift 2
+        ;;
+      --name)
+        [ "$#" -ge 2 ] || fail "--name requires a label"
+        name=$2
+        shift 2
+        ;;
+      --final)
+        final_run=yes
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown validate option: $1" ;;
+    esac
+  done
+
+  case "$requirement" in
+    required|conditional|informational) ;;
+    *) fail "invalid validation requirement: ${requirement:-<missing>}" ;;
+  esac
+  [ -n "$name" ] || fail "--name is required"
+  reject_control_chars "$name"
+  [ "$#" -gt 0 ] || fail "a command is required after --"
+  ensure_meta_state
+  assert_identity
+  command_display=$(join_command "$@")
+  id=$(awk 'END { print NR + 1 }' "$STATE/validations.tsv")
+  evidence_file="$STATE/validation.$(printf '%04d' "$id").log"
+  head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  if (CDPATH= cd "$CHECKOUT" && "$@") >"$evidence_file" 2>&1; then
+    result=passed
+    code=0
+  else
+    code=$?
+    result=failed
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$id" "$requirement" "$name" "$result" "$code" \
+    "$(basename "$evidence_file")" "$command_display" "$head" "$final_run" \
+    >>"$STATE/validations.tsv"
+  printf '%s: %s (%s)\n' "$name" "$result" "$evidence_file"
+  [ "$result" = passed ]
+}
+
+changed_paths() {
+  {
+    git -C "$CHECKOUT" diff --name-only HEAD
+    git -C "$CHECKOUT" ls-files --others --exclude-standard
+  } | sort -u
+}
+
+scope_allows() {
+  candidate=$1
+  while IFS= read -r scope; do
+    [ -n "$scope" ] || continue
+    reject_control_chars "$scope"
+    case "$scope" in
+      */\*\*)
+        prefix=${scope%/\*\*}
+        case "$candidate" in
+          "$prefix"|"$prefix"/*) return 0 ;;
+        esac
+        ;;
+      *)
+        [ "$candidate" = "$scope" ] && return 0
+        ;;
+    esac
+  done <"$SCOPE_TMP"
+  return 1
+}
+
+noninformational_status() {
+  awk -F '\t' '
+    $2 != "informational" {
+      names[$3] = 1
+      latest[$3] = $4
+    }
+    END {
+      total=0
+      bad=0
+      for (name in names) {
+        total++
+        if (latest[name] != "passed") bad++
+      }
+      if (total == 0) print "missing"
+      else if (bad != 0) print "failed"
+      else print "passed"
+    }
+  ' "$STATE/validations.tsv"
+}
+
+current_head_validations() {
+  wanted_head=$1
+  awk -F '\t' -v wanted="$wanted_head" '
+    $2 != "informational" && $9 == "yes" {
+      names[$3] = 1
+      if ($4 == "passed" && $8 == wanted) passed[$3] = 1
+    }
+    END {
+      total=0
+      bad=0
+      for (name in names) {
+        total++
+        if (!passed[name]) bad++
+      }
+      if (total == 0) print "missing"
+      else if (bad != 0) print "failed"
+      else print "passed"
+    }
+  ' "$STATE/validations.tsv"
+}
+
+checkpoint_run() {
+  scope_count=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --scope)
+        [ "$#" -ge 2 ] || fail "--scope requires a path or path/**"
+        [ -n "$2" ] || fail "--scope requires a non-empty path"
+        [ -n "$SCOPE_TMP" ] || SCOPE_TMP=$STATE/scope.$$
+        printf '%s\n' "$2" >>"$SCOPE_TMP"
+        scope_count=$((scope_count + 1))
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown checkpoint option: $1" ;;
+    esac
+  done
+
+  [ "$scope_count" -gt 0 ] || fail "at least one --scope is required"
+  ensure_meta_state
+  assert_identity
+  CHANGED_TMP=$STATE/changed.$$
+  changed_paths >"$CHANGED_TMP"
+  changed_count=0
+  out_of_scope=
+  while IFS= read -r changed; do
+    [ -n "$changed" ] || continue
+    reject_control_chars "$changed"
+    changed_count=$((changed_count + 1))
+    if ! scope_allows "$changed"; then
+      if [ -n "$out_of_scope" ]; then out_of_scope="$out_of_scope, $changed"; else out_of_scope=$changed; fi
+    fi
+  done <"$CHANGED_TMP"
+  [ "$changed_count" -gt 0 ] || fail "checkpoint has no changed files"
+  [ -z "$out_of_scope" ] || fail "changed files outside checkpoint scope: $out_of_scope"
+  validation_status=$(noninformational_status)
+  [ "$validation_status" = passed ] || \
+    fail "required or conditional validation is not passing: $validation_status"
+
+  id=$(awk 'END { print NR + 1 }' "$STATE/checkpoints.tsv")
+  paths_file="$STATE/checkpoint.$(printf '%04d' "$id").paths"
+  cp "$CHANGED_TMP" "$paths_file"
+  head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  branch=$(current_branch)
+  printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$head" \
+    "$(basename "$paths_file")" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    >>"$STATE/checkpoints.tsv"
+  printf 'PASS: checkpoint %s recorded (%s changed files)\n' "$id" "$changed_count"
+  printf 'CHECKPOINT_ID: %s\n' "$id"
+}
+
+checkpoint_paths() {
+  id=$1
+  paths=$(awk -F '\t' -v wanted="$id" '$1 == wanted { print $4; exit }' "$STATE/checkpoints.tsv")
+  [ -n "$paths" ] || fail "unknown checkpoint: $id"
+  [ -f "$STATE/$paths" ] || fail "checkpoint paths are missing: $paths"
+  printf '%s\n' "$STATE/$paths"
+}
+
+same_path_sets() {
+  first=$1
+  second=$2
+  sort -u "$first" >"$STATE/.set-a.$$"
+  sort -u "$second" >"$STATE/.set-b.$$"
+  if cmp -s "$STATE/.set-a.$$" "$STATE/.set-b.$$"; then
+    result=0
+  else
+    result=1
+  fi
+  rm -f "$STATE/.set-a.$$" "$STATE/.set-b.$$"
+  return "$result"
+}
+
+commit_slice() {
+  checkpoint_id=
+  message=
+  authorized_by=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --checkpoint)
+        [ "$#" -ge 2 ] || fail "--checkpoint requires an ID"
+        checkpoint_id=$2
+        shift 2
+        ;;
+      --message)
+        [ "$#" -ge 2 ] || fail "--message requires a subject"
+        message=$2
+        shift 2
+        ;;
+      --authorized-by)
+        [ "$#" -ge 2 ] || fail "--authorized-by requires PR or GO"
+        authorized_by=$2
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown commit-slice option: $1" ;;
+    esac
+  done
+
+  [ "$authorized_by" = PR ] || [ "$authorized_by" = GO ] || \
+    fail "commit-slice requires explicit PR or GO authorization"
+  [ -n "$message" ] || fail "--message is required"
+  reject_control_chars "$message"
+  message_length=$(printf '%s' "$message" | awk '{ print length }')
+  [ "$message_length" -le 72 ] || fail "commit subject exceeds 72 characters"
+  ensure_meta_state
+  assert_identity
+  checkpoint_file=$(checkpoint_paths "$checkpoint_id")
+  validation_status=$(noninformational_status)
+  [ "$validation_status" = passed ] || \
+    fail "cannot commit a checkpoint without passing validation"
+  if ! git -C "$CHECKOUT" diff --cached --quiet; then
+    fail "staged changes exist before commit-slice"
+  fi
+  CHANGED_TMP=$STATE/commit-changed.$$
+  changed_paths >"$CHANGED_TMP"
+  same_path_sets "$checkpoint_file" "$CHANGED_TMP" || \
+    fail "current changed paths differ from checkpoint $checkpoint_id"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    git -C "$CHECKOUT" add -- "$path"
+  done <"$checkpoint_file"
+  STAGED_TMP=$STATE/staged.$$
+  git -C "$CHECKOUT" diff --cached --name-only | sort -u >"$STAGED_TMP"
+  same_path_sets "$checkpoint_file" "$STAGED_TMP" || \
+    fail "staged paths differ from checkpoint $checkpoint_id"
+  git -C "$CHECKOUT" commit -m "$message"
+  rm -f "$STAGED_TMP"
+  printf 'PASS: committed checkpoint %s\n' "$checkpoint_id"
+  printf 'COMMIT: %s\n' "$(git -C "$CHECKOUT" rev-parse HEAD)"
+}
+
+review_run() {
+  result=
+  source=
+  findings=0
+  repaired=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --result)
+        [ "$#" -ge 2 ] || fail "--result requires PASS or CHANGES_REQUIRED"
+        result=$2
+        shift 2
+        ;;
+      --source)
+        [ "$#" -ge 2 ] || fail "--source requires a review source"
+        source=$2
+        shift 2
+        ;;
+      --findings)
+        [ "$#" -ge 2 ] || fail "--findings requires a non-negative integer"
+        findings=$2
+        shift 2
+        ;;
+      --repaired)
+        [ "$#" -ge 2 ] || fail "--repaired requires a non-negative integer"
+        repaired=$2
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown review option: $1" ;;
+    esac
+  done
+
+  [ "$result" = PASS ] || [ "$result" = CHANGES_REQUIRED ] || \
+    fail "invalid review result: ${result:-<missing>}"
+  [ -n "$source" ] || fail "--source is required"
+  case "$findings" in ''|*[!0-9]*) fail "findings must be a non-negative integer" ;; esac
+  case "$repaired" in ''|*[!0-9]*) fail "repaired must be a non-negative integer" ;; esac
+  ensure_meta_state
+  assert_identity
+  head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  review_tmp=$STATE/review.env.tmp.$$
+  {
+    printf 'result=%s\n' "$result"
+    printf 'source=%s\n' "$source"
+    printf 'findings=%s\n' "$findings"
+    printf 'repaired=%s\n' "$repaired"
+    printf 'head=%s\n' "$head"
+    printf 'recorded_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } >"$review_tmp"
+  mv "$review_tmp" "$STATE/review.env"
+  printf 'REVIEW: %s (%s findings, %s repaired)\n' "$result" "$findings" "$repaired"
+  [ "$result" = PASS ]
+}
+
+final_blockers=0
+blocker() {
+  final_blockers=$((final_blockers + 1))
+  printf 'BLOCKED: %s\n' "$*" >&2
+}
+
+check_final_state() {
+  require_pr_url=$1
+  final_blockers=0
+  ensure_meta_state
+  if ! identity_safe; then
+    blocker "checkout identity, branch, or protection state is not safe"
+  fi
+  status=$(status_porcelain)
+  [ -z "$status" ] || blocker "checkout is dirty"
+  baseline_head=$(meta_value baseline_head "$STATE/meta.env")
+  current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  git -C "$CHECKOUT" merge-base --is-ancestor "$baseline_head" "$current_head" || \
+    blocker "current HEAD is not based on the recorded baseline"
+  checkpoint_count=$(awk 'END { print NR }' "$STATE/checkpoints.tsv")
+  [ "$checkpoint_count" -gt 0 ] || blocker "no checkpoint evidence was recorded"
+  validation_status=$(current_head_validations "$current_head")
+  [ "$validation_status" = passed ] || \
+    blocker "required or conditional validation is not passing at current HEAD: $validation_status"
+  if [ -f "$STATE/review.env" ]; then
+    review_result=$(meta_value result "$STATE/review.env")
+    review_head=$(meta_value head "$STATE/review.env")
+    [ "$review_result" = PASS ] || blocker "fresh review is not PASS: ${review_result:-missing}"
+    [ "$review_head" = "$current_head" ] || blocker "review evidence is not for current HEAD"
+  else
+    blocker "review evidence is missing"
+  fi
+  if [ "$require_pr_url" = yes ]; then
+    [ -n "${PR_URL:-}" ] || blocker "PR URL is required for a final PR receipt"
+  fi
+}
+
+deliver_pr() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown deliver-pr option: $1" ;;
+    esac
+  done
+  check_final_state no
+  [ "$final_blockers" -eq 0 ] || exit 1
+  printf 'PASS: PR delivery prerequisites\n'
+  printf 'BRANCH: %s\n' "$(current_branch)"
+  printf 'HEAD: %s\n' "$(git -C "$CHECKOUT" rev-parse HEAD)"
+}
+
+receipt_text() {
+  execution=$1
+  delivery=$2
+  pr_url=$3
+  baseline_head=$(meta_value baseline_head "$STATE/meta.env")
+  current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  branch=$(current_branch)
+  short_base=$(git -C "$CHECKOUT" rev-parse --short "$baseline_head")
+  commit_count=$(git -C "$CHECKOUT" rev-list --count "$baseline_head..$current_head")
+  checkpoint_count=$(awk 'END { print NR }' "$STATE/checkpoints.tsv")
+  printf '## SWE Forge receipt\n\n'
+  printf 'Execution: %s\n' "$execution"
+  printf 'Delivery: %s\n' "$delivery"
+  printf 'Base: %s\n' "$short_base"
+  printf 'Branch: %s\n' "$branch"
+  printf 'Commits: %s (%s validated slices)\n' "$commit_count" "$checkpoint_count"
+  printf 'Verification:\n'
+  while IFS="$(printf '\t')" read -r id requirement name result code evidence command head final_run; do
+    [ -n "${id:-}" ] || continue
+    case "$result" in
+      passed) display=passed ;;
+      failed) display=failed ;;
+      skipped) display=skipped ;;
+      unavailable) display=unavailable ;;
+      *) display=$result ;;
+    esac
+    printf -- '- %s: %s\n' "$name" "$display"
+  done <"$STATE/validations.tsv"
+  if [ -f "$STATE/review.env" ]; then
+    review_result=$(meta_value result "$STATE/review.env")
+    review_findings=$(meta_value findings "$STATE/review.env")
+    review_repaired=$(meta_value repaired "$STATE/review.env")
+    printf 'Fresh review: %s — %s findings, %s repaired\n' \
+      "$review_result" "$review_findings" "$review_repaired"
+  else
+    printf 'Fresh review: NOT RUN\n'
+  fi
+  if [ -n "$pr_url" ]; then
+    printf 'Pull request: %s\n' "$pr_url"
+  else
+    printf 'Pull request: not-created\n'
+  fi
+  if [ "$final_blockers" -eq 0 ]; then
+    printf 'Final status: ACCEPTED\n'
+  else
+    printf 'Final status: BLOCKED\n'
+  fi
+  printf 'Merge performed: no\n'
+}
+
+receipt_run() {
+  execution=
+  delivery=
+  PR_URL=
+  output=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --execution)
+        [ "$#" -ge 2 ] || fail "--execution requires SOLO, SUBAGENTS, or ISOLATED"
+        execution=$2
+        shift 2
+        ;;
+      --delivery)
+        [ "$#" -ge 2 ] || fail "--delivery requires GUIDED or PR"
+        delivery=$2
+        shift 2
+        ;;
+      --pr-url)
+        [ "$#" -ge 2 ] || fail "--pr-url requires a URL"
+        PR_URL=$2
+        shift 2
+        ;;
+      --output)
+        [ "$#" -ge 2 ] || fail "--output requires a file"
+        output=$2
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown receipt option: $1" ;
+    esac
+  done
+
+  case "$execution" in SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid execution topology: ${execution:-<missing>}" ;; esac
+  case "$delivery" in GUIDED|PR) ;; *) fail "invalid delivery mode: ${delivery:-<missing>}" ;; esac
+  [ "$delivery" != PR ] || [ -n "$PR_URL" ] || PR_URL=
+  if [ -n "$PR_URL" ]; then
+    case "$PR_URL" in http://*|https://*) ;; *) fail "PR URL must use http:// or https://" ;; esac
+  fi
+  ensure_meta_state
+  if [ -n "$output" ]; then
+    reject_control_chars "$output"
+    output=$(absolute_path "$output")
+    output_tmp=$output.tmp.$$
+  else
+    output_tmp=$STATE/receipt.$$.md
+  fi
+  if [ "$delivery" = PR ] && [ -z "$PR_URL" ]; then
+    PR_URL=
+  fi
+  if [ "$delivery" = PR ]; then
+    check_final_state yes
+  else
+    check_final_state no
+  fi
+  receipt_text "$execution" "$delivery" "$PR_URL" >"$output_tmp"
+  if [ -n "$output" ]; then
+    mv "$output_tmp" "$output"
+    cat "$output"
+  else
+    cat "$output_tmp"
+    rm -f "$output_tmp"
+  fi
+  [ "$final_blockers" -eq 0 ]
+}
+
+main() {
+  [ "$#" -gt 0 ] || { usage >&2; exit 2; }
+  command=$1
+  shift
+  case "$command" in
+    preflight) preflight "$@" ;;
+    validate) validate_run "$@" ;;
+    checkpoint) checkpoint_run "$@" ;;
+    commit-slice) commit_slice "$@" ;;
+    review) review_run "$@" ;;
+    deliver-pr) deliver_pr "$@" ;;
+    receipt) receipt_run "$@" ;;
+    -h|--help) usage ;;
+    *) fail "unknown command: $command" ;;
+  esac
+}
+
+main "$@"

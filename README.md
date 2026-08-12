@@ -87,6 +87,7 @@ ticket
   → implement and validate bounded slices or dependency waves
   → centrally integrate isolated results in planned order when applicable
   → verify, independently review, and repair when needed
+  → run executable evidence gates and generate a compact receipt when useful
   → report ACCEPTED, BLOCKED, or FAILED
 ```
 
@@ -158,10 +159,12 @@ and still creates exactly one final PR. Its PR description is kept concise and
 informative; it still never merges.
 
 The delivery helpers are intentionally atomic: `/git-push` only pushes; use
-`/git-pr` separately to create or report the pull request. Commit and PR
-messages follow the repository delivery policy: concise imperative subjects,
-clear subject/body separation, and bodies that preserve what/why context when
-needed. See the harness adapter documentation for the available
+`/git-pr` separately to create or report the pull request. In PR mode, a compact
+SWE Forge receipt can be generated after the PR URL exists; it contains public
+evidence only and never a transcript. Commit and PR messages follow the
+repository delivery policy: concise imperative subjects, clear subject/body
+separation, and bodies that preserve what/why context when needed. See the
+harness adapter documentation for the available
 `git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
 
 ## Learn more
@@ -171,6 +174,7 @@ needed. See the harness adapter documentation for the available
 - [Architecture](docs/architecture.md)
 - [Adapter index](.swe-forge/adapters/README.md)
 - [Execution providers](.swe-forge/providers/README.md)
+- [Executable evidence and receipts](.swe-forge/policies/evidence.md)
 - [Adding a harness](docs/adding-a-harness.md)
 - [Adding an optional specialist skill](docs/adding-a-skill.md)
 - [Contributing](CONTRIBUTING.md)

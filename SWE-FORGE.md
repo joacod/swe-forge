@@ -39,8 +39,8 @@ The source of truth is deliberately separated:
 - `SWE-FORGE.md` defines activation, principles, lifecycle, and acceptance.
 - `.swe-forge/workflows/` defines executable workflow procedures.
 - `.swe-forge/agents/` defines harness-neutral role responsibilities.
-- `.swe-forge/contracts/` defines structured task, result, review, and state
-  formats.
+- `.swe-forge/contracts/` defines structured task, result, review, receipt,
+  and state formats.
 - `.swe-forge/policies/` defines routing, provider selection, delegation,
   model, specification, delivery, verification, recovery, and optional
   specialist-skill rules.
@@ -70,6 +70,8 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Keep read-only research separate from writable implementation.
 - Never allow concurrent writing workers to edit the same checkout.
 - Treat verification evidence as stronger than confidence or code inspection.
+- Make safety-critical boundaries executable when a compatible helper is
+  available, while keeping planning and reasoning adaptive.
 - Make a risk-proportional testing decision for every ticket: prefer focused
   behavioral tests at observable seams, use existing coverage when sufficient,
   and record focused manual or reproduction evidence when automation is not
@@ -260,7 +262,10 @@ each validated slice or integration unit, then runs final verification and
 fresh review before pushing the integration/delivery branch and creating one
 pull request. Worker branches are never pushed and worker PRs are never
 created. It ends with a concise PR URL and never merges. It does not skip
-automated checks or independent review.
+automated checks or independent review. After the PR URL exists, generate a
+compact receipt using `.swe-forge/contracts/receipt.md` and add it to the PR
+description when the provider supports updating the description. Never include
+transcripts or claim checks that were not run.
 
 Use the atomic delivery actions described by `.swe-forge/policies/delivery.md`
 for guided follow-up: `git-commit`, `git-push`, `git-pr`, and `git-sync`.
@@ -314,7 +319,8 @@ lifecycle is:
    checkpoints when `delivery_mode` is `GUIDED`.
 10. Integrate isolated work centrally, with final commits built and validated
     by the orchestrator.
-11. Verify with relevant repository quality gates.
+11. Verify with relevant repository quality gates and record current-HEAD
+    evidence when using the executable gate.
 12. Review from fresh context using evidence, not implementation chatter.
 13. Repair relevant findings and rerun affected validation.
 14. Compare the final diff against the original ticket and acceptance criteria.
@@ -331,8 +337,10 @@ Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
 state must survive context changes. In `PR` mode, the working-spec contract
 provides a short behavior-first brief; it is temporary and is not a repository
 artifact. When a specialist skill is considered, the working spec records its
-source, selection status, and reason for not or using it. A run state is
-temporary by default and should live outside the repository, for example:
+source, selection status, and reason for not or using it. An optional executable
+evidence ledger may support preflight, checkpoints, validation, and receipt
+generation; it is not a second source of truth. A run state is temporary by
+default and should live outside the repository, for example:
 
 ```text
 $TMPDIR/swe-forge/<run-id>/run-state.yaml
@@ -415,6 +423,8 @@ Declare success only when all applicable conditions are met:
 - no blocking review finding under `.swe-forge/contracts/review.md` remains
 - no unintended changes remain
 - the final integrated diff has been inspected
+- any generated receipt is truthful, contains no transcript, and reports
+  `ACCEPTED` only when its required evidence gate passes
 - a normal ticket has one dedicated delivery branch; an isolated ticket has
   one integration/delivery branch and exactly one final pull request
 - every accepted isolated worker commit has an integration mapping and final
@@ -448,6 +458,7 @@ Return a concise report containing:
 - assumptions and remaining risks
 - delivery result (checkpoint, commit, push, PR URL, or explicit
   not-authorized status)
+- receipt result or explicit not-generated status
 - cleanup status and remaining resources when temporary state, processes,
   providers, or worktrees were used
 

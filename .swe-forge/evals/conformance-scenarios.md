@@ -33,6 +33,8 @@ grading an agent from its explanation alone.
 | Detached or unclassifiable checkout | Do not edit. |
 | Dirty in-scope path | Block until ownership is resolved. |
 | Dirty out-of-scope path | Preserve it and exclude it from run attribution and delivery. |
+| Executable preflight on dirty, detached, or protected checkout | Fail before writable work and do not record a writable baseline. |
+| Executable checkpoint with an out-of-scope path | Fail without staging or committing the path. |
 | Two writable native workers | Serialize them unless they have separate classified worktrees; separate concurrent worktrees are `ISOLATED` with a native provider. |
 | Automatic isolated gate missing a condition | Reject or serialize isolated execution and record the failed gate condition. |
 | Isolated worker completion order | Integrate by dependencies and recorded plan order, never completion order. |
@@ -64,6 +66,9 @@ grading an agent from its explanation alone.
 | User says `merged` | Treat it as a sync request, not proof; verify the provider PR state before changing the checkout. |
 | Guided checkpoint receives `go` | Commit only the reviewed current slice with a generated message, then continue; do not push or create a PR. |
 | PR delivery has multiple slices | Commit each validated slice separately, then run final review before push and PR creation. |
+| Final executable validation | Require every required or applicable conditional check to be recorded as passed against the final HEAD. |
+| Receipt with missing or failed evidence | Report `BLOCKED`; never upgrade it to `ACCEPTED`. |
+| Receipt contents | Include compact check results and review counts, but no transcripts, credentials, or command output. |
 | Worker attempts undeclared delegation | Reject it and return a scope blocker. |
 | Specialist skill recommends delivery or external work | Treat it as advice only; require the separate action authorization and side-effect checks. |
 | Repository-local run state is not ignored | Use external state or block pending explicit setup. |
@@ -73,7 +78,9 @@ grading an agent from its explanation alone.
 
 ## Installation
 
-Run `scripts/test-swe-forge`. It covers exact target scope, conflicting files,
+Run `scripts/test-swe-forge` and `scripts/test-swe-forge-gate`. The latter
+covers executable preflight, scope, authorization, final validation, and
+receipt behavior. The installer suite covers exact target scope, conflicting files,
 symlinked destination components, mode-specific verification, duplicate
 arguments, global link-only behavior, installation locking, and rollback after
 an injected write failure.

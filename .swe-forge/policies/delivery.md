@@ -30,9 +30,12 @@ transfer resources only.
   those commits separate so the pull request shows the implementation steps
 - for `ISOLATED`, create final integration commits centrally after each accepted
   worker unit; never push worker branches or create worker PRs
-- after the final quality gates and fresh review pass, push the one dedicated
-  delivery branch and create one pull request when the required tools are
-  available
+- after the final quality gates and fresh review pass, run the executable
+  `deliver-pr` gate when available, then push the one dedicated delivery
+  branch and create one pull request when the required tools are available
+- after the PR URL exists, generate the compact receipt defined by
+  `../contracts/receipt.md` and add it to the PR description when the provider
+  supports updating it
 - report the pull-request URL and stop; never merge it
 
 The pull request should be easy to scan. Use a short, capitalized, imperative
@@ -49,6 +52,9 @@ Validation:
 
 Notes:
 - <only an important risk or follow-up; omit this section when empty>
+
+SWE Forge receipt:
+<generated compact receipt from `../contracts/receipt.md`>
 ```
 
 Apply the same title discipline as a commit subject: capitalize the first
@@ -67,7 +73,8 @@ file-by-file dump into the description.
 `PR` mode does not waive tests, protected-branch rules, scope checks, fresh
 review for medium/high-risk work, or the final diff inspection. It only replaces
 human checkpoints with an explicit request to continue through pull-request
-creation.
+creation. A receipt is public evidence, not a substitute for those gates; do
+not hand-edit it to upgrade a blocked status.
 
 ## One-Branch Boundary
 
@@ -227,6 +234,8 @@ For isolated execution, the orchestrator must:
 - record the source-to-integration commit mapping
 - run wave-level validation after every wave
 - run all applicable repository checks and fresh review before push or PR
+- run the executable `deliver-pr` gate when available and generate a truthful
+  receipt after the PR URL exists
 - preserve a clean checkpoint and stop safely on conflicts or ambiguous state
 
 Completion order never determines integration order. Use dependencies and the

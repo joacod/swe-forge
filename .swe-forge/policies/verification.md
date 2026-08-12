@@ -100,10 +100,13 @@ Skipped and unavailable checks are not passes. A failed check remains part of
 the final report even after a later repair unless the repaired run supersedes
 it with clear evidence.
 
-A required check that is skipped or unavailable blocks acceptance. A substitute
-check is allowed only after the validation plan or delegated task contract is
-updated with the reason. Conditional and informational outcomes remain visible
-even when they do not block acceptance.
+A required check that is skipped or unavailable blocks acceptance. When the
+executable evidence gate is used, every required or applicable conditional final
+check must be recorded against the final HEAD; an earlier passing result is not
+sufficient after a commit. A substitute check is allowed only after the
+validation plan or delegated task contract is updated with the reason.
+Conditional and informational outcomes remain visible even when they do not
+block acceptance.
 
 ## Independent Review
 
@@ -131,4 +134,5 @@ claiming success. In `PR` mode, an unavailable tool needed to create the
 requested PR produces `BLOCKED` after preserving the reviewed local branch; it
 must not be reported as a completed delivery. In `GUIDED`, an unavailable
 optional delivery tool does not invalidate an accepted reviewed diff when no
-delivery action was requested.
+delivery action was requested. A generated receipt must preserve the same
+status and show missing or unavailable evidence explicitly.

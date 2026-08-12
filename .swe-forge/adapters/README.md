@@ -50,6 +50,9 @@ specific files:
   and one pull-request creation
 - pushing never creates a PR, and syncing verifies `MERGED` before changing the
   checkout
+- when available, `.swe-forge/tools/swe-forge-gate` provides executable
+  preflight, checkpoint, validation, delivery, and receipt evidence without
+  redefining the canonical workflow
 
 Adapter-specific files should document only host syntax, discovery paths,
 permissions, native capabilities, and other behavior that cannot be
