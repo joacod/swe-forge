@@ -26,6 +26,11 @@ current_wave: research
 ticket_ref: <immutable ticket or external artifact reference>
 working_spec_ref: <external temporary working spec, active context, or none>
 acceptance_ref: <acceptance criteria reference>
+specialist_skills:
+  - id: <identifier>
+    source: <user-provided or already-installed path or URL>
+    status: selected | skipped | unavailable
+    reason: <ticket fit and expected benefit, or why it was not used>
 checkout:
   path: <absolute checkout path>
   head: <revision>
@@ -87,7 +92,8 @@ retries:
 - preserve checkout identity, baseline, single-task-branch strategy,
   authorization, validation, review attempts, delivery mode, checkpoint state,
   working-spec reference, prior
-  status, retry ceilings and provenance, and cleanup state during recovery
+  status, retry ceilings and provenance, specialist-skill decisions, and
+  cleanup state during recovery
 - never store credentials, secrets, full transcripts, or private ticket data
 - treat the final repository diff, tests, and review as authoritative over stale
   run state

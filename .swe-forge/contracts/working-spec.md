@@ -57,6 +57,12 @@ acceptance:
 constraints:
   - <compatibility, safety, or repository constraint>
 
+specialist_skills:
+  - id: <identifier>
+    source: <user-provided or already-installed path or URL>
+    status: selected | skipped | unavailable
+    reason: <ticket fit and expected benefit, or why it was not used>
+
 assumptions:
   - <low-risk assumption, or none>
 
@@ -87,6 +93,7 @@ open_questions: []
 
 A `ready` working spec has a concrete intent, bounded scope and non-goals,
 observable requirements, acceptance checks, a validation plan, and explicit
-assumptions. Open questions may remain only when they do not block safe
-implementation and are recorded as risks. A blocking decision must be asked of
-the user rather than guessed.
+assumptions. When a specialist skill is considered, its source, status, and
+selection reason are also recorded. Open questions may remain only when they do
+not block safe implementation and are recorded as risks. Ask the user about a
+blocking decision rather than guessing.

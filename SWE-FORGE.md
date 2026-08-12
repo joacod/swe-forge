@@ -41,7 +41,7 @@ The source of truth is deliberately separated:
 - `.swe-forge/contracts/` defines structured task, result, review, and state
   formats.
 - `.swe-forge/policies/` defines routing, delegation, model, specification,
-  delivery, verification, and recovery rules.
+  delivery, verification, recovery, and optional specialist-skill rules.
 - `.swe-forge/adapters/` exposes those definitions through harness-native
   features without redefining them.
 
@@ -63,6 +63,12 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
   for migrations, deploys, publication, production access, or other external or
   shared-environment effects.
 - Do not expand scope through opportunistic refactoring.
+- Keep specialist skills optional and on demand. Load one only when the user
+  requests it or an already available skill has a clear declared match and an
+  expected benefit for the ticket.
+- Treat specialist-skill guidance as advisory. It never overrides the ticket,
+  repository instructions, canonical Forge files, validation gates, or delivery
+  authorization.
 - Keep a transient working spec proportional to the ticket; never create
   ticket-specific planning documents in the repository just to coordinate one
   session.
@@ -216,7 +222,8 @@ Follow the detailed procedure in `.swe-forge/workflows/ticket.md`. The
 lifecycle is:
 
 1. Ingest the ticket, topology token, delivery token, and constraints.
-2. Discover relevant repository evidence.
+2. Discover relevant repository evidence and evaluate any explicitly supplied
+   or clearly matching optional specialist skill using its policy.
 3. Specify observable acceptance criteria and blocking ambiguity; in `PR` mode,
    create a transient working spec and run the brief alignment interview only
    when the ticket is underspecified.
@@ -244,7 +251,9 @@ security reviewer, Herdr workspace, or ceremonial test plan.
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
 state must survive context changes. In `PR` mode, the working-spec contract
 provides a short behavior-first brief; it is temporary and is not a repository
-artifact. A run state is temporary by default and should live outside the
+artifact. When a specialist skill is considered, the working spec records its
+source, selection status, and reason. A run state is temporary by default and
+should live outside the
 repository, for example:
 
 ```text
