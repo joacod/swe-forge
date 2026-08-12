@@ -65,6 +65,16 @@ validate_registry
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
 require_text 'pre-edit baseline' SWE-FORGE.md
 require_text 'delivery_mode: GUIDED | PR' SWE-FORGE.md
+require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' SWE-FORGE.md
+require_text 'execution_mode: SOLO | SUBAGENTS | ISOLATED' SWE-FORGE.md
+require_text '/swe-forge isolated <ticket>' SWE-FORGE.md
+require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' SWE-FORGE.md
+require_text 'execution_provider: NATIVE | HERDR | NONE' SWE-FORGE.md
+require_text 'parallel_strategy: NONE | COMPOSE' SWE-FORGE.md
+require_text 'integration_strategy: NONE | CHERRY_PICK' SWE-FORGE.md
+reject_text 'requested_mode: AUTO | SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
+reject_text 'execution_mode: SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
+reject_text 'execution_mode: HERDR' SWE-FORGE.md
 require_text 'transient working spec' SWE-FORGE.md
 require_text 'specialist skills optional and on demand' SWE-FORGE.md
 require_text 'risk-proportional testing decision' SWE-FORGE.md
@@ -95,15 +105,35 @@ require_text 'only a dependency in `done`' .swe-forge/contracts/run-state.md
 require_text 'every critical finding blocks' .swe-forge/contracts/review.md
 require_text 'review: skipped' .swe-forge/examples/simple-ticket.md
 require_text 'checkout_baseline:' .swe-forge/examples/parallel-ticket.md
-require_text 'checkout_baseline:' .swe-forge/examples/herdr-ticket.md
+require_text 'checkout_baseline:' .swe-forge/examples/isolated-ticket.md
 require_text 'branch_setup:' .swe-forge/contracts/run-state.md
 require_text 'branch_setup:' .swe-forge/contracts/task.md
 require_text 'branch_setup:' .swe-forge/examples/parallel-ticket.md
-require_text 'branch_setup:' .swe-forge/examples/herdr-ticket.md
+require_text 'branch_setup:' .swe-forge/examples/isolated-ticket.md
 require_text '## Shared Workflow Behavior' .swe-forge/adapters/README.md
 require_text 'one dedicated task branch for the run' .swe-forge/adapters/README.md
+require_text 'one integration/delivery branch' .swe-forge/adapters/README.md
 require_text 'pushing never creates a PR' .swe-forge/adapters/README.md
 require_text 'syncing verifies `MERGED`' .swe-forge/adapters/README.md
+require_text 'ISOLATED' .swe-forge/workflows/ticket.md
+require_text '/swe-forge isolated <ticket>' .swe-forge/workflows/ticket.md
+require_text 'The `herdr` topology token was removed' .swe-forge/workflows/ticket.md
+require_text 'Automatic `ISOLATED` routing requires every condition' .swe-forge/policies/execution-routing.md
+require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
+require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
+require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
+require_text 'integration_strategy: NONE | CHERRY_PICK' .swe-forge/policies/provider-selection.md
+require_text 'Prefer `NATIVE`' .swe-forge/policies/provider-selection.md
+require_text 'Herdr is optional' .swe-forge/providers/herdr/README.md
+require_text 'does not define SWE Forge behavior' .swe-forge/providers/herdr/README.md
+require_text 'does not replace the coding harness' .swe-forge/providers/herdr/README.md
+require_text 'must not be installed automatically' .swe-forge/providers/herdr/README.md
+require_text 'HERDR_ENV' .swe-forge/providers/herdr/README.md
+require_text 'scheduling evidence' .swe-forge/providers/herdr/README.md
+require_text 'Structured worker results, Git evidence, validation, and central integration' .swe-forge/providers/herdr/README.md
+[ ! -e "$ROOT/.swe-forge/adapters/herdr" ] || fail "Herdr provider remains under adapters"
+[ -d "$ROOT/.swe-forge/providers/herdr" ] || fail "missing Herdr provider directory"
+[ -f "$ROOT/.swe-forge/providers/README.md" ] || fail "missing provider catalog"
 
 for file in \
   .swe-forge/adapters/opencode/commands/swe-forge-global.md \
@@ -121,7 +151,11 @@ done
 require_text '~/.pi/agent/swe-forge' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text '~/.pi/agent/swe-forge/.swe-forge/policies/delivery.md' .swe-forge/adapters/pi/prompts/git-pr.md
 require_text 'thin loader' .swe-forge/adapters/opencode/commands/git-push.md
-require_text 'clean status' .swe-forge/adapters/herdr/runbook.md
+require_text 'clean status' .swe-forge/providers/herdr/runbook.md
+require_text 'worker-local transfer commit' .swe-forge/workflows/isolated-execution.md
+require_text 'Completion order never determines integration order' .swe-forge/workflows/isolated-execution.md
+require_text 'integrated-state validation' .swe-forge/workflows/isolated-execution.md
+require_text 'never use forced removal automatically' .swe-forge/workflows/isolated-execution.md
 
 while IFS='|' read -r file action; do
   require_text "\`$action\` action only" "$file"
@@ -157,12 +191,36 @@ require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent
 require_text '~/.agents/swe-forge' .swe-forge/adapters/shared/agent-skill/global/SKILL.md
 require_text 'disable-model-invocation: true' .swe-forge/adapters/shared/agent-skill/project/SKILL.md
 require_text 'shared/agent-skill/project' .swe-forge/adapters/registry.tsv
+require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' .swe-forge/contracts/task.md
+require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/contracts/task.md
+require_text 'base_sha:' .swe-forge/contracts/task.md
+require_text 'integration_order:' .swe-forge/contracts/task.md
+require_text 'environment_isolation:' .swe-forge/contracts/task.md
+require_text 'deliverable_commits:' .swe-forge/contracts/result.md
+require_text 'scope_exceptions:' .swe-forge/contracts/result.md
+require_text 'staged_changes:' .swe-forge/contracts/result.md
+require_text 'unstaged_changes:' .swe-forge/contracts/result.md
+require_text 'untracked_changes:' .swe-forge/contracts/result.md
+require_text 'environment_resources:' .swe-forge/contracts/result.md
+require_text 'source_to_integration:' .swe-forge/contracts/run-state.md
+require_text 'workers:' .swe-forge/contracts/run-state.md
+require_text 'parallel_strategy:' .swe-forge/contracts/run-state.md
+require_text 'cleanup_status:' .swe-forge/contracts/run-state.md
+require_text 'provider: NATIVE | HERDR | NONE' .swe-forge/contracts/review.md
+require_text 'integrated_validation_checked:' .swe-forge/contracts/review.md
+require_text 'worker branches are local-only' .swe-forge/policies/delivery.md
+require_text 'Completion order never determines integration order' .swe-forge/policies/delivery.md
+require_text 'integrated-state validation' .swe-forge/policies/delivery.md
+require_text 'never use forced removal automatically' .swe-forge/policies/delivery.md
+reject_text 'execution_mode: HERDR' .swe-forge/contracts/task.md
+reject_text 'execution_mode: HERDR' .swe-forge/contracts/run-state.md
+reject_text 'execution_mode: HERDR' .swe-forge/examples/isolated-ticket.md
 reject_text 'install all' README.md
 reject_text 'install all' docs/installation.md
 reject_text 'install all' scripts/swe-forge
 reject_text 'verify all' scripts/test-swe-forge
 reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
-reject_text 'commit_policy:' .swe-forge/examples/herdr-ticket.md
+reject_text 'commit_policy:' .swe-forge/examples/isolated-ticket.md
 reject_text 'pushing no longer asks whether' README.md
 
 printf '%s\n' 'PASS: SWE Forge structural checks'

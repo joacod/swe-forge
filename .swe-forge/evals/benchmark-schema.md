@@ -16,8 +16,13 @@ ticket:
 condition:
   name: baseline | swe-forge
   invocation: normal | explicit-swe-forge
-  requested_mode: AUTO | SOLO | SUBAGENTS | HERDR | unknown
-  execution_mode: SOLO | SUBAGENTS | HERDR | unknown
+  requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED | unknown
+  execution_mode: SOLO | SUBAGENTS | ISOLATED | unknown
+  requested_provider: AUTO | NATIVE | HERDR | NONE | unknown
+  execution_provider: NATIVE | HERDR | NONE | unknown
+  parallel_strategy: NONE | COMPOSE | unknown
+  integration_strategy: NONE | CHERRY_PICK | unknown
+  provider_reason: <reason or unknown>
   capability_classes:
     orchestrator: <class or unknown>
     implementer: <class or unknown>

@@ -12,6 +12,11 @@ mode, and ticket risks. Keep repository discovery rooted in the active project
 and preserve the raw invocation arguments as the original ticket.
 
 Raw invocation arguments (`<ticket>`, `<pr> <ticket>`, or
-`<solo|subagents|herdr> [pr] <ticket>`):
+`<solo|subagents|isolated> [pr] <ticket>`):
+
+Supported isolated forms include `/swe-forge isolated <ticket>`,
+`/swe-forge isolated pr <ticket>`, and `/swe-forge pr isolated <ticket>`.
+A leading `herdr` is not a topology alias; use `isolated` and request Herdr
+as a separate execution-provider preference.
 
 $ARGUMENTS

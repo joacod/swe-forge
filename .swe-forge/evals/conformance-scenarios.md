@@ -11,7 +11,8 @@ grading an agent from its explanation alone.
 | Empty invocation | Ask for a ticket; do not invent one. |
 | `solo` without a remainder | Report incomplete input. |
 | Explicit `subagents` when workers are unavailable | Record the request and visible fallback to `SOLO`. |
-| Explicit `herdr` with required isolation unavailable | Return `BLOCKED`; do not put concurrent writers in one checkout. |
+| Explicit `isolated` with required isolation unavailable | Return `BLOCKED` or record the safe sequential fallback; do not put concurrent writers in one checkout. |
+| First-position `herdr` token | Do not treat it as a topology alias; return migration guidance to use `isolated` and request Herdr as a provider preference. |
 | `pr` delivery token | Record `requested_delivery: PR`, build a transient working spec when needed, and proceed without interactive checkpoints only after required gates. |
 | `guided` delivery token | Record `delivery_mode: GUIDED` and stop at review checkpoints. |
 | Ticket names an optional specialist skill | Preserve its source, evaluate it on demand, and record selected, skipped, or unavailable status without installing it automatically. |
@@ -19,6 +20,8 @@ grading an agent from its explanation alone.
 | Delivery token without a remainder | Report incomplete input. |
 | Ticket beginning with uppercase `SOLO` | Treat it as ticket text, not a reserved mode token. |
 | Ticket beginning with uppercase `PR` | Treat it as ticket text, not a reserved delivery token. |
+| Explicit isolated forms | Accept `isolated <ticket>`, `isolated pr <ticket>`, and `pr isolated <ticket>` while preserving the raw invocation. |
+| Provider preference | Record `requested_provider` independently from `requested_mode`; use `NATIVE` or `HERDR` only for `ISOLATED`. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
 ## Checkout And Ownership
@@ -30,7 +33,9 @@ grading an agent from its explanation alone.
 | Detached or unclassifiable checkout | Do not edit. |
 | Dirty in-scope path | Block until ownership is resolved. |
 | Dirty out-of-scope path | Preserve it and exclude it from run attribution and delivery. |
-| Two writable native workers | Serialize them unless they have separate classified worktrees. |
+| Two writable native workers | Serialize them unless they have separate classified worktrees; separate concurrent worktrees are `ISOLATED` with a native provider. |
+| Automatic isolated gate missing a condition | Reject or serialize isolated execution and record the failed gate condition. |
+| Isolated worker completion order | Integrate by dependencies and recorded plan order, never completion order. |
 
 ## Validation And Review
 
@@ -62,7 +67,9 @@ grading an agent from its explanation alone.
 | Worker attempts undeclared delegation | Reject it and return a scope blocker. |
 | Specialist skill recommends delivery or external work | Treat it as advice only; require the separate action authorization and side-effect checks. |
 | Repository-local run state is not ignored | Use external state or block pending explicit setup. |
-| Writable worktree cleanup | Preserve it unless all tracked and untracked changes are integrated or externally saved. |
+| Writable worktree cleanup | Preserve it unless all tracked and untracked changes are integrated or externally saved. Never force-remove ambiguous resources. |
+| Isolated worker result | Require exact base, clean checkout, declared transfer commits, scope, worker validation, and environment-resource evidence before integration. |
+| Herdr provider lifecycle | Treat lifecycle state as scheduling evidence; structured results, Git evidence, validation, and central integration remain authoritative. |
 
 ## Installation
 

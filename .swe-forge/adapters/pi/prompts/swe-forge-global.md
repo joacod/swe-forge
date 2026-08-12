@@ -1,6 +1,6 @@
 ---
 description: Run SWE Forge with automatic topology and guided or PR delivery
-argument-hint: "[pr|solo|subagents|herdr] [pr] <ticket>"
+argument-hint: "[pr|solo|subagents|isolated] [pr] <ticket>"
 ---
 
 The user explicitly invoked SWE Forge through Pi.
@@ -15,6 +15,11 @@ relative reference under `~/.pi/agent/swe-forge/`, never against a project-local
 preserve the raw invocation arguments as the original ticket.
 
 Raw invocation arguments (`<ticket>`, `<pr> <ticket>`, or
-`<solo|subagents|herdr> [pr] <ticket>`):
+`<solo|subagents|isolated> [pr] <ticket>`):
+
+Supported isolated forms include `/swe-forge isolated <ticket>`,
+`/swe-forge isolated pr <ticket>`, and `/swe-forge pr isolated <ticket>`.
+A leading `herdr` is not a topology alias; use `isolated` and request Herdr
+as a separate execution-provider preference.
 
 $ARGUMENTS

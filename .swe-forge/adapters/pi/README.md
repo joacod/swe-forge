@@ -34,10 +34,17 @@ installations.
 Pi derives the prompt-template command from its filename:
 
 ```text
-/swe-forge <ticket>             # guided checkpoints (default)
-/swe-forge pr <ticket>          # verify and create a PR without checkpoints
-/swe-forge solo pr <ticket>     # combine explicit topology and delivery
+/swe-forge <ticket>                 # guided checkpoints (default)
+/swe-forge pr <ticket>              # verify and create a PR without checkpoints
+/swe-forge isolated <ticket>        # explicit isolated topology
+/swe-forge isolated pr <ticket>     # isolated topology with PR delivery
+/swe-forge pr isolated <ticket>     # delivery token first
 ```
+
+The canonical parser also supports `/swe-forge solo ...` and
+`/swe-forge subagents ...`. A leading `herdr` is not a topology alias; the
+workflow gives migration guidance to use `isolated` and request Herdr as a
+separate provider preference.
 
 The template uses Pi's `$ARGUMENTS` expansion and is only processed when the
 user explicitly types `/swe-forge`. Ordinary prompts remain unchanged. The
@@ -45,10 +52,13 @@ separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync` prompts load the
 canonical delivery policy. See [shared adapter behavior](../README.md) for the
 workflow and delivery rules.
 
-Pi does not provide native subagents by default. If `SUBAGENTS` is unavailable,
-the canonical workflow falls back to `SOLO` or sequential execution according
-to its routing and safety rules. Herdr remains optional and is used only when
-the required tooling is available.
+Pi does not provide native writable isolated workers by default. If
+`SUBAGENTS` is unavailable, the canonical workflow falls back to `SOLO` or
+sequential execution according to its routing and safety rules. `ISOLATED` is
+portable at the workflow level and uses demonstrated native harness worktree
+capabilities or the optional Herdr provider when available; it is not
+universally available in every Pi setup. Herdr remains outside this harness
+adapter and is never installed automatically.
 
 ## References
 

@@ -3,14 +3,21 @@
 Portable, opt-in workflow orchestration for AI coding harnesses.
 
 SWE Forge helps an agent turn a ticket into a bounded, evidence-backed change:
-inspect, plan, implement, verify, review, and report. It sits above your coding
-harness. It is not a harness or model provider, and it never activates from
-ordinary prompts.
+inspect, plan, implement, verify, review, and report. It sits above your
+coding harness. It is not a harness, model provider, execution daemon, or
+scheduler, and it never activates from ordinary prompts.
 
 For each explicit ticket, it chooses a proportionate execution topology:
-`SOLO`, `SUBAGENTS`, or `HERDR`. Delivery is a separate choice: `GUIDED` is
+`SOLO`, `SUBAGENTS`, or `ISOLATED`. Delivery is a separate choice: `GUIDED` is
 the default for reviewable increments, while opt-in `PR` mode can carry a
 well-specified ticket through verification and pull-request creation.
+
+`ISOLATED` is used when concurrent writable work requires separate execution
+environments. SWE Forge may use native harness worktree agents or Herdr as the
+provider. It still produces one integration branch and one final PR. The mode
+is portable at the workflow level, but it is not universally available in every
+harness; the provider policy records demonstrated capabilities and explicit
+fallback.
 
 ## Install
 
@@ -32,13 +39,18 @@ globally. Link installations follow updates to this checkout. See the
 [installation guide](docs/installation.md) for copy mode, verification,
 updates, and conflicts.
 
+Installation does not install Herdr. Herdr is an optional execution provider
+and may be used only when already available and selected safely by the canonical
+provider policy.
+
 ## Use
 
 Installation only makes it available; it does not activate the workflow.
 Invoke it explicitly with a ticket. Ordinary prompts continue to use your
-harness normally. A clean default branch gets one dedicated task branch
-automatically; commits, pushes, pull requests, and merges remain separately
-controlled actions.
+harness normally. A clean normal default branch gets one dedicated task branch
+automatically. An isolated run instead uses one run-owned integration worktree
+and one integration/delivery branch; bounded worker branches are local-only.
+Commits, pushes, pull requests, and merges remain separately controlled.
 
 | Harness | Installation | Invocation |
 | --- | --- | --- |
@@ -48,6 +60,18 @@ controlled actions.
 | [Codex](.swe-forge/adapters/codex/README.md) | Project or global | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
 | [Cursor](.swe-forge/adapters/cursor/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
 
+Explicit topology and delivery can be combined:
+
+```text
+/swe-forge isolated <ticket>
+/swe-forge isolated pr <ticket>
+/swe-forge pr isolated <ticket>
+```
+
+The canonical topology words are `solo`, `subagents`, and `isolated`. A leading
+`herdr` is not a topology alias. The workflow gives migration guidance to use
+`isolated` and request Herdr as a separate execution-provider preference.
+
 ## How it works
 
 SWE Forge turns an explicit ticket into a bounded, evidence-backed change:
@@ -56,8 +80,10 @@ SWE Forge turns an explicit ticket into a bounded, evidence-backed change:
 ticket
   → inspect the repository and clarify important decisions
   → define acceptance criteria and the smallest compatible approach
-  → choose SOLO, SUBAGENTS, or HERDR
-  → implement and validate bounded slices
+  → choose SOLO, SUBAGENTS, or ISOLATED
+  → select NATIVE or optional HERDR only for ISOLATED when demonstrated
+  → implement and validate bounded slices or dependency waves
+  → centrally integrate isolated results in planned order when applicable
   → verify, independently review, and repair when needed
   → report ACCEPTED, BLOCKED, or FAILED
 ```
@@ -65,7 +91,7 @@ ticket
 The original ticket remains authoritative. When clarification is needed, Forge
 asks only questions whose answers could change behavior, scope, compatibility,
 safety, or delivery. A temporary working spec may organize the intent,
-scenarios, assumptions, and validation plan, but ticket-specific specs are not
+scenarios, assumptions, and validation, but ticket-specific specs are not
 normally added to the repository.
 
 Every ticket also records a risk-proportional testing decision: focused
@@ -79,8 +105,16 @@ PR creation, and post-merge synchronization remain separately controlled
 actions, and optional specialist skills are loaded only when requested or
 clearly useful.
 
-The detailed lifecycle lives in the [workflow specification](SWE-FORGE.md) and
-[ticket procedure](.swe-forge/workflows/ticket.md).
+When `ISOLATED` applies, the workflow requires a foundation phase, a dependency
+DAG, wave barriers, at most two concurrent writable workers by default, exact
+base SHAs, explicit shared-artifact ownership, isolated runtime resources,
+worker-level and integrated validation, source-to-integration mappings, and
+conservative cleanup. Worker completion order never determines integration
+order. Worker branches never receive pushes or PRs.
+
+The detailed lifecycle lives in the [workflow specification](SWE-FORGE.md),
+[ticket procedure](.swe-forge/workflows/ticket.md), and
+[isolated execution workflow](.swe-forge/workflows/isolated-execution.md).
 
 ## Delivery modes
 
@@ -99,6 +133,12 @@ diffs:
   → use /git-commit if needed, then /git-push and /git-pr separately
 ```
 
+For explicit `isolated` or automatic isolated routing, the setup checkpoint
+shows the worker count, wave, task ownership, provider, worktree plan,
+integration order, shared artifacts, and environment resources. `continue`
+authorizes only that local setup; `go` authorizes a reviewed integration-branch
+commit. The integration branch remains the sole delivery branch.
+
 After reviewing and manually merging the PR, say `merged` (or run
 `/git-sync merged`). Forge verifies the PR was actually merged before returning
 to the remote default branch and fast-forwarding it. It never merges
@@ -110,15 +150,17 @@ Use `/swe-forge pr <ticket>` when the change is clear enough for low-touch
 execution. Forge performs a short alignment interview only when important
 requirements are missing, keeps the working spec temporary, commits each
 validated implementation slice separately, runs the full verification and
-review gates, and stops with a PR available to review. Its PR description is
-kept concise and informative; it still never merges.
+review gates, and stops with one PR available to review. For `ISOLATED`, it
+central-integrates worker transfer commits into one integration/delivery branch
+and still creates exactly one final PR. Its PR description is kept concise and
+informative; it still never merges.
 
 The delivery helpers are intentionally atomic: `/git-push` only pushes; use
 `/git-pr` separately to create or report the pull request. Commit and PR
 messages follow the repository delivery policy: concise imperative subjects,
 clear subject/body separation, and bodies that preserve what/why context when
-needed. See the harness adapter documentation for the available `git-commit`,
-`git-push`, `git-pr`, and `git-sync` loaders.
+needed. See the harness adapter documentation for the available
+`git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
 
 ## Learn more
 
@@ -126,5 +168,6 @@ needed. See the harness adapter documentation for the available `git-commit`,
 - [Installation guide](docs/installation.md)
 - [Architecture](docs/architecture.md)
 - [Adapter index](.swe-forge/adapters/README.md)
+- [Execution providers](.swe-forge/providers/README.md)
 - [Adding a harness](docs/adding-a-harness.md)
 - [Adding an optional specialist skill](docs/adding-a-skill.md)
