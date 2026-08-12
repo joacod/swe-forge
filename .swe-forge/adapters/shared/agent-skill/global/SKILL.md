@@ -8,7 +8,7 @@ The user explicitly invoked SWE Forge through the host's explicit skill entry.
 Use `$swe-forge` in Codex or `/swe-forge` in Cursor.
 
 Read `~/.agents/swe-forge/AGENTS.md` and
-`~/.agents/swe-forge/SWE-FORGE.md`, then read the V1 procedure at
+`~/.agents/swe-forge/SWE-FORGE.md`, then read the ticket procedure at
 `~/.agents/swe-forge/.swe-forge/workflows/ticket.md`. Follow the canonical
 workflow and load only the role, contract, and policy files required by the
 selected topology and ticket risks. Resolve every canonical relative

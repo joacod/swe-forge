@@ -1,7 +1,5 @@
 # SWE Forge Specification
 
-Version: 1
-
 SWE Forge is an explicitly invoked, portable software-engineering workflow for
 AI coding harnesses. It sits above the harness and chooses how much process is
 useful for the current ticket.
@@ -27,7 +25,7 @@ When the user explicitly invokes SWE Forge:
 1. Treat the user's ticket as the workflow input.
 2. Read this file completely enough to follow the activation and acceptance
    rules.
-3. Read `.swe-forge/workflows/ticket.md` for the V1 ticket procedure.
+3. Read `.swe-forge/workflows/ticket.md` for the ticket procedure.
 4. Read only the role, contract, and policy files needed by the selected
    topology and task risks.
 
@@ -151,7 +149,7 @@ performance-reviewer: strongest-reasoning
 Harness adapters may map capabilities to user-selected models and harnesses.
 Different models for implementation and review are optional, not required.
 
-## V1 Ticket Lifecycle
+## Ticket Lifecycle
 
 Follow the detailed procedure in `.swe-forge/workflows/ticket.md`. The
 lifecycle is:

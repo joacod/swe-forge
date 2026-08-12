@@ -37,7 +37,7 @@ contracts, policies, and integrations.
 ## Canonical Layer
 
 `SWE-FORGE.md` owns activation, topology principles, lifecycle, acceptance,
-failure boundaries, and final reporting. The V1 ticket procedure is loaded from
+failure boundaries, and final reporting. The ticket procedure is loaded from
 `.swe-forge/workflows/ticket.md` after explicit activation.
 
 `AGENTS.md` is intentionally small. It tells compatible agents that Forge
@@ -133,10 +133,11 @@ verification evidence.
 
 ## Extensibility
 
-V1 has one general ticket workflow. Future workflows should reuse the existing
-contracts and policies, add only workflow-specific decisions, and remain
-explicitly invoked. New roles and adapters require evidence that the
-specialization improves outcomes enough to justify its maintenance cost.
+The repository currently has one general ticket workflow. Future workflows
+should reuse the existing contracts and policies, add only workflow-specific
+decisions, and remain explicitly invoked. New roles and adapters require
+evidence that the specialization improves outcomes enough to justify its
+maintenance cost.
 
 Harness compatibility should prefer a shared projection when vendors support
 the same standard. Keep vendor-specific files only for native syntax or

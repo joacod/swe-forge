@@ -1,6 +1,6 @@
 # General Ticket Workflow
 
-This is the V1 operational workflow for a general software ticket. Read it
+This is the operational workflow for a general software ticket. Read it
 only after the user explicitly invokes SWE Forge.
 
 ## Inputs

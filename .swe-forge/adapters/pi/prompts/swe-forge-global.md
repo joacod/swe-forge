@@ -6,7 +6,7 @@ argument-hint: "[solo|subagents|herdr] <ticket>"
 The user explicitly invoked SWE Forge through Pi.
 
 Read `~/.pi/agent/swe-forge/AGENTS.md` and
-`~/.pi/agent/swe-forge/SWE-FORGE.md`, then read the V1 procedure at
+`~/.pi/agent/swe-forge/SWE-FORGE.md`, then read the ticket procedure at
 `~/.pi/agent/swe-forge/.swe-forge/workflows/ticket.md`. Follow the canonical
 workflow and load only the role, contract, and policy files required by the
 selected topology and ticket risks. Resolve every canonical relative reference

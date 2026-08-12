@@ -20,7 +20,7 @@ Copy or link `skills/swe-forge/SKILL.md` to:
 
 The skill creates `/swe-forge` and uses `disable-model-invocation: true`, so
 Claude can run it only when the user explicitly invokes it. The skill body is a
-loader that reads `AGENTS.md`, `SWE-FORGE.md`, and the V1 workflow; it does not
+loader that reads `AGENTS.md`, `SWE-FORGE.md`, and the ticket workflow; it does not
 duplicate them.
 
 In the default link mode, the project `CLAUDE.md` is a relative symlink to the
