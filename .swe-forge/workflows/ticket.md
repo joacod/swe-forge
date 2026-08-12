@@ -43,19 +43,35 @@ Read the ticket without designing the solution immediately.
 
 For harness commands, parse the raw arguments before ingesting the ticket:
 
-- if the first whitespace-delimited token is lowercase `solo`, `subagents`, or
-  `herdr`, record the corresponding explicit `requested_mode` and use the
-  non-empty remainder as the ticket
-- otherwise preserve all arguments as the ticket and record
-  `requested_mode: AUTO`
-- a mode token without a ticket is incomplete input; ask for the missing ticket
+- inspect the first token: if it is lowercase `solo`, `subagents`, or `herdr`,
+  record `requested_mode` and remove it as the explicit topology
+- inspect the first remaining token (or the original first token): if it is
+  lowercase `guided` or `pr`, record `requested_delivery` and remove it as the
+  delivery token; this supports either `solo pr <ticket>` or `pr solo <ticket>`
+- if a delivery token was consumed before a topology token, inspect the next
+  token for lowercase `solo`, `subagents`, or `herdr` and record it as the
+  explicit topology
+- if no delivery token is present, record `requested_delivery: DEFAULT` and
+  resolve `delivery_mode: GUIDED`
+- if no delivery token is present, record `requested_delivery: DEFAULT` and
+  resolve `delivery_mode: GUIDED`
+- if no topology token was consumed, record `requested_mode: AUTO`
+- preserve the non-empty remainder as the original ticket
+- a topology or delivery token without a ticket is incomplete input; ask for the
+  missing ticket
+- if the first token is not one of the reserved lowercase tokens, preserve it
+  as ticket text and record `requested_mode: AUTO`
 
-The lowercase mode words are reserved only as the first command token. Natural
+The lowercase topology words remain reserved only in the canonical topology
+position. The delivery shorthand is intentionally explicit: `pr` selects the
+low-touch pull-request path, while `guided` makes the default visible. Natural
 language activation without a command may state a mode preference directly.
 
 Record the requested behavior, explicit constraints, affected users or
 systems, non-goals, and any requested validation. Preserve important wording
-from the original ticket.
+from the original ticket. Record whether the user wants review checkpoints or
+low-touch PR delivery; do not treat a delivery preference as permission to
+merge.
 
 ### 2. Discover
 
@@ -72,8 +88,14 @@ references.
 Translate the ticket into observable acceptance criteria. Separate facts from
 assumptions and identify compatibility constraints.
 
-Ask the user only when ambiguity genuinely blocks safe implementation. If a
-reasonable, low-risk assumption is possible, record it and continue.
+In `GUIDED`, ask only blocking questions and keep the plan in the active
+context unless a durable run artifact is needed. In `PR`, follow
+`.swe-forge/policies/specification.md`: inspect repository facts first, run at
+most a short high-leverage interview when the ticket is underspecified, and
+build the transient artifact described by
+`.swe-forge/contracts/working-spec.md`. Do not write ticket-specific specs to
+the repository. A reasonable, low-risk assumption may be recorded and used;
+a blocking user decision must be asked rather than guessed.
 
 ### 4. Architect
 
@@ -89,7 +111,10 @@ unless the ticket and repository evidence justify it.
 Create bounded tasks only where decomposition provides useful independence.
 Each writable task must state its objective, reason, dependencies, allowed
 scope, forbidden scope, acceptance criteria, validation, risk, and expected
-result.
+result. For `GUIDED`, also divide broad work into cohesive review slices with a
+small observable boundary and an explicit checkpoint. For `PR`, keep the
+transient working spec and task graph sufficient for one uninterrupted
+implementation.
 
 Parallelize only when dependencies are satisfied, ownership is non-overlapping,
 and outputs can be independently evaluated. Otherwise use sequential waves or
@@ -97,12 +122,15 @@ and outputs can be independently evaluated. Otherwise use sequential waves or
 
 ### 6. Route
 
-Record exactly one execution mode and its reason:
+Record exactly one execution topology and delivery mode with their reasons:
 
 ```text
 requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
-reason: ...
+requested_delivery: DEFAULT | GUIDED | PR
+delivery_mode: GUIDED | PR
+reason: <why this is the smallest useful topology>
+fallback_used: no | <requested mode -> selected mode and reason>
 ```
 
 Use `SOLO` for small or tightly coupled work. Use `SUBAGENTS` for useful
@@ -134,15 +162,22 @@ Classify each check as `required`, `conditional`, or `informational`; every
 conditional check must include its observable condition. Inspect
 commands before execution for filesystem mutation, credentials, networking,
 migrations, deployment, publication, production access, or shared-environment
-effects. Normal workflow invocation authorizes local validation, not those
-external or destructive effects; obtain explicit authorization or use a safe
-isolated substitute.
+effects. Classify delivery commands separately: local commit, branch push, PR
+creation, and post-merge sync are external or checkout-changing effects. A
+normal guided invocation authorizes local validation only. `PR` mode or an
+explicit atomic delivery command may authorize its named action after the
+quality gates; merge always needs a separate instruction.
 
 ### 8. Implement
 
 Execute dependency waves while preserving bounded scope. A worker owns only
 the task it received and must report scope expansion or blocking issues
-immediately.
+immediately. In `GUIDED`, complete and validate one review slice at a time,
+then stop at a checkpoint with the diff boundary and next slice. Resume only
+after the user says `continue`, requests a revision, or explicitly says
+`commit and continue`. In `PR`, do not pause for slice approval after the
+working spec is ready; keep all required evidence and stop only for a blocking
+decision or failed gate.
 
 Two writing workers must never edit the same checkout concurrently. Read-only
 workers may inspect the integration checkout. Herdr writing workers require
@@ -169,7 +204,10 @@ structured result. They must not claim success from code inspection alone.
 ### 9. Integrate
 
 The orchestrator owns integration. Review each result against its task contract
-before combining it with other work.
+before combining it with other work. Preserve the checkpoint boundary in
+`GUIDED`; the user reviews the integrated slice before the next writable wave.
+For isolated worktrees, integrate only after the worker result and scope have
+been independently checked.
 
 For isolated worktrees, integrate commits or patches sequentially in a central
 checkout, resolve conflicts centrally, and rerun affected validation. Do not
@@ -179,7 +217,10 @@ authorization but cannot create it.
 
 ### 10. Verify
 
-Run the relevant repository quality gates after integration. These may include
+Run the relevant repository quality gates after integration. In `PR` mode,
+verification must complete before any commit, push, or PR creation. In
+`GUIDED`, a checkpoint may report a passing slice while the final acceptance
+gate remains pending. These may include
 targeted tests, the complete test suite, typecheck, lint, build, static
 analysis, packaging, or repository-specific checks.
 
@@ -237,6 +278,8 @@ authorization, access, or environment change can enable safe continuation, and
 Return only the decision-relevant result:
 
 - final status: `ACCEPTED`, `BLOCKED`, or `FAILED`
+- requested and selected execution topology
+- requested and selected delivery mode
 - execution mode and reason
 - approach and important decisions
 - files changed
@@ -248,11 +291,12 @@ Return only the decision-relevant result:
 
 Do not include internal worker transcripts.
 
-Normal completion stops with the reviewed diff and validation evidence for
-human approval. A separate explicit instruction to continue through pull-request
-creation may authorize committing the reviewed diff, pushing its non-protected
-branch, and creating the pull request. It never authorizes merge; merging needs
-a separate explicit instruction outside the normal lifecycle.
+Normal `GUIDED` completion stops with the reviewed diff and validation evidence
+for human approval. The user can then use the separate `git-commit`, `git-push`,
+and `git-pr` actions, or authorize one of those actions in the conversation.
+`PR` completion may carry out commit, push, and pull-request creation after the
+quality gates and reports the URL. It never authorizes merge. After a human
+merge, `git-sync` is a separate explicit post-merge action.
 
 ## Blocking and Recovery
 

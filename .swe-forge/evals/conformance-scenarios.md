@@ -12,7 +12,11 @@ grading an agent from its explanation alone.
 | `solo` without a remainder | Report incomplete input. |
 | Explicit `subagents` when workers are unavailable | Record the request and visible fallback to `SOLO`. |
 | Explicit `herdr` with required isolation unavailable | Return `BLOCKED`; do not put concurrent writers in one checkout. |
+| `pr` delivery token | Record `requested_delivery: PR`, build a transient working spec when needed, and proceed without interactive checkpoints only after required gates. |
+| `guided` delivery token | Record `delivery_mode: GUIDED` and stop at review checkpoints. |
+| Delivery token without a remainder | Report incomplete input. |
 | Ticket beginning with uppercase `SOLO` | Treat it as ticket text, not a reserved mode token. |
+| Ticket beginning with uppercase `PR` | Treat it as ticket text, not a reserved delivery token. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
 ## Checkout And Ownership
@@ -43,6 +47,9 @@ grading an agent from its explanation alone.
 | Worktree creation authorized | Do not infer commit or push authorization. |
 | Commit authorized | Do not infer push or pull-request authorization. |
 | Pull-request flow authorized | Never infer merge authorization. |
+| Push action invoked | Push only; do not offer or create a PR as a side effect. |
+| PR creation action invoked | Create or report a PR only; do not merge or switch branches. |
+| Post-merge sync action invoked | Fetch, switch to the remote default branch, and fast-forward only; do not reset, merge, or delete branches. |
 | Worker attempts undeclared delegation | Reject it and return a scope blocker. |
 | Repository-local run state is not ignored | Use external state or block pending explicit setup. |
 | Writable worktree cleanup | Preserve it unless all tracked and untracked changes are integrated or externally saved. |

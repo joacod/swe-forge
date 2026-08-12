@@ -21,6 +21,7 @@ Segment tickets by:
 - refactor
 - architectural
 - security-sensitive
+- delivery preference: `GUIDED` versus `PR`
 
 Keep the ticket distribution visible. Do not let a workflow look better by
 being evaluated only on tasks that match its strengths.
@@ -51,6 +52,9 @@ Record:
 - agent calls and worker count
 - retries and blocked tasks
 - worktrees and external orchestration overhead
+- guided checkpoint count and human correction time
+- PR completion rate and delivery failures
+- spec questions asked, unanswered blockers, and requirement misses
 - final diff size and unrelated modifications
 
 Measure both outcome and cost. A small correctness gain may not justify large
@@ -66,8 +70,11 @@ high-risk work if review catches materially more defects.
    claims.
 5. Have a reviewer classify correctness, regressions, and human corrections.
 6. Compare results by ticket segment, not only aggregate average.
-7. Track routing decisions, retries, and topology failures.
-8. Tune policies only when the evidence supports a change.
+7. Track routing decisions, delivery modes, retries, checkpoints, and topology
+   failures.
+8. Tune policies only when the evidence supports a change. Do not equate fewer
+   questions or fewer checkpoints with a better outcome without measuring
+   regressions and human corrections.
 
 ## Learning Routing Policies
 

@@ -97,10 +97,17 @@ For a source-linked installation:
 The installer also links the requested harness bridge:
 
 ```bash
-# OpenCode: .opencode/commands/swe-forge.md
+# OpenCode: .opencode/commands/swe-forge.md and atomic delivery commands
 # Claude Code: CLAUDE.md and .claude/skills/swe-forge/
 # Codex and Cursor: .agents/skills/swe-forge/
+# Pi: ~/.pi/agent/prompts/swe-forge.md and atomic delivery prompts
 ```
+
+OpenCode and Pi also receive the explicit atomic delivery helpers
+`git-commit`, `git-push`, `git-pr`, and `git-sync`. They load the canonical
+`.swe-forge/policies/delivery.md`; they do not redefine the workflow. The push
+helper never asks whether to create a PR, and the sync helper is intended for
+after the user manually merges one.
 
 The source checkout path must remain available to the user. Existing conflicting
 files stop the install before canonical or selected adapter files are written. A
@@ -146,12 +153,13 @@ Do not copy the full canonical workflow into a harness-specific file.
 Global installation is optional and must be explicitly requested. The installer
 creates source-linked harness entries in these locations:
 
-- OpenCode: `~/.config/opencode/commands/swe-forge.md` and
-  `~/.config/opencode/swe-forge/`
+- OpenCode: `~/.config/opencode/commands/swe-forge.md` plus the atomic
+  delivery commands, and `~/.config/opencode/swe-forge/`
 - Claude Code: `~/.claude/skills/swe-forge/` and `~/.claude/swe-forge/`
 - Codex and Cursor: `~/.agents/skills/swe-forge/` and
   `~/.agents/swe-forge/`
-- Pi: `~/.pi/agent/prompts/swe-forge.md` and `~/.pi/agent/swe-forge/`
+- Pi: `~/.pi/agent/prompts/swe-forge.md` plus the atomic delivery prompts,
+  and `~/.pi/agent/swe-forge/`
 
 The global loaders point back to the support directory, which points back to
 the canonical checkout. This makes the explicit harness entry available across

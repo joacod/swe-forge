@@ -38,6 +38,8 @@ The shared contract is:
 ```text
 requested_mode: AUTO
 execution_mode: HERDR
+requested_delivery: DEFAULT
+delivery_mode: GUIDED
 reason: API and web are independent writable packages with separate worktrees and long-running development servers.
 ```
 
@@ -67,6 +69,8 @@ dependencies: []
 execution_mode: HERDR
 write_access: read-write
 worktree: isolated
+delivery_mode: GUIDED
+working_spec_ref: none
 checkout_baseline:
   path: <absolute API worktree path>
   head: <revision>
@@ -114,6 +118,8 @@ dependencies: []
 execution_mode: HERDR
 write_access: read-write
 worktree: isolated
+delivery_mode: GUIDED
+working_spec_ref: none
 checkout_baseline:
   path: <absolute storefront worktree path>
   head: <revision>
@@ -201,6 +207,8 @@ The final report records:
 ```text
 requested_mode: AUTO
 execution_mode: HERDR
+requested_delivery: DEFAULT
+delivery_mode: GUIDED
 result: ACCEPTED | BLOCKED | FAILED
 worktrees: api, web
 validation: API checks, UI checks, cross-package checks, and review result

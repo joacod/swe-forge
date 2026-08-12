@@ -2,7 +2,9 @@
 
 SWE Forge is a portable specification layer above coding harnesses. Its
 architecture separates canonical workflow logic from role definitions,
-contracts, policies, and integrations.
+contracts, policies, and integrations. Execution topology and delivery mode are
+orthogonal: the former controls coordination, while the latter controls human
+checkpoints and authorized repository delivery.
 
 ## Layers
 
@@ -65,17 +67,19 @@ state:
 - worker results expose status, files, tests, evidence, assumptions, risks, and
   follow-ups
 - review results expose severity, confidence, location, evidence, and action
-- run state records temporary topology, checkout identity, task statuses,
-  dependencies, authorization, validation, review, retries, and cleanup
+- run state records temporary topology and delivery mode, checkout identity,
+  task statuses, dependencies, authorization, validation, review, retries,
+  checkpoints, and cleanup
 
 Run state is external or ignored by default. It is not application source and
 must not contain secrets or full transcripts.
 
 ## Policy Layer
 
-Policies define how to route, delegate, select capability classes, verify, and
-recover. They are deliberately separate from role descriptions so a routing
-change does not silently redefine worker responsibilities.
+Policies define how to route, delegate, select capability classes, specify,
+deliver, verify, and recover. They are deliberately separate from role
+descriptions so a routing or human-control change does not silently redefine
+worker responsibilities.
 
 ## Execution Topologies
 
@@ -86,6 +90,21 @@ is the actual requirement.
 
 The invariant for all topologies is that concurrent writing workers never share
 one checkout. Herdr workers use separate worktrees and integrate centrally.
+
+## Delivery Modes
+
+Delivery is orthogonal to topology:
+
+- `GUIDED` is the default human-control path. It creates review checkpoints
+  between cohesive implementation slices and leaves commit, push, PR, and merge
+  actions separate.
+- `PR` is an explicit low-touch path. It creates a transient working spec when
+  needed, proceeds through required verification and fresh review, and may
+  commit, push, and create a PR after the gates. It never merges.
+
+The canonical delivery policy owns action authorization and the post-merge
+`git-sync` boundary. Harness commands and prompts are thin loaders, so pushing
+cannot accidentally create a PR.
 
 ## Adapter Boundary
 
@@ -116,24 +135,31 @@ receive only the selected projection.
 ```text
 ticket
   -> acceptance criteria and assumptions
+  -> transient working spec when PR mode needs alignment
   -> evidence and architecture
-  -> bounded task graph
-  -> execution mode and worker waves
+  -> bounded task graph or guided review slices
+  -> execution topology and delivery mode
+  -> checkpoints (GUIDED) or uninterrupted waves (PR)
   -> structured results
   -> integrated diff
   -> quality gates
   -> fresh review
   -> repair if needed
+  -> authorized commit/push/PR actions, if applicable
+  -> human merge and explicit post-merge sync
   -> final acceptance report
 ```
 
-The original ticket remains authoritative at every step. Worker summaries,
-stale run state, and model confidence cannot override final diff inspection and
+The original ticket remains authoritative at every step. A transient working
+spec may organize intent, scenarios, assumptions, and validation, but it is
+never committed or treated as a second source of truth. Worker summaries, stale
+run state, and model confidence cannot override final diff inspection and
 verification evidence.
 
 ## Extensibility
 
-The repository currently has one general ticket workflow. Future workflows
+The repository currently has one general ticket workflow. Delivery mode is a
+policy within that workflow rather than a second lifecycle. Future workflows
 should reuse the existing contracts and policies, add only workflow-specific
 decisions, and remain explicitly invoked. New roles and adapters require
 evidence that the specialization improves outcomes enough to justify its

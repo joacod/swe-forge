@@ -20,6 +20,8 @@ dependencies: []
 execution_mode: SUBAGENTS
 write_access: read-write
 worktree: shared
+delivery_mode: GUIDED | PR
+working_spec_ref: <external temporary spec, active context, or none>
 checkout_baseline:
   path: <absolute checkout path>
   head: <revision>
@@ -89,7 +91,9 @@ expected_output:
 - `delegation`: whether child workers are allowed and, if so, their limits
 
 Writable tasks additionally require `execution_mode`, `write_access`,
-`worktree`, `checkout_baseline`, and `authorization`.
+`worktree`, `delivery_mode`, `checkout_baseline`, and `authorization`.
+`working_spec_ref` is required when a transient spec guides the task and is
+`none` when it does not.
 
 `execution_mode`, `write_access`, `worktree`, and `checkout_baseline` make
 execution constraints explicit. They are required for writable tasks. A task
@@ -101,7 +105,10 @@ action independently. `not-authorized` is the default. An authorized action
 must include its own provenance identifying the user instruction and its own
 scope. Shared provenance is insufficient when actions were authorized by
 different instructions. Branch or worktree setup authorization does not imply
-delivery authorization.
+delivery authorization. An explicit `PR` delivery token may be recorded as the
+provenance for creating one dedicated branch, committing the reviewed result,
+pushing it, and creating its pull request after all gates pass; it never
+authorizes `merge`.
 
 `delegation.allowed` defaults to `false`. When it is `true`, the contract must
 also define `max_depth`, `max_workers`, allowed roles, writable isolation, and
@@ -126,6 +133,9 @@ cannot reset or increase them.
 - authorization may only transmit an explicit user instruction; a task
   contract cannot create authority itself
 - authorization for one action never implies authorization for another action
+- `delivery_mode: GUIDED` must stop at declared review checkpoints unless the
+  user resumes it; `delivery_mode: PR` may proceed without those checkpoints but
+  must retain the working-spec, validation, and review evidence
 - workers must not delegate when `delegation.allowed` is false or exceed its
   declared depth, worker, role, or isolation limits
 - the orchestrator evaluates the result against this contract before

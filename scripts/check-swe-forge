@@ -28,7 +28,12 @@ sh -n "$ROOT/scripts/swe-forge" "$ROOT/scripts/test-swe-forge"
 
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
 require_text 'pre-edit baseline' SWE-FORGE.md
+require_text 'delivery_mode: GUIDED | PR' SWE-FORGE.md
+require_text 'transient working spec' SWE-FORGE.md
 require_text 'side effects' .swe-forge/policies/verification.md
+require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
+require_text 'git-sync' .swe-forge/policies/delivery.md
+require_text 'working_spec_ref:' .swe-forge/contracts/run-state.md
 require_text 'requirement: required' .swe-forge/contracts/task.md
 require_text 'create_pull_request: {status: not-authorized' .swe-forge/contracts/task.md
 require_text 'delegation.allowed' .swe-forge/contracts/task.md
@@ -42,8 +47,13 @@ require_text 'Resolve every canonical relative' .swe-forge/adapters/claude-code/
 require_text 'Resolve every canonical relative' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text '$ARGUMENTS' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text '~/.pi/agent/swe-forge' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text '~/.pi/agent/swe-forge/.swe-forge/policies/delivery.md' .swe-forge/adapters/pi/prompts/git-pr.md
+require_text 'Pushing never creates a PR' .swe-forge/adapters/opencode/commands/git-push.md
 require_text 'clean status' .swe-forge/adapters/herdr/runbook.md
 require_text 'ADAPTER_REGISTRY' scripts/swe-forge
+require_text 'opencode|project|file|opencode/commands/git-push.md' .swe-forge/adapters/registry.tsv
+require_text 'opencode|global|file|opencode/commands/git-pr-global.md' .swe-forge/adapters/registry.tsv
+require_text 'pi|global|file|pi/prompts/git-sync.md' .swe-forge/adapters/registry.tsv
 require_text 'codex|project|tree|shared/agent-skill/project' .swe-forge/adapters/registry.tsv
 require_text 'cursor|global|tree|shared/agent-skill/global' .swe-forge/adapters/registry.tsv
 require_text 'https://developers.openai.com/learn/codex' .swe-forge/adapters/shared/agent-skill/README.md

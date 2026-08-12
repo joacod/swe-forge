@@ -34,6 +34,8 @@ distinguishes a missing optional field from existing numeric cases.
 ```text
 requested_mode: AUTO
 execution_mode: SOLO
+requested_delivery: DEFAULT
+delivery_mode: GUIDED
 reason: One localized formatter change with tightly coupled tests and no useful independent ownership.
 ```
 
@@ -46,6 +48,12 @@ verification, and final review in one context.
 Add or update focused cases for missing, zero, and non-zero discounts. Run the
 receipt test file and inspect the final diff. A full repository build is not
 justified unless repository instructions require it for formatter changes.
+
+## Guided Checkpoint
+
+After the formatter slice passes its focused checks, stop and report the diff
+boundary. The user can reply `continue`, `revise: ...`, or `commit and continue`.
+The checkpoint is not a final acceptance result until the whole ticket is done.
 
 ## Implementation Result
 
