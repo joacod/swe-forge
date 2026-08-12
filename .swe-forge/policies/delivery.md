@@ -22,17 +22,45 @@ authorization.
 `PR` is opt-in (`/swe-forge pr <ticket>`). It optimizes for low-touch delivery:
 
 - run the brief alignment interview when the ticket is underspecified
-- create a transient working spec, then implement, verify, and independently
-  review without interactive slice checkpoints
-- after all required gates pass, commit the reviewed change, push its dedicated
-  branch, and create a pull request when the required tools and authorization
-  are available
+- create a transient working spec, then implement and validate cohesive slices
+  without interactive approval checkpoints
+- create one local commit after each slice's required validation passes; keep
+  those commits separate so the pull request shows the implementation steps
+- after the final quality gates and fresh review pass, push the dedicated branch
+  and create a pull request when the required tools are available
 - report the pull-request URL and stop; never merge it
+
+The pull request should be easy to scan. Use a short imperative title and a
+short-to-medium body with a few bullets for the summary, validation, and only
+important risks or follow-ups. Do not paste the working spec, transcript, or a
+file-by-file dump into the description.
 
 `PR` mode does not waive tests, protected-branch rules, scope checks, fresh
 review for medium/high-risk work, or the final diff inspection. It only replaces
 human checkpoints with an explicit request to continue through pull-request
 creation.
+
+## Task Branch Setup
+
+Both delivery modes use one dedicated task branch for the whole run. When the
+checkout is clean and currently on the protected remote default branch, the
+normal workflow automatically creates a safe non-protected branch from it. The
+name should identify the ticket, such as `swe-forge/<ticket-slug>`, and may use a
+short run suffix when the name already exists. Never silently reuse an existing
+branch from another run.
+
+If the checkout is already on a suitable non-protected branch or worktree,
+reuse it for every slice in the run. Do not create another branch between
+checkpoints or before delivery. If the checkout is dirty, detached,
+ambiguous, or cannot be classified safely, stop and ask the user to resolve the
+checkout rather than moving or overwriting work. A user-provided branch or
+worktree preference may replace the default only when it passes the same safety
+gates.
+
+Automatic task-branch setup is workflow authorization only. It permits creating
+that one branch and does not permit commits, pushes, pull requests, merges, or
+destructive cleanup. Record whether the branch was auto-created, reused, or
+provided by the user in run state.
 
 ## Action Authorization
 
@@ -49,15 +77,14 @@ The following actions are independent:
 An explicit `/git-commit`, `/git-push`, `/git-pr`, or `/git-sync` command
 carries authorization only for its named action. A later natural-language
 instruction may authorize one named action and must be recorded with its
-provenance.
+provenance. The normal workflow invocation already covers the safe one-branch
+setup described above; it does not broaden delivery authorization.
 
-An explicit `PR` delivery token is a user request to continue through local
-commit, branch push, and pull-request creation after verification and review.
-When starting from a clean protected default branch, it may also authorize
-creating one dedicated non-protected branch with a safe generated name. It does
-not authorize merge, force-push, publication outside the PR, or destructive
-cleanup. If the checkout is dirty, detached, ambiguous, or the branch setup
-would overwrite existing work, stop and ask.
+An explicit `PR` delivery token authorizes local per-slice commits after their
+required validation, the final reviewed branch push, and pull-request creation.
+It does not authorize merge, force-push, publication outside the PR, or
+destructive cleanup. If the checkout is dirty, detached, ambiguous, or the
+branch setup would overwrite existing work, stop and ask.
 
 ## Guided Checkpoints
 
@@ -72,14 +99,32 @@ A checkpoint is a deliberate hand-off, not a failed run. It should include:
 The user can reply:
 
 - `continue`: implement the next slice without delivery action
-- `commit and continue`: explicitly authorize the current reviewed slice to be
-  committed, then continue
+- `go`: explicitly authorize a local commit of the current reviewed slice,
+  using the commit-message rules below, then continue
+- `commit and continue`: the longer equivalent of `go`
 - `revise: ...`: repair or reshape the current slice before continuing
 - `stop`: leave the reviewed checkout for manual handling
 
-At the final checkpoint, the agent stops before delivery unless the user
-explicitly requests the applicable delivery action. A guided run may therefore
-end with an accepted local diff and no commit, push, or PR.
+At the final checkpoint, `go` commits the final reviewed slice and then the
+run ends; it never implies a push, pull request, or merge. Without `go`, the
+agent stops before delivery unless the user explicitly requests the applicable
+delivery action. A guided run may therefore end with an accepted local diff and
+no commit, push, or PR.
+
+## Commit Messages
+
+For a `go` commit or a PR-mode slice commit:
+
+- stage only the current slice's reviewed files; preserve unrelated or
+  pre-existing changes
+- follow the repository's existing convention; otherwise use a concise,
+  imperative subject of at most 72 characters that names the outcome
+- add a short body only when the rationale or an important compatibility note
+  would be lost from the subject
+- do not use generic subjects such as `update`, `changes`, or `wip`
+
+A repair after review is a separate commit rather than a rewrite of the earlier
+slice, unless the user explicitly requests a different history.
 
 ## Atomic Delivery Commands
 
@@ -89,9 +134,10 @@ Keep these commands separate so pushing never unexpectedly creates a PR:
 2. `git-push` validates and pushes only the current branch. A `create-pr`
    argument is rejected or reported as a follow-up to `/git-pr`; it never
    changes the push action's scope.
-3. `git-pr` validates the pushed branch and creates or reports a PR.
-4. `git-sync` is used after the human merges the PR; it switches to the remote
-   default branch and runs a fast-forward-only pull.
+3. `git-pr` validates the pushed branch and creates or reports a PR using the
+   concise title and body rules above.
+4. `git-sync` verifies that the relevant PR is actually merged, then switches
+   to the remote default branch and runs a fast-forward-only pull.
 
 Each command must refuse protected/default branches where the action would be
 unsafe, preserve unrelated changes, and stop on divergence or conflicts rather
@@ -101,6 +147,15 @@ loaders for this policy; their syntax may vary by harness.
 ## Post-Merge Boundary
 
 PR creation is not proof that the PR was merged. Do not automatically switch
-branches or pull after creating a PR. Once the user confirms the human merge,
-run the explicit `git-sync` action (or equivalent host command) to return to the
-remote default branch and bring it up to date.
+branches or pull after creating a PR. When the user says `merged` in the active
+run, or invokes `git-sync merged`, treat that as an explicit request to sync,
+not as proof of merge. First identify the PR for the current task branch and
+verify its provider state is `MERGED` (for example with the host's supported PR
+CLI or API), including the expected default-branch target.
+
+If the PR is open, closed without merge, missing, ambiguous, or its state cannot
+be checked, report the evidence and leave the checkout untouched. Only after a
+confirmed merge and a clean checkout may `git-sync` fetch, switch to the remote
+default branch, and fast-forward-only pull it. Never merge, reset, force-update,
+delete the task branch, or assume that the user's statement alone proves the
+PR was merged.

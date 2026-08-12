@@ -68,9 +68,10 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
   session.
 - Preserve a human checkpoint in `GUIDED` mode and keep delivery actions
   separately authorized.
-- Do not create commits, push, publish, or modify global configuration unless the
-  user explicitly authorizes it; a task contract may only transmit that
-  authorization.
+- Keep commits, pushes, publication, and global configuration changes separately
+  authorized. `PR` mode authorizes its documented per-slice commits, push, and PR
+  creation; `go` authorizes only the current guided slice's local commit. Never
+  infer merge authorization.
 
 ## Execution Topology
 
@@ -159,27 +160,34 @@ fall back to native subagents or sequential execution and record the fallback.
 
 ### GUIDED (default)
 
-`GUIDED` keeps the user in the loop without forcing one large review. The
-orchestrator plans cohesive implementation slices, validates each slice, and
-stops at a checkpoint with the diff boundary, evidence, risks, and next step.
-The user may ask for `continue`, request a revision, or explicitly authorize
-`commit and continue`. A guided run never commits, pushes, creates a PR, or
-merges merely because a slice was approved.
+`GUIDED` keeps the user in the loop without forcing one large review. From a
+clean protected default branch, it automatically creates one dedicated task
+branch and reuses that branch for the whole run. The orchestrator plans
+cohesive implementation slices, validates each slice, and stops at a checkpoint
+with the diff boundary, evidence, risks, and next step.
+
+The user may reply `continue` to proceed without delivery, `revise: ...` to
+reshape the slice, or `go` to commit the reviewed slice with a generated,
+repository-appropriate message and continue. `commit and continue` remains the
+long form of `go`. A guided run never pushes, creates a PR, or merges merely
+because a slice was approved; `go` authorizes only its local commit.
 
 ### PR
 
 `PR` is the opt-in low-touch path. It runs the lightweight specification policy
 when the ticket needs clarification, keeps the working spec outside the
-repository, and proceeds through implementation, required verification, fresh
-review, commit, push, and pull-request creation after the gates pass. It ends
-with a PR URL and never merges. It does not skip automated checks or independent
-review; it skips interactive implementation checkpoints.
+repository, and proceeds through implementation without interactive checkpoints.
+It creates one local commit after each validated slice, then runs final
+verification and fresh review before pushing and creating a pull request. The
+commits remain separate so the PR shows the implementation steps. It ends with
+a concise PR URL and never merges. It does not skip automated checks or
+independent review.
 
 Use the atomic delivery actions described by `.swe-forge/policies/delivery.md`
 for guided follow-up: `git-commit`, `git-push`, `git-pr`, and `git-sync`. Pushing
-must never unexpectedly create a PR. After a human merges a PR, `git-sync` is
-the explicit action that returns to the remote default branch and fast-forwards
-it.
+must never unexpectedly create a PR. After a human merges a PR, say `merged` in
+the active run or invoke `git-sync`; Forge verifies the PR state before
+returning to the remote default branch and fast-forwarding it.
 
 ## Model Routing
 
@@ -249,31 +257,30 @@ credentials, or generated logs.
 
 ## Checkout And Delivery Safety
 
-Before writable implementation, confirm that the checkout is on a dedicated,
-non-protected branch or worktree. Treat repository-declared protected branches,
-the locally known remote default branch, and conventional `main` and `master`
-as protected. If the checkout is protected, detached, or cannot be classified
-safely, ask the user to provide a suitable checkout or authorize creating one.
-Do not edit or commit on a protected branch.
+Before writable implementation, classify the checkout and record the
+baseline. Treat repository-declared protected branches, the locally known
+remote default branch, and conventional `main` and `master` as protected. If a
+clean checkout is currently on a protected default branch, the normal workflow
+automatically creates one safe, dedicated non-protected task branch. If it is
+already on a suitable non-protected branch or worktree, reuse that same branch
+for every slice. Never create another branch during the run.
 
-Also record a pre-edit baseline containing the checkout path, HEAD, branch,
-remote-default evidence, and staged, unstaged, and untracked files. Do not edit
-an in-scope path with pre-existing changes until ownership is resolved. Never
-reset, clean, stash, overwrite, or include pre-existing user changes in delivery
-without explicit authorization.
+If the checkout is dirty, detached, or cannot be classified safely, stop and ask
+the user to resolve it; do not reset, clean, stash, overwrite, or include
+pre-existing user changes. Do not edit or commit on a protected branch. If the
+requested branch name already belongs to another task, use a safe run suffix or
+ask rather than silently reusing it. A user-provided branch or worktree
+preference may replace the default when it passes the same gates.
 
-Normal `GUIDED` invocation authorizes implementation in the suitable checkout,
-not delivery actions. Unless the user explicitly authorizes each applicable
-action, do not commit, push, create a pull request, or merge. Authorization to
-create a branch or worktree grants only that setup action.
-
-An explicit `PR` delivery token is a user request to continue through commit,
-branch push, and pull-request creation after verification and review. From a
-clean protected default branch it may create one dedicated non-protected branch
-with a safe generated name. It never authorizes merge, force-push, publication
-outside the PR, or destructive cleanup. If setup is ambiguous or would overlap
-existing work, stop and ask. Merging always requires a separate explicit
-instruction and is not part of the ticket lifecycle.
+Record a pre-edit baseline containing the checkout path, HEAD, branch,
+remote-default evidence, and staged, unstaged, and untracked files. Automatic
+branch setup is workflow authorization only. Normal `GUIDED` invocation
+authorizes implementation and this one-branch setup, not commits, pushes,
+pull requests, or merges. `go` explicitly authorizes only the current local
+slice commit. An explicit `PR` delivery token authorizes its per-slice commits,
+final push, and pull-request creation after the required gates. Merging always
+requires a separate explicit instruction and is not part of the ticket
+lifecycle.
 
 ## Failure Handling
 
