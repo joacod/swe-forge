@@ -1,5 +1,7 @@
 # SWE Forge
 
+[![CI](https://github.com/joacod/swe-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/joacod/swe-forge/actions/workflows/ci.yml)
+
 Portable, opt-in workflow orchestration for AI coding harnesses.
 
 SWE Forge helps an agent turn a ticket into a bounded, evidence-backed change:
@@ -171,3 +173,4 @@ needed. See the harness adapter documentation for the available
 - [Execution providers](.swe-forge/providers/README.md)
 - [Adding a harness](docs/adding-a-harness.md)
 - [Adding an optional specialist skill](docs/adding-a-skill.md)
+- [Contributing](CONTRIBUTING.md)

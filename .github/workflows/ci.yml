@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check shell syntax
+        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge
+
+      - name: Run structural checks
+        run: ./scripts/check-swe-forge
+
+      - name: Run installer fixture tests
+        run: ./scripts/test-swe-forge
+
+      - name: Check diff formatting
+        run: git diff --check
