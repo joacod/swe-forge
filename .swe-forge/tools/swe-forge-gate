@@ -658,12 +658,17 @@ receipt_text() {
   short_base=$(git -C "$CHECKOUT" rev-parse --short "$baseline_head")
   commit_count=$(git -C "$CHECKOUT" rev-list --count "$baseline_head..$current_head")
   checkpoint_count=$(awk 'END { print NR }' "$STATE/checkpoints.tsv")
+  if [ "$checkpoint_count" -eq 1 ]; then
+    slice_label=slice
+  else
+    slice_label=slices
+  fi
   printf '## SWE Forge receipt\n\n'
   printf 'Execution: %s\n' "$execution"
   printf 'Delivery: %s\n' "$delivery"
   printf 'Base: %s\n' "$short_base"
   printf 'Branch: %s\n' "$branch"
-  printf 'Commits: %s (%s validated slices)\n' "$commit_count" "$checkpoint_count"
+  printf 'Commits: %s (%s validated %s)\n' "$commit_count" "$checkpoint_count" "$slice_label"
   printf 'Verification:\n'
   while IFS="$(printf '\t')" read -r id requirement name result code evidence command head final_run; do
     [ -n "${id:-}" ] || continue
