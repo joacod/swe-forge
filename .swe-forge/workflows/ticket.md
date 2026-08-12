@@ -1,7 +1,7 @@
 # General Ticket Workflow
 
-This is the operational workflow for a general software ticket. Read it
-only after the user explicitly invokes SWE Forge.
+This is the operational workflow for a general software ticket. Read it only
+after the user explicitly invokes SWE Forge.
 
 ## Inputs
 
@@ -10,7 +10,7 @@ The workflow accepts:
 - the original ticket or problem description
 - explicit user constraints
 - repository instructions and available tooling
-- optional harness, model, or isolation preferences
+- optional harness, model, execution-provider, or isolation preferences
 
 The original ticket remains authoritative. Do not silently replace it with a
 worker's interpretation.
@@ -30,31 +30,46 @@ Keep temporary run state outside the repository or under an ignored
 credentials, or ticket-specific state.
 
 Before writing repository-local state, verify the exact path is ignored, for
-example with `git check-ignore`. If it is not ignored, use a permission-restricted
-external temporary directory or stop for explicit setup; do not silently modify
-the repository's ignore rules. Clean external state at run completion and
-report any cleanup failure.
+example with `git check-ignore`. If it is not ignored, use a permission-
+restricted external temporary directory or stop for explicit setup; do not
+silently modify the repository's ignore rules. Clean external state at run
+completion and report any cleanup failure.
 
 ## Procedure
 
 ### 1. Ingest
 
-Read the ticket without designing the solution immediately.
+Read the ticket without designing the solution immediately. Preserve the raw
+invocation arguments as the immutable ticket input, including reserved command
+tokens before parsing. Record the parsed remainder separately; the remainder
+must not replace the original input.
 
 For harness commands, parse the raw arguments before ingesting the ticket:
 
-- inspect the first token: if it is lowercase `solo`, `subagents`, or `herdr`,
-  record `requested_mode` and remove it as the explicit topology
+- inspect the first token: if it is lowercase `solo`, `subagents`, or
+  `isolated`, record `requested_mode` and remove it as the explicit topology
 - inspect the first remaining token (or the original first token): if it is
   lowercase `guided` or `pr`, record `requested_delivery` and remove it as the
-  delivery token; this supports either `solo pr <ticket>` or `pr solo <ticket>`
+  delivery token; this supports either `solo pr <ticket>`, `isolated pr
+  <ticket>`, or `pr isolated <ticket>`
 - if a delivery token was consumed before a topology token, inspect the next
-  token for lowercase `solo`, `subagents`, or `herdr` and record it as the
+  token for lowercase `solo`, `subagents`, or `isolated` and record it as the
   explicit topology
-- if no delivery token is present, record `requested_delivery: DEFAULT` and
+- if the first token is lowercase `herdr`, do not record a Herdr topology and
+  do not silently treat it as a ticket. Return clear migration guidance:
+  "The `herdr` topology token was removed. Use `isolated` and request Herdr as
+  an execution-provider preference if it is wanted." Ask the user to resubmit
+  the corrected invocation, while preserving the original raw arguments in run
+  state.
+- record a separate `requested_provider` when the user explicitly asks for
+  `NATIVE`, `HERDR`, or `NONE` as an execution-provider preference; provider
+  preference never changes `requested_mode` and the word `herdr` is not a
+  topology alias
+- if no delivery token is consumed, record `requested_delivery: DEFAULT` and
   resolve `delivery_mode: GUIDED`
-- if no topology token was consumed, record `requested_mode: AUTO`
-- preserve the non-empty remainder as the original ticket
+- if no topology token is consumed, record `requested_mode: AUTO`
+- preserve the non-empty remainder as the parsed ticket while retaining the
+  complete raw invocation as the original ticket reference
 - preserve any user-supplied specialist-skill names, paths, or URLs as ticket
   input; do not treat them as permission to install or execute external code
 - a topology or delivery token without a ticket is incomplete input; ask for the
@@ -65,26 +80,41 @@ For harness commands, parse the raw arguments before ingesting the ticket:
 The lowercase topology words remain reserved only in the canonical topology
 position. The delivery shorthand is intentionally explicit: `pr` selects the
 low-touch pull-request path, while `guided` makes the default visible. Natural
-language activation without a command may state a mode preference directly.
+language activation without a command may state a mode or provider preference
+directly. The supported explicit isolated forms are:
 
-Record the requested behavior, explicit constraints, affected users or
-systems, non-goals, and any requested validation. Preserve important wording
-from the original ticket. Record whether the user wants review checkpoints or
-low-touch PR delivery; do not treat a delivery preference as permission to
-merge.
+```text
+/swe-forge isolated <ticket>
+/swe-forge isolated pr <ticket>
+/swe-forge pr isolated <ticket>
+```
+
+Never advertise a removed provider name as an execution mode. Migration
+handling must point users to `isolated` and a separate Herdr provider
+preference.
+
+Record the requested behavior, explicit constraints, affected users or systems,
+non-goals, and any requested validation. Preserve important wording from the
+original ticket. Record whether the user wants review checkpoints or low-touch
+PR delivery; do not treat a delivery preference as permission to merge.
 
 ### 2. Discover
 
-Inspect the repository before making architectural claims. Locate relevant
-entry points, dependencies, analogous implementations, conventions,
-documentation, tests, and quality gates. If the ticket names an optional
-specialist skill, or an already available skill has a clearly declared match,
-read `.swe-forge/policies/specialist-skills.md` and evaluate it on demand;
-otherwise do not search or load unrelated skills.
+Inspect the repository before making architectural claims. Locate relevant entry
+points, dependencies, analogous implementations, conventions, documentation,
+tests, and quality gates. If the ticket names an optional specialist skill, or
+an already available skill has a clearly declared match, read
+`.swe-forge/policies/specialist-skills.md` and evaluate it on demand; otherwise
+do not search or load unrelated skills.
 
 Use parallel read-only research only when it reduces time or context load. All
 research must return evidence with file, symbol, command, or documentation
 references.
+
+Check available harness and provider capabilities without claiming them from
+installation alone. In particular, an installed provider is not evidence that
+it can safely create isolated writable worktrees, collect structured results,
+or preserve central integration.
 
 ### 3. Specify
 
@@ -97,10 +127,10 @@ context unless a durable run artifact is needed. In `PR`, follow
 most a short high-leverage interview when the ticket is underspecified, and
 build the transient artifact described by
 `.swe-forge/contracts/working-spec.md`. Do not write ticket-specific specs to
-the repository. When a specialist skill is considered, record its source,
-status, and selection reason in the transient working spec. A reasonable,
-low-risk assumption may be recorded and used; a blocking user decision must be
-asked rather than guessed.
+the repository. When a specialist skill is considered, the working spec records
+its source, selection status, and reason. A reasonable, low-risk assumption may
+be recorded and used; a blocking user decision must be asked rather than
+guessed.
 
 ### 4. Architect
 
@@ -109,47 +139,75 @@ components, interfaces, data flow, migration or compatibility concerns, and
 risks.
 
 Do not edit code during architecture analysis. Do not introduce an abstraction
-unless the ticket and repository evidence justify it.
+unless the ticket and repository evidence justify it. If isolated execution is
+being considered, identify the shared foundation, stable interfaces, task
+ownership, shared-artifact owners, environment resources, and integration order
+before creating workers.
 
 ### 5. Decompose
 
 Create bounded tasks only where decomposition provides useful independence.
 Each writable task must state its objective, reason, dependencies, allowed
 scope, forbidden scope, acceptance criteria, validation, risk, and expected
-result. For `GUIDED`, also divide broad work into cohesive review slices with a
-small observable boundary and an explicit checkpoint. For `PR`, keep the
-transient working spec and task graph sufficient for one uninterrupted
-implementation.
+result. For `ISOLATED`, each task additionally records `shared_artifacts`,
+`base_sha`, `wave`, and `integration_order` as required by
+`.swe-forge/workflows/isolated-execution.md`.
+
+For `GUIDED`, also divide broad work into cohesive review slices with a small
+observable boundary and an explicit checkpoint. For `PR`, keep the transient
+working spec and task graph sufficient for one uninterrupted implementation.
 
 Parallelize only when dependencies are satisfied, ownership is non-overlapping,
 and outputs can be independently evaluated. Otherwise use sequential waves or
-`SOLO`.
+`SOLO`. A shared schema, migration, contract, architecture decision, root
+lockfile, or generated artifact with unsettled ownership requires foundation
+work first and may require serialization.
 
 ### 6. Route
 
-Record exactly one execution topology and delivery mode with their reasons:
+Record exactly one execution topology, one provider decision where relevant,
+and one delivery mode with their reasons:
 
 ```text
-requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
-execution_mode: SOLO | SUBAGENTS | HERDR
+requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
+execution_mode: SOLO | SUBAGENTS | ISOLATED
+requested_provider: AUTO | NATIVE | HERDR | NONE
+execution_provider: NATIVE | HERDR | NONE
+provider_reason: <why this provider satisfies the isolated-execution requirements>
+parallel_strategy: NONE | COMPOSE
+integration_strategy: NONE | CHERRY_PICK
 requested_delivery: DEFAULT | GUIDED | PR
 delivery_mode: GUIDED | PR
 reason: <why this is the smallest useful topology>
-fallback_used: no | <requested mode -> selected mode and reason>
+fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
 ```
 
-Use `SOLO` for small or tightly coupled work. Use `SUBAGENTS` for useful
-native parallel research, implementation, testing, or review. Use `HERDR` only
-when separate worktrees, processes, harnesses, or contexts materially improve
-execution.
+Use `SOLO` for small, tightly coupled, or inherently sequential work. Use
+`SUBAGENTS` for useful native parallel read-only work or sequential bounded
+writable delegation in one checkout. Use `ISOLATED` only when concurrent
+writable work needs separate execution environments and the full automatic
+gate in `.swe-forge/policies/execution-routing.md` passes, or when the user
+explicitly requests it and safe isolation is available.
+
+Any concurrent writable subagents using separate worktrees are `ISOLATED`,
+even when the current harness provides those worktrees natively. Strong context
+isolation alone does not justify `ISOLATED`; difficulty, file count, or the
+presence of Herdr alone does not justify it.
+
+When `execution_mode` is `ISOLATED`, load
+`.swe-forge/policies/provider-selection.md`, select `NATIVE` or `HERDR` only
+when its capabilities are demonstrated, and record `provider_reason`.
+`parallel_strategy` must be `COMPOSE` and `integration_strategy` must be
+`CHERRY_PICK`. If neither provider can supply required isolation, fall back to
+sequential `SUBAGENTS` or `SOLO` when safe, or return `BLOCKED` when required
+isolation would be lost. A non-isolated run records `execution_provider: NONE`,
+`parallel_strategy: NONE`, and `integration_strategy: NONE`.
 
 Never choose a mode merely because the task is difficult or a tool is
-available.
-
-For `AUTO`, apply the routing policy after discovery. An explicit mode bypasses
-topology preference but not safety or validation. Use the policy fallback when
-the requested mode is unavailable, report it, and block if fallback would
-remove isolation required for safe execution or the user prohibited fallback.
+available. For `AUTO`, record why all ten isolated-routing conditions passed or
+which condition caused serialization. An explicit mode bypasses topology
+preference but not safety, provider capability, validation, scope, or delivery
+authorization.
 
 ### 7. Test Strategy
 
@@ -188,85 +246,113 @@ conditional check must include its observable condition. Inspect commands
 before execution for filesystem mutation, credentials, networking, migrations,
 deployment, publication, production access, or shared-environment effects.
 Classify delivery commands separately: local commit, branch push, PR creation,
-and post-merge sync are external or checkout-changing effects. A normal guided
-invocation authorizes local validation and one safe task-branch setup from a
-clean protected default branch, but not delivery. `go` authorizes the current
-guided slice's local commit; `PR` mode authorizes per-slice commits, the final
-push, and PR creation after their applicable gates. Merge always needs a
-separate instruction.
+and post-merge sync. A normal guided invocation authorizes local validation and
+one safe task-branch setup from a clean protected default branch, but not
+delivery. `go` authorizes the current guided slice's local commit; `PR` mode
+authorizes per-slice commits, the final integration-branch push, and one PR
+after their applicable gates. Merge always needs a separate instruction.
+
+For `ISOLATED`, add environment isolation to the plan and task contracts:
+
+```yaml
+environment_isolation:
+  setup_commands: []
+  copied_ignored_files: []
+  ports: []
+  databases: []
+  docker_projects: []
+  temporary_directories: []
+  external_resources: []
+  cleanup_commands: []
+```
+
+Copy ignored files only from an explicit allowlist, allocate unique resources,
+inspect setup side effects, and serialize when safe resource isolation is not
+available. Migrations and shared persistent environments require separate
+authorization.
 
 ### 8. Implement
 
-Execute dependency waves while preserving bounded scope. A worker owns only
-the task it received and must report scope expansion or blocking issues
+Execute dependency waves while preserving bounded scope. A worker owns only the
+task it received and must report scope expansion or blocking issues
 immediately. In `GUIDED`, complete and validate one review slice at a time,
 then stop at a checkpoint with the diff boundary and next slice. Resume after
 `continue` or a revision; `go` (or `commit and continue`) first creates a local
-commit for the reviewed slice with a concise generated message, then resumes.
-In `PR`, do not pause for slice approval after the working spec is ready. Create
-one local commit after each slice's required validation, retain the separate
-history, and stop only for a blocking decision or failed gate.
+commit for the reviewed slice, then resumes. In `PR`, do not pause for slice
+approval after the working spec is ready. Create one local commit after each
+slice's required validation, retain the separate history, and stop only for a
+blocking decision or failed gate.
 
 Two writing workers must never edit the same checkout concurrently. Read-only
-workers may inspect the integration checkout. Herdr writing workers require
-separate worktrees.
+workers may inspect the integration checkout. `ISOLATED` writable workers each
+receive a dedicated worktree and local branch from the exact recorded
+integration `HEAD`; they cannot access the integration checkout. The
+integration worktree belongs exclusively to the orchestrator.
 
 Before the first edit, confirm that writable work is on a dedicated,
 non-protected branch or worktree. Protected branches include repository-declared
 protected branches, the locally known remote default branch, `main`, and
-`master`. From a clean protected default branch, automatically create one safe
-non-protected task branch and reuse it for the entire run. If a suitable
-non-protected branch already exists, reuse it; never create another branch for a
-later slice. Do not write when the checkout is dirty, detached, or cannot be
+`master`. From a clean protected default, automatically create and record one
+safe non-protected task/delivery branch for `SOLO` or `SUBAGENTS`. For
+`ISOLATED`, the orchestrator creates one run-owned integration worktree and one
+integration/delivery branch, then creates bounded worker resources only as
+ready waves permit. Leave the user's original checkout untouched.
+
+Do not write when the relevant checkout is dirty, detached, or cannot be
 classified safely. Stop and ask the user to resolve those conditions rather
-than moving or overwriting work.
+than moving or overwriting work. Record a pre-edit baseline with the absolute
+checkout path, HEAD, branch, remote-default evidence, branch/worktree setup,
+and staged, unstaged, and untracked files. If the request for additional
+branches or worktrees is ambiguous, ask before creating them.
 
-Record a pre-edit baseline with the absolute checkout path, HEAD, branch,
-remote-default evidence, branch setup strategy, and staged, unstaged, and
-untracked files. If the request for additional branches or worktrees is
-ambiguous, ask before creating them. Compare task scope to that inventory. Block
-on overlapping
-pre-existing changes until the user resolves ownership; preserve unrelated
-changes and do not reset, clean, stash, or overwrite them. Use the baseline
-again during final diff inspection so untracked files and user changes are not
-misattributed to the run.
-
-Workers must run assigned validation, report files touched, and return a
-structured result. They must not claim success from code inspection alone.
+Workers must run assigned validation and return a structured result. They must
+not claim success from code inspection alone. A writable isolated result is
+eligible for integration only when branch/worktree identity, exact base,
+cleanliness, declared commits, scope, untracked state, worker validation, and
+forbidden delivery actions all pass the checks in the isolated workflow.
 
 ### 9. Integrate
 
 The orchestrator owns integration. Review each result against its task contract
 before combining it with other work. Preserve the checkpoint boundary in
 `GUIDED`; the user reviews the integrated slice before the next writable wave.
-For isolated worktrees, integrate only after the worker result and scope have
-been independently checked.
+For isolated worktrees, integrate accepted results centrally and sequentially in
+recorded `integration_order`, not completion order.
 
-For isolated worktrees, integrate commits or patches sequentially in a central
-checkout, resolve conflicts centrally, and rerun affected validation. Keep all
-slices for one task on its one task branch. Do not push, create a pull request,
-or merge unless the user explicitly authorized the applicable action. `go` and
-`PR` mode provide only the local commit authorization described above; task
-contracts may transmit authorization but cannot create it.
+For every isolated integration unit, inspect the source commit and result,
+verify scope and base, record a clean checkpoint, apply changes without
+immediately finalizing the integration commit, run integrated validation, then
+create the final repository-appropriate commit and record the
+source-to-integration commit mapping. Do not blindly merge branches or copy
+entire worktrees. Do not resolve conflicts silently.
+
+A conflict between supposedly independent tasks requires stopping safely,
+preserving worker resources, restoring the integration worktree to its recorded
+clean checkpoint with a safe operation, re-evaluating ownership and
+ dependencies, and serializing or recreating the affected task. Never force
+cleanup against ambiguous state.
 
 ### 10. Verify
 
 Run the relevant repository quality gates after integration. In `PR` mode,
-each slice's required targeted checks must pass before its local commit, and
-final verification and fresh review must pass before push or PR creation. In
-`GUIDED`, a checkpoint may report a passing slice while the final acceptance
-gate remains pending. These may include
-targeted tests, the complete test suite, typecheck, lint, build, static
-analysis, packaging, or repository-specific checks.
+each slice or integration unit's required targeted checks must pass before its
+local integration commit, and final verification and fresh review must pass
+before push or PR creation. In `GUIDED`, a checkpoint may report a passing
+slice while final acceptance remains pending. Checks may include targeted
+tests, the complete test suite, typecheck, lint, build, static analysis,
+packaging, or repository-specific structural and installer checks.
 
 Report every check as passed, failed, skipped, or unavailable. Explain why a
-check was not applicable or could not run.
+check was not applicable or could not run. Every required check must pass. A
+conditional check must pass when its condition applies or have a recorded
+evidence-backed determination that it does not apply. Informational checks
+never substitute for required evidence. Changing or substituting a delegated
+check requires a revised task contract.
 
-Every required check must pass. A conditional check must pass when its condition
-applies or have a recorded evidence-backed determination that it does not apply.
-Informational
-checks never substitute for required evidence. Changing or substituting a
-delegated check requires a revised task contract.
+For `ISOLATED`, require worker-level targeted validation, integrated-state
+validation after each integration unit, wave-level validation after each wave,
+complete applicable repository checks after all integration, and evidence that
+the final integration commits were built centrally.
 
 ### 11. Review
 
@@ -275,13 +361,16 @@ delegated, the change spans components, risk is medium or higher, or security,
 data integrity, compatibility, concurrency, or external effects are relevant.
 For a trivial localized `SOLO` change, the orchestrator may perform final diff
 review in the active context and record `review: skipped` with the reason.
-Provide the original ticket,
-acceptance criteria, architecture decisions, final diff, and validation
-evidence. Do not provide the implementer's entire conversational history.
+Provide the original ticket, acceptance criteria, architecture decisions, final
+diff, and validation evidence. Do not provide the implementer's entire
+conversational history.
 
 Review correctness, missing requirements, regressions, abstractions, scope,
 error handling, compatibility, concurrency, security, performance, tests, and
-unrelated changes. Return findings using `.swe-forge/contracts/review.md`.
+unrelated changes. For isolated work also review provider boundaries, exact
+base SHAs, worker scope, shared-artifact ownership, environment isolation,
+integration order, source-to-integration mappings, and conservative cleanup.
+Return findings using `.swe-forge/contracts/review.md`.
 
 Apply the blocking matrix in `.swe-forge/contracts/review.md`. Low-confidence
 stylistic opinions do not block completion by themselves.
@@ -294,6 +383,8 @@ failure remains unexplained.
 
 Limit review and repair cycles. If a finding cannot be safely resolved, report
 the evidence, impact, and remaining risk instead of looping indefinitely.
+Repairs to an isolated integration branch normally become explicit cohesive
+repair commits; do not rewrite accepted integration history automatically.
 
 ### 13. Final Acceptance
 
@@ -301,12 +392,17 @@ Compare the final integrated diff to the original ticket, acceptance criteria,
 and explicit constraints. Check for missing functionality, accidental changes,
 scope creep, unresolved failures, and unreviewed generated files.
 
-Success requires the acceptance gate in `SWE-FORGE.md`. Do not substitute a
-worker's summary for final inspection.
+Success requires the acceptance gate in `SWE-FORGE.md`. For an isolated ticket,
+verify that the integration/delivery branch is the only published branch, every
+accepted source commit has an integration mapping, worker branches remain local
+and safe, and exactly one final PR is planned or created. Do not substitute a
+worker's summary, provider lifecycle status, or passing worker tests for final
+inspection and integrated verification.
 
 Map the run to `ACCEPTED` only when the gate passes, `BLOCKED` when a decision,
 authorization, access, or environment change can enable safe continuation, and
-`FAILED` when attempted work remains incorrect or recovery limits are exhausted.
+`FAILED` when attempted work remains incorrect or the gate cannot be met within
+the ticket and recovery limits.
 
 ### 14. Report
 
@@ -314,14 +410,17 @@ Return only the decision-relevant result:
 
 - final status: `ACCEPTED`, `BLOCKED`, or `FAILED`
 - requested and selected execution topology
+- requested and selected provider when `ISOLATED`, including reason and any
+  fallback
 - requested and selected delivery mode
-- execution mode and reason
-- approach and important decisions
+- implementation approach and important decisions
 - files changed
 - tests and other validation with results
 - independent review status
 - assumptions
 - remaining risks or follow-ups
+- delivery result (checkpoint, commits, push, PR URL, or explicit blocked or
+  not-authorized status)
 - cleanup status and remaining resources when applicable
 
 Do not include internal worker transcripts.
@@ -329,24 +428,31 @@ Do not include internal worker transcripts.
 Normal `GUIDED` completion stops with the reviewed diff and validation evidence
 for human approval. The user can say `go` at a checkpoint to commit that slice
 and continue, or use the separate `git-commit`, `git-push`, and `git-pr` actions.
-`PR` completion may create separate local slice commits, then push and create a
-pull request after the final quality gates and reports the URL. It never
-authorizes merge. After a human merge, the user can say `merged` or invoke
-`git-sync`; the sync action must verify the PR state before switching and
-fast-forwarding the default branch.
+`PR` completion may create separate local slice commits, then push the one
+integration/delivery branch and create one PR after the final quality gates and
+review. It never authorizes merge. After a human merge, the user can say
+`merged` or invoke `git-sync`; the sync action must verify the PR state before
+switching and fast-forwarding the default branch.
 
 ## Blocking and Recovery
 
 When a worker is `BLOCKED` or `FAILED`, the orchestrator should preserve the
 task graph and choose the smallest recovery action:
 
-1. supply missing context
-2. retry once with an explicit correction
-3. invoke a debugger for evidence gathering
-4. serialize conflicting work
-5. change execution topology
-6. escalate capability
-7. complete the task directly
+1. supply missing context or repository access
+2. clarify the task contract and retry once
+3. run a focused debugger investigation
+4. serialize work that exposed an ownership, environment, or ordering conflict
+5. reduce the task scope to the smallest safe unit
+6. change provider or topology when the required safety properties remain
+   intact
+7. escalate capability or assign the work to the orchestrator
+8. stop and report the unresolved failure when safe progress is not possible
+
+Do not hide a failure by changing the status to `DONE`. For isolated recovery,
+inspect actual Git worktree, branch, checkout, provider, and process state;
+stale run state never overrides repository evidence. Preserve dirty or
+ambiguous worker resources rather than force-removing them.
 
 Track retries in temporary run state. Do not retry indefinitely or conceal a
 failure in the final report.
