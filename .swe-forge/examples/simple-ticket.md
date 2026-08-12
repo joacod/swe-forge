@@ -52,8 +52,10 @@ justified unless repository instructions require it for formatter changes.
 ## Guided Checkpoint
 
 After the formatter slice passes its focused checks, stop and report the diff
-boundary. The user can reply `continue`, `revise: ...`, or `commit and continue`.
-The checkpoint is not a final acceptance result until the whole ticket is done.
+boundary. The user can reply `continue`, `revise: ...`, or `go`. `go` commits
+the reviewed slice with a concise message and continues; `commit and continue`
+is the longer equivalent. The checkpoint is not a final acceptance result until
+the whole ticket is done.
 
 ## Implementation Result
 

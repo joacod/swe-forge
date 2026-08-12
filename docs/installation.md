@@ -106,8 +106,9 @@ The installer also links the requested harness bridge:
 OpenCode and Pi also receive the explicit atomic delivery helpers
 `git-commit`, `git-push`, `git-pr`, and `git-sync`. They load the canonical
 `.swe-forge/policies/delivery.md`; they do not redefine the workflow. The push
-helper never asks whether to create a PR, and the sync helper is intended for
-after the user manually merges one.
+helper only pushes, while the PR helper creates or reports a PR separately. The
+sync helper verifies that the PR was merged before returning to the default
+branch; `git-sync merged` is the explicit post-merge form.
 
 The source checkout path must remain available to the user. Existing conflicting
 files stop the install before canonical or selected adapter files are written. A

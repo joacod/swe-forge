@@ -40,10 +40,13 @@ Pi derives the prompt-template command from its filename:
 ```
 
 The template uses Pi's `$ARGUMENTS` expansion and is only processed when the
-user explicitly types `/swe-forge`. Ordinary prompts remain unchanged. The
-separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync` prompts load the
-canonical delivery policy. `/git-push` never creates a PR as a side effect;
-`/git-sync` is for returning to the default branch after a human merge.
+user explicitly types `/swe-forge`. Ordinary prompts remain unchanged. A clean
+default branch gets one dedicated task branch automatically and all slices stay
+on it. In guided mode, reply `go` at a checkpoint to commit that slice and
+continue. The separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync`
+prompts load the canonical delivery policy. `/git-push` only pushes; after a
+human merge, say `merged` or use `/git-sync merged` so the PR state is verified
+before returning to the default branch.
 
 Pi does not provide native subagents by default. If `SUBAGENTS` is unavailable,
 the canonical workflow falls back to `SOLO` or sequential execution according
