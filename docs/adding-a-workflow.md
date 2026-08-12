@@ -1,8 +1,8 @@
 # Adding a Workflow
 
-V1 implements only the general ticket workflow. Add another workflow only when
-real tickets demonstrate that a distinct lifecycle and acceptance strategy is
-worth maintaining.
+The repository currently implements only the general ticket workflow. Add
+another workflow only when real tickets demonstrate that a distinct lifecycle
+and acceptance strategy is worth maintaining.
 
 ## Location and Invocation
 

@@ -28,7 +28,7 @@ means copying or linking only the selected adapter projection to a target
 repository or user configuration. The adapter catalog itself is never copied
 into the target's canonical `.swe-forge/` tree.
 
-For the supported V1 harnesses, prefer `scripts/swe-forge install <harness>`
+For supported harnesses, prefer `scripts/swe-forge install <harness>`
 and `scripts/swe-forge verify <harness>`. The installer links selected
 artifacts to the canonical checkout by default and accepts `--global` only
 when the user explicitly asks for user-level harness access. Each invocation

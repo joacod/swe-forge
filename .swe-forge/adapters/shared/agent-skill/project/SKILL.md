@@ -7,7 +7,7 @@ disable-model-invocation: true
 The user explicitly invoked SWE Forge through the host's explicit skill entry.
 Use `$swe-forge` in Codex or `/swe-forge` in Cursor.
 
-Read `AGENTS.md` and `SWE-FORGE.md`, then read the V1 procedure at
+Read `AGENTS.md` and `SWE-FORGE.md`, then read the ticket procedure at
 `.swe-forge/workflows/ticket.md`. Follow the canonical workflow and load only
 the role, contract, and policy files required by the selected topology and
 ticket risks. Parse and honor an explicit topology token using the canonical

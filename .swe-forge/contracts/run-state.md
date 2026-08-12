@@ -75,9 +75,9 @@ retries:
 - clean external state at completion and record cleanup failures
 
 The implementation may use a more specific timestamp or task schema, but it
-must preserve the workflow version, requested and selected execution modes,
-task status, dependencies, review status, retry visibility, checkout identity,
-authorization, validation evidence, and cleanup status.
+must preserve the run-state format version, requested and selected execution
+modes, task status, dependencies, review status, retry visibility, checkout
+identity, authorization, validation evidence, and cleanup status.
 It must also preserve the prior status needed to resume a blocked run and every
 task or review retry ceiling, including provenance for an increased ceiling.
 
