@@ -71,7 +71,7 @@ state=$(clean_feature_state "$repo")
   printf 'changed\n' >>README.md
   "$GATE" validate --state "$state" --requirement required --name smoke -- \
     sh -c 'grep -q changed README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  "$GATE" checkpoint --scope README.md --state "$state" >/dev/null
   "$GATE" commit-slice --state "$state" --checkpoint 1 \
     --message 'Record gate evidence' --authorized-by PR >/dev/null
   "$GATE" validate --state "$state" --requirement required --name final-smoke \

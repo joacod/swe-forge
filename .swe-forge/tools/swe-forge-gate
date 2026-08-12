@@ -12,6 +12,7 @@ CHECKOUT=
 SCOPE_TMP=
 CHANGED_TMP=
 COMMITTED_TMP=
+SCOPE_VALUES=
 TAB=$(printf '\t')
 NEWLINE='
 '
@@ -356,16 +357,16 @@ noninformational_status() {
 current_head_validations() {
   wanted_head=$1
   awk -F '\t' -v wanted="$wanted_head" '
-    $2 != "informational" && $9 == "yes" {
+    $2 != "informational" && $9 == "yes" && $8 == wanted {
       names[$3] = 1
-      if ($4 == "passed" && $8 == wanted) passed[$3] = 1
+      latest[$3] = $4
     }
     END {
       total=0
       bad=0
       for (name in names) {
         total++
-        if (!passed[name]) bad++
+        if (latest[name] != "passed") bad++
       }
       if (total == 0) print "missing"
       else if (bad != 0) print "failed"
@@ -376,6 +377,7 @@ current_head_validations() {
 
 checkpoint_run() {
   scope_count=0
+  SCOPE_VALUES=
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --state)
@@ -386,8 +388,12 @@ checkpoint_run() {
       --scope)
         [ "$#" -ge 2 ] || fail "--scope requires a path or path/**"
         [ -n "$2" ] || fail "--scope requires a non-empty path"
-        [ -n "$SCOPE_TMP" ] || SCOPE_TMP=$STATE/scope.$$
-        printf '%s\n' "$2" >>"$SCOPE_TMP"
+        reject_control_chars "$2"
+        if [ -n "$SCOPE_VALUES" ]; then
+          SCOPE_VALUES="$SCOPE_VALUES$NEWLINE$2"
+        else
+          SCOPE_VALUES=$2
+        fi
         scope_count=$((scope_count + 1))
         shift 2
         ;;
@@ -398,6 +404,8 @@ checkpoint_run() {
 
   [ "$scope_count" -gt 0 ] || fail "at least one --scope is required"
   ensure_meta_state
+  SCOPE_TMP=$STATE/scope.$$
+  printf '%s\n' "$SCOPE_VALUES" >"$SCOPE_TMP"
   assert_identity
   CHANGED_TMP=$STATE/changed.$$
   COMMITTED_TMP=$STATE/committed.$$
