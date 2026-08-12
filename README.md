@@ -80,9 +80,11 @@ review gates, and stops with a PR available to review. Its PR description is
 kept concise and informative; it still never merges.
 
 The delivery helpers are intentionally atomic: `/git-push` only pushes; use
-`/git-pr` separately to create or report the pull request. See the harness
-adapter documentation for the available `git-commit`, `git-push`, `git-pr`, and
-`git-sync` loaders.
+`/git-pr` separately to create or report the pull request. Commit and PR
+messages follow the repository delivery policy: concise imperative subjects,
+clear subject/body separation, and bodies that preserve what/why context when
+needed. See the harness adapter documentation for the available `git-commit`,
+`git-push`, `git-pr`, and `git-sync` loaders.
 
 ## Learn more
 

@@ -30,8 +30,9 @@ authorization.
   and create a pull request when the required tools are available
 - report the pull-request URL and stop; never merge it
 
-The pull request should be easy to scan. Use a short imperative title and a
-short-to-medium body with this compact shape:
+The pull request should be easy to scan. Use a short, capitalized, imperative
+title without terminal punctuation and a short-to-medium body with this compact
+shape:
 
 ```text
 Summary:
@@ -45,8 +46,17 @@ Notes:
 - <only an important risk or follow-up; omit this section when empty>
 ```
 
-Do not paste the working spec, transcript, or a file-by-file dump into the
-description.
+Apply the same title discipline as a commit subject: capitalize it, use the
+imperative mood, omit terminal punctuation, target 50 characters or fewer, and
+treat 72 as the hard maximum. The `Summary` explains the outcome and why it
+matters, `Validation` names evidence a reviewer can reproduce, and `Notes`
+captures only material risks or follow-ups. Keep prose and bullets readable at
+about 72 characters where the provider permits it. Put issue references at the
+bottom using the repository's established syntax, such as `Refs: #123` or
+`Fixes: #123`, and use closing keywords only when closure is intentional.
+
+Do not paste the working spec, transcript, implementation diary, or a
+file-by-file dump into the description.
 
 `PR` mode does not waive tests, protected-branch rules, scope checks, fresh
 review for medium/high-risk work, or the final diff inspection. It only replaces
@@ -130,18 +140,37 @@ no commit, push, or PR.
 
 ## Commit Messages
 
+The commit guidance here borrows the durable parts of [Tim Pope's commit
+message note](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html)
+and [Chris Beams's seven rules](https://cbea.ms/git-commit/). The goal is a
+history that communicates context efficiently: the diff shows how, while the
+message records the outcome, motivation, compatibility boundary, and important
+side effects. These rules apply to new commits; do not rewrite existing history
+only to make it conform.
+
 For a `go` commit or a PR-mode slice commit:
 
-- stage only the current slice's reviewed files; preserve unrelated or
-  pre-existing changes
-- follow the repository's existing convention; otherwise use a concise,
-  imperative subject of at most 72 characters that names the outcome
-- add a short body only when the rationale or an important compatibility note
-  would be lost from the subject
-- do not use generic subjects such as `update`, `changes`, or `wip`
-
-A repair after review is a separate commit rather than a rewrite of the earlier
-slice, unless the user explicitly requests a different history.
+- Stage only the current slice's reviewed files; preserve unrelated or
+  pre-existing changes.
+- Write a concise subject that names the outcome. Target 50 characters or
+  fewer, treat 72 as the hard maximum, capitalize the first word, use the
+  imperative mood, and do not end with a period. The subject should complete
+  the sentence, `If applied, this commit will ...`.
+- If a body is needed, separate it from the subject with one blank line. A
+  one-line subject is appropriate when the diff needs no further context.
+- Use the body to explain what changed and why rather than narrating how the
+  code works. Include the problem being solved, behavior that is intentionally
+  different, compatibility constraints, or unintuitive side effects when they
+  would otherwise be lost.
+- Wrap prose and bullet lines at about 72 characters. Keep additional
+  paragraphs and bullet groups separated by blank lines.
+- When an issue or external reference matters, add it after a blank line at the
+  bottom using repository conventions, for example `Refs: #123` or
+  `Fixes: #123`. Never invent references or imply closure accidentally.
+- Keep each PR-mode slice and each review repair atomic. A repair after review
+  is a separate commit rather than a rewrite of the earlier slice, unless the
+  user explicitly requests a different history.
+- Do not use generic subjects such as `update`, `changes`, or `wip`.
 
 ## Atomic Delivery Commands
 
