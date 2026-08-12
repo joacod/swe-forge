@@ -69,6 +69,7 @@ require_text 'transient working spec' SWE-FORGE.md
 require_text 'specialist skills optional and on demand' SWE-FORGE.md
 require_text 'side effects' .swe-forge/policies/verification.md
 require_text 'specialist_skills:' .swe-forge/contracts/working-spec.md
+require_text 'specialist_skills:' .swe-forge/contracts/run-state.md
 require_text 'Do not add external skill URLs to the adapter registry' .swe-forge/policies/specialist-skills.md
 require_text 'refactor-design-patterns' docs/adding-a-skill.md
 require_text 'ui-design-token-refactor' docs/adding-a-skill.md
