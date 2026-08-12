@@ -74,7 +74,8 @@ working_spec_ref: none
 checkout_baseline:
   path: <absolute API worktree path>
   head: <revision>
-  branch: <branch>
+  branch: <isolated API worker branch>
+  branch_setup: auto-created | reused | user-provided
   classification: writable
   remote_default_evidence: <reference>
   staged: []
@@ -123,7 +124,8 @@ working_spec_ref: none
 checkout_baseline:
   path: <absolute storefront worktree path>
   head: <revision>
-  branch: <branch>
+  branch: <isolated storefront worker branch>
+  branch_setup: auto-created | reused | user-provided
   classification: writable
   remote_default_evidence: <reference>
   staged: []
@@ -162,11 +164,12 @@ authorization:
 
 After the user authorizes creation of the planned worktrees, the orchestrator
 verifies `test "${HERDR_ENV:-}" = 1` and uses Herdr to create or open the two
-worktree-backed workspaces. Before edits, it confirms the integration checkout
-and both worker checkouts are dedicated, non-protected, attached, and safely
-classifiable. It starts one harness agent in each worktree, sends only the
-corresponding task contract, and keeps user focus unchanged with background
-panes.
+worktree-backed workspaces. The central checkout has one automatically created
+or reused task branch for the run; each worker receives its own isolated branch.
+Before edits, it confirms the integration checkout and both worker checkouts are
+dedicated, non-protected, attached, and safely classifiable. It starts one
+harness agent in each worktree, sends only the corresponding task contract, and
+keeps user focus unchanged with background panes.
 
 The orchestrator records the user's worktree-creation authorization in run
 state. The worker contracts keep `create_worktree` as `not-authorized` because

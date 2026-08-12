@@ -29,7 +29,8 @@ acceptance_ref: <acceptance criteria reference>
 checkout:
   path: <absolute checkout path>
   head: <revision>
-  branch: <branch>
+  branch: <single task branch used for the entire run>
+  branch_setup: auto-created | reused | user-provided | blocked
   classification: writable | protected | detached | unclassifiable
   baseline_ref: <working-tree inventory reference>
 authorization_ref: <per-action authorization record or none>
@@ -54,10 +55,11 @@ checkpoint:
   status: not-applicable | awaiting-user | resumed | complete
   number: 0
   next_slice: <bounded review slice or none>
-  requested_action: <continue, revise, commit, or none>
+  requested_action: <continue, revise, go, commit, or none>
 
 delivery:
   commit: not-authorized | pending | complete | blocked
+  commit_history_ref: <per-slice commit records or none>
   push: not-authorized | pending | complete | blocked
   create_pull_request: not-authorized | pending | complete | blocked
   sync: not-authorized | pending | complete | blocked
@@ -82,8 +84,9 @@ retries:
 - update task status only from evidence or an explicit orchestrator decision
 - preserve dependency and retry information during recovery
 - treat `retries.<task>.attempts` as the single authoritative attempt counter
-- preserve checkout identity, baseline, authorization, validation, review
-  attempts, delivery mode, checkpoint state, working-spec reference, prior
+- preserve checkout identity, baseline, single-task-branch strategy,
+  authorization, validation, review attempts, delivery mode, checkpoint state,
+  working-spec reference, prior
   status, retry ceilings and provenance, and cleanup state during recovery
 - never store credentials, secrets, full transcripts, or private ticket data
 - treat the final repository diff, tests, and review as authoritative over stale
@@ -97,8 +100,10 @@ checkout identity, authorization, validation evidence, checkpoint state, and
 cleanup status.
 It must also preserve the prior status needed to resume a blocked run and every
 task or review retry ceiling, including provenance for an increased ceiling.
-It must preserve whether a checkpoint is awaiting user input and whether each
-delivery action was authorized, completed, or blocked.
+It must preserve whether a checkpoint is awaiting user input, whether `go`
+authorized a local slice commit, the per-slice commit history reference, whether
+each delivery action was authorized, completed, or blocked, and which one task
+branch the run used.
 
 ## Transitions
 

@@ -95,16 +95,18 @@ one checkout. Herdr workers use separate worktrees and integrate centrally.
 
 Delivery is orthogonal to topology:
 
-- `GUIDED` is the default human-control path. It creates review checkpoints
-  between cohesive implementation slices and leaves commit, push, PR, and merge
-  actions separate.
+- `GUIDED` is the default human-control path. From a clean protected default
+  branch it creates one task branch, then uses review checkpoints between
+  cohesive slices. `go` commits the reviewed slice and continues; push, PR, and
+  merge remain separate actions.
 - `PR` is an explicit low-touch path. It creates a transient working spec when
-  needed, proceeds through required verification and fresh review, and may
-  commit, push, and create a PR after the gates. It never merges.
+  needed, commits each validated slice separately, runs required verification
+  and fresh review, then pushes and creates a concise PR. It never merges.
 
-The canonical delivery policy owns action authorization and the post-merge
-`git-sync` boundary. Harness commands and prompts are thin loaders, so pushing
-cannot accidentally create a PR.
+The canonical delivery policy owns task-branch setup, action authorization, PR
+history and descriptions, and the post-merge `git-sync` boundary. Harness
+commands and prompts are thin loaders, so pushing cannot accidentally create a
+PR or syncing cannot assume that a PR was merged.
 
 ## Adapter Boundary
 
@@ -139,14 +141,15 @@ ticket
   -> evidence and architecture
   -> bounded task graph or guided review slices
   -> execution topology and delivery mode
-  -> checkpoints (GUIDED) or uninterrupted waves (PR)
+  -> one task branch for the run
+  -> checkpoints and optional `go` commits (GUIDED) or per-slice commits (PR)
   -> structured results
   -> integrated diff
   -> quality gates
   -> fresh review
   -> repair if needed
-  -> authorized commit/push/PR actions, if applicable
-  -> human merge and explicit post-merge sync
+  -> authorized slice-commit/push/PR actions, if applicable
+  -> verified human merge and explicit post-merge sync
   -> final acceptance report
 ```
 

@@ -36,8 +36,9 @@ updates, and conflicts.
 
 Installation only makes it available; it does not activate the workflow.
 Invoke it explicitly with a ticket. Ordinary prompts continue to use your
-harness normally. Commits, pushes, pull requests, and merges require explicit
-authorization.
+harness normally. A clean default branch gets one dedicated task branch
+automatically; commits, pushes, pull requests, and merges remain separately
+controlled actions.
 
 | Harness | Installation | Invocation |
 | --- | --- | --- |
@@ -56,27 +57,32 @@ diffs:
 
 ```text
 /swe-forge <ticket>
+  → create or reuse one task branch
   → implement and validate one cohesive slice
   → checkpoint: review the diff
-  → continue or revise; optionally say "commit and continue"
+  → say "continue" or "go"; go commits the slice and continues
   → repeat until the feature is complete
-  → use /git-commit, /git-push, then /git-pr as separate actions
+  → use /git-commit if needed, then /git-push and /git-pr separately
 ```
 
-After manually merging the PR, run `/git-sync` to return to the remote default
-branch and fast-forward it. Forge never merges automatically.
+After reviewing and manually merging the PR, say `merged` (or run
+`/git-sync merged`). Forge verifies the PR was actually merged before returning
+to the remote default branch and fast-forwarding it. It never merges
+automatically.
 
 ### PR mode
 
 Use `/swe-forge pr <ticket>` when the change is clear enough for low-touch
 execution. Forge performs a short alignment interview only when important
-requirements are missing, keeps the working spec temporary, runs the full
-verification and review gates, and stops with a PR available to review. It
-still never merges.
+requirements are missing, keeps the working spec temporary, commits each
+validated implementation slice separately, runs the full verification and
+review gates, and stops with a PR available to review. Its PR description is
+kept concise and informative; it still never merges.
 
-The delivery helpers are intentionally atomic: pushing no longer asks whether
-to create a PR. See the harness adapter documentation for the available
-`git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
+The delivery helpers are intentionally atomic: `/git-push` only pushes; use
+`/git-pr` separately to create or report the pull request. See the harness
+adapter documentation for the available `git-commit`, `git-push`, `git-pr`, and
+`git-sync` loaders.
 
 ## Learn more
 

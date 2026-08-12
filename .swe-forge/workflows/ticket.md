@@ -164,20 +164,23 @@ commands before execution for filesystem mutation, credentials, networking,
 migrations, deployment, publication, production access, or shared-environment
 effects. Classify delivery commands separately: local commit, branch push, PR
 creation, and post-merge sync are external or checkout-changing effects. A
-normal guided invocation authorizes local validation only. `PR` mode or an
-explicit atomic delivery command may authorize its named action after the
-quality gates; merge always needs a separate instruction.
+normal guided invocation authorizes local validation and one safe task-branch
+setup from a clean protected default branch, but not delivery. `go` authorizes
+the current guided slice's local commit; `PR` mode authorizes per-slice commits,
+the final push, and PR creation after their applicable gates. Merge always needs
+a separate instruction.
 
 ### 8. Implement
 
 Execute dependency waves while preserving bounded scope. A worker owns only
 the task it received and must report scope expansion or blocking issues
 immediately. In `GUIDED`, complete and validate one review slice at a time,
-then stop at a checkpoint with the diff boundary and next slice. Resume only
-after the user says `continue`, requests a revision, or explicitly says
-`commit and continue`. In `PR`, do not pause for slice approval after the
-working spec is ready; keep all required evidence and stop only for a blocking
-decision or failed gate.
+then stop at a checkpoint with the diff boundary and next slice. Resume after
+`continue` or a revision; `go` (or `commit and continue`) first creates a local
+commit for the reviewed slice with a concise generated message, then resumes.
+In `PR`, do not pause for slice approval after the working spec is ready. Create
+one local commit after each slice's required validation, retain the separate
+history, and stop only for a blocking decision or failed gate.
 
 Two writing workers must never edit the same checkout concurrently. Read-only
 workers may inspect the integration checkout. Herdr writing workers require
@@ -186,17 +189,22 @@ separate worktrees.
 Before the first edit, confirm that writable work is on a dedicated,
 non-protected branch or worktree. Protected branches include repository-declared
 protected branches, the locally known remote default branch, `main`, and
-`master`. Do not write when the checkout is protected, detached, or cannot be
-classified safely. Ask the user to provide a suitable checkout or authorize
-creating one; that authorization does not grant permission to commit or
-publish.
+`master`. From a clean protected default branch, automatically create one safe
+non-protected task branch and reuse it for the entire run. If a suitable
+non-protected branch already exists, reuse it; never create another branch for a
+later slice. Do not write when the checkout is dirty, detached, or cannot be
+classified safely. Stop and ask the user to resolve those conditions rather
+than moving or overwriting work.
 
 Record a pre-edit baseline with the absolute checkout path, HEAD, branch,
-remote-default evidence, and staged, unstaged, and untracked files. Compare task
-scope to that inventory. Block on overlapping pre-existing changes until the
-user resolves ownership; preserve unrelated changes and do not reset, clean,
-stash, or overwrite them. Use the baseline again during final diff inspection
-so untracked files and user changes are not misattributed to the run.
+remote-default evidence, branch setup strategy, and staged, unstaged, and
+untracked files. If the request for additional branches or worktrees is
+ambiguous, ask before creating them. Compare task scope to that inventory. Block
+on overlapping
+pre-existing changes until the user resolves ownership; preserve unrelated
+changes and do not reset, clean, stash, or overwrite them. Use the baseline
+again during final diff inspection so untracked files and user changes are not
+misattributed to the run.
 
 Workers must run assigned validation, report files touched, and return a
 structured result. They must not claim success from code inspection alone.
@@ -210,15 +218,17 @@ For isolated worktrees, integrate only after the worker result and scope have
 been independently checked.
 
 For isolated worktrees, integrate commits or patches sequentially in a central
-checkout, resolve conflicts centrally, and rerun affected validation. Do not
-commit, push, create a pull request, or merge unless the user explicitly
-authorized the applicable action. Task contracts may carry user-granted
-authorization but cannot create it.
+checkout, resolve conflicts centrally, and rerun affected validation. Keep all
+slices for one task on its one task branch. Do not push, create a pull request,
+or merge unless the user explicitly authorized the applicable action. `go` and
+`PR` mode provide only the local commit authorization described above; task
+contracts may transmit authorization but cannot create it.
 
 ### 10. Verify
 
 Run the relevant repository quality gates after integration. In `PR` mode,
-verification must complete before any commit, push, or PR creation. In
+each slice's required targeted checks must pass before its local commit, and
+final verification and fresh review must pass before push or PR creation. In
 `GUIDED`, a checkpoint may report a passing slice while the final acceptance
 gate remains pending. These may include
 targeted tests, the complete test suite, typecheck, lint, build, static
@@ -292,11 +302,13 @@ Return only the decision-relevant result:
 Do not include internal worker transcripts.
 
 Normal `GUIDED` completion stops with the reviewed diff and validation evidence
-for human approval. The user can then use the separate `git-commit`, `git-push`,
-and `git-pr` actions, or authorize one of those actions in the conversation.
-`PR` completion may carry out commit, push, and pull-request creation after the
-quality gates and reports the URL. It never authorizes merge. After a human
-merge, `git-sync` is a separate explicit post-merge action.
+for human approval. The user can say `go` at a checkpoint to commit that slice
+and continue, or use the separate `git-commit`, `git-push`, and `git-pr` actions.
+`PR` completion may create separate local slice commits, then push and create a
+pull request after the final quality gates and reports the URL. It never
+authorizes merge. After a human merge, the user can say `merged` or invoke
+`git-sync`; the sync action must verify the PR state before switching and
+fast-forwarding the default branch.
 
 ## Blocking and Recovery
 

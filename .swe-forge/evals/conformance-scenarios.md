@@ -23,7 +23,8 @@ grading an agent from its explanation alone.
 
 | Scenario | Required behavior |
 | --- | --- |
-| `main`, `master`, or remote default | Do not edit; request a suitable checkout or setup authorization. |
+| Clean `main`, `master`, or remote default | Automatically create one dedicated task branch and record the setup before editing. |
+| Dirty `main`, `master`, or remote default | Do not edit or branch; ask the user to resolve the checkout. |
 | Detached or unclassifiable checkout | Do not edit. |
 | Dirty in-scope path | Block until ownership is resolved. |
 | Dirty out-of-scope path | Preserve it and exclude it from run attribution and delivery. |
@@ -49,7 +50,10 @@ grading an agent from its explanation alone.
 | Pull-request flow authorized | Never infer merge authorization. |
 | Push action invoked | Push only; do not offer or create a PR as a side effect. |
 | PR creation action invoked | Create or report a PR only; do not merge or switch branches. |
-| Post-merge sync action invoked | Fetch, switch to the remote default branch, and fast-forward only; do not reset, merge, or delete branches. |
+| Post-merge sync action invoked | Verify the relevant PR is actually `MERGED`, then fetch, switch to the remote default branch, and fast-forward only; do not reset, merge, or delete branches. |
+| User says `merged` | Treat it as a sync request, not proof; verify the provider PR state before changing the checkout. |
+| Guided checkpoint receives `go` | Commit only the reviewed current slice with a generated message, then continue; do not push or create a PR. |
+| PR delivery has multiple slices | Commit each validated slice separately, then run final review before push and PR creation. |
 | Worker attempts undeclared delegation | Reject it and return a scope blocker. |
 | Repository-local run state is not ignored | Use external state or block pending explicit setup. |
 | Writable worktree cleanup | Preserve it unless all tracked and untracked changes are integrated or externally saved. |

@@ -25,7 +25,8 @@ working_spec_ref: <external temporary spec, active context, or none>
 checkout_baseline:
   path: <absolute checkout path>
   head: <revision>
-  branch: <branch>
+  branch: <single task branch used for the entire run>
+  branch_setup: auto-created | reused | user-provided
   classification: writable
   remote_default_evidence: <reference>
   staged: []
@@ -100,15 +101,17 @@ execution constraints explicit. They are required for writable tasks. A task
 contract may use `read-only` access for research or review. Use `isolated`
 worktrees for concurrent writing tasks.
 
-`authorization` is required for writable tasks and records each privileged
-action independently. `not-authorized` is the default. An authorized action
-must include its own provenance identifying the user instruction and its own
-scope. Shared provenance is insufficient when actions were authorized by
-different instructions. Branch or worktree setup authorization does not imply
-delivery authorization. An explicit `PR` delivery token may be recorded as the
-provenance for creating one dedicated branch, committing the reviewed result,
-pushing it, and creating its pull request after all gates pass; it never
-authorizes `merge`.
+`authorization` is required for writable tasks and records each delivery or
+user-directed setup action independently. `not-authorized` is the default. The
+automatic one-branch setup from a clean protected default is recorded in
+`checkout_baseline.branch_setup` and does not need a separate user
+authorization; it never conveys delivery authority. An action authorized outside
+that default must include its own provenance identifying the user instruction
+and its own scope. Shared provenance is insufficient when actions were
+authorized by different instructions. `go` may authorize the current guided
+slice's local commit, while an explicit `PR` delivery token may authorize
+per-slice commits, the final push, and pull-request creation after all gates
+pass. Neither authorizes `merge`.
 
 `delegation.allowed` defaults to `false`. When it is `true`, the contract must
 also define `max_depth`, `max_workers`, allowed roles, writable isolation, and

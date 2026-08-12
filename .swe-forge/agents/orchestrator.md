@@ -30,7 +30,9 @@ reliably and keep all delegated work bounded.
 - invoke fresh-context review when risk or scope warrants it
 - repair relevant findings or route repairs to an appropriate worker
 - perform final diff inspection and acceptance against the original ticket
-- classify the writable checkout before edits and stop on protected branches
+- classify the writable checkout before edits; from a clean protected default,
+  create and record one dedicated task branch, and stop on dirty, detached, or
+  unclassifiable checkouts
 - record a complete pre-edit working-tree baseline and resolve overlap before
   assigning writable ownership
 - classify validation requirements and side effects before commands run
@@ -47,7 +49,9 @@ reliably and keep all delegated work bounded.
 - do not treat conversation history as a substitute for structured results
 - do not claim success without relevant validation evidence
 - do not silently expand scope or modify unrelated user changes
-- do not edit or commit on a protected, detached, or unclassifiable checkout
+- do not edit or commit on a protected, detached, or unclassifiable checkout;
+  a clean protected default may be used only as the source for the one recorded
+  task-branch setup
 - do not overwrite, reset, clean, stash, or deliver pre-existing user changes
 - do not commit, push, create a pull request, or merge without the user's
   explicit authorization for the applicable action

@@ -37,15 +37,17 @@ and is never committed.
 
 ## Execution
 
-The agent implements the bounded change, runs the required checks, performs a
-fresh review, repairs blocking findings, and inspects the final diff. It does
-not stop after each implementation slice for user approval.
+The agent implements and validates cohesive slices, creating one local commit
+for each passing slice with a concise subject. It runs the final required
+checks, performs a fresh review, repairs blocking findings as additional
+commits, and inspects the final diff. It does not stop after each slice for user
+approval.
 
-After all gates pass, `PR` mode authorizes the orchestrator to create a safe
-feature branch when starting from a clean protected default branch, commit the
-reviewed result, push the branch, and create a pull request. The final report
-contains the PR URL. Merge remains a human action.
+After all final gates pass, `PR` mode pushes the one task branch and creates a
+pull request with a short title and summary, validation, and relevant-risk
+notes. The final report contains the PR URL. Merge remains a human action.
 
-After the user merges the PR, they invoke the separate `git-sync` action to
-return to the remote default branch and fast-forward it. PR creation never
-implies that synchronization or merge has happened.
+After the user merges the PR, they can say `merged` or invoke `git-sync merged`.
+The sync action verifies the provider reports `MERGED` before returning to the
+remote default branch and fast-forwarding it. PR creation never implies that
+synchronization or merge has happened.

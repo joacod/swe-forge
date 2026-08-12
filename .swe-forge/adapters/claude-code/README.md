@@ -34,6 +34,10 @@ Use SWE Forge.
 <ticket>
 ```
 
+A clean protected default branch gets one dedicated task branch automatically.
+In guided mode, `go` commits the reviewed slice and continues; PR mode keeps
+validated slices as separate commits before final review and PR creation.
+
 ## Native Subagents
 
 Claude Code supports project subagents under `.claude/agents/`. Add a thin
