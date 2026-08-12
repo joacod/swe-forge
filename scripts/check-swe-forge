@@ -65,6 +65,9 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/.swe-forge/tools/swe-forge-gate"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-gate" ] || fail "evidence gate is not executable"
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
+require_text 'fetch-depth: 0' .github/workflows/ci.yml
+require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
+require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
 validate_registry
 
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md

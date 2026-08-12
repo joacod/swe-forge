@@ -13,6 +13,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # The formatting check compares commits, not the clean checkout.
+          fetch-depth: 0
 
       - name: Check shell syntax
         run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/swe-forge-gate scripts/test-swe-forge-gate .swe-forge/tools/swe-forge-gate
@@ -27,4 +30,25 @@ jobs:
         run: ./scripts/test-swe-forge-gate
 
       - name: Check diff formatting
-        run: git diff --check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          zero_sha=0000000000000000000000000000000000000000
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # GITHUB_SHA is the tested pull-request merge revision.
+            git diff --check "$BASE_SHA...$CURRENT_SHA"
+          elif [ "$BEFORE_SHA" = "$zero_sha" ]; then
+            # A newly-created branch has no push range; check its pushed commit.
+            if git rev-parse "$CURRENT_SHA^" >/dev/null 2>&1; then
+              git diff --check "$CURRENT_SHA^..$CURRENT_SHA"
+            else
+              empty_tree=$(git mktree </dev/null)
+              git diff --check "$empty_tree" "$CURRENT_SHA"
+            fi
+          else
+            git diff --check "$BEFORE_SHA..$CURRENT_SHA"
+          fi
