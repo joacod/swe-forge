@@ -208,7 +208,7 @@ After final acceptance and PR creation:
 - verify every accepted source commit has an integration mapping
 - verify every worker worktree is clean
 - remove only workspaces, panes, and worktrees created for this run
-- never use forced removal automatically
+- never use forced removal automatically; require a clean status before removal
 - delete integrated worker branches only with safe deletion
 - remember that removing a Herdr worktree does not delete its branch
 - do not close user-owned sessions or stop the Herdr server
