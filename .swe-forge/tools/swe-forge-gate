@@ -11,6 +11,7 @@ STATE=
 CHECKOUT=
 SCOPE_TMP=
 CHANGED_TMP=
+COMMITTED_TMP=
 TAB=$(printf '\t')
 NEWLINE='
 '
@@ -19,6 +20,7 @@ UMASK_SET=0
 cleanup() {
   [ -z "$SCOPE_TMP" ] || rm -f "$SCOPE_TMP"
   [ -z "$CHANGED_TMP" ] || rm -f "$CHANGED_TMP"
+  [ -z "$COMMITTED_TMP" ] || rm -f "$COMMITTED_TMP"
 }
 
 trap 'status=$?; cleanup; exit "$status"' 0 HUP INT TERM
@@ -398,11 +400,16 @@ checkpoint_run() {
   ensure_meta_state
   assert_identity
   CHANGED_TMP=$STATE/changed.$$
+  COMMITTED_TMP=$STATE/committed.$$
   changed_paths >"$CHANGED_TMP"
   baseline_head=$(meta_value baseline_head "$STATE/meta.env")
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  git -C "$CHECKOUT" diff --name-only "$baseline_head..$current_head" | sort -u >"$COMMITTED_TMP"
+  if [ -s "$CHANGED_TMP" ] && [ -s "$COMMITTED_TMP" ]; then
+    fail "checkpoint mixes worktree changes with committed changes; start a new preflight"
+  fi
   if [ ! -s "$CHANGED_TMP" ] && [ "$baseline_head" != "$current_head" ]; then
-    git -C "$CHECKOUT" diff --name-only "$baseline_head..$current_head" | sort -u >"$CHANGED_TMP"
+    cp "$COMMITTED_TMP" "$CHANGED_TMP"
   fi
   changed_count=0
   out_of_scope=
