@@ -88,9 +88,8 @@ The orchestrator leaves the user's original checkout untouched, creates one
 dedicated integration worktree, and creates or reuses one safe non-protected
 integration/delivery branch. The integration worktree belongs exclusively to
 the orchestrator. Bounded worker branches and worktrees may be created locally
-when tasks become ready, but they are ephemeral, never pushed, and never used
-for worker PRs. Push only the integration branch and create exactly one final
-PR. Never merge automatically. Include the run ID and task ID in namespaced
+when tasks become ready, but worker branches are local-only, ephemeral, never pushed, and never used for
+worker PRs. Push only the integration branch and create exactly one final PR. Never merge automatically. Include the run ID and task ID in namespaced
 branch and worktree names.
 
 If the checkout is already on a suitable non-protected branch or worktree,
