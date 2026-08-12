@@ -29,11 +29,7 @@ The delivery helpers are separate explicit commands:
 ```
 
 They load `.swe-forge/policies/delivery.md` rather than copying its procedure.
-A clean default branch gets one dedicated task branch for the whole run;
-PR mode keeps each validated slice as a separate commit. `/git-push` only
-pushes; `/git-pr` creates or reports a PR without merging, and
-`/git-sync merged` verifies the PR was merged before returning to the remote
-default branch.
+See [shared adapter behavior](../README.md) for the workflow and delivery rules.
 
 Do not install a command that auto-runs the workflow for ordinary prompts.
 

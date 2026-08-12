@@ -116,8 +116,11 @@ it maps one harness and scope to an artifact kind, source payload, destination,
 and optional global canonical support directory.
 
 The installer consumes the registry generically for preflight, link/copy,
-verification, and collision handling. Adding a harness should normally add a
-payload folder and registry rows rather than new installer branches.
+verification, and collision handling. Registry rows are validated as managed
+relative paths before any target is written, so a malformed adapter cannot
+redirect an installation outside its selected destination. Adding a harness
+should normally add a payload folder and registry rows rather than new
+installer branches.
 
 Adapter artifacts may be:
 

@@ -20,6 +20,7 @@ PENDING_SIGNAL=0
 CREATED_FILES=$RUN_TMP/created-files
 CREATED_DIRS=$RUN_TMP/created-dirs
 ADAPTER_REGISTRY=$SOURCE_ROOT/.swe-forge/adapters/registry.tsv
+REGISTRY_VALIDATOR=$SOURCE_ROOT/scripts/lib/registry.sh
 ADAPTER_ROWS=$RUN_TMP/adapter-rows
 : >"$CREATED_FILES"
 : >"$CREATED_DIRS"
@@ -79,6 +80,9 @@ die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
 }
+
+[ -f "$REGISTRY_VALIDATOR" ] || die "missing adapter registry validator: $REGISTRY_VALIDATOR"
+. "$REGISTRY_VALIDATOR"
 
 info() {
   printf '%s\n' "$*"
@@ -208,6 +212,40 @@ same_path() {
   [ "$first" = "$second" ]
 }
 
+validate_registry_row() {
+  registry_line_number=$1
+  registry_harness=$2
+  registry_scope=$3
+  registry_kind=$4
+  registry_source_rel=$5
+  registry_destination_rel=$6
+  registry_support_rel=$7
+
+  if ! swe_forge_registry_row_is_valid \
+    "$registry_harness" \
+    "$registry_scope" \
+    "$registry_kind" \
+    "$registry_source_rel" \
+    "$registry_destination_rel" \
+    "$registry_support_rel"; then
+    die "invalid adapter registry row at line $registry_line_number"
+  fi
+
+  case "$registry_kind" in
+    file)
+      registry_source_path=$SOURCE_ROOT/.swe-forge/adapters/$registry_source_rel
+      [ -f "$registry_source_path" ] || \
+        die "adapter registry file source is missing at line $registry_line_number: $registry_source_rel"
+      ;;
+    tree)
+      registry_source_path=$SOURCE_ROOT/.swe-forge/adapters/$registry_source_rel
+      [ -d "$registry_source_path" ] || \
+        die "adapter registry tree source is missing at line $registry_line_number: $registry_source_rel"
+      ;;
+    bridge) ;;
+  esac
+}
+
 prepare_manifests() {
   canonical_files=$RUN_TMP/canonical-files
   canonical_dirs=$RUN_TMP/canonical-dirs
@@ -232,10 +270,20 @@ prepare_manifests() {
   done
 
   : >"$ADAPTER_ROWS"
+  registry_line_number=0
   while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+    registry_line_number=$((registry_line_number + 1))
     case "$adapter_harness" in
       ''|\#*) continue ;;
     esac
+    validate_registry_row \
+      "$registry_line_number" \
+      "$adapter_harness" \
+      "$adapter_scope" \
+      "$adapter_kind" \
+      "$adapter_source_rel" \
+      "$adapter_destination_rel" \
+      "$adapter_support_rel"
     [ "$adapter_harness" = "$HARNESS" ] || continue
     printf '%s|%s|%s|%s|%s|%s\n' \
       "$adapter_harness" "$adapter_scope" "$adapter_kind" \
