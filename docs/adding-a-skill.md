@@ -72,6 +72,10 @@ check; it cannot waive a required repository check or authorize external work.
 These are useful external candidates, not SWE Forge dependencies or bundled
 canonical files:
 
+- [`tdd`](https://github.com/mattpocock/skills/blob/main/skills/engineering/tdd/SKILL.md)
+  fits explicit test-first, red-green-refactor, or integration-test requests.
+  Its `tests.md` and `mocking.md` references are part of the bundle and must be
+  read when needed; it should not make TDD mandatory for ordinary tickets.
 - [`refactor-design-patterns`](https://github.com/joacod/skills/blob/main/skills/refactor-design-patterns/SKILL.md)
   fits pattern-selection and incremental refactor design questions. It should
   be loaded only when the ticket has a real design pressure; it should not add

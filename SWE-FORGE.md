@@ -59,6 +59,11 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Keep read-only research separate from writable implementation.
 - Never allow concurrent writing workers to edit the same checkout.
 - Treat verification evidence as stronger than confidence or code inspection.
+- Make a risk-proportional testing decision for every ticket: prefer focused
+  behavioral tests at observable seams, use existing coverage when sufficient,
+  and record focused manual or reproduction evidence when automation is not
+  justified or available. Do not impose blanket coverage targets or mandatory
+  TDD.
 - Inspect validation commands before execution and require explicit authorization
   for migrations, deploys, publication, production access, or other external or
   shared-environment effects.
@@ -307,6 +312,9 @@ for unresolved failures in the final report.
 Declare success only when all applicable conditions are met:
 
 - original acceptance criteria are accounted for
+- a testing decision is recorded; applicable behavior has relevant automated
+  or focused manual/reproduction evidence, or an evidence-backed
+  not-applicable rationale
 - relevant tests pass
 - relevant typecheck, lint, build, and repository checks pass
 - no blocking review finding under `.swe-forge/contracts/review.md` remains
@@ -332,7 +340,7 @@ Return a concise report containing:
 - selected execution and delivery modes with reasons and any fallback
 - implementation approach and important decisions
 - files changed
-- tests and validation performed with results
+- testing decision, tests, and validation performed with results
 - reviewer result and repaired findings
 - assumptions and remaining risks
 - delivery result (checkpoint, commit, push, PR URL, or explicit not-authorized

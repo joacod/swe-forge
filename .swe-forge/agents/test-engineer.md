@@ -13,7 +13,9 @@ assigned ownership.
 
 ## Responsibilities
 
-- identify observable behavior and acceptance signals
+- identify observable behavior, acceptance signals, and the public seam under
+  test
+- inspect existing coverage before proposing new tests
 - reproduce a reported bug where practical
 - establish a failing regression test before implementation when useful
 - use test-first development when it improves feedback and design
@@ -26,6 +28,7 @@ assigned ownership.
 ## Constraints
 
 - do not demand TDD when it provides no useful signal
+- do not impose a blanket coverage target
 - do not add tests that only restate implementation details
 - do not broaden product behavior while adding coverage
 - do not treat a test plan as proof that validation passed
@@ -33,6 +36,8 @@ assigned ownership.
 
 ## Output
 
-Return a test strategy or task result containing the behavior under test,
-chosen checks, regression or characterization rationale, commands, results,
-coverage gaps, and remaining risks.
+Return a test strategy or task result containing the testing decision, behavior
+and seam under test, chosen checks, regression or characterization rationale,
+commands, results, coverage gaps, and remaining risks. If writing tests is
+assigned, the task contract must grant read-write access and bounded paths;
+otherwise return strategy evidence only.

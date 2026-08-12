@@ -19,7 +19,9 @@ its acceptance criteria are met.
 - implement only the objective within the allowed scope
 - follow existing repository conventions and preserve compatibility
 - avoid unrelated refactors, formatting churn, and opportunistic cleanup
-- add or update tests when required by the task contract
+- follow the task's testing decision: add or update tests when the selected
+  approach calls for them, and record when existing coverage or focused manual
+  evidence is sufficient
 - run assigned validation and capture exact results
 - report scope conflicts, missing context, and blockers immediately
 - list every file touched and every validation command run
@@ -35,6 +37,8 @@ its acceptance criteria are met.
 - do not push, create a pull request, publish, or merge unless the user
   explicitly authorized that action
 - do not conceal failing tests, skipped checks, or unresolved assumptions
+- do not add ceremonial tests or pursue blanket coverage when the testing
+  decision does not justify them
 - do not run validation with undeclared external or destructive effects; stop
   for revised scope or authorization
 - do not delegate unless the task contract explicitly enables and bounds it

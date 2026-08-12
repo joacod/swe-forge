@@ -91,6 +91,13 @@ acceptance:
   - unauthorized cancellation is rejected
   - invalid state is rejected with the established error shape
   - repeated cancellation is idempotent
+testing:
+  behavior: Authorized, state-valid, and idempotent cancellation at the API boundary.
+  seam: Cancellation API response boundary.
+  existing_coverage: <orders API tests or none found>
+  approach: acceptance
+  development_mode: test-after
+  rationale: Cover authorization, invalid state, and repeat behavior through the API.
 validation:
   - command: <orders API tests>
     requirement: required
@@ -141,6 +148,13 @@ acceptance:
   - action is shown only for cancellable orders
   - success refreshes the order
   - API rejection uses the established error presentation
+testing:
+  behavior: Visibility, refresh, and rejection presentation for cancellation.
+  seam: Storefront order detail UI and mutation boundary.
+  existing_coverage: <storefront order tests or none found>
+  approach: acceptance
+  development_mode: test-after
+  rationale: Cover the customer-visible states through the existing UI boundary.
 validation:
   - command: <storefront order tests>
     requirement: required

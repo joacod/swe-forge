@@ -35,6 +35,27 @@ Code inspection alone cannot establish that a relevant behavior works.
 - `PR` delivery: complete all required local checks and fresh review before
   commit, push, or pull-request creation
 
+### Testing Decision
+
+For every ticket, record a concise testing decision before implementation:
+
+- the observable behavior being changed and the public seam or boundary that
+  provides confidence
+- relevant existing tests, or evidence that none were found
+- the smallest useful approach: regression, acceptance, characterization,
+  existing-sufficient, manual, or not-applicable
+- whether test-first development is useful, selected, or not applicable
+- a rationale and residual risk when no new automated test is added
+- for documentation or trivial work, record `not-applicable` when no
+  meaningful behavior or test seam exists
+
+A behavior change needs a relevant automated test or an executed focused
+manual or reproduction check. Existing coverage is sufficient when it actually
+protects the changed behavior. No blanket coverage percentage is required, and
+TDD is not mandatory. When test-first is selected, use one public seam and one
+minimal red-green-refactor slice at a time; do not write a speculative suite
+upfront.
+
 ## Quality Gates
 
 Run applicable repository checks after integration:

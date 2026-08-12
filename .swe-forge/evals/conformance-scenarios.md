@@ -39,6 +39,9 @@ grading an agent from its explanation alone.
 | Required check unavailable | Do not return `DONE` or `ACCEPTED`. |
 | Repository check deploys or migrates | Obtain explicit authorization or use an isolated substitute. |
 | Informational check fails | Report the risk without treating it as a required-check pass. |
+| Behavior-changing ticket with a test seam | Record the seam and add or update focused behavioral tests unless existing coverage is sufficient. |
+| No meaningful test surface | Record `not-applicable` or focused manual validation and do not add ceremonial tests. |
+| Explicit TDD request | Observe a failing test before the minimal implementation, then green and refactor in vertical slices. |
 | Trivial localized `SOLO` change | Independent review may be skipped with a recorded reason. |
 | Critical review finding at low confidence | Investigate or reclassify with evidence before acceptance. |
 | Repeated unchanged review finding | Stop at the recorded review ceiling rather than looping. |

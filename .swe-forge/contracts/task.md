@@ -57,6 +57,14 @@ acceptance:
   - Invalid Foo returns HTTP 400.
   - Existing valid Foo requests remain compatible.
 
+testing:
+  behavior: Invalid Foo is rejected while valid requests remain compatible.
+  seam: HTTP API response boundary
+  existing_coverage: <relevant API tests or none found>
+  approach: regression | acceptance | characterization | existing-sufficient | manual | not-applicable
+  development_mode: test-first | test-after | not-applicable
+  rationale: <why this is the smallest useful evidence>
+
 validation:
   - command: pnpm test foo
     requirement: required
@@ -86,6 +94,8 @@ expected_output:
 - `allowed_scope`: paths, symbols, or operations the worker may change
 - `forbidden_scope`: paths or changes explicitly outside ownership
 - `acceptance`: conditions that determine task completion
+- `testing`: the observable behavior, seam, testing approach, development mode,
+  and rationale for the task
 - `validation`: commands or checks the worker must run
 - `risk`: `low`, `medium`, `high`, or `critical`
 - `expected_output`: artifacts and evidence the worker must return
@@ -130,6 +140,11 @@ cannot reset or increase them.
 - allowed scopes must not overlap dangerously with another writing task
 - a worker must ask for a revised contract before expanding scope
 - validation must be realistic for the worker's checkout and environment
+- behavior-affecting tasks must record a testing decision; existing coverage
+  may be sufficient, while manual or not-applicable approaches require a
+  rationale and any residual risk
+- the testing decision must not impose a blanket coverage target or mandatory
+  TDD
 - every validation entry states whether it is `required`, `conditional`, or
   `informational` and whether it has local or external side effects
 - every `conditional` validation entry states its observable `condition`
