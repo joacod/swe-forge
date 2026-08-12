@@ -42,8 +42,8 @@ The source of truth is deliberately separated:
 - `.swe-forge/contracts/` defines structured task, result, review, receipt,
   and state formats.
 - `.swe-forge/policies/` defines routing, provider selection, delegation,
-  model, specification, delivery, verification, recovery, and optional
-  specialist-skill rules.
+  model, specification, delivery, verification, evidence, recovery, and
+  optional specialist-skill rules.
 - `.swe-forge/providers/` defines optional execution-provider runbooks such as
   Herdr without defining canonical workflow behavior.
 - `.swe-forge/adapters/` exposes those definitions through harness-native
