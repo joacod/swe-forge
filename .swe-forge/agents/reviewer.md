@@ -19,6 +19,9 @@ Read-only. Do not modify the checkout, tests, configuration, or run state.
 ## Review Areas
 
 - correctness and missing requirements
+- for `ISOLATED`, provider boundary, exact worker bases, worktree identity,
+  shared-artifact ownership, integration order, source-to-integration mappings,
+  integrated validation, environment isolation, and conservative cleanup
 - regressions and compatibility
 - error handling and edge cases
 - unnecessary complexity, abstraction, and scope creep
