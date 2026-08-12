@@ -158,6 +158,13 @@ forbidden_scope:
   - global query-string helpers
 acceptance:
   - all ticket criteria pass
+testing:
+  behavior: API filtering/cursor compatibility and admin URL-backed pagination behavior.
+  seam: HTTP API response boundary and admin table URL/query boundary.
+  existing_coverage: Focused API and UI tests cover adjacent behavior.
+  approach: acceptance
+  development_mode: test-after
+  rationale: Add focused acceptance cases at both public boundaries without requiring a full browser run.
 validation:
   - command: <orders API focused tests>
     requirement: required
@@ -198,6 +205,12 @@ FILES_TOUCHED:
 - apps/admin/src/orders/OrdersTable.tsx
 - apps/admin/src/orders/use-orders.ts
 - apps/admin/src/orders/OrdersTable.test.tsx
+TESTING_DECISION:
+- behavior: API filtering/cursor compatibility and admin URL-backed pagination behavior.
+- seam: HTTP API response boundary and admin table URL/query boundary.
+- approach: acceptance
+- development_mode: test-after
+- rationale: Focused API and UI cases cover the observable behavior.
 TESTS_RUN:
 - command: <orders API focused tests>
   requirement: required

@@ -17,6 +17,13 @@ FILES_TOUCHED:
 - packages/api/src/foo/validate.ts
 - packages/api/tests/foo/validate.test.ts
 
+TESTING_DECISION:
+- behavior: Invalid Foo is rejected while valid requests remain compatible.
+- seam: HTTP API response boundary
+- approach: acceptance
+- development_mode: test-after
+- rationale: Focused API tests cover the observable contract.
+
 TESTS_RUN:
 - command: pnpm test foo
   requirement: required
@@ -45,8 +52,9 @@ FOLLOWUPS:
 
 ## Status Rules
 
-- `DONE`: the task acceptance criteria are met, every required check passed,
-  and every applicable conditional check passed or was explicitly resolved
+- `DONE`: the task acceptance criteria and testing decision are met, every
+  required check passed, and every applicable conditional check passed or was
+  explicitly resolved
 - `BLOCKED`: work cannot safely continue without context, access, or a decision
 - `FAILED`: an attempted task did not meet its acceptance criteria or validation
   exposed an unresolved failure
@@ -67,6 +75,8 @@ For a conditional check, the result must repeat the contract condition, record
 
 - list every touched file, including generated or deleted files
 - distinguish tests that passed from checks that were not applicable
+- report the testing decision and explain when existing coverage, manual
+  evidence, or a not-applicable rationale replaces a new automated test
 - report assumptions separately from observed evidence
 - report scope expansion as a blocker unless the contract was updated
 - keep the result concise enough for the orchestrator to consume reliably

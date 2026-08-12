@@ -63,6 +63,14 @@ specialist_skills:
     status: selected | skipped | unavailable
     reason: <ticket fit and expected benefit, or why it was not used>
 
+testing:
+  behavior: <observable behavior being changed, or none>
+  seam: <public interface or observable boundary, or none>
+  existing_coverage: <relevant tests or none found>
+  approach: regression | acceptance | characterization | existing-sufficient | manual | not-applicable
+  development_mode: test-first | test-after | not-applicable
+  rationale: <why this is the smallest useful evidence>
+
 assumptions:
   - <low-risk assumption, or none>
 
@@ -92,8 +100,8 @@ open_questions: []
 ## Readiness Rules
 
 A `ready` working spec has a concrete intent, bounded scope and non-goals,
-observable requirements, acceptance checks, a validation plan, and explicit
-assumptions. When a specialist skill is considered, its source, status, and
-selection reason are also recorded. Open questions may remain only when they do
-not block safe implementation and are recorded as risks. Ask the user about a
-blocking decision rather than guessing.
+observable requirements, acceptance checks, a testing decision, a validation
+plan, and explicit assumptions. When a specialist skill is considered, its
+source, status, and selection reason are also recorded. Open questions may
+remain only when they do not block safe implementation and are recorded as
+risks. Ask the user about a blocking decision rather than guessing.

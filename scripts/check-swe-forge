@@ -67,13 +67,20 @@ require_text 'pre-edit baseline' SWE-FORGE.md
 require_text 'delivery_mode: GUIDED | PR' SWE-FORGE.md
 require_text 'transient working spec' SWE-FORGE.md
 require_text 'specialist skills optional and on demand' SWE-FORGE.md
+require_text 'risk-proportional testing decision' SWE-FORGE.md
 require_text 'side effects' .swe-forge/policies/verification.md
+require_text 'No blanket coverage percentage' .swe-forge/policies/verification.md
 require_text 'specialist_skills:' .swe-forge/contracts/working-spec.md
+require_text 'testing:' .swe-forge/contracts/working-spec.md
+require_text 'testing:' .swe-forge/contracts/task.md
+require_text 'TESTING_DECISION:' .swe-forge/contracts/result.md
 require_text 'specialist_skills:' .swe-forge/contracts/run-state.md
 require_text 'Do not add external skill URLs to the adapter registry' .swe-forge/policies/specialist-skills.md
 require_text 'refactor-design-patterns' docs/adding-a-skill.md
 require_text 'ui-design-token-refactor' docs/adding-a-skill.md
 require_text 'Ticket names an optional specialist skill' .swe-forge/evals/conformance-scenarios.md
+require_text 'Behavior-changing ticket with a test seam' .swe-forge/evals/conformance-scenarios.md
+require_text 'explicit test-first' docs/adding-a-skill.md
 require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
 require_text 'git-sync' .swe-forge/policies/delivery.md
 require_text 'one dedicated task branch' .swe-forge/policies/delivery.md

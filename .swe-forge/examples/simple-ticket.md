@@ -49,6 +49,11 @@ Add or update focused cases for missing, zero, and non-zero discounts. Run the
 receipt test file and inspect the final diff. A full repository build is not
 justified unless repository instructions require it for formatter changes.
 
+Testing decision: the public formatter boundary has an existing test seam;
+focused acceptance cases are the smallest useful evidence. Use `test-first`
+when the missing-value regression provides useful feedback, otherwise use
+`test-after`; no blanket coverage expansion is needed.
+
 ## Guided Checkpoint
 
 After the formatter slice passes its focused checks, stop and report the diff
@@ -69,6 +74,12 @@ SUMMARY: Added an explicit missing-value branch without changing numeric formatt
 FILES_TOUCHED:
 - src/receipts/format-total.ts
 - src/receipts/format-total.test.ts
+TESTING_DECISION:
+- behavior: Missing, zero, and non-zero discount formatting.
+- seam: Public receipt formatter boundary.
+- approach: acceptance
+- development_mode: test-first
+- rationale: Focused cases protect the observable formatting contract.
 TESTS_RUN:
 - command: <receipt test command>
   requirement: required

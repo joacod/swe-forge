@@ -53,8 +53,6 @@ For harness commands, parse the raw arguments before ingesting the ticket:
   explicit topology
 - if no delivery token is present, record `requested_delivery: DEFAULT` and
   resolve `delivery_mode: GUIDED`
-- if no delivery token is present, record `requested_delivery: DEFAULT` and
-  resolve `delivery_mode: GUIDED`
 - if no topology token was consumed, record `requested_mode: AUTO`
 - preserve the non-empty remainder as the original ticket
 - preserve any user-supplied specialist-skill names, paths, or URLs as ticket
@@ -155,27 +153,47 @@ remove isolation required for safe execution or the user prohibited fallback.
 
 ### 7. Test Strategy
 
+Before implementation, identify the observable behavior and public seam that
+will provide confidence. Record a concise testing decision for every ticket,
+even when the result is that no automated test is applicable:
+
+- `behavior`: the changed user- or caller-observable behavior
+- `seam`: the public interface or observable boundary under test, or `none`
+- `existing_coverage`: relevant tests already present, or `none found`
+- `approach`: `regression`, `acceptance`, `characterization`,
+  `existing-sufficient`, `manual`, or `not-applicable`
+- `development_mode`: `test-first`, `test-after`, or `not-applicable`
+- `rationale`: why this is the smallest useful evidence
+
 Select validation proportional to risk and behavior:
 
 - reproduce a bug and add a regression test first when practical
-- use test-first development when it provides useful signal
+- use test-first development when it provides useful feedback or design signal
 - establish a green baseline before behavior-preserving refactors
 - use characterization tests when existing behavior needs protection
-- use targeted tests and repository quality gates for straightforward work
+- use targeted tests at public seams for new or changed behavior
+- use focused manual or reproduction evidence when automation is unavailable
+  or not justified
 - avoid ceremonial tests for changes with no meaningful test surface
+
+Existing tests can be sufficient; no blanket coverage target is required. A
+behavior change without an automated test needs an executed manual or
+reproduction check and an explicit residual-risk note. A test plan alone is not
+validation. When test-first is selected, work in vertical red-green-refactor
+slices rather than writing a speculative test suite upfront.
 
 Record what will be run before implementation when the task is delegated.
 Classify each check as `required`, `conditional`, or `informational`; every
-conditional check must include its observable condition. Inspect
-commands before execution for filesystem mutation, credentials, networking,
-migrations, deployment, publication, production access, or shared-environment
-effects. Classify delivery commands separately: local commit, branch push, PR
-creation, and post-merge sync are external or checkout-changing effects. A
-normal guided invocation authorizes local validation and one safe task-branch
-setup from a clean protected default branch, but not delivery. `go` authorizes
-the current guided slice's local commit; `PR` mode authorizes per-slice commits,
-the final push, and PR creation after their applicable gates. Merge always needs
-a separate instruction.
+conditional check must include its observable condition. Inspect commands
+before execution for filesystem mutation, credentials, networking, migrations,
+deployment, publication, production access, or shared-environment effects.
+Classify delivery commands separately: local commit, branch push, PR creation,
+and post-merge sync are external or checkout-changing effects. A normal guided
+invocation authorizes local validation and one safe task-branch setup from a
+clean protected default branch, but not delivery. `go` authorizes the current
+guided slice's local commit; `PR` mode authorizes per-slice commits, the final
+push, and PR creation after their applicable gates. Merge always needs a
+separate instruction.
 
 ### 8. Implement
 

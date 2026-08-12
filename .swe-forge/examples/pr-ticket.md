@@ -32,7 +32,8 @@ $TMPDIR/swe-forge/<run-id>/working-spec.md
 ```
 
 The spec contains observable requirements, scenarios, assumptions, affected
-paths, validation, and delivery authorization. It is deleted during cleanup
+paths, a testing decision, validation, and delivery authorization. It is
+deleted during cleanup
 and is never committed.
 
 ## Execution

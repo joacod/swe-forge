@@ -68,6 +68,10 @@ safety, or delivery. A temporary working spec may organize the intent,
 scenarios, assumptions, and validation plan, but ticket-specific specs are not
 normally added to the repository.
 
+Every ticket also records a risk-proportional testing decision: focused
+behavioral tests when they add signal, existing coverage or focused manual
+evidence when sufficient, and no blanket coverage target or mandatory TDD.
+
 `GUIDED` mode keeps a human checkpoint between reviewable slices. `PR` mode is
 an explicit low-touch path that can continue through validation, review, push,
 and pull-request creation. Neither mode merges automatically. Commits, pushes,
