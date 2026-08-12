@@ -93,6 +93,8 @@ state:
   cleanliness, environment resources, assumptions, risks, and follow-ups
 - review results expose severity, confidence, location, evidence, integration
   mappings, and action
+- receipt contracts define the compact public evidence summary and its
+  non-claiming rules
 - run state records temporary topology/provider and delivery mode, integration
   branch/worktree, ephemeral worker resources, tasks and dependencies, waves,
   source-to-integration mappings, authorization, validation, review, retries,
@@ -101,14 +103,16 @@ state:
 Run state is external or ignored by default. It is not application source and
 must not contain secrets or full transcripts. The integration/delivery branch
 is distinct from ephemeral worker branches; worker transfer commits are
- distinct from final central integration commits.
+distinct from final central integration commits. An optional executable
+evidence ledger records preflight, validation, checkpoints, and receipts
+without becoming a second source of truth.
 
 ## Policy Layer
 
 Policies define how to route, select a provider, delegate, select capability
-classes, specify, deliver, verify, and recover. They are deliberately separate
-from role descriptions so a routing or human-control change does not silently
-redefine worker responsibilities.
+classes, specify, deliver, verify, record evidence, and recover. They are
+deliberately separate from role descriptions so a routing or human-control
+change does not silently redefine worker responsibilities.
 
 `execution-routing.md` defines the automatic `ISOLATED` gate and the distinction
 between read-only/sequential `SUBAGENTS` and concurrent writable isolated
@@ -201,7 +205,8 @@ commits, the final push, and one PR. Worker branches never receive delivery
 actions.
 
 The canonical delivery policy owns branch/worktree setup, action
-authorization, PR history and descriptions, central integration, cleanup, and
+authorization, PR history and descriptions, compact receipt placement, central
+integration, cleanup, and
 the post-merge `git-sync` boundary. Harness commands and prompts are thin
 loaders, so pushing cannot accidentally create a PR or syncing cannot assume
 that a PR was merged.

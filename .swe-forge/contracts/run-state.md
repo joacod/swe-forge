@@ -136,6 +136,8 @@ environment_resources:
     commands: []
 
 validation_ref: <structured validation evidence or none>
+evidence_ledger_ref: <temporary executable evidence ledger or none>
+receipt_ref: <generated receipt path or URL, or none>
 cleanup:
   status: pending | complete | incomplete | not-needed
   remaining_resources: []
@@ -187,6 +189,8 @@ integration strategy supported by this version.
 - never store credentials, secrets, full transcripts, or private ticket data
 - treat the final repository diff, tests, actual Git/provider/process state, and
   review as authoritative over stale run state
+- treat the executable evidence ledger and receipt as supporting evidence;
+  neither replaces canonical run state or remote provider state
 - worker lifecycle state is scheduling evidence, not task-acceptance evidence
 - clean external state at completion and record cleanup failures
 
