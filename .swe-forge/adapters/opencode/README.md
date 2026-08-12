@@ -19,13 +19,27 @@ Copy or link `commands/swe-forge.md` to:
 The command uses OpenCode's file references and `$ARGUMENTS` substitution to
 load the canonical instructions only when the user types `/swe-forge`.
 
+The delivery helpers are separate explicit commands:
+
+```text
+/git-commit [paths|message]
+/git-push [force|-f]
+/git-pr
+/git-sync
+```
+
+They load `.swe-forge/policies/delivery.md` rather than copying its procedure.
+`/git-push` only pushes; it never asks whether to create a PR. `/git-pr` creates
+or reports a PR without merging, and `/git-sync` returns to the remote default
+branch after the user has manually merged.
+
 Do not install a command that auto-runs the workflow for ordinary prompts.
 
-The global installer links the global loader to
-`~/.config/opencode/commands/swe-forge.md` and exposes the canonical source
-through `~/.config/opencode/swe-forge/`. The loader uses OpenCode's supported
+The global installer links the global loader and the four atomic delivery
+commands to `~/.config/opencode/commands/` and exposes the canonical source
+through `~/.config/opencode/swe-forge/`. The loaders use OpenCode's supported
 home-relative file references, so projects do not need local canonical copies
-for `/swe-forge`.
+for `/swe-forge` or the delivery actions.
 
 ## Native Subagents
 

@@ -15,6 +15,8 @@ status: planning | running | blocked | reviewing | repairing | accepted | failed
 prior_status: <state before blocked or none>
 requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
+requested_delivery: DEFAULT | GUIDED | PR
+delivery_mode: GUIDED | PR
 reason: <why this topology was selected>
 fallback_used: no | <requested mode -> selected mode and reason>
 
@@ -22,6 +24,7 @@ started_at: <ISO-8601 timestamp>
 updated_at: <ISO-8601 timestamp>
 current_wave: research
 ticket_ref: <immutable ticket or external artifact reference>
+working_spec_ref: <external temporary working spec, active context, or none>
 acceptance_ref: <acceptance criteria reference>
 checkout:
   path: <absolute checkout path>
@@ -47,6 +50,19 @@ review:
   retry_ceiling: 2
   ceiling_provenance: default
 
+checkpoint:
+  status: not-applicable | awaiting-user | resumed | complete
+  number: 0
+  next_slice: <bounded review slice or none>
+  requested_action: <continue, revise, commit, or none>
+
+delivery:
+  commit: not-authorized | pending | complete | blocked
+  push: not-authorized | pending | complete | blocked
+  create_pull_request: not-authorized | pending | complete | blocked
+  sync: not-authorized | pending | complete | blocked
+  pull_request_ref: <URL or none>
+
 validation_ref: <structured validation evidence or none>
 cleanup:
   status: pending | complete | incomplete | not-needed
@@ -67,19 +83,22 @@ retries:
 - preserve dependency and retry information during recovery
 - treat `retries.<task>.attempts` as the single authoritative attempt counter
 - preserve checkout identity, baseline, authorization, validation, review
-  attempts, prior status, retry ceilings and provenance, and cleanup state
-  during recovery
+  attempts, delivery mode, checkpoint state, working-spec reference, prior
+  status, retry ceilings and provenance, and cleanup state during recovery
 - never store credentials, secrets, full transcripts, or private ticket data
 - treat the final repository diff, tests, and review as authoritative over stale
   run state
 - clean external state at completion and record cleanup failures
 
 The implementation may use a more specific timestamp or task schema, but it
-must preserve the run-state format version, requested and selected execution
-modes, task status, dependencies, review status, retry visibility, checkout
-identity, authorization, validation evidence, and cleanup status.
+must preserve the run-state format version, requested and selected execution and
+delivery modes, task status, dependencies, review status, retry visibility,
+checkout identity, authorization, validation evidence, checkpoint state, and
+cleanup status.
 It must also preserve the prior status needed to resume a blocked run and every
 task or review retry ceiling, including provenance for an increased ceiling.
+It must preserve whether a checkpoint is awaiting user input and whether each
+delivery action was authorized, completed, or blocked.
 
 ## Transitions
 

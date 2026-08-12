@@ -1,8 +1,8 @@
 # Harness Adapters
 
-Adapters expose the canonical SWE Forge workflow through harness-native
-features. They are optional integration layers, not alternate workflow
-definitions.
+Adapters expose the canonical SWE Forge workflow and its explicit delivery
+actions through harness-native features. They are optional integration layers,
+not alternate workflow definitions.
 
 ## Source of Truth
 
@@ -17,8 +17,10 @@ Always update these canonical files first:
 
 An adapter may contain a loader, command, permission mapping, or runbook. It
 must point the harness back to those files rather than copying their content.
-The installation source of truth is `registry.tsv`; it maps harnesses to
-selected payloads and destinations.
+The OpenCode and Pi delivery loaders expose separate `git-commit`, `git-push`,
+`git-pr`, and `git-sync` actions; canonical behavior lives in
+`../policies/delivery.md`. The installation source of truth is `registry.tsv`;
+it maps harnesses to selected payloads and destinations.
 
 ## Installation Boundary
 

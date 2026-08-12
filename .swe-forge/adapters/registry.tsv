@@ -1,6 +1,14 @@
 # harness|scope|kind|source|destination|support
 opencode|project|file|opencode/commands/swe-forge.md|.opencode/commands/swe-forge.md|-
+opencode|project|file|opencode/commands/git-commit.md|.opencode/commands/git-commit.md|-
+opencode|project|file|opencode/commands/git-push.md|.opencode/commands/git-push.md|-
+opencode|project|file|opencode/commands/git-pr.md|.opencode/commands/git-pr.md|-
+opencode|project|file|opencode/commands/git-sync.md|.opencode/commands/git-sync.md|-
 opencode|global|file|opencode/commands/swe-forge-global.md|.config/opencode/commands/swe-forge.md|.config/opencode/swe-forge
+opencode|global|file|opencode/commands/git-commit-global.md|.config/opencode/commands/git-commit.md|.config/opencode/swe-forge
+opencode|global|file|opencode/commands/git-push-global.md|.config/opencode/commands/git-push.md|.config/opencode/swe-forge
+opencode|global|file|opencode/commands/git-pr-global.md|.config/opencode/commands/git-pr.md|.config/opencode/swe-forge
+opencode|global|file|opencode/commands/git-sync-global.md|.config/opencode/commands/git-sync.md|.config/opencode/swe-forge
 claude|project|tree|claude-code/skills/swe-forge|.claude/skills/swe-forge|-
 claude|project|bridge|-|CLAUDE.md|-
 claude|global|tree|claude-code/skills/swe-forge-global|.claude/skills/swe-forge|.claude/swe-forge
@@ -9,3 +17,7 @@ codex|global|tree|shared/agent-skill/global|.agents/skills/swe-forge|.agents/swe
 cursor|project|tree|shared/agent-skill/project|.agents/skills/swe-forge|-
 cursor|global|tree|shared/agent-skill/global|.agents/skills/swe-forge|.agents/swe-forge
 pi|global|file|pi/prompts/swe-forge-global.md|.pi/agent/prompts/swe-forge.md|.pi/agent/swe-forge
+pi|global|file|pi/prompts/git-commit.md|.pi/agent/prompts/git-commit.md|.pi/agent/swe-forge
+pi|global|file|pi/prompts/git-push.md|.pi/agent/prompts/git-push.md|.pi/agent/swe-forge
+pi|global|file|pi/prompts/git-pr.md|.pi/agent/prompts/git-pr.md|.pi/agent/swe-forge
+pi|global|file|pi/prompts/git-sync.md|.pi/agent/prompts/git-sync.md|.pi/agent/swe-forge

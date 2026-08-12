@@ -7,9 +7,10 @@ inspect, plan, implement, verify, review, and report. It sits above your coding
 harness. It is not a harness or model provider, and it never activates from
 ordinary prompts.
 
-For each explicit ticket, it chooses a proportionate execution mode: `SOLO`,
-`SUBAGENTS`, or `HERDR`. This keeps simple work simple while allowing complex
-work to be delegated or isolated.
+For each explicit ticket, it chooses a proportionate execution topology:
+`SOLO`, `SUBAGENTS`, or `HERDR`. Delivery is a separate choice: `GUIDED` is
+the default for reviewable increments, while opt-in `PR` mode can carry a
+well-specified ticket through verification and pull-request creation.
 
 ## Install
 
@@ -40,11 +41,42 @@ authorization.
 
 | Harness | Installation | Invocation |
 | --- | --- | --- |
-| [Pi](.swe-forge/adapters/pi/README.md) | Global only | `/swe-forge <ticket>` |
-| [OpenCode](.swe-forge/adapters/opencode/README.md) | Project or global | `/swe-forge <ticket>` |
-| [Claude Code](.swe-forge/adapters/claude-code/README.md) | Project or global | `/swe-forge <ticket>` |
-| [Codex](.swe-forge/adapters/codex/README.md) | Project or global | `$swe-forge <ticket>` |
-| [Cursor](.swe-forge/adapters/cursor/README.md) | Project or global | `/swe-forge <ticket>` |
+| [Pi](.swe-forge/adapters/pi/README.md) | Global only | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [OpenCode](.swe-forge/adapters/opencode/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [Claude Code](.swe-forge/adapters/claude-code/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [Codex](.swe-forge/adapters/codex/README.md) | Project or global | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
+| [Cursor](.swe-forge/adapters/cursor/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+
+## Delivery modes
+
+### Guided (default)
+
+Use the normal invocation when you want to steer the work and review smaller
+diffs:
+
+```text
+/swe-forge <ticket>
+  → implement and validate one cohesive slice
+  → checkpoint: review the diff
+  → continue or revise; optionally say "commit and continue"
+  → repeat until the feature is complete
+  → use /git-commit, /git-push, then /git-pr as separate actions
+```
+
+After manually merging the PR, run `/git-sync` to return to the remote default
+branch and fast-forward it. Forge never merges automatically.
+
+### PR mode
+
+Use `/swe-forge pr <ticket>` when the change is clear enough for low-touch
+execution. Forge performs a short alignment interview only when important
+requirements are missing, keeps the working spec temporary, runs the full
+verification and review gates, and stops with a PR available to review. It
+still never merges.
+
+The delivery helpers are intentionally atomic: pushing no longer asks whether
+to create a PR. See the harness adapter documentation for the available
+`git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
 
 ## Learn more
 

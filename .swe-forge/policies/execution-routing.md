@@ -9,12 +9,14 @@ Automatic routing is the default for `/swe-forge <ticket>`. Explicit command
 forms may request `solo`, `subagents`, or `herdr`; no separate routing worker is
 required because the orchestrator already owns discovery and topology choice.
 
-Every run records:
+Every run records topology and delivery independently:
 
 ```text
 requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
-reason: <specific evidence for the choice>
+requested_delivery: DEFAULT | GUIDED | PR
+delivery_mode: GUIDED | PR
+reason: <specific evidence for the topology choice>
 fallback_used: no | <requested mode -> selected mode and reason>
 ```
 
@@ -29,6 +31,8 @@ Evaluate these factors before creating workers:
 - need for separate services, processes, worktrees, or harnesses
 - availability and quality of native subagent support
 - verification burden and failure impact
+- delivery mode and whether human checkpoints or uninterrupted execution are
+  useful
 - communication, context, and integration overhead
 
 Task difficulty alone is not a routing criterion.
@@ -85,14 +89,17 @@ has multiple files.
 3. For `AUTO`, estimate whether independent reasoning or ownership is real, not
    imagined, and select the smallest useful topology.
 4. For an explicit request, use that topology when available without treating
-   it as permission to bypass safety, scope, or validation.
+   it as permission to bypass safety, scope, validation, or delivery
+   authorization.
 5. Reject parallelization when writable scopes overlap dangerously.
 6. Prefer native subagents when they satisfy the independence requirement.
 7. Select Herdr automatically only when process or checkout isolation is the
    requirement.
-8. Record the mode, reason, worker limit, and fallback plan.
+8. Record the topology, delivery mode, reason, worker limit, and fallback
+   plan.
 9. Re-evaluate the mode if evidence shows the topology is causing conflicts or
-   unnecessary overhead.
+   unnecessary overhead. Delivery mode may change checkpoint behavior, but it
+   does not make unsafe parallelism acceptable.
 
 ## Safety Rules
 
@@ -119,15 +126,18 @@ block instead of selecting an unsafe or unwanted topology.
 
 ```text
 execution_mode: SOLO
+delivery_mode: GUIDED
 reason: Single localized behavior change with tightly coupled implementation and test.
 ```
 
 ```text
 execution_mode: SUBAGENTS
-reason: Read-only repository research and fresh review are independent of the bounded implementation.
+delivery_mode: PR
+reason: Read-only repository research and fresh review are independent of the bounded implementation; uninterrupted delivery was explicitly requested.
 ```
 
 ```text
 execution_mode: HERDR
+delivery_mode: GUIDED
 reason: Two services require concurrent writable worktrees and independent development processes.
 ```

@@ -2,7 +2,9 @@
 
 SWE Forge is an explicitly invoked, portable software-engineering workflow for
 AI coding harnesses. It sits above the harness and chooses how much process is
-useful for the current ticket.
+useful for the current ticket. Execution topology (`SOLO`, `SUBAGENTS`, or
+`HERDR`) is independent from delivery mode (`GUIDED` or `PR`), so delegation
+and human-control preferences can be combined without weakening safety.
 
 ## Activation Contract
 
@@ -38,8 +40,8 @@ The source of truth is deliberately separated:
 - `.swe-forge/agents/` defines harness-neutral role responsibilities.
 - `.swe-forge/contracts/` defines structured task, result, review, and state
   formats.
-- `.swe-forge/policies/` defines routing, delegation, model, verification, and
-  recovery rules.
+- `.swe-forge/policies/` defines routing, delegation, model, specification,
+  delivery, verification, and recovery rules.
 - `.swe-forge/adapters/` exposes those definitions through harness-native
   features without redefining them.
 
@@ -61,6 +63,11 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
   for migrations, deploys, publication, production access, or other external or
   shared-environment effects.
 - Do not expand scope through opportunistic refactoring.
+- Keep a transient working spec proportional to the ticket; never create
+  ticket-specific planning documents in the repository just to coordinate one
+  session.
+- Preserve a human checkpoint in `GUIDED` mode and keep delivery actions
+  separately authorized.
 - Do not create commits, push, publish, or modify global configuration unless the
   user explicitly authorizes it; a task contract may only transmit that
   authorization.
@@ -79,18 +86,38 @@ Harness commands may also accept an explicit topology as the first argument:
 /swe-forge herdr <ticket>
 ```
 
-Every run must record the request, selected mode, and reason:
+Execution topology and delivery mode are orthogonal. The default delivery
+mode is `GUIDED`; use `pr` only when the user wants the run to continue through
+pull-request creation:
+
+```text
+/swe-forge <ticket>                 # GUIDED, automatic topology
+/swe-forge pr <ticket>              # PR delivery, automatic topology
+/swe-forge solo pr <ticket>         # explicit topology plus PR delivery
+/swe-forge subagents <ticket>       # GUIDED, explicit topology
+```
+
+The parser accepts a delivery token before or after an explicit topology. Lower-
+case `pr` and `guided` are reserved in those positions; other ticket text is
+preserved. A missing ticket after either token is incomplete input.
+
+Every run must record the request, selected modes, and reasons:
 
 ```text
 requested_mode: AUTO | SOLO | SUBAGENTS | HERDR
 execution_mode: SOLO | SUBAGENTS | HERDR
+requested_delivery: DEFAULT | GUIDED | PR
+delivery_mode: GUIDED | PR
 reason: <why this is the smallest useful topology>
+fallback_used: no | <requested mode -> selected mode and reason>
 ```
 
-An explicit mode overrides topology preference, not safety, validation, scope,
-or delivery authorization. Apply the fallback policy when the requested
-topology is unavailable and report the fallback. Block instead when falling
-back would make required isolation unsafe or the user prohibited fallback.
+An explicit topology overrides topology preference, not safety, validation,
+scope, or delivery authorization. An explicit `pr` delivery token requests
+low-touch delivery but does not bypass safety, validation, scope, or review.
+Apply the fallback policy when the requested topology is unavailable and report
+the fallback. Block instead when falling back would make required isolation
+unsafe or the user prohibited fallback.
 
 ### SOLO
 
@@ -128,6 +155,32 @@ worker a separate worktree and integrate changes centrally, one at a time.
 Herdr is optional. If it is unavailable or cannot provide useful isolation,
 fall back to native subagents or sequential execution and record the fallback.
 
+## Delivery Modes
+
+### GUIDED (default)
+
+`GUIDED` keeps the user in the loop without forcing one large review. The
+orchestrator plans cohesive implementation slices, validates each slice, and
+stops at a checkpoint with the diff boundary, evidence, risks, and next step.
+The user may ask for `continue`, request a revision, or explicitly authorize
+`commit and continue`. A guided run never commits, pushes, creates a PR, or
+merges merely because a slice was approved.
+
+### PR
+
+`PR` is the opt-in low-touch path. It runs the lightweight specification policy
+when the ticket needs clarification, keeps the working spec outside the
+repository, and proceeds through implementation, required verification, fresh
+review, commit, push, and pull-request creation after the gates pass. It ends
+with a PR URL and never merges. It does not skip automated checks or independent
+review; it skips interactive implementation checkpoints.
+
+Use the atomic delivery actions described by `.swe-forge/policies/delivery.md`
+for guided follow-up: `git-commit`, `git-push`, `git-pr`, and `git-sync`. Pushing
+must never unexpectedly create a PR. After a human merges a PR, `git-sync` is
+the explicit action that returns to the remote default branch and fast-forwards
+it.
+
 ## Model Routing
 
 The canonical workflow uses capability classes, not provider names or model
@@ -154,20 +207,26 @@ Different models for implementation and review are optional, not required.
 Follow the detailed procedure in `.swe-forge/workflows/ticket.md`. The
 lifecycle is:
 
-1. Ingest the ticket and constraints.
+1. Ingest the ticket, topology token, delivery token, and constraints.
 2. Discover relevant repository evidence.
-3. Specify observable acceptance criteria and blocking ambiguity.
+3. Specify observable acceptance criteria and blocking ambiguity; in `PR` mode,
+   create a transient working spec and run the brief alignment interview only
+   when the ticket is underspecified.
 4. Architect the smallest compatible approach.
-5. Decompose only where useful and define bounded task ownership.
+5. Decompose only where useful and define bounded task ownership or guided
+   review slices.
 6. Route explicitly to `SOLO`, `SUBAGENTS`, or `HERDR`.
 7. Select an appropriate test and validation strategy.
-8. Implement dependency waves within task scope.
+8. Implement dependency waves within task scope, stopping at guided
+   checkpoints when `delivery_mode` is `GUIDED`.
 9. Integrate isolated work centrally.
 10. Verify with relevant repository quality gates.
 11. Review from fresh context using evidence, not implementation chatter.
 12. Repair relevant findings and rerun affected validation.
 13. Compare the final diff against the original ticket and acceptance criteria.
-14. Report the result concisely.
+14. Perform only the delivery actions authorized by the selected mode or a
+   later explicit user instruction.
+15. Report the result concisely.
 
 The workflow must adapt its depth. A typo does not require an architect,
 security reviewer, Herdr workspace, or ceremonial test plan.
@@ -175,8 +234,10 @@ security reviewer, Herdr workspace, or ceremonial test plan.
 ## State and Contracts
 
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
-state must survive context changes. A run state is temporary by default and
-should live outside the repository, for example:
+state must survive context changes. In `PR` mode, the working-spec contract
+provides a short behavior-first brief; it is temporary and is not a repository
+artifact. A run state is temporary by default and should live outside the
+repository, for example:
 
 ```text
 $TMPDIR/swe-forge/<run-id>/run-state.yaml
@@ -201,14 +262,18 @@ an in-scope path with pre-existing changes until ownership is resolved. Never
 reset, clean, stash, overwrite, or include pre-existing user changes in delivery
 without explicit authorization.
 
-Normal SWE Forge invocation authorizes implementation in the suitable checkout,
+Normal `GUIDED` invocation authorizes implementation in the suitable checkout,
 not delivery actions. Unless the user explicitly authorizes each applicable
 action, do not commit, push, create a pull request, or merge. Authorization to
-create a branch or worktree grants only that setup action. Authorization to
-continue through pull-request creation may cover commit, branch push, and pull
-request creation after verification and review; it never authorizes merge.
-Merging requires a separate explicit instruction and is not part of the normal
-ticket lifecycle.
+create a branch or worktree grants only that setup action.
+
+An explicit `PR` delivery token is a user request to continue through commit,
+branch push, and pull-request creation after verification and review. From a
+clean protected default branch it may create one dedicated non-protected branch
+with a safe generated name. It never authorizes merge, force-push, publication
+outside the PR, or destructive cleanup. If setup is ambiguous or would overlap
+existing work, stop and ask. Merging always requires a separate explicit
+instruction and is not part of the ticket lifecycle.
 
 ## Failure Handling
 
@@ -230,6 +295,9 @@ Declare success only when all applicable conditions are met:
 - no blocking review finding under `.swe-forge/contracts/review.md` remains
 - no unintended changes remain
 - the final integrated diff has been inspected
+- when `delivery_mode: PR`, the authorized commit, push, and pull-request
+  actions complete or the run is reported `BLOCKED`; `GUIDED` may finish with a
+  reviewed local diff and delivery actions not authorized
 
 Do not claim a check passed when it was not run. Distinguish skipped checks,
 unavailable tooling, and failures from successful validation.
@@ -244,12 +312,14 @@ incorrect or the gate cannot be met within the ticket and recovery limits.
 Return a concise report containing:
 
 - final status: `ACCEPTED`, `BLOCKED`, or `FAILED`
-- selected execution mode and reason
+- selected execution and delivery modes with reasons and any fallback
 - implementation approach and important decisions
 - files changed
 - tests and validation performed with results
 - reviewer result and repaired findings
 - assumptions and remaining risks
+- delivery result (checkpoint, commit, push, PR URL, or explicit not-authorized
+  status)
 - cleanup status and remaining resources when temporary state, processes, or
   worktrees were used
 

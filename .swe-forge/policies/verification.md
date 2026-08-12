@@ -4,7 +4,8 @@
 
 Use evidence to determine whether the original ticket is safely accepted.
 Verification is a required workflow phase even in `SOLO` mode, but its depth
-must match the ticket's risk and observable surface.
+must match the ticket's risk and observable surface. Delivery mode changes when
+human checkpoints occur, not the evidence required for acceptance.
 
 ## Evidence Order
 
@@ -29,6 +30,10 @@ Code inspection alone cannot establish that a relevant behavior works.
 - performance-sensitive change: compare a representative workload or profile
 - documentation or trivial change: use focused checks and diff review without
   ceremonial test scaffolding
+- `GUIDED` checkpoint: validate the completed slice and label final acceptance
+  as pending until the whole ticket is integrated
+- `PR` delivery: complete all required local checks and fresh review before
+  commit, push, or pull-request creation
 
 ## Quality Gates
 
@@ -56,8 +61,9 @@ Inspect each command for side effects. Local test artifacts and build output are
 normal validation effects. Migrations, deployment, publication, production or
 shared-service access, outbound messages, credential use beyond the local test
 environment, and destructive cleanup require isolation or explicit user
-authorization. A repository script name is not evidence that these effects are
-authorized.
+authorization. Commit, push, pull-request creation, and post-merge
+synchronization are delivery actions, not validation. A repository script name
+is not evidence that these effects are authorized.
 
 ## Reporting
 
@@ -96,6 +102,12 @@ Accept only when:
 - no blocking finding under `../contracts/review.md` remains
 - unintended changes are absent
 - the final integrated diff has been inspected
+- a requested `PR` delivery has completed its authorized commit, push, and PR
+  actions, or is explicitly reported as `BLOCKED`
 
 When a gate cannot run, state why and leave the result as a risk rather than
-claiming success.
+claiming success. In `PR` mode, an unavailable tool needed to create the
+requested PR produces `BLOCKED` after preserving the reviewed local branch; it
+must not be reported as a completed delivery. In `GUIDED`, an unavailable
+optional delivery tool does not invalidate an accepted reviewed diff when no
+delivery action was requested.

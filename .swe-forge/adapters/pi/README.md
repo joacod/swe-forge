@@ -16,6 +16,10 @@ The installer creates:
 
 ```text
 ~/.pi/agent/prompts/swe-forge.md
+~/.pi/agent/prompts/git-commit.md
+~/.pi/agent/prompts/git-push.md
+~/.pi/agent/prompts/git-pr.md
+~/.pi/agent/prompts/git-sync.md
 ~/.pi/agent/swe-forge/
 ```
 
@@ -30,14 +34,16 @@ installations.
 Pi derives the prompt-template command from its filename:
 
 ```text
-/swe-forge <ticket>
-/swe-forge solo <ticket>
-/swe-forge subagents <ticket>
-/swe-forge herdr <ticket>
+/swe-forge <ticket>             # guided checkpoints (default)
+/swe-forge pr <ticket>          # verify and create a PR without checkpoints
+/swe-forge solo pr <ticket>     # combine explicit topology and delivery
 ```
 
 The template uses Pi's `$ARGUMENTS` expansion and is only processed when the
-user explicitly types `/swe-forge`. Ordinary prompts remain unchanged.
+user explicitly types `/swe-forge`. Ordinary prompts remain unchanged. The
+separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync` prompts load the
+canonical delivery policy. `/git-push` never creates a PR as a side effect;
+`/git-sync` is for returning to the default branch after a human merge.
 
 Pi does not provide native subagents by default. If `SUBAGENTS` is unavailable,
 the canonical workflow falls back to `SOLO` or sequential execution according
