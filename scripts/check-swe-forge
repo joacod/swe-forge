@@ -33,6 +33,10 @@ require_text 'transient working spec' SWE-FORGE.md
 require_text 'side effects' .swe-forge/policies/verification.md
 require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
 require_text 'git-sync' .swe-forge/policies/delivery.md
+require_text 'one dedicated task branch' .swe-forge/policies/delivery.md
+require_text 'per-slice commits' .swe-forge/policies/delivery.md
+require_text 'provider state is `MERGED`' .swe-forge/policies/delivery.md
+require_text '`go` to commit' SWE-FORGE.md
 require_text 'working_spec_ref:' .swe-forge/contracts/run-state.md
 require_text 'requirement: required' .swe-forge/contracts/task.md
 require_text 'create_pull_request: {status: not-authorized' .swe-forge/contracts/task.md
@@ -42,6 +46,10 @@ require_text 'every critical finding blocks' .swe-forge/contracts/review.md
 require_text 'review: skipped' .swe-forge/examples/simple-ticket.md
 require_text 'checkout_baseline:' .swe-forge/examples/parallel-ticket.md
 require_text 'checkout_baseline:' .swe-forge/examples/herdr-ticket.md
+require_text 'branch_setup:' .swe-forge/contracts/run-state.md
+require_text 'branch_setup:' .swe-forge/contracts/task.md
+require_text 'branch_setup:' .swe-forge/examples/parallel-ticket.md
+require_text 'branch_setup:' .swe-forge/examples/herdr-ticket.md
 require_text 'Resolve every canonical relative' .swe-forge/adapters/opencode/commands/swe-forge-global.md
 require_text 'Resolve every canonical relative' .swe-forge/adapters/claude-code/skills/swe-forge-global/SKILL.md
 require_text 'Resolve every canonical relative' .swe-forge/adapters/pi/prompts/swe-forge-global.md
@@ -58,6 +66,14 @@ require_text 'codex|project|tree|shared/agent-skill/project' .swe-forge/adapters
 require_text 'cursor|global|tree|shared/agent-skill/global' .swe-forge/adapters/registry.tsv
 require_text 'https://developers.openai.com/learn/codex' .swe-forge/adapters/shared/agent-skill/README.md
 require_text 'https://cursor.com/docs' .swe-forge/adapters/shared/agent-skill/README.md
+require_text 'one dedicated task branch automatically' .swe-forge/adapters/claude-code/README.md
+require_text 'one dedicated task branch automatically' .swe-forge/adapters/codex/README.md
+require_text 'one dedicated task branch automatically' .swe-forge/adapters/cursor/README.md
+require_text 'dedicated task' .swe-forge/adapters/shared/agent-skill/README.md
+require_text 'create one dedicated task branch' .swe-forge/adapters/claude-code/skills/swe-forge/SKILL.md
+require_text 'create one dedicated task branch' .swe-forge/adapters/shared/agent-skill/project/SKILL.md
+require_text 'verify merge state' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text 'actually `MERGED`' .swe-forge/evals/conformance-scenarios.md
 require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/project/agents/openai.yaml
 require_text '~/.agents/swe-forge' .swe-forge/adapters/shared/agent-skill/global/SKILL.md
 require_text 'disable-model-invocation: true' .swe-forge/adapters/shared/agent-skill/project/SKILL.md
@@ -68,5 +84,6 @@ reject_text 'install all' scripts/swe-forge
 reject_text 'verify all' scripts/test-swe-forge
 reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
 reject_text 'commit_policy:' .swe-forge/examples/herdr-ticket.md
+reject_text 'pushing no longer asks whether' README.md
 
 printf '%s\n' 'PASS: SWE Forge structural checks'

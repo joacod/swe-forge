@@ -147,7 +147,8 @@ ticket
   -> integrated diff
   -> quality gates
   -> fresh review
-  -> authorized push/PR actions, if applicable
+  -> repair if needed
+  -> authorized slice-commit/push/PR actions, if applicable
   -> verified human merge and explicit post-merge sync
   -> final acceptance report
 ```

@@ -139,7 +139,8 @@ working_spec_ref: none
 checkout_baseline:
   path: <absolute checkout path>
   head: <revision>
-  branch: <branch>
+  branch: <single task branch used for the entire run>
+  branch_setup: auto-created | reused | user-provided
   classification: writable
   remote_default_evidence: <reference>
   staged: []

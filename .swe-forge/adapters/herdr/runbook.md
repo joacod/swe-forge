@@ -48,12 +48,14 @@ resources. Preserve the user's focus with `--no-focus` for background work.
 Use a shared workspace only for read-only research or when one writer owns the
 checkout. Concurrent writable workers require separate Git worktrees.
 
-Selecting `HERDR` does not authorize branch or worktree creation. Before using
-`worktree.create`, obtain explicit user authorization for that setup action.
-Opening an existing checkout does not need creation authorization, but before
-any edit classify the integration checkout and every writable worker checkout
-under the canonical protected-branch gate. Each must be dedicated,
-non-protected, attached, and safely classifiable.
+Selecting `HERDR` does not authorize additional worktree creation. The normal
+workflow may automatically create or reuse one dedicated task branch in the
+clean central checkout; record that setup before editing. Before using
+`worktree.create` for concurrent workers, obtain explicit user authorization for
+that setup action. Opening an existing checkout does not need creation
+authorization, but before any edit classify the integration checkout and every
+writable worker checkout under the canonical protected-branch gate. Each must be
+dedicated, non-protected, attached, and safely classifiable.
 
 The current Herdr worktree surface includes these operations:
 
@@ -132,16 +134,18 @@ The orchestrator owns integration. For each isolated worker:
 4. resolve conflicts centrally
 5. rerun affected validation
 
-Do not let Herdr workers modify the central checkout concurrently. A temporary
-worker commit may be used only when the user explicitly authorized commits and
-the task contract transmits that authorization. Do not push, create a pull
-request, publish, or merge without explicit authorization for that action.
+Do not let Herdr workers modify the central checkout concurrently. Keep the
+central integration branch as the one task branch for the run; worker worktrees
+are isolated implementation branches or patches that are integrated centrally.
+A temporary worker commit may be used only when the user explicitly authorized
+commits and the task contract transmits that authorization. Do not push, create
+a pull request, publish, or merge without explicit authorization for that action.
 
 ## 7. Clean Up Safely
 
 Close or remove only workspaces, panes, and worktrees created for this run.
-Do not close user-owned sessions, stop the Herdr server, or delete branches
-unless the user explicitly requests it.
+Do not close user-owned sessions, stop the Herdr server, or delete the central
+task branch unless the user explicitly requests it.
 
 Before removing a writable worktree, require either a clean status or evidence
 that every tracked and untracked change is represented in the integrated

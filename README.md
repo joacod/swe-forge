@@ -62,7 +62,7 @@ diffs:
   → checkpoint: review the diff
   → say "continue" or "go"; go commits the slice and continues
   → repeat until the feature is complete
-  → use /git-push, then /git-pr as separate actions
+  → use /git-commit if needed, then /git-push and /git-pr separately
 ```
 
 After reviewing and manually merging the PR, say `merged` (or run

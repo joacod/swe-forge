@@ -31,9 +31,22 @@ authorization.
 - report the pull-request URL and stop; never merge it
 
 The pull request should be easy to scan. Use a short imperative title and a
-short-to-medium body with a few bullets for the summary, validation, and only
-important risks or follow-ups. Do not paste the working spec, transcript, or a
-file-by-file dump into the description.
+short-to-medium body with this compact shape:
+
+```text
+Summary:
+- <what changed and why it matters>
+- <important compatibility or behavior note, if any>
+
+Validation:
+- <relevant command or manual check>
+
+Notes:
+- <only an important risk or follow-up; omit this section when empty>
+```
+
+Do not paste the working spec, transcript, or a file-by-file dump into the
+description.
 
 `PR` mode does not waive tests, protected-branch rules, scope checks, fresh
 review for medium/high-risk work, or the final diff inspection. It only replaces
@@ -45,9 +58,10 @@ creation.
 Both delivery modes use one dedicated task branch for the whole run. When the
 checkout is clean and currently on the protected remote default branch, the
 normal workflow automatically creates a safe non-protected branch from it. The
-name should identify the ticket, such as `swe-forge/<ticket-slug>`, and may use a
-short run suffix when the name already exists. Never silently reuse an existing
-branch from another run.
+name should identify the ticket and follow the repository convention, such as
+`feat/<ticket-slug>` or `swe-forge/<ticket-slug>`. It may use a short run suffix
+when the name already exists. Never silently reuse an existing branch from
+another run.
 
 If the checkout is already on a suitable non-protected branch or worktree,
 reuse it for every slice in the run. Do not create another branch between
@@ -55,7 +69,9 @@ checkpoints or before delivery. If the checkout is dirty, detached,
 ambiguous, or cannot be classified safely, stop and ask the user to resolve the
 checkout rather than moving or overwriting work. A user-provided branch or
 worktree preference may replace the default only when it passes the same safety
-gates.
+gates. An explicit user request may also opt into a different multi-branch or
+worktree arrangement; absent that request, keep every slice for the task on this
+one branch.
 
 Automatic task-branch setup is workflow authorization only. It permits creating
 that one branch and does not permit commits, pushes, pull requests, merges, or
@@ -148,10 +164,10 @@ loaders for this policy; their syntax may vary by harness.
 
 PR creation is not proof that the PR was merged. Do not automatically switch
 branches or pull after creating a PR. When the user says `merged` in the active
-run, or invokes `git-sync merged`, treat that as an explicit request to sync,
-not as proof of merge. First identify the PR for the current task branch and
-verify its provider state is `MERGED` (for example with the host's supported PR
-CLI or API), including the expected default-branch target.
+run, or invokes `git-sync`, treat that as an explicit request to sync, not as
+proof of merge. First identify the PR for the current task branch and verify
+its provider state is `MERGED` (for example with the host's supported PR CLI or
+API), including the expected default-branch target.
 
 If the PR is open, closed without merge, missing, ambiguous, or its state cannot
 be checked, report the evidence and leave the checkout untouched. Only after a

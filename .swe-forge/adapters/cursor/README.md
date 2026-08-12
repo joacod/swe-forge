@@ -19,8 +19,11 @@ is installed at `~/.agents/skills/swe-forge/` and reads canonical support files
 from `~/.agents/swe-forge/`. The installer does not modify Cursor settings,
 CLI configuration, permissions, models, credentials, or team configuration.
 
-Invoke it explicitly with `/swe-forge <ticket>`. Natural-language activation
-through the project's `AGENTS.md` remains the fallback.
+Invoke it explicitly with `/swe-forge <ticket>`. A clean protected default
+branch gets one dedicated task branch automatically. In guided mode, `go`
+commits the reviewed slice and continues; PR mode keeps validated slices as
+separate commits before final review and PR creation. Natural-language
+activation through the project's `AGENTS.md` remains the fallback.
 
 See the [shared Agent Skill adapter](../shared/agent-skill/README.md) for the
 current Codex and Cursor documentation references.

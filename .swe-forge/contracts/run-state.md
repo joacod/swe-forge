@@ -59,6 +59,7 @@ checkpoint:
 
 delivery:
   commit: not-authorized | pending | complete | blocked
+  commit_history_ref: <per-slice commit records or none>
   push: not-authorized | pending | complete | blocked
   create_pull_request: not-authorized | pending | complete | blocked
   sync: not-authorized | pending | complete | blocked
@@ -100,8 +101,9 @@ cleanup status.
 It must also preserve the prior status needed to resume a blocked run and every
 task or review retry ceiling, including provenance for an increased ceiling.
 It must preserve whether a checkpoint is awaiting user input, whether `go`
-authorized a local slice commit, whether each delivery action was authorized,
-completed, or blocked, and which one task branch the run used.
+authorized a local slice commit, the per-slice commit history reference, whether
+each delivery action was authorized, completed, or blocked, and which one task
+branch the run used.
 
 ## Transitions
 

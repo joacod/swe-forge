@@ -26,7 +26,10 @@ offered as a multi-harness operation.
 The skill sets `disable-model-invocation: true` for hosts that support that
 field, while `agents/openai.yaml` disables implicit invocation in Codex. Users
 invoke the installed skill explicitly as `$swe-forge` in Codex or
-`/swe-forge` in Cursor.
+`/swe-forge` in Cursor. A clean protected default branch gets one dedicated task
+branch automatically; guided `go` commits the reviewed slice and continues, and
+PR mode keeps validated slices as separate commits before final review and PR
+creation.
 
 References checked on 2026-08-11:
 
