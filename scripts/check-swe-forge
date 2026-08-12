@@ -24,7 +24,43 @@ reject_text() {
   fi
 }
 
-sh -n "$ROOT/scripts/swe-forge" "$ROOT/scripts/test-swe-forge"
+REGISTRY_VALIDATOR=$ROOT/scripts/lib/registry.sh
+[ -f "$REGISTRY_VALIDATOR" ] || fail "missing adapter registry validator"
+. "$REGISTRY_VALIDATOR"
+
+validate_registry() {
+  registry_line_number=0
+  while IFS='|' read -r registry_harness registry_scope registry_kind \
+    registry_source registry_destination registry_support; do
+    registry_line_number=$((registry_line_number + 1))
+    case "$registry_harness" in
+      ''|\#*) continue ;;
+    esac
+    if ! swe_forge_registry_row_is_valid \
+      "$registry_harness" \
+      "$registry_scope" \
+      "$registry_kind" \
+      "$registry_source" \
+      "$registry_destination" \
+      "$registry_support"; then
+      fail "invalid adapter registry row at line $registry_line_number"
+    fi
+    case "$registry_kind" in
+      file)
+        [ -f "$ROOT/.swe-forge/adapters/$registry_source" ] || \
+          fail "missing adapter registry file source at line $registry_line_number"
+        ;;
+      tree)
+        [ -d "$ROOT/.swe-forge/adapters/$registry_source" ] || \
+          fail "missing adapter registry tree source at line $registry_line_number"
+        ;;
+      bridge) ;;
+    esac
+  done <"$ROOT/.swe-forge/adapters/registry.tsv"
+}
+
+sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" "$ROOT/scripts/test-swe-forge"
+validate_registry
 
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
 require_text 'pre-edit baseline' SWE-FORGE.md

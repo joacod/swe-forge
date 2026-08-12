@@ -4,6 +4,8 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 INSTALL=$ROOT/scripts/swe-forge
+PROJECT_HARNESSES='opencode claude codex cursor'
+DELIVERY_COMMANDS='git-commit git-push git-pr git-sync'
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-test.XXXXXX")
 TMP_ROOT=$(CDPATH= cd "$TMP_ROOT" && pwd -P)
 
@@ -33,7 +35,7 @@ expect_failure() {
 project=$TMP_ROOT/project
 mkdir -p "$project"
 
-for harness in opencode claude codex cursor; do
+for harness in $PROJECT_HARNESSES; do
   "$INSTALL" install "$harness" --target "$project" >/dev/null
   "$INSTALL" install "$harness" --target "$project" >/dev/null
   "$INSTALL" verify "$harness" --target "$project" >/dev/null
@@ -43,7 +45,7 @@ test -L "$project/AGENTS.md" || fail "project AGENTS.md is not linked"
 test -L "$project/SWE-FORGE.md" || fail "project SWE-FORGE.md is not linked"
 test -L "$project/.swe-forge/agents" || fail "canonical agent directory is not linked"
 test -L "$project/.opencode/commands/swe-forge.md" || fail "OpenCode command is not linked"
-for command in git-commit git-push git-pr git-sync; do
+for command in $DELIVERY_COMMANDS; do
   test -L "$project/.opencode/commands/$command.md" || fail "OpenCode $command command is not linked"
 done
 test -L "$project/.claude/skills/swe-forge" || fail "Claude skill directory is not linked"
@@ -62,9 +64,23 @@ grep -F '<pr> <ticket>' \
 grep -F 'thin loader' \
   "$project/.opencode/commands/git-push.md" >/dev/null || fail "OpenCode delivery loader is not thin"
 
+invalid_source=$TMP_ROOT/invalid-source
+invalid_target=$TMP_ROOT/invalid-target
+mkdir -p "$invalid_source" "$invalid_target"
+cp -R "$ROOT/scripts" "$invalid_source/"
+cp -R "$ROOT/.swe-forge" "$invalid_source/"
+cp "$ROOT/AGENTS.md" "$ROOT/SWE-FORGE.md" "$invalid_source/"
+printf '%s\n' \
+  'opencode|project|file|opencode/commands/swe-forge.md|../outside|-' \
+  >"$invalid_source/.swe-forge/adapters/registry.tsv"
+expect_failure "invalid adapter registry row" \
+  "$invalid_source/scripts/swe-forge" install opencode --target "$invalid_target"
+test ! -e "$invalid_target/AGENTS.md" || fail "invalid registry wrote canonical files"
+test ! -e "$invalid_target/.swe-forge" || fail "invalid registry wrote canonical directory"
+
 copy_project=$TMP_ROOT/copy-project
 mkdir -p "$copy_project"
-for harness in opencode claude codex cursor; do
+for harness in $PROJECT_HARNESSES; do
   "$INSTALL" install "$harness" --target "$copy_project" --mode copy >/dev/null
   "$INSTALL" verify "$harness" --target "$copy_project" --mode copy >/dev/null
 done
@@ -72,7 +88,7 @@ expect_failure "is not a source link" "$INSTALL" verify opencode --target "$copy
 test ! -L "$copy_project/AGENTS.md" || fail "copy mode linked AGENTS.md"
 test ! -L "$copy_project/.swe-forge/agents" || fail "copy mode linked canonical files"
 test ! -L "$copy_project/.opencode/commands/swe-forge.md" || fail "copy mode linked OpenCode command"
-for command in git-commit git-push git-pr git-sync; do
+for command in $DELIVERY_COMMANDS; do
   test ! -L "$copy_project/.opencode/commands/$command.md" || fail "copy mode linked OpenCode $command command"
 done
 test ! -L "$copy_project/.claude/skills/swe-forge" || fail "copy mode linked Claude skill"
@@ -256,7 +272,7 @@ test ! -e "$mkdir_signal_project/.swe-forge-install.lock" || fail "directory-sig
 
 global_home=$TMP_ROOT/home
 mkdir -p "$global_home"
-for harness in opencode claude codex cursor; do
+for harness in $PROJECT_HARNESSES; do
   HOME="$global_home" "$INSTALL" install "$harness" --global >/dev/null
   HOME="$global_home" "$INSTALL" install "$harness" --global >/dev/null
   HOME="$global_home" "$INSTALL" verify "$harness" --global >/dev/null
@@ -268,13 +284,13 @@ HOME="$global_home" \
 HOME="$global_home" \
   "$INSTALL" verify pi --global >/dev/null
 test -L "$global_home/.config/opencode/commands/swe-forge.md" || fail "global OpenCode command is not linked"
-for command in git-commit git-push git-pr git-sync; do
+for command in $DELIVERY_COMMANDS; do
   test -L "$global_home/.config/opencode/commands/$command.md" || fail "global OpenCode $command command is not linked"
 done
 test -L "$global_home/.claude/skills/swe-forge" || fail "global Claude skill is not linked"
 test -L "$global_home/.agents/skills/swe-forge" || fail "global shared Agent Skill is not linked"
 test -L "$global_home/.pi/agent/prompts/swe-forge.md" || fail "global Pi prompt is not linked"
-for command in git-commit git-push git-pr git-sync; do
+for command in $DELIVERY_COMMANDS; do
   test -L "$global_home/.pi/agent/prompts/$command.md" || fail "global Pi $command prompt is not linked"
 done
 test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global OpenCode source is not linked"
