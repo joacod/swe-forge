@@ -105,7 +105,9 @@ wave barriers:
 Default to at most two concurrent writable workers. A higher limit requires an
 explicit recorded user preference and a justification that covers resource
 isolation, result collection, and integration capacity.
-Completion order never determines integration order; dependencies and the recorded plan do.
+
+Completion order never determines integration order; dependencies and the
+recorded plan do.
 
 A task may be in an isolated topology while some waves are sequential. The
 mode authorizes bounded isolated writable workers where useful; it does not
