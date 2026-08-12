@@ -118,12 +118,15 @@ require_text 'syncing verifies `MERGED`' .swe-forge/adapters/README.md
 require_text 'ISOLATED' .swe-forge/workflows/ticket.md
 require_text '/swe-forge isolated <ticket>' .swe-forge/workflows/ticket.md
 require_text 'The `herdr` topology token was removed' .swe-forge/workflows/ticket.md
+require_text 'use Herdr as the provider for this' .swe-forge/workflows/ticket.md
+require_text 'requested_provider: HERDR' .swe-forge/workflows/ticket.md
 require_text 'Automatic `ISOLATED` routing requires every condition' .swe-forge/policies/execution-routing.md
 require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
 require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
 require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
 require_text 'integration_strategy: NONE | CHERRY_PICK' .swe-forge/policies/provider-selection.md
 require_text 'Prefer `NATIVE`' .swe-forge/policies/provider-selection.md
+require_text 'use Herdr as the provider for this isolated run' .swe-forge/policies/provider-selection.md
 require_text 'Herdr is optional' .swe-forge/providers/herdr/README.md
 require_text 'does not define SWE Forge behavior' .swe-forge/providers/herdr/README.md
 require_text 'does not replace the coding harness' .swe-forge/providers/herdr/README.md

@@ -21,6 +21,9 @@ execution_provider: NATIVE | HERDR | NONE
 provider_reason: <why the provider satisfies isolated-execution requirements>
 parallel_strategy: NONE | COMPOSE
 integration_strategy: NONE | CHERRY_PICK
+provider_constraints:
+  non_isolated: execution_provider=NONE, parallel_strategy=NONE, integration_strategy=NONE
+  isolated: execution_provider=NATIVE|HERDR, parallel_strategy=COMPOSE, integration_strategy=CHERRY_PICK
 requested_delivery: DEFAULT | GUIDED | PR
 delivery_mode: GUIDED | PR
 reason: <why this topology and provider were selected>
@@ -156,8 +159,14 @@ sections. It must distinguish:
 - environment resources from checkout identity
 - cleanup status from worker status
 
-`execution_provider` is `NONE` for non-isolated runs. `NATIVE` and `HERDR` are
-provider values only; neither is a canonical execution topology. `COMPOSE` is
+The provider fields are conditional state, not independent enum choices:
+`execution_mode` other than `ISOLATED` requires `execution_provider: NONE`,
+`parallel_strategy: NONE`, and `integration_strategy: NONE`; `ISOLATED`
+requires `execution_provider: NATIVE | HERDR`, `parallel_strategy: COMPOSE`,
+and `integration_strategy: CHERRY_PICK`. `requested_provider` records the
+preference separately and may be `AUTO`, `NATIVE`, `HERDR`, or `NONE` before
+selection or after a safe fallback. `NATIVE` and `HERDR` are provider values
+only; neither is a canonical execution topology. `COMPOSE` is
 the only isolated parallel strategy and `CHERRY_PICK` is the only isolated
 integration strategy supported by this version.
 

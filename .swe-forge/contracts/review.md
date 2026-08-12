@@ -15,6 +15,9 @@ status: PASS | CHANGES_REQUIRED
 scope:
   topology: SOLO | SUBAGENTS | ISOLATED
   provider: NATIVE | HERDR | NONE
+  provider_constraint: NONE unless topology is ISOLATED; NATIVE or HERDR only for ISOLATED
+  parallel_strategy: NONE | COMPOSE
+  integration_strategy: NONE | CHERRY_PICK
   delivery_mode: GUIDED | PR
   integration_branch: <one branch or none>
   integration_worktree: <path or none>
@@ -70,7 +73,10 @@ Review all applicable areas:
 - one integration/delivery branch and one final PR boundary
 - conservative cleanup that never force-removes ambiguous resources
 
-A reviewer must confirm that completion order did not determine integration
+A reviewer must confirm that provider and strategy fields obey their
+conditional topology constraint: non-isolated runs use `NONE`, while isolated
+runs use a selected provider, `COMPOSE`, and `CHERRY_PICK`. The reviewer must
+also confirm that completion order did not determine integration
 order, worker branches were not published, and final commits were constructed
 and validated centrally when `ISOLATED` applies.
 

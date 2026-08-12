@@ -62,9 +62,12 @@ For harness commands, parse the raw arguments before ingesting the ticket:
   the corrected invocation, while preserving the original raw arguments in run
   state.
 - record a separate `requested_provider` when the user explicitly asks for
-  `NATIVE`, `HERDR`, or `NONE` as an execution-provider preference; provider
-  preference never changes `requested_mode` and the word `herdr` is not a
-  topology alias
+  `NATIVE`, `HERDR`, or `NONE` as an execution-provider preference. Provider
+  preference is a natural-language decision (for example, "use Herdr as the
+  provider for isolated execution") rather than a topology token; a harness
+  may expose a separate provider-preference field only when it documents that
+  syntax. Provider preference never changes `requested_mode` and the word
+  `herdr` is not a topology alias
 - if no delivery token is consumed, record `requested_delivery: DEFAULT` and
   resolve `delivery_mode: GUIDED`
 - if no topology token is consumed, record `requested_mode: AUTO`
@@ -89,7 +92,10 @@ directly. The supported explicit isolated forms are:
 /swe-forge pr isolated <ticket>
 ```
 
-Never advertise a removed provider name as an execution mode. Migration
+A natural-language request such as "use Herdr as the provider for this
+isolated run" records `requested_provider: HERDR` without changing the
+reserved topology grammar. Never advertise a removed provider name as an
+execution mode. Migration
 handling must point users to `isolated` and a separate Herdr provider
 preference.
 

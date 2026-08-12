@@ -112,6 +112,9 @@ The result should also identify the provider, branch, and worktree so the
 orchestrator can compare them with run state. `deliverable_commits` are local
 worker transfer artifacts, not integration commits. The orchestrator records
 the source-commit to integration-commit mapping after central validation.
+For non-isolated tasks, provider and integration strategy fields are `NONE`;
+`NATIVE`/`HERDR`, `COMPOSE`, and `CHERRY_PICK` are valid only for an
+`ISOLATED` task.
 
 ## Status Rules
 

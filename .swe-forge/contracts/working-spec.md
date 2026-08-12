@@ -62,6 +62,9 @@ routing:
   provider_reason: <why the provider satisfies isolated-execution requirements>
   parallel_strategy: NONE | COMPOSE
   integration_strategy: NONE | CHERRY_PICK
+  provider_constraints:
+    non_isolated: execution_provider=NONE, parallel_strategy=NONE, integration_strategy=NONE
+    isolated: execution_provider=NATIVE|HERDR, parallel_strategy=COMPOSE, integration_strategy=CHERRY_PICK
   reason: <why this topology and provider are the smallest safe choice>
   fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
 
@@ -130,8 +133,10 @@ open_questions: []
 
 A `ready` working spec has a concrete intent, bounded scope and non-goals,
 observable requirements, acceptance checks, a testing decision, a validation
-plan, and explicit assumptions. It records topology and provider separately;
-provider values apply only when `execution_mode: ISOLATED`. An isolated plan
+plan, and explicit assumptions. It records topology and provider separately. The provider state is
+conditional: non-isolated execution uses `NONE` for provider and strategies,
+while `ISOLATED` uses `NATIVE` or `HERDR`, `COMPOSE`, and `CHERRY_PICK`.
+An isolated plan
 must identify its one integration/delivery branch, foundation, task DAG, wave,
 shared-artifact owners, environment resources, and planned integration order.
 When a specialist skill is considered, its source, status, and selection reason

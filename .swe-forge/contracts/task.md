@@ -26,6 +26,15 @@ execution_provider: NATIVE | HERDR | NONE
 provider_reason: <why the provider satisfies isolated-execution requirements>
 parallel_strategy: NONE | COMPOSE
 integration_strategy: NONE | CHERRY_PICK
+provider_constraints:
+  non_isolated:
+    execution_provider: NONE
+    parallel_strategy: NONE
+    integration_strategy: NONE
+  isolated:
+    execution_provider: NATIVE | HERDR
+    parallel_strategy: COMPOSE
+    integration_strategy: CHERRY_PICK
 write_access: read-write
 worktree_role: shared | integration | worker | none
 worktree: shared | dedicated
@@ -162,6 +171,14 @@ delivery branch/worktree from the `worker` branch/worktree and local transfer
 commits. `base_sha`, `wave`, `integration_order`, `shared_artifacts`, and
 `environment_isolation` are required. The worker must start from the exact
 recorded integration `HEAD`; a worker cannot choose a different base.
+
+The provider constraint is conditional, not an independent mode: when
+`execution_mode` is not `ISOLATED`, `execution_provider` must be `NONE`,
+`parallel_strategy` must be `NONE`, and `integration_strategy` must be `NONE`.
+When `execution_mode` is `ISOLATED`, `execution_provider` must be `NATIVE` or
+`HERDR`, `parallel_strategy` must be `COMPOSE`, and `integration_strategy` must
+be `CHERRY_PICK`. `requested_provider` records preference and may remain
+`AUTO`, `NATIVE`, `HERDR`, or `NONE` before selection or after a safe fallback.
 
 `authorization` records each delivery or user-directed setup action
 independently. `not-authorized` is the default. Automatic setup of one normal

@@ -70,10 +70,11 @@ coordination boundary.
 
 ## Selection
 
-1. Record `requested_provider`. A natural-language provider preference is
-   separate from any topology token. The former topology token `herdr` is not
-   accepted as an alias; return migration guidance to use `isolated` and ask
-   for Herdr as a provider preference.
+1. Record `requested_provider`. A natural-language provider preference (for
+   example, "use Herdr as the provider for this isolated run") is separate
+   from any topology token. The former topology token `herdr` is not accepted
+   as an alias; return migration guidance to use `isolated` and ask for Herdr as
+   a provider preference.
 2. Verify the selected provider's capabilities against the task contract and
    the current integration commit.
 3. Prefer `NATIVE` when it satisfies every required isolated-worker capability
