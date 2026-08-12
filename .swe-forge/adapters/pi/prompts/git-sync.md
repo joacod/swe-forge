@@ -6,14 +6,8 @@ argument-hint: "[merged|default-branch]"
 The user explicitly invoked the `/git-sync` delivery action through Pi.
 
 Read `~/.pi/agent/swe-forge/.swe-forge/policies/delivery.md` and follow its
-`sync` action only. If the user supplied `merged` or is confirming a PR merge,
-identify the PR for the current task branch and verify the provider reports
-`MERGED` before changing the checkout. Confirm that the working tree is clean,
-identify the remote default branch, fetch the remote, switch safely, and run a
-fast-forward-only pull. Stop on an unmerged, missing, ambiguous, or
-unverifiable PR, conflicts, divergence, a detached checkout, or a default
-branch already used by another worktree. Never merge, reset, delete the feature
-branch, force-update, or treat the user's statement alone as proof of merge.
+`sync` action only. Apply that action to the user-provided arguments below;
+keep this prompt as a thin loader and do not perform another delivery action.
 
 User-provided action arguments:
 $ARGUMENTS

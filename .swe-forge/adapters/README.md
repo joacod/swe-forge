@@ -22,6 +22,23 @@ The OpenCode and Pi delivery loaders expose separate `git-commit`, `git-push`,
 `../policies/delivery.md`. The installation source of truth is `registry.tsv`;
 it maps harnesses to selected payloads and destinations.
 
+## Shared Workflow Behavior
+
+All adapters load the same canonical workflow and delivery policies. Keep these
+rules centralized instead of restating them in host-specific files:
+
+- activation is explicit; ordinary prompts do not activate SWE Forge
+- `AUTO` routing and `GUIDED` delivery are the defaults; `PR` is opt-in
+- a clean protected default branch gets one dedicated task branch for the run
+- `go` commits only the reviewed guided slice; PR mode commits validated slices
+  separately before final review, push, and pull-request creation
+- pushing never creates a PR, and syncing verifies `MERGED` before changing the
+  checkout
+
+Adapter-specific files should document only host syntax, discovery paths,
+permissions, and other behavior that cannot be represented by the canonical
+files. The canonical workflow, policies, and contracts remain authoritative.
+
 ## Installation Boundary
 
 The files in this directory are portable templates and documentation. They are

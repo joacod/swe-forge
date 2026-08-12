@@ -6,14 +6,9 @@ argument-hint: "[title/body options]"
 The user explicitly invoked the `/git-pr` delivery action through Pi.
 
 Read `~/.pi/agent/swe-forge/.swe-forge/policies/delivery.md` and follow its
-`create_pull_request` action only. Verify the current branch is non-protected,
-clean, pushed, and has a valid protected default-branch target. Reuse an
-existing PR when one is already open; otherwise generate a short, capitalized,
-imperative title without terminal punctuation and a concise
-summary/validation/risk body using the policy's format. Keep references at the
-bottom and use closing keywords only when closure is intentional. Create the PR
-with the host's supported CLI. Never merge, approve, close, force-push, or
-switch to the default branch as a side effect.
+`create_pull_request` action only. Apply that action to the user-provided
+arguments below; keep this prompt as a thin loader and do not perform another
+delivery action.
 
 User-provided action arguments:
 $ARGUMENTS

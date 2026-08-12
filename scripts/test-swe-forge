@@ -59,8 +59,8 @@ test "$(readlink "$project/.opencode/commands/git-push.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/git-push.md" || fail "OpenCode git-push source link is incorrect"
 grep -F '<pr> <ticket>' \
   "$project/.opencode/commands/swe-forge.md" >/dev/null || fail "OpenCode delivery hint is missing"
-grep -F 'never creates a PR' \
-  "$project/.opencode/commands/git-push.md" >/dev/null || fail "OpenCode push separation is missing"
+grep -F 'thin loader' \
+  "$project/.opencode/commands/git-push.md" >/dev/null || fail "OpenCode delivery loader is not thin"
 
 copy_project=$TMP_ROOT/copy-project
 mkdir -p "$copy_project"
