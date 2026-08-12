@@ -91,6 +91,26 @@ if grep -F 'grep -q' "$TMP_ROOT/receipt.md" >/dev/null; then
   fail "receipt leaked validation command output"
 fi
 
+repo=$(make_repo committed)
+git -C "$repo" checkout -qb feature
+printf 'committed change\n' >>"$repo/README.md"
+git -C "$repo" add README.md
+git -C "$repo" commit -qm 'Commit before evidence setup'
+state=$TMP_ROOT/committed.state
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" --base HEAD~1 >/dev/null
+  "$GATE" validate --state "$state" --requirement required --name committed-smoke \
+    --final -- sh -c 'grep -q committed README.md' >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
+  "$GATE" deliver-pr --state "$state" >/dev/null
+  "$GATE" receipt --state "$state" --execution SOLO --delivery GUIDED \
+    --output "$TMP_ROOT/committed-receipt.md" >/dev/null
+)
+grep -F 'Final status: ACCEPTED' "$TMP_ROOT/committed-receipt.md" >/dev/null || \
+  fail "committed-range receipt is missing final status"
+
 repo=$(make_repo dirty)
 git -C "$repo" checkout -qb feature
 printf 'uncommitted\n' >>"$repo/README.md"

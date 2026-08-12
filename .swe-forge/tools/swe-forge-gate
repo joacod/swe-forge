@@ -31,7 +31,7 @@ fail() {
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/swe-forge-gate preflight --state DIR [--branch BRANCH]
+  scripts/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
   scripts/swe-forge-gate validate --state DIR --requirement TYPE --name NAME [--final] -- COMMAND [ARGS...]
   scripts/swe-forge-gate checkpoint --state DIR --scope PATH [--scope PATH...]
   scripts/swe-forge-gate commit-slice --state DIR --checkpoint ID --message MESSAGE --authorized-by PR|GO
@@ -164,6 +164,7 @@ write_meta() {
     printf 'state_version=1\n'
     printf 'checkout_path=%s\n' "$CHECKOUT"
     printf 'baseline_head=%s\n' "$1"
+    printf 'checkout_head=%s\n' "$4"
     printf 'baseline_branch=%s\n' "$2"
     printf 'remote_default=%s\n' "$3"
     printf 'created_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
@@ -173,6 +174,7 @@ write_meta() {
 
 preflight() {
   expected_branch=
+  baseline_ref=HEAD
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --state)
@@ -184,6 +186,12 @@ preflight() {
         [ "$#" -ge 2 ] || fail "--branch requires a name"
         expected_branch=$2
         reject_control_chars "$expected_branch"
+        shift 2
+        ;;
+      --base)
+        [ "$#" -ge 2 ] || fail "--base requires a Git revision"
+        baseline_ref=$2
+        reject_control_chars "$baseline_ref"
         shift 2
         ;;
       -h|--help) usage; exit 0 ;;
@@ -207,12 +215,17 @@ preflight() {
   status=$(status_porcelain)
   [ -z "$status" ] || fail "checkout is not clean before writable work"
   head=$(git -C "$CHECKOUT" rev-parse HEAD 2>/dev/null || fail "checkout has no commit baseline")
+  base_head=$(git -C "$CHECKOUT" rev-parse "$baseline_ref" 2>/dev/null || \
+    fail "base revision does not resolve: $baseline_ref")
+  git -C "$CHECKOUT" merge-base --is-ancestor "$base_head" "$head" || \
+    fail "base revision is not an ancestor of the current checkout: $baseline_ref"
   mkdir -p "$STATE"
-  write_meta "$head" "$branch" "$remote_default"
+  write_meta "$base_head" "$branch" "$remote_default" "$head"
   : >"$STATE/validations.tsv"
   : >"$STATE/checkpoints.tsv"
   printf 'PASS: preflight baseline recorded at %s\n' "$STATE"
-  printf 'BASELINE_HEAD: %s\n' "$head"
+  printf 'BASELINE_HEAD: %s\n' "$base_head"
+  printf 'CHECKOUT_HEAD: %s\n' "$head"
   printf 'BRANCH: %s\n' "$branch"
 }
 
@@ -386,6 +399,11 @@ checkpoint_run() {
   assert_identity
   CHANGED_TMP=$STATE/changed.$$
   changed_paths >"$CHANGED_TMP"
+  baseline_head=$(meta_value baseline_head "$STATE/meta.env")
+  current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  if [ ! -s "$CHANGED_TMP" ] && [ "$baseline_head" != "$current_head" ]; then
+    git -C "$CHECKOUT" diff --name-only "$baseline_head..$current_head" | sort -u >"$CHANGED_TMP"
+  fi
   changed_count=0
   out_of_scope=
   while IFS= read -r changed; do

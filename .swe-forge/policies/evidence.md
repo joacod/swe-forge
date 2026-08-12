@@ -20,7 +20,7 @@ Run the commands from a clean, classified checkout and use a fresh temporary
 state directory for each run:
 
 ```sh
-.swe-forge/tools/swe-forge-gate preflight --state "$STATE" --branch "$BRANCH"
+.swe-forge/tools/swe-forge-gate preflight --state "$STATE" --branch "$BRANCH" --base "$BASE"
 .swe-forge/tools/swe-forge-gate validate \
   --state "$STATE" --requirement required --name "structural checks" -- \
   ./scripts/check-swe-forge
@@ -37,12 +37,16 @@ state directory for each run:
 The command boundaries are intentionally separate:
 
 - `preflight` rejects dirty, detached, protected, or branch-drifted checkouts
-  and records the baseline.
+  and records the baseline. An explicit `--base REF` can record a clean
+  checkout whose already-created commits are being resumed and must be an
+  ancestor of the current HEAD.
 - `validate` executes one inspected local check, records its exit status, and
   stores command output outside the repository. Use `--final` for every
   required or conditional check run against the final HEAD.
 - `checkpoint` records changed paths and requires them to stay within the
-  declared scope with passing required and conditional evidence.
+  declared scope with passing required and conditional evidence. It can record
+  either current worktree changes or committed changes since the recorded base
+  when a run is resumed after delivery work.
 - `commit-slice` stages only the paths recorded by a passing checkpoint and
   requires explicit `PR` or guided `GO` authorization. It never pushes.
 - `review` records only the structured review result and finding counts; it
