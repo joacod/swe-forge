@@ -14,6 +14,8 @@ grading an agent from its explanation alone.
 | Explicit `herdr` with required isolation unavailable | Return `BLOCKED`; do not put concurrent writers in one checkout. |
 | `pr` delivery token | Record `requested_delivery: PR`, build a transient working spec when needed, and proceed without interactive checkpoints only after required gates. |
 | `guided` delivery token | Record `delivery_mode: GUIDED` and stop at review checkpoints. |
+| Ticket names an optional specialist skill | Preserve its source, evaluate it on demand, and record selected, skipped, or unavailable status without installing it automatically. |
+| A matching skill is too specific for the ticket | Skip it, record the reason, and keep the normal workflow and scope. |
 | Delivery token without a remainder | Report incomplete input. |
 | Ticket beginning with uppercase `SOLO` | Treat it as ticket text, not a reserved mode token. |
 | Ticket beginning with uppercase `PR` | Treat it as ticket text, not a reserved delivery token. |
@@ -55,6 +57,7 @@ grading an agent from its explanation alone.
 | Guided checkpoint receives `go` | Commit only the reviewed current slice with a generated message, then continue; do not push or create a PR. |
 | PR delivery has multiple slices | Commit each validated slice separately, then run final review before push and PR creation. |
 | Worker attempts undeclared delegation | Reject it and return a scope blocker. |
+| Specialist skill recommends delivery or external work | Treat it as advice only; require the separate action authorization and side-effect checks. |
 | Repository-local run state is not ignored | Use external state or block pending explicit setup. |
 | Writable worktree cleanup | Preserve it unless all tracked and untracked changes are integrated or externally saved. |
 

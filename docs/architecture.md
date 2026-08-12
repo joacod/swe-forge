@@ -56,6 +56,11 @@ frontmatter, but the wrapper must load the canonical role rather than copy it.
 The orchestrator is the hub. Workers do not form an unrestricted peer network
 or own final acceptance.
 
+Optional specialist skills are domain playbooks loaded on demand. They may
+inform architecture, implementation, or review, but they do not own a task,
+override canonical instructions, or authorize delivery actions. Keep their
+bundled references and tooling subject to the same scope and validation gates.
+
 ## Contract Layer
 
 Contracts make coordination explicit without using agent conversation as shared
@@ -170,6 +175,13 @@ should reuse the existing contracts and policies, add only workflow-specific
 decisions, and remain explicitly invoked. New roles and adapters require
 evidence that the specialization improves outcomes enough to justify its
 maintenance cost.
+
+Optional specialist skills are a separate extension path for guidance that is
+useful on some tickets but too specific for the default context. Keep third-
+party skills outside the canonical tree and expose them through thin,
+explicitly invoked harness loaders when useful. Do not add an installer registry
+entry or permanent workflow phase until representative tickets demonstrate a
+repeatable benefit.
 
 Harness compatibility should prefer a shared projection when vendors support
 the same standard. Keep vendor-specific files only for native syntax or

@@ -93,3 +93,4 @@ needed. See the harness adapter documentation for the available `git-commit`,
 - [Architecture](docs/architecture.md)
 - [Adapter index](.swe-forge/adapters/README.md)
 - [Adding a harness](docs/adding-a-harness.md)
+- [Adding an optional specialist skill](docs/adding-a-skill.md)

@@ -57,6 +57,8 @@ For harness commands, parse the raw arguments before ingesting the ticket:
   resolve `delivery_mode: GUIDED`
 - if no topology token was consumed, record `requested_mode: AUTO`
 - preserve the non-empty remainder as the original ticket
+- preserve any user-supplied specialist-skill names, paths, or URLs as ticket
+  input; do not treat them as permission to install or execute external code
 - a topology or delivery token without a ticket is incomplete input; ask for the
   missing ticket
 - if the first token is not one of the reserved lowercase tokens, preserve it
@@ -77,7 +79,10 @@ merge.
 
 Inspect the repository before making architectural claims. Locate relevant
 entry points, dependencies, analogous implementations, conventions,
-documentation, tests, and quality gates.
+documentation, tests, and quality gates. If the ticket names an optional
+specialist skill, or an already available skill has a clearly declared match,
+read `.swe-forge/policies/specialist-skills.md` and evaluate it on demand;
+otherwise do not search or load unrelated skills.
 
 Use parallel read-only research only when it reduces time or context load. All
 research must return evidence with file, symbol, command, or documentation
@@ -94,8 +99,10 @@ context unless a durable run artifact is needed. In `PR`, follow
 most a short high-leverage interview when the ticket is underspecified, and
 build the transient artifact described by
 `.swe-forge/contracts/working-spec.md`. Do not write ticket-specific specs to
-the repository. A reasonable, low-risk assumption may be recorded and used;
-a blocking user decision must be asked rather than guessed.
+the repository. When a specialist skill is considered, record its source,
+status, and selection reason in the transient working spec. A reasonable,
+low-risk assumption may be recorded and used; a blocking user decision must be
+asked rather than guessed.
 
 ### 4. Architect
 
