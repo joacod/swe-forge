@@ -48,6 +48,36 @@ controlled actions.
 | [Codex](.swe-forge/adapters/codex/README.md) | Project or global | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
 | [Cursor](.swe-forge/adapters/cursor/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
 
+## How it works
+
+SWE Forge turns an explicit ticket into a bounded, evidence-backed change:
+
+```text
+ticket
+  → inspect the repository and clarify important decisions
+  → define acceptance criteria and the smallest compatible approach
+  → choose SOLO, SUBAGENTS, or HERDR
+  → implement and validate bounded slices
+  → verify, independently review, and repair when needed
+  → report ACCEPTED, BLOCKED, or FAILED
+```
+
+The original ticket remains authoritative. When clarification is needed, Forge
+asks only questions whose answers could change behavior, scope, compatibility,
+safety, or delivery. A temporary working spec may organize the intent,
+scenarios, assumptions, and validation plan, but ticket-specific specs are not
+normally added to the repository.
+
+`GUIDED` mode keeps a human checkpoint between reviewable slices. `PR` mode is
+an explicit low-touch path that can continue through validation, review, push,
+and pull-request creation. Neither mode merges automatically. Commits, pushes,
+PR creation, and post-merge synchronization remain separately controlled
+actions, and optional specialist skills are loaded only when requested or
+clearly useful.
+
+The detailed lifecycle lives in the [workflow specification](SWE-FORGE.md) and
+[ticket procedure](.swe-forge/workflows/ticket.md).
+
 ## Delivery modes
 
 ### Guided (default)
