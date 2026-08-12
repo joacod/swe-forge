@@ -54,6 +54,38 @@ requirements:
 acceptance:
   - <checkable condition>
 
+routing:
+  requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
+  execution_mode: SOLO | SUBAGENTS | ISOLATED
+  requested_provider: AUTO | NATIVE | HERDR | NONE
+  execution_provider: NATIVE | HERDR | NONE
+  provider_reason: <why the provider satisfies isolated-execution requirements>
+  parallel_strategy: NONE | COMPOSE
+  integration_strategy: NONE | CHERRY_PICK
+  provider_constraints:
+    non_isolated: execution_provider=NONE, parallel_strategy=NONE, integration_strategy=NONE
+    isolated: execution_provider=NATIVE|HERDR, parallel_strategy=COMPOSE, integration_strategy=CHERRY_PICK
+  reason: <why this topology and provider are the smallest safe choice>
+  fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
+
+isolated_plan:
+  integration_branch: <one integration/delivery branch or none>
+  integration_worktree: <absolute orchestrator worktree or none>
+  foundation: []
+  tasks: []
+  current_wave: <wave or none>
+  integration_order: []
+  shared_artifacts: []
+  environment_isolation:
+    setup_commands: []
+    copied_ignored_files: []
+    ports: []
+    databases: []
+    docker_projects: []
+    temporary_directories: []
+    external_resources: []
+    cleanup_commands: []
+
 constraints:
   - <compatibility, safety, or repository constraint>
 
@@ -101,7 +133,13 @@ open_questions: []
 
 A `ready` working spec has a concrete intent, bounded scope and non-goals,
 observable requirements, acceptance checks, a testing decision, a validation
-plan, and explicit assumptions. When a specialist skill is considered, its
-source, status, and selection reason are also recorded. Open questions may
-remain only when they do not block safe implementation and are recorded as
-risks. Ask the user about a blocking decision rather than guessing.
+plan, and explicit assumptions. It records topology and provider separately. The provider state is
+conditional: non-isolated execution uses `NONE` for provider and strategies,
+while `ISOLATED` uses `NATIVE` or `HERDR`, `COMPOSE`, and `CHERRY_PICK`.
+An isolated plan
+must identify its one integration/delivery branch, foundation, task DAG, wave,
+shared-artifact owners, environment resources, and planned integration order.
+When a specialist skill is considered, its source, status, and selection reason
+are also recorded. Open questions may remain only when they do not block safe
+implementation and are recorded as risks. Ask the user about a blocking
+decision rather than guessing.

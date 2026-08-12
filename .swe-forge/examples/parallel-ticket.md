@@ -108,6 +108,10 @@ tasks:
 ```text
 requested_mode: AUTO
 execution_mode: SUBAGENTS
+requested_provider: AUTO
+execution_provider: NONE
+parallel_strategy: NONE
+integration_strategy: NONE
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
 reason: API research, UI research, and test strategy are independent read-only tasks; implementation is kept sequential because the API contract and UI behavior are coupled.
@@ -115,8 +119,8 @@ worker_limit: 3
 fallback: serialize research or use SOLO if native workers are unavailable
 ```
 
-The orchestrator does not use Herdr because no concurrent writable worktree or
-independent process is needed.
+The orchestrator does not select `ISOLATED` or an execution provider because
+no concurrent writable worktree or independent process is needed.
 
 ## 7. Task Contract
 
@@ -132,6 +136,10 @@ dependencies:
   - ui-research
   - test-strategy
 execution_mode: SUBAGENTS
+requested_provider: AUTO
+execution_provider: NONE
+parallel_strategy: NONE
+integration_strategy: NONE
 write_access: read-write
 worktree: shared
 delivery_mode: GUIDED
@@ -266,6 +274,10 @@ no critical or high-confidence correctness finding, and reports:
 ```text
 requested_mode: AUTO
 execution_mode: SUBAGENTS
+requested_provider: AUTO
+execution_provider: NONE
+parallel_strategy: NONE
+integration_strategy: NONE
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
 result: ACCEPTED

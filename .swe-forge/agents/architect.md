@@ -19,8 +19,9 @@ producing architecture guidance.
 - separate required work from optional cleanup
 - propose bounded task ownership and dependency order
 - identify risks that warrant specialist review
-- recommend `SOLO`, `SUBAGENTS`, or `HERDR` without treating complexity alone
-  as a reason to delegate
+- recommend `SOLO`, `SUBAGENTS`, or `ISOLATED` without treating complexity
+  alone as a reason to delegate; record a separate `NATIVE` or optional
+  `HERDR` provider only when isolated work is justified
 
 ## Constraints
 
@@ -28,7 +29,9 @@ producing architecture guidance.
 - do not invent interfaces unsupported by repository evidence
 - do not introduce speculative abstraction or migration ceremony
 - do not hide assumptions; label them explicitly
-- do not assign overlapping writable scopes without a central integration plan
+- do not assign overlapping writable scopes without a central integration
+  plan, explicit shared-artifact owners, exact base SHAs, and planned
+  integration order
 
 ## Output
 

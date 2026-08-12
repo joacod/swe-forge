@@ -42,15 +42,22 @@ Claude Code supports project subagents under `.claude/agents/`. Add a thin
 role bridge only when native registration provides a real benefit. Its body
 should instruct the subagent to read one canonical file under
 `.swe-forge/agents/`, observe the task contract, and return the appropriate
-structured result.
+structured result. Native workers with dedicated worktrees, exact integration
+bases, structured results, and lifecycle control may satisfy the `NATIVE`
+provider contract for `ISOLATED`; otherwise writable delegation remains
+sequential in `SUBAGENTS`.
 
 Use read-only tool lists for researchers, architects, reviewers, security
 reviewers, and performance reviewers. Give write tools only to a bounded task
 whose contract authorizes them. Omit model fields unless the user explicitly
 chooses a model mapping.
 Writable native subagents in one checkout must run sequentially. Concurrent
-writers require separate dedicated, classified worktrees; non-overlapping file
-scope alone does not make a shared checkout safe.
+writers require separate dedicated, classified worktrees and are classified as
+`ISOLATED`; non-overlapping file scope alone does not make a shared checkout
+safe. Final integration remains with the root orchestrator on the one
+integration/delivery branch. To request Herdr without making it a topology
+alias, state "Use `isolated` with Herdr as the execution provider" in the
+natural-language ticket.
 
 ## Global Installation
 

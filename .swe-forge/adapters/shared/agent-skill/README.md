@@ -26,8 +26,11 @@ offered as a multi-harness operation.
 The skill sets `disable-model-invocation: true` for hosts that support that
 field, while `agents/openai.yaml` disables implicit invocation in Codex. Users
 invoke the installed skill explicitly as `$swe-forge` in Codex or
-`/swe-forge` in Cursor. See [shared adapter behavior](../../README.md) for the
-workflow and delivery rules.
+`/swe-forge` in Cursor. The canonical support tree also exposes provider
+runbooks, including optional Herdr documentation; it does not install provider
+tools. State "Use `isolated` with Herdr as the execution provider" in the
+natural-language ticket when that preference is wanted. See [shared adapter
+shared adapter behavior](../../README.md) for the workflow and delivery rules.
 
 References checked on 2026-08-11:
 

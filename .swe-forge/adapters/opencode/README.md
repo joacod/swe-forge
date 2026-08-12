@@ -28,6 +28,12 @@ The delivery helpers are separate explicit commands:
 /git-sync
 ```
 
+The canonical command accepts automatic, explicit, and orthogonal delivery
+forms such as `/swe-forge isolated <ticket>`, `/swe-forge isolated pr
+<ticket>`, and `/swe-forge pr isolated <ticket>`. `herdr` is not a topology
+alias; users who want Herdr request it as the provider for `ISOLATED`, for
+example in ticket text: "Use `isolated` with Herdr as the execution provider."
+
 They load `.swe-forge/policies/delivery.md` rather than copying its procedure.
 See [shared adapter behavior](../README.md) for the workflow and delivery rules.
 
@@ -43,7 +49,11 @@ for `/swe-forge` or the delivery actions.
 
 OpenCode provides native primary and subagent modes. Use them when the routing
 policy selects `SUBAGENTS`. Built-in read-only exploration or general-purpose
-workers can receive a bounded task and the relevant canonical role file.
+workers can receive a bounded task and the relevant canonical role file. If
+OpenCode can demonstrably create concurrent writable workers in dedicated
+worktrees from one exact integration SHA, those workers satisfy the `NATIVE`
+provider contract and the topology is `ISOLATED`; otherwise keep writable
+subagents sequential in one checkout.
 
 For a custom native role, create a thin project agent in `.opencode/agents/`
 that contains only:
@@ -66,8 +76,10 @@ Choose permissions for each role deliberately. Read-only researchers and
 reviewers should not receive edit access. Writable implementers need explicit
 scope from a task contract.
 Writable native subagents in one checkout must run sequentially. Concurrent
-writers require separate dedicated, classified worktrees; non-overlapping file
-scope alone does not make a shared checkout safe.
+writers require separate dedicated, classified worktrees and are classified as
+`ISOLATED`; non-overlapping file scope alone does not make a shared checkout
+safe. The root orchestrator keeps final integration and delivery under its own
+checkout.
 
 ## Models and Permissions
 

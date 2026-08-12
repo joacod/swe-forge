@@ -1,8 +1,9 @@
 # Adding a Workflow
 
-The repository currently implements only the general ticket workflow. Add
-another workflow only when real tickets demonstrate that a distinct lifecycle
-and acceptance strategy is worth maintaining.
+The repository currently implements the general ticket workflow and its
+conditional isolated-execution workflow. Add another workflow only when real
+tickets demonstrate that a distinct lifecycle and acceptance strategy is worth
+maintaining.
 
 ## Location and Invocation
 
@@ -56,9 +57,11 @@ strong coding agent for its target ticket class.
 
 - activation remains explicitly user-controlled
 - the original ticket remains authoritative
-- `SOLO`, `SUBAGENTS`, and `HERDR` rules remain safe
+- `SOLO`, `SUBAGENTS`, and `ISOLATED` rules remain safe
+- execution providers remain separate from topology, with Herdr optional
 - concurrent writers never share a checkout
-- workers return structured results
+- workers return structured results with exact bases, scope, validation, and
+  environment-resource evidence when isolated
 - verification and fresh review are proportional and real
 - adapters remain thin loaders
 - examples and evaluation coverage explain when the workflow should not be used

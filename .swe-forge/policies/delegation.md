@@ -50,8 +50,11 @@ Before writable delegation, create a task contract using
 - recursive delegation disabled by default or explicitly bounded
 
 Workers must request a contract update before expanding scope.
-Writable tasks must classify validation requirements and side effects. Workers
-may not substitute required checks or infer one authorized action from another.
+Writable tasks must classify validation requirements and side effects. Isolated
+worker tasks must also record an exact base SHA, wave, integration order,
+shared-artifact owner, environment-isolation plan, and local-only delivery
+permissions. Workers may not substitute required checks or infer one
+authorized action from another.
 Recursive delegation depth is measured from the original owner and worker limits
 are total descendant budgets. Child contracts must carry the root task ID and
 reduced remaining budgets; they cannot reset limits.
@@ -75,8 +78,9 @@ to make the workflow look more complex.
 
 - one writing task owns a path or symbol set at a time
 - read-only workers may inspect shared files
-- concurrent writers require separate worktrees
-- Herdr worktrees are integrated centrally, one at a time
+- concurrent writers require separate worktrees and are classified as `ISOLATED`
+- native or Herdr provider worktrees are integrated centrally, one at a time
+- one integration/delivery branch remains the only ticket delivery boundary
 - the orchestrator must preserve unrelated user changes
 - no worker may rewrite another worker's checkout without authorization
 

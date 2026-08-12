@@ -141,9 +141,10 @@ Add only the bridge needed by the target harness:
 - Pi: the global installer links the explicit prompt template to
   `~/.pi/agent/prompts/swe-forge.md` and does not modify Pi settings or install
   an extension.
-- Herdr: use `.swe-forge/adapters/herdr/` only when an execution decision
-  selects isolated work; install Herdr's own official skill separately if
-  needed.
+- Herdr: the optional execution provider is documented under
+  `.swe-forge/providers/herdr/` and is used only when canonical routing selects
+  `ISOLATED`; install Herdr's own official skill separately if it is needed and
+  already authorized. The SWE Forge installer never installs Herdr.
 - Other harnesses: use the natural-language activation contract until a thin
   adapter is justified and documented.
 

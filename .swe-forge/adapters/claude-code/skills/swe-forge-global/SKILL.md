@@ -2,7 +2,7 @@
 name: swe-forge
 description: Explicitly activate the portable SWE Forge workflow with guided or PR delivery for a user-supplied ticket.
 disable-model-invocation: true
-argument-hint: "[pr|solo|subagents|herdr] [pr] <ticket>"
+argument-hint: "[pr|solo|subagents|isolated] [pr] <ticket>"
 compatibility: Claude Code global skill
 ---
 
@@ -18,6 +18,11 @@ repository discovery rooted in the active project and preserve the raw
 invocation arguments as the original ticket.
 
 Raw invocation arguments (`<ticket>`, `<pr> <ticket>`, or
-`<solo|subagents|herdr> [pr] <ticket>`):
+`<solo|subagents|isolated> [pr] <ticket>`):
+
+Supported isolated forms include `/swe-forge isolated <ticket>`,
+`/swe-forge isolated pr <ticket>`, and `/swe-forge pr isolated <ticket>`.
+A leading `herdr` is not a topology alias; use `isolated` and request Herdr
+as a separate execution-provider preference.
 
 $ARGUMENTS

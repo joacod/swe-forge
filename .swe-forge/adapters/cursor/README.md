@@ -19,7 +19,9 @@ is installed at `~/.agents/skills/swe-forge/` and reads canonical support files
 from `~/.agents/swe-forge/`. The installer does not modify Cursor settings,
 CLI configuration, permissions, models, credentials, or team configuration.
 
-Invoke it explicitly with `/swe-forge <ticket>`. Natural-language activation
+Invoke it explicitly with `/swe-forge <ticket>`. For isolated execution,
+state "Use `isolated` with Herdr as the execution provider" in the ticket when
+that optional provider preference is wanted. Natural-language activation
 through the project's `AGENTS.md` remains the fallback.
 
 See the [shared Agent Skill adapter](../shared/agent-skill/README.md) for the

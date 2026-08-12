@@ -34,13 +34,17 @@ distinguishes a missing optional field from existing numeric cases.
 ```text
 requested_mode: AUTO
 execution_mode: SOLO
+requested_provider: AUTO
+execution_provider: NONE
+parallel_strategy: NONE
+integration_strategy: NONE
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
 reason: One localized formatter change with tightly coupled tests and no useful independent ownership.
 ```
 
-No architect, security reviewer, performance reviewer, or Herdr workspace is
-needed. The active agent performs lightweight orchestration, implementation,
+No architect, security reviewer, performance reviewer, or isolated provider
+workspace is needed. The active agent performs lightweight orchestration, implementation,
 verification, and final review in one context.
 
 ## Test Strategy

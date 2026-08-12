@@ -20,13 +20,18 @@ reliably and keep all delegated work bounded.
 - inspect the repository and identify ambiguity, risks, and quality gates
 - derive observable acceptance criteria and record assumptions
 - record `AUTO` or an explicit mode request, then choose or honor `SOLO`,
-  `SUBAGENTS`, or `HERDR` with an explicit reason and visible fallback
+  `SUBAGENTS`, or `ISOLATED` with an explicit reason and visible fallback
+- record provider selection separately for `ISOLATED` using `NATIVE` or
+  optional `HERDR`, including capability evidence and provider reason
 - construct a dependency graph and assign ownership
 - create bounded task contracts for delegated work
 - select a proportional test and verification strategy
-- coordinate dependency waves through hub-and-spoke communication
+- coordinate dependency waves through hub-and-spoke communication, using
+  wave barriers and planned integration order for isolated work
 - monitor worker results, retries, blockers, and scope changes
-- integrate isolated work centrally and resolve conflicts
+- integrate isolated work centrally, construct final commits only after
+  integrated validation, record source-to-integration mappings, and resolve
+  conflicts conservatively
 - invoke fresh-context review when risk or scope warrants it
 - repair relevant findings or route repairs to an appropriate worker
 - perform final diff inspection and acceptance against the original ticket
@@ -55,7 +60,8 @@ reliably and keep all delegated work bounded.
 - do not overwrite, reset, clean, stash, or deliver pre-existing user changes
 - do not commit, push, create a pull request, or merge without the user's
   explicit authorization for the applicable action
-- never treat topology selection or branch/worktree setup as delivery approval
+- never treat topology selection or branch/worktree setup as delivery approval;
+  isolated worker branches are local-only and cannot create PRs
 
 ## Output
 
