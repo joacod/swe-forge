@@ -5,6 +5,11 @@ already selected `ISOLATED` workflow. They do not define SWE Forge behavior,
 replace the coding harness, select the topology, own task acceptance, or own
 final integration and delivery.
 
+Provider documentation is canonical support content, not a harness adapter
+projection or registry artifact. The installer source-links this directory
+with the canonical `.swe-forge/` support tree so global and project consumers
+resolve the same provider runbooks without installing provider tools.
+
 The provider boundary is intentionally small. A provider may create or expose
 bounded worker environments, wait and inspect them, collect structured results,
 cancel or clean run-owned resources, and report lifecycle evidence. The root

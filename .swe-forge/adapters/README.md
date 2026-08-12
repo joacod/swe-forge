@@ -25,8 +25,11 @@ lives in `../policies/delivery.md`. The installation source of truth is
 
 An execution provider is not a harness adapter. Providers expose optional
 isolated lifecycle capabilities only after canonical routing selects
-`ISOLATED`. Herdr documentation lives under `../providers/herdr/`; it is not
-installed automatically and has no adapter registry entry.
+`ISOLATED`. Provider documentation is canonical support content under
+`../providers/`, source-linked with the canonical support tree; it is not an
+adapter registry artifact. Herdr documentation lives under
+`../providers/herdr/`; it is not installed automatically as a Herdr tool and
+has no adapter registry entry.
 
 ## Shared Workflow Behavior
 

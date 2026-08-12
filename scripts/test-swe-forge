@@ -45,6 +45,9 @@ test -L "$project/AGENTS.md" || fail "project AGENTS.md is not linked"
 test -L "$project/SWE-FORGE.md" || fail "project SWE-FORGE.md is not linked"
 test -L "$project/.swe-forge/agents" || fail "canonical agent directory is not linked"
 test -L "$project/.swe-forge/providers" || fail "execution providers directory is not linked"
+test -d "$project/.swe-forge/providers/herdr" || fail "Herdr provider directory is missing"
+test -f "$project/.swe-forge/providers/herdr/README.md" || fail "Herdr provider README is missing"
+test -f "$project/.swe-forge/providers/herdr/runbook.md" || fail "Herdr provider runbook is missing"
 test -L "$project/.opencode/commands/swe-forge.md" || fail "OpenCode command is not linked"
 for command in $DELIVERY_COMMANDS; do
   test -L "$project/.opencode/commands/$command.md" || fail "OpenCode $command command is not linked"
@@ -306,6 +309,9 @@ for support in \
   "$global_home/.agents/swe-forge" \
   "$global_home/.pi/agent/swe-forge"; do
   test -L "$support/.swe-forge/providers" || fail "execution providers directory is not linked in $support"
+  test -d "$support/.swe-forge/providers/herdr" || fail "Herdr provider is missing in $support"
+  test -f "$support/.swe-forge/providers/herdr/README.md" || fail "Herdr provider README is missing in $support"
+  test -f "$support/.swe-forge/providers/herdr/runbook.md" || fail "Herdr provider runbook is missing in $support"
   test ! -e "$support/.swe-forge/adapters" || fail "adapter catalog was installed in $support"
 done
 test "$(readlink "$global_home/.config/opencode/commands/swe-forge.md")" = \

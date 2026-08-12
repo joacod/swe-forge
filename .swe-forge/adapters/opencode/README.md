@@ -31,7 +31,8 @@ The delivery helpers are separate explicit commands:
 The canonical command accepts automatic, explicit, and orthogonal delivery
 forms such as `/swe-forge isolated <ticket>`, `/swe-forge isolated pr
 <ticket>`, and `/swe-forge pr isolated <ticket>`. `herdr` is not a topology
-alias; users who want Herdr request it as the provider for `ISOLATED`.
+alias; users who want Herdr request it as the provider for `ISOLATED`, for
+example in ticket text: "Use `isolated` with Herdr as the execution provider."
 
 They load `.swe-forge/policies/delivery.md` rather than copying its procedure.
 See [shared adapter behavior](../README.md) for the workflow and delivery rules.

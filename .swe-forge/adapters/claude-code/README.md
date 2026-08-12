@@ -55,7 +55,9 @@ Writable native subagents in one checkout must run sequentially. Concurrent
 writers require separate dedicated, classified worktrees and are classified as
 `ISOLATED`; non-overlapping file scope alone does not make a shared checkout
 safe. Final integration remains with the root orchestrator on the one
-integration/delivery branch.
+integration/delivery branch. To request Herdr without making it a topology
+alias, state "Use `isolated` with Herdr as the execution provider" in the
+natural-language ticket.
 
 ## Global Installation
 
