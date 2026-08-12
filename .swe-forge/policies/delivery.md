@@ -71,7 +71,8 @@ checkout rather than moving or overwriting work. A user-provided branch or
 worktree preference may replace the default only when it passes the same safety
 gates. An explicit user request may also opt into a different multi-branch or
 worktree arrangement; absent that request, keep every slice for the task on this
-one branch.
+one branch. If the request is ambiguous, ask before creating additional
+branches or worktrees.
 
 Automatic task-branch setup is workflow authorization only. It permits creating
 that one branch and does not permit commits, pushes, pull requests, merges, or

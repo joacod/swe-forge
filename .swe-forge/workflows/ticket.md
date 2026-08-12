@@ -198,7 +198,9 @@ than moving or overwriting work.
 
 Record a pre-edit baseline with the absolute checkout path, HEAD, branch,
 remote-default evidence, branch setup strategy, and staged, unstaged, and
-untracked files. Compare task scope to that inventory. Block on overlapping
+untracked files. If the request for additional branches or worktrees is
+ambiguous, ask before creating them. Compare task scope to that inventory. Block
+on overlapping
 pre-existing changes until the user resolves ownership; preserve unrelated
 changes and do not reset, clean, stash, or overwrite them. Use the baseline
 again during final diff inspection so untracked files and user changes are not

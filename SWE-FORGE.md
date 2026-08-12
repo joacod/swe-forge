@@ -278,7 +278,8 @@ branch setup is workflow authorization only. Normal `GUIDED` invocation
 authorizes implementation and this one-branch setup, not commits, pushes,
 pull requests, or merges. `go` explicitly authorizes only the current local
 slice commit. An explicit `PR` delivery token authorizes its per-slice commits,
-final push, and pull-request creation after the required gates. Merging always
+final push, and pull-request creation after the required gates. An ambiguous
+request for extra branches or worktrees requires clarification. Merging always
 requires a separate explicit instruction and is not part of the ticket
 lifecycle.
 
