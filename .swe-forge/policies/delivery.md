@@ -64,6 +64,28 @@ Worker branches and worktrees are local-only transfer resources and never a
 second delivery boundary. worker branches are local-only
 and cannot create PRs.
 
+## Delivery branch naming
+
+Name normal task/delivery branches and isolated integration/delivery branches
+with the conventional form:
+
+```text
+<type>/<short-kebab-case-description>
+```
+
+Choose `<type>` from the primary ticket outcome, for example `feat`, `fix`,
+`docs`, `refactor`, `test`, `chore`, `perf`, `build`, or `ci`. Keep the
+description lowercase, concise, and separated with hyphens; include an issue
+number only when the repository or ticket supplies one. Do not use the
+repository/project name (for example `swe-forge/`) as a generic branch prefix.
+
+If the preferred name is already occupied, retain the type and description and
+add a short unique suffix (or use a supplied issue identifier); do not silently
+reuse another task's branch. Namespaced `worker/` or run/task names are allowed
+only for ephemeral local-only worker branches in `ISOLATED`, where uniqueness
+and resource ownership matter. They are never delivery branches, pushed
+branches, or PR branches.
+
 ## Atomic actions
 
 Each action is independently authorized:

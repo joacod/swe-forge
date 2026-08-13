@@ -87,9 +87,11 @@ files, links, or manifests.
 
 Installation only makes it available; it does not activate the workflow.
 Invoke it explicitly with a ticket. Ordinary prompts continue to use your
-harness normally. A clean normal default branch gets one dedicated task branch
-automatically. An isolated run instead uses one run-owned integration worktree
-and one integration/delivery branch; bounded worker branches are local-only.
+harness normally. A clean normal default branch gets one dedicated task
+branch automatically, using the conventional
+`<type>/<short-kebab-case-description>` form without a project-name prefix. An isolated run instead uses one run-owned integration
+worktree and one integration/delivery branch with the same convention; bounded
+worker branches are local-only.
 Commits, pushes, pull requests, and merges remain separately controlled.
 
 | Harness | Installation | Invocation |

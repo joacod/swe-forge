@@ -42,9 +42,10 @@ specific files:
 - canonical topologies are `SOLO`, `SUBAGENTS`, and `ISOLATED`
 - `SUBAGENTS` uses parallel read-only work or sequential bounded writable work
   in one checkout; concurrent writable worktrees are `ISOLATED`
-- a clean normal checkout gets one dedicated task branch for the run; an
-  isolated ticket has one integration/delivery branch; worker branches are
-  local-only and cannot create PRs
+- a clean normal checkout gets one dedicated task branch using the canonical
+  `<type>/<short-kebab-case-description>` convention; an isolated ticket has
+  one integration/delivery branch using the same convention; worker branches
+  are local-only and cannot create PRs
 - `go` commits only the reviewed guided slice or accepted central integration
   unit; PR mode plans meaningful slices before editing and commits each validated
   slice separately before final review, push, and one pull-request creation

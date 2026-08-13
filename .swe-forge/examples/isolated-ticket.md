@@ -47,7 +47,7 @@ concurrent writers. Fall back safely to sequential `SUBAGENTS`/`SOLO` or return
 Before creating multiple writable resources, the guided checkpoint shows:
 
 ```text
-integration branch/worktree: swe-forge/<run-id>/integration / <absolute path>
+integration branch/worktree: feat/order-cancellation / <absolute path>
 checkout_baseline:
   path: <absolute integration worktree path>
   head: <exact worker base SHA>

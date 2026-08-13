@@ -188,6 +188,11 @@ require_text 'explicit test-first' docs/adding-a-skill.md
 require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
 require_text 'git-sync' .swe-forge/policies/delivery.md
 require_text 'one dedicated task branch' .swe-forge/policies/delivery.md
+require_text '<type>/<short-kebab-case-description>' .swe-forge/policies/delivery.md
+require_text 'repository/project name' .swe-forge/policies/delivery.md
+require_text 'fix/branch-naming' SWE-FORGE.md
+require_text 'feat/order-cancellation' .swe-forge/examples/isolated-ticket.md
+reject_text 'swe-forge/<run-id>/integration' .swe-forge/examples/isolated-ticket.md
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text 'provider state is `MERGED`' .swe-forge/policies/delivery.md
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
@@ -206,7 +211,7 @@ require_text 'branch_setup:' .swe-forge/contracts/task.md
 require_text 'branch_setup:' .swe-forge/examples/parallel-ticket.md
 require_text 'branch_setup:' .swe-forge/examples/isolated-ticket.md
 require_text '## Shared Workflow Behavior' .swe-forge/adapters/README.md
-require_text 'one dedicated task branch for the run' .swe-forge/adapters/README.md
+require_text 'one dedicated task branch using the canonical' .swe-forge/adapters/README.md
 require_text 'one integration/delivery branch' .swe-forge/adapters/README.md
 require_text 'pushing never creates a PR' .swe-forge/adapters/README.md
 require_text 'syncing verifies `MERGED`' .swe-forge/adapters/README.md
