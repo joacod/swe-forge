@@ -54,6 +54,14 @@ requirements:
 acceptance:
   - <checkable condition>
 
+commit_plan:
+  - id: S1
+    objective: <one cohesive observable step>
+    scope: [<owned path or symbol>]
+    depends_on: []
+    validation: [<targeted check>]
+    commit_subject: <imperative subject>
+
 routing:
   requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
   execution_mode: SOLO | SUBAGENTS | ISOLATED

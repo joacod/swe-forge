@@ -266,17 +266,22 @@ only its local delivery-branch commit.
 `PR` is the opt-in low-touch path. It runs the lightweight specification policy
 when the ticket needs clarification, keeps the working spec outside the
 repository, and proceeds through implementation without interactive
-checkpoints. For `SOLO` and `SUBAGENTS`, it uses the one dedicated delivery
-branch. For `ISOLATED`, it uses one integration/delivery branch, planned local
-worker resources, and central integration. It creates one local commit after
-each validated slice or integration unit, then runs final verification and
-fresh review before pushing the integration/delivery branch and creating one
-pull request. Worker branches are never pushed and worker PRs are never
-created. It ends with a concise PR URL and never merges. It does not skip
-automated checks or independent review. After the PR URL exists, generate a
-compact receipt using `.swe-forge/contracts/receipt.md` and add it to the PR
-description when the provider supports updating the description. Never include
-transcripts or claim checks that were not run.
+checkpoints. Before the first edit, the working spec contains an ordered commit
+plan with one cohesive objective, scope, targeted validation, and commit subject
+per step. The orchestrator validates and commits each step before beginning the
+next; it does not accumulate a broad diff and create one catch-all commit. A
+one-step ticket remains one commit rather than being split artificially. For
+`SOLO` and `SUBAGENTS`, it uses the one dedicated delivery branch. For
+`ISOLATED`, it uses one integration/delivery branch, planned local worker
+resources, and central integration. It creates one local commit after each
+validated slice or integration unit, then runs final verification and fresh
+review before pushing the integration/delivery branch and creating one pull
+request. Worker branches are never pushed and worker PRs are never created. It
+ends with a concise PR URL and never merges. It does not skip automated checks
+or independent review. After the PR URL exists, generate a compact receipt using
+`.swe-forge/contracts/receipt.md` and add it to the PR description when the
+provider supports updating the description. Never include transcripts or claim
+checks that were not run.
 
 Use the atomic delivery actions described by `.swe-forge/policies/delivery.md`
 for guided follow-up: `git-commit`, `git-push`, `git-pr`, and `git-sync`.

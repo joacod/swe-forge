@@ -14,6 +14,15 @@ Workers return one of:
 A provider lifecycle state is scheduling evidence only. It never replaces a
 structured result, Git evidence, validation, or central integration.
 
+## Provider retry boundary
+
+Automatic model or provider retries are not SWE Forge task retries. While a
+provider is retrying, do not launch duplicate workers, repeat the plan, or make
+a second delivery attempt. Once the call settles, inspect the actual checkout
+and evidence state before continuing. If the provider still fails, record the
+provider failure separately and use at most the normal one Forge retry after a
+changed hypothesis or explicit correction.
+
 ## Recovery Ladder
 
 Use the smallest recovery action that addresses the evidence:

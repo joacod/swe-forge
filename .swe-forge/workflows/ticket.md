@@ -160,8 +160,11 @@ result. For `ISOLATED`, each task additionally records `shared_artifacts`,
 `.swe-forge/workflows/isolated-execution.md`.
 
 For `GUIDED`, also divide broad work into cohesive review slices with a small
-observable boundary and an explicit checkpoint. For `PR`, keep the transient
-working spec and task graph sufficient for one uninterrupted implementation.
+observable boundary and an explicit checkpoint. For `PR`, the transient working
+spec must include an ordered commit plan even when execution is `SOLO`. Each
+step owns a cohesive observable boundary, scope, dependencies, targeted
+validation, and commit subject. Keep steps large enough to avoid ceremonial
+commits but small enough that one validated step can be reviewed independently.
 
 Parallelize only when dependencies are satisfied, ownership is non-overlapping,
 and outputs can be independently evaluated. Otherwise use sequential waves or
@@ -249,10 +252,11 @@ slices rather than writing a speculative test suite upfront.
 Record what will be run before implementation when the task is delegated.
 When `.swe-forge/tools/swe-forge-gate` is available, register the expected
 checks with `plan-check`, then use `validate` or `record-check-status` for
-preflight, inspected validation commands, checkpoints, and current-HEAD final
-checks; keep that ledger outside the repository or under an already ignored
-path. Classify each check as `required`, `conditional`, or `informational`;
-every conditional check must include its observable condition. Validation,
+preflight, each current slice, and current-HEAD final checks; keep that ledger
+outside the repository or under an already ignored path. Mark slice-local
+checks with `--final-required false` and register final checks separately.
+Classify each check as `required`, `conditional`, or `informational`; every
+conditional check must include its observable condition. Validation,
 checkpoint, and commit evidence is bound to the exact candidate fingerprint.
 Inspect commands
 before execution for filesystem mutation, credentials, networking, migrations,
@@ -290,10 +294,11 @@ task it received and must report scope expansion or blocking issues
 immediately. In `GUIDED`, complete and validate one review slice at a time,
 then stop at a checkpoint with the diff boundary and next slice. Resume after
 `continue` or a revision; `go` (or `commit and continue`) first creates a local
-commit for the reviewed slice, then resumes. In `PR`, do not pause for slice
-approval after the working spec is ready. Create one local commit after each
-slice's required validation, retain the separate history, and stop only for a
-blocking decision or failed gate.
+commit for the reviewed slice, then resumes. In `PR`, finalize the first
+commit-plan step only after its targeted checks pass, create exactly that
+step's local commit, and then begin the next step. Keep the planned history
+separate; do not defer all commits until the end or collapse multiple steps
+into one catch-all commit. Stop only for a blocking decision or failed gate.
 
 Two writing workers must never edit the same checkout concurrently. Read-only
 workers may inspect the integration checkout. `ISOLATED` writable workers each
