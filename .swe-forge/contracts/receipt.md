@@ -11,6 +11,13 @@ run state.
 ## SWE Forge receipt
 Execution: SOLO | SUBAGENTS | ISOLATED
 Delivery: GUIDED | PR
+Run metadata: (optional; omit when unavailable)
+- SWE Forge: <release version>
+- Harness: <name> <version>
+- Routing: <requested topology> -> <selected topology>
+- Provider: NONE | NATIVE | HERDR
+- Model: <safe public model label>
+- Routing reason: <short rationale>
 Base: <short base SHA>
 Branch: <delivery branch>
 Commits: <count> (<validated slice count> validated slices)
@@ -23,6 +30,11 @@ Merge performed: no
 ```
 
 ## Required evidence
+
+Run metadata is optional and must be supplied from structured run state or
+explicit harness facts. Omit unavailable fields rather than guessing. Model
+labels and routing reasons must not contain credentials, private paths, raw
+transcripts, or private ticket details.
 
 A receipt may report `ACCEPTED` only when:
 

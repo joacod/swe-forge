@@ -44,6 +44,7 @@ target/
 *.bak
 
 # Temporary SWE Forge execution state
+.swe-forge-install-state/
 .swe-forge/runs/
 .swe-forge/.runs/
 .swe-forge/generated/

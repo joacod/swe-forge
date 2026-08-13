@@ -23,14 +23,18 @@ fallback.
 
 ## Install
 
-Keep a checkout somewhere stable:
+For the experimental `v0.1.0-alpha.1` release, pin the source checkout rather
+than following mutable `main`:
 
 ```bash
-git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
+git clone --branch v0.1.0-alpha.1 --depth 1 \
+  https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
 ```
 
-For Pi, install the global prompt template:
+For development, a personal checkout may follow `main`, but public
+installations should use a release tag. For Pi, install the global prompt
+template:
 
 ```bash
 scripts/swe-forge install pi --global
@@ -44,6 +48,32 @@ updates, and conflicts.
 Installation does not install Herdr. Herdr is an optional execution provider
 and may be used only when already available and selected safely by the canonical
 provider policy.
+
+See the [compatibility snapshot](docs/compatibility.md) for the harness versions
+validated for this alpha release and the [changelog](CHANGELOG.md) for known
+limitations.
+
+## Installer lifecycle
+
+The dependency-free installer exposes read-only inspection and conservative
+lifecycle operations in addition to `install` and `verify`:
+
+```bash
+scripts/swe-forge version
+scripts/swe-forge status pi --global
+scripts/swe-forge doctor pi --global
+scripts/swe-forge install pi --global --dry-run
+scripts/swe-forge update opencode --target /path/to/project --dry-run
+scripts/swe-forge update opencode --target /path/to/project
+scripts/swe-forge uninstall opencode --target /path/to/project
+```
+
+Installations record an exact managed manifest. `update` and `uninstall` refuse
+modified, missing, or ambiguous managed entries rather than guessing. Legacy
+installations without a manifest can be inspected and verified, but destructive
+lifecycle operations stop until the installation is reviewed and recreated.
+`--dry-run` performs planning and conflict checks without creating locks,
+files, links, or manifests.
 
 ## Use
 
@@ -167,10 +197,21 @@ separation, and bodies that preserve what/why context when needed. See the
 harness adapter documentation for the available
 `git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
 
+## Feedback
+
+Please report friction through the [issue templates](https://github.com/joacod/swe-forge/issues/new/choose):
+[installation or adapter problem](https://github.com/joacod/swe-forge/issues/new?template=installation-adapter.md),
+[workflow behavior problem](https://github.com/joacod/swe-forge/issues/new?template=workflow-behavior.md),
+or [real-run report](https://github.com/joacod/swe-forge/issues/new?template=real-run-report.md).
+Redact credentials, private ticket details, transcripts, and personal paths.
+
 ## Learn more
 
 - [Workflow specification](SWE-FORGE.md)
 - [Installation guide](docs/installation.md)
+- [Compatibility snapshot](docs/compatibility.md)
+- [Changelog](CHANGELOG.md)
+- [v0.1.0-alpha.1 release notes](docs/releases/v0.1.0-alpha.1.md)
 - [Architecture](docs/architecture.md)
 - [Adapter index](.swe-forge/adapters/README.md)
 - [Execution providers](.swe-forge/providers/README.md)

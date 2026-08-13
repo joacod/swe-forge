@@ -63,12 +63,19 @@ it. The helper records command results; it does not authorize external effects.
 
 ## Receipt rules
 
-A generated receipt may contain:
+A generated receipt may contain optional public run metadata when the
+orchestrator has structured evidence for it:
 
 ```text
 ## SWE Forge receipt
 Execution: SOLO
 Delivery: PR
+Run metadata:
+- SWE Forge: 0.1.0-alpha.1
+- Harness: Pi 0.84.1
+- Routing: AUTO -> SOLO
+- Provider: NONE
+- Routing reason: tightly coupled installer and receipt changes
 Base: abc123
 Commits: 4 (4 validated slices)
 Verification:
@@ -89,5 +96,7 @@ not become passes.
 Receipts are public evidence summaries, not proof that the review was
 independent or that a remote check passed. They must be generated from the
 ledger and actual Git state, contain no transcripts or secrets, and never be
-hand-edited to upgrade their status. The canonical run state remains the source
-of truth for topology, authorization, worker state, and recovery.
+hand-edited to upgrade their status. Optional model, harness, and routing
+metadata must be omitted when unavailable or unsafe to publish. The canonical
+run state remains the source of truth for topology, authorization, worker
+state, and recovery.

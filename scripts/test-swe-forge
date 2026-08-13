@@ -32,6 +32,11 @@ expect_failure() {
   esac
 }
 
+version_output=$($INSTALL version)
+grep -F 'SWE Forge version: ' <<EOF_VERSION >/dev/null
+$version_output
+EOF_VERSION
+
 project=$TMP_ROOT/project
 mkdir -p "$project"
 
@@ -71,6 +76,43 @@ grep -F '/swe-forge isolated <ticket>' \
   "$project/.opencode/commands/swe-forge.md" >/dev/null || fail "OpenCode isolated invocation is missing"
 grep -F 'thin loader' \
   "$project/.opencode/commands/git-push.md" >/dev/null || fail "OpenCode delivery loader is not thin"
+
+lifecycle_project=$TMP_ROOT/lifecycle-project
+mkdir -p "$lifecycle_project"
+"$INSTALL" install opencode --target "$lifecycle_project" --dry-run >"$TMP_ROOT/install-dry-run"
+test ! -e "$lifecycle_project/AGENTS.md" || fail "install dry-run wrote canonical files"
+test ! -e "$lifecycle_project/.swe-forge-install-state" || fail "install dry-run wrote a manifest"
+test ! -e "$lifecycle_project/.swe-forge-install.lock" || fail "install dry-run wrote a lock"
+"$INSTALL" install opencode --target "$lifecycle_project" >/dev/null
+"$INSTALL" status opencode --target "$lifecycle_project" >"$TMP_ROOT/status-output" || fail "status rejected a valid installation"
+grep -F 'managed paths:' "$TMP_ROOT/status-output" >/dev/null || fail "status omitted managed path count"
+grep -F 'verification: PASS' "$TMP_ROOT/status-output" >/dev/null || fail "status omitted verification"
+"$INSTALL" doctor opencode --target "$lifecycle_project" >"$TMP_ROOT/doctor-output" || fail "doctor rejected a valid installation"
+grep -F 'doctor: PASS' "$TMP_ROOT/doctor-output" >/dev/null || fail "doctor omitted PASS"
+"$INSTALL" update opencode --target "$lifecycle_project" --dry-run >"$TMP_ROOT/update-dry-run"
+grep -F 'would do nothing' "$TMP_ROOT/update-dry-run" >/dev/null || fail "update dry-run did not report a current installation"
+manifest="$lifecycle_project/.swe-forge-install-state/opencode.tsv"
+test -f "$manifest" || fail "installation manifest is missing"
+rm "$lifecycle_project/.opencode/commands/git-pr.md"
+ln -s "$ROOT/README.md" "$lifecycle_project/.opencode/commands/git-pr.md"
+expect_failure "managed link was modified" \
+  "$INSTALL" uninstall opencode --target "$lifecycle_project"
+# Restore the exact source link after the refusal test and confirm uninstall is safe.
+rm "$lifecycle_project/.opencode/commands/git-pr.md"
+ln -s "$ROOT/.swe-forge/adapters/opencode/commands/git-pr.md" \
+  "$lifecycle_project/.opencode/commands/git-pr.md"
+"$INSTALL" uninstall opencode --target "$lifecycle_project" >/dev/null
+
+test ! -e "$lifecycle_project/.opencode/commands/swe-forge.md" || fail "uninstall left a managed link"
+
+copy_lifecycle_project=$TMP_ROOT/copy-lifecycle-project
+mkdir -p "$copy_lifecycle_project"
+"$INSTALL" install opencode --target "$copy_lifecycle_project" --mode copy >/dev/null
+printf '%s\n' changed >>"$copy_lifecycle_project/.opencode/commands/git-pr.md"
+expect_failure "managed copy was modified" \
+  "$INSTALL" uninstall opencode --target "$copy_lifecycle_project" --mode copy
+test -f "$copy_lifecycle_project/.opencode/commands/swe-forge.md" || \
+  fail "failed uninstall removed files before detecting a modified copy"
 
 invalid_source=$TMP_ROOT/invalid-source
 invalid_target=$TMP_ROOT/invalid-target

@@ -4,11 +4,18 @@ SWE Forge is a portable repository first. Keep one stable clone as the source
 of truth and install links to that checkout. Installation into another project
 or global harness configuration is always an explicit user action.
 
-The repository includes a dependency-free installer:
+The repository includes a dependency-free installer. The public alpha example
+pins the source checkout to `v0.1.0-alpha.1`; use a `main` checkout only for
+personal development:
 
 ```bash
+scripts/swe-forge version
 scripts/swe-forge install <opencode|claude|codex|cursor|pi> [options]
 scripts/swe-forge verify <opencode|claude|codex|cursor|pi> [options]
+scripts/swe-forge status <harness> [options]
+scripts/swe-forge doctor <harness> [options]
+scripts/swe-forge update <harness> [options]
+scripts/swe-forge uninstall <harness> [options]
 ```
 
 The default mode is `link`. A link installation follows changes in this
@@ -25,13 +32,16 @@ repository, folder, or `global`. Non-interactive callers must use `--target` or
 
 ## Recommended Installation
 
-Keep the source checkout at a stable path:
+Keep a tagged source checkout at a stable path:
 
 ```bash
-git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
+git clone --branch v0.1.0-alpha.1 --depth 1 \
+  https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
-git pull
 ```
+
+For development-only checkouts, `git pull` may follow `main`. Do not use a
+mutable development checkout in public installation instructions.
 
 Install into a project or folder:
 
@@ -122,9 +132,11 @@ For a reviewed snapshot instead:
 ~/tools/swe-forge/scripts/swe-forge install opencode --target . --mode copy
 ```
 
-Copied installations do not update in place. After the source checkout changes,
-review and remove the prior copied installation, then install the new snapshot.
-This explicit replacement avoids silently overwriting locally modified copies.
+Copied installations can be updated in place after the source checkout
+changes. Run `update` only after reviewing the source; it replaces unchanged
+managed files and refuses locally modified copies. If an installation predates
+managed manifests, recreate it explicitly rather than relying on guessed
+ownership.
 
 ## Harness Bridges
 
@@ -175,6 +187,35 @@ them.
 Do not commit generated global support directories, machine-specific paths,
 credentials, local model IDs, or personal run state.
 
+## Lifecycle commands
+
+`version` reports the release version, source commit, and whether the source
+checkout is dirty. `status` reports the source, harness, scope, mode, managed
+manifest, paths, and verification result. `doctor` runs the same checks with
+remediation-oriented diagnostics.
+
+Use `--dry-run` with `install` or `update` to perform preflight and conflict
+checks without creating a lock, file, link, directory, or manifest:
+
+```bash
+scripts/swe-forge install opencode --target /path/to/project --dry-run
+scripts/swe-forge update opencode --target /path/to/project --dry-run
+```
+
+Each successful installation records an exact manifest under the hidden
+`.swe-forge-install-state/` directory at the selected target or global support
+root. The manifest records the source revision, mode, and every managed file,
+link, and fingerprint. `update` replaces only unchanged copied files and
+refuses modified or ambiguous entries. `uninstall` removes only entries that
+still match the recorded link target or copy fingerprint and refuses modified
+copies, changed links, missing manifests, and ambiguous ownership. It never
+force-removes directories or shared canonical files owned by another harness.
+
+Legacy installations created before manifests were introduced remain usable by
+`verify`, `status`, and `doctor`, but `update` and `uninstall` stop safely with a
+migration message rather than guessing what is managed. Review the installation
+and recreate it explicitly if destructive lifecycle management is needed.
+
 ## Verification
 
 Installation runs verification automatically. It can also be run later:
@@ -209,19 +250,22 @@ $swe-forge <small test ticket>
 Ordinary prompts must continue to behave normally; SWE Forge remains explicitly
 invoked.
 
-## Updating
+## Updating the source and installed projections
 
-When updating an installation:
+For a development checkout, review and fetch source changes manually. For a
+pinned public installation, choose and review a newer release tag first:
 
-1. run `git pull` in the stable source checkout
-2. run the matching `verify` command for each installation
-3. review changes to activation, contracts, policies, and adapters
-4. preserve project-specific `AGENTS.md` instructions
-5. remove stale generated adapter files only after review
-6. run the repository's documentation and structural checks
+1. update the stable source checkout explicitly
+2. run `scripts/swe-forge version`
+3. run `status`, `doctor`, and the matching `verify` command for each install
+4. use `scripts/swe-forge update <harness>` for a managed copy or link
+5. review changes to activation, contracts, policies, and adapters
+6. preserve project-specific `AGENTS.md` instructions
+7. remove stale generated adapter files only after review
+8. run the repository's documentation and structural checks
 
-Keep temporary run state outside the repository or under ignored
-`.swe-forge/runs/`.
+`update` never fetches, switches branches, or publishes changes. Keep temporary
+run state outside the repository or under ignored `.swe-forge/runs/`.
 
 ## Filesystem Safety
 

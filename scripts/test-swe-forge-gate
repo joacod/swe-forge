@@ -81,12 +81,21 @@ state=$(clean_feature_state "$repo")
   "$GATE" deliver-pr --state "$state" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 \
+    --forge-version 0.1.0-alpha.1 --harness Pi --harness-version 0.84.1 \
+    --requested-mode AUTO --selected-mode SOLO --provider NONE \
+    --routing-reason 'tightly coupled test fixture' --model test-model \
     --output "$TMP_ROOT/receipt.md" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "accepted receipt is missing final status"
 grep -F 'Fresh review: PASS — 1 findings, 1 repaired' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "receipt is missing review summary"
+grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "receipt is missing harness metadata"
+grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "receipt is missing routing metadata"
+grep -F -- '- Provider: NONE' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "receipt is missing provider metadata"
 if grep -F 'grep -q' "$TMP_ROOT/receipt.md" >/dev/null; then
   fail "receipt leaked validation command output"
 fi

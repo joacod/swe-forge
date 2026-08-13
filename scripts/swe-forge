@@ -11,6 +11,15 @@ VERIFY_FAILURES=0
 MODE=link
 SCOPE=project
 TARGET=
+DRY_RUN=0
+MANIFEST_BASE=
+MANIFEST_DIR=
+MANIFEST_PATH=
+MANIFEST_ENTRIES=
+MANIFEST_BACKUP=
+MANIFEST_WAS_EXISTING=0
+BACKUP_RECORDS=
+REMOVED_LINKS=
 TRANSACTION_ACTIVE=0
 LOCK_DIR=
 LOCK_OWNED=0
@@ -19,16 +28,38 @@ CRITICAL_SECTION=0
 PENDING_SIGNAL=0
 CREATED_FILES=$RUN_TMP/created-files
 CREATED_DIRS=$RUN_TMP/created-dirs
+BACKUP_RECORDS=$RUN_TMP/backup-records
+REMOVED_LINKS=$RUN_TMP/removed-links
+: >"$CREATED_FILES"
+: >"$CREATED_DIRS"
+: >"$BACKUP_RECORDS"
+: >"$REMOVED_LINKS"
 ADAPTER_REGISTRY=$SOURCE_ROOT/.swe-forge/adapters/registry.tsv
 REGISTRY_VALIDATOR=$SOURCE_ROOT/scripts/lib/registry.sh
 ADAPTER_ROWS=$RUN_TMP/adapter-rows
-: >"$CREATED_FILES"
-: >"$CREATED_DIRS"
 
 rollback() {
   while IFS= read -r created_file; do
     rm -f "$created_file"
   done <"$CREATED_FILES"
+
+  while IFS="$(printf '\t')" read -r backup_path backup_source; do
+    [ -n "${backup_path:-}" ] || continue
+    cp -p "$backup_source" "$backup_path" 2>/dev/null || true
+  done <"$BACKUP_RECORDS"
+
+  while IFS="$(printf '\t')" read -r removed_path removed_target; do
+    [ -n "${removed_path:-}" ] || continue
+    [ -e "$removed_path" ] || ln -s "$removed_target" "$removed_path" 2>/dev/null || true
+  done <"$REMOVED_LINKS"
+
+  if [ -n "$MANIFEST_PATH" ]; then
+    if [ "$MANIFEST_WAS_EXISTING" -eq 1 ] && [ -f "$MANIFEST_BACKUP" ]; then
+      cp -p "$MANIFEST_BACKUP" "$MANIFEST_PATH" 2>/dev/null || true
+    elif [ "$MANIFEST_WAS_EXISTING" -eq 0 ]; then
+      rm -f "$MANIFEST_PATH"
+    fi
+  fi
 
   sort -r "$CREATED_DIRS" | while IFS= read -r created_dir; do
     rmdir "$created_dir" 2>/dev/null || true
@@ -92,19 +123,360 @@ invocation_hint() {
   info 'invoke with: see the selected harness adapter README'
 }
 
+source_version() {
+  if [ -f "$SOURCE_ROOT/VERSION" ]; then
+    IFS= read -r source_version_value <"$SOURCE_ROOT/VERSION" || true
+    [ -n "${source_version_value:-}" ] || source_version_value=unknown
+    printf '%s\n' "$source_version_value"
+  else
+    printf '%s\n' unknown
+  fi
+}
+
+source_commit() {
+  git -C "$SOURCE_ROOT" rev-parse --short HEAD 2>/dev/null || printf '%s\n' unknown
+}
+
+source_tree_state() {
+  if git -C "$SOURCE_ROOT" diff --quiet --ignore-submodules -- 2>/dev/null &&
+    [ -z "$(git -C "$SOURCE_ROOT" status --porcelain=v1 --untracked-files=all 2>/dev/null)" ]; then
+    printf '%s\n' clean
+  else
+    printf '%s\n' dirty
+  fi
+}
+
+file_hash() {
+  hash_path=$1
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$hash_path" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$hash_path" | awk '{print $1}'
+  else
+    die 'neither shasum nor sha256sum is available for managed-copy fingerprints'
+  fi
+}
+
+manifest_set_paths() {
+  if [ "$SCOPE" = global ]; then
+    MANIFEST_BASE=$HOME
+  else
+    MANIFEST_BASE=$TARGET
+  fi
+  MANIFEST_DIR=$MANIFEST_BASE/.swe-forge-install-state
+  MANIFEST_PATH=$MANIFEST_DIR/$HARNESS.tsv
+  assert_real_ancestors "$MANIFEST_DIR/manifest"
+  if path_exists "$MANIFEST_DIR" && {
+    [ ! -d "$MANIFEST_DIR" ] || [ -L "$MANIFEST_DIR" ];
+  }; then
+    die "managed installation state must be a real directory: $MANIFEST_DIR"
+  fi
+}
+
+manifest_relative_path() {
+  manifest_absolute_path=$1
+  case "$manifest_absolute_path" in
+    "$MANIFEST_BASE"/*) printf '%s\n' "${manifest_absolute_path#"$MANIFEST_BASE"/}" ;;
+    *) die "managed path escapes installation base: $manifest_absolute_path" ;;
+  esac
+}
+
+manifest_add() {
+  manifest_kind=$1
+  manifest_destination=$2
+  manifest_source=$3
+  manifest_fingerprint=$4
+  manifest_link_target=$5
+  reject_unsupported_path "$manifest_destination"
+  reject_unsupported_path "$manifest_source"
+  manifest_relative=$(manifest_relative_path "$manifest_destination")
+  printf 'entry\t%s\t%s\t%s\t%s\t%s\n' \
+    "$manifest_kind" "$manifest_relative" "$manifest_source" \
+    "$manifest_fingerprint" "$manifest_link_target" >>"$MANIFEST_ENTRIES"
+}
+
+manifest_add_file() {
+  manifest_source=$1
+  manifest_destination=$2
+  if [ "$MODE" = link ]; then
+    manifest_add file "$manifest_destination" "$manifest_source" - "$manifest_source"
+  else
+    manifest_add file "$manifest_destination" "$manifest_source" \
+      "$(file_hash "$manifest_source")" -
+  fi
+}
+
+manifest_add_directory_link() {
+  manifest_source=$1
+  manifest_destination=$2
+  manifest_add dir "$manifest_destination" "$manifest_source" - "$manifest_source"
+}
+
+manifest_add_bridge() {
+  manifest_destination=$1
+  if [ "$MODE" = link ]; then
+    manifest_add bridge "$manifest_destination" "$SOURCE_ROOT/AGENTS.md" - AGENTS.md
+  else
+    manifest_add bridge "$manifest_destination" bridge \
+      "$(file_hash "$RUN_TMP/claude-bridge")" -
+  fi
+}
+
+manifest_support_relative() {
+  while IFS='|' read -r manifest_harness manifest_scope manifest_kind \
+    manifest_source manifest_destination manifest_support; do
+    case "$manifest_harness" in ''|\#*) continue ;; esac
+    [ "$manifest_scope" = "$SCOPE" ] || continue
+    if [ "$manifest_support" != - ]; then
+      printf '%s\n' "$manifest_support"
+      return 0
+    fi
+  done <"$ADAPTER_ROWS"
+  return 1
+}
+
+build_manifest_inventory() {
+  MANIFEST_ENTRIES=$RUN_TMP/manifest-entries
+  : >"$MANIFEST_ENTRIES"
+
+  if [ "$SCOPE" = global ]; then
+    manifest_support=$(manifest_support_relative) || \
+      die "global adapter is missing a canonical support path"
+    canonical_destination_root=$(adapter_destination "$manifest_support")
+  else
+    canonical_destination_root=$TARGET
+  fi
+
+  manifest_add_file "$SOURCE_ROOT/AGENTS.md" "$canonical_destination_root/AGENTS.md"
+  manifest_add_file "$SOURCE_ROOT/SWE-FORGE.md" "$canonical_destination_root/SWE-FORGE.md"
+  if [ "$MODE" = link ]; then
+    while IFS= read -r manifest_source_dir; do
+      manifest_entry_name=${manifest_source_dir##*/}
+      manifest_add_directory_link "$manifest_source_dir" \
+        "$canonical_destination_root/.swe-forge/$manifest_entry_name"
+    done <"$RUN_TMP/canonical-dirs"
+  else
+    while IFS= read -r manifest_source_file; do
+      manifest_relative=${manifest_source_file#"$SOURCE_ROOT/"}
+      manifest_add_file "$manifest_source_file" "$canonical_destination_root/$manifest_relative"
+    done <"$RUN_TMP/canonical-files"
+  fi
+
+  while IFS='|' read -r manifest_harness manifest_scope manifest_kind \
+    manifest_source manifest_destination manifest_support; do
+    case "$manifest_harness" in ''|\#*) continue ;; esac
+    [ "$manifest_scope" = "$SCOPE" ] || continue
+    manifest_source_path=$(adapter_source "$manifest_source")
+    manifest_destination_path=$(adapter_destination "$manifest_destination")
+    case "$manifest_kind" in
+      file) manifest_add_file "$manifest_source_path" "$manifest_destination_path" ;;
+      tree)
+        if [ "$MODE" = link ]; then
+          manifest_add_directory_link "$manifest_source_path" "$manifest_destination_path"
+        else
+          manifest_tree_files=$RUN_TMP/manifest-tree-files
+          find "$manifest_source_path" -type f -print >"$manifest_tree_files"
+          while IFS= read -r manifest_tree_file; do
+            manifest_tree_relative=${manifest_tree_file#"$manifest_source_path/"}
+            manifest_add_file "$manifest_tree_file" \
+              "$manifest_destination_path/$manifest_tree_relative"
+          done <"$manifest_tree_files"
+        fi
+        ;;
+      bridge) manifest_add_bridge "$manifest_destination_path" ;;
+      *) die "unsupported adapter artifact kind: $manifest_kind" ;;
+    esac
+  done <"$ADAPTER_ROWS"
+}
+
+manifest_meta() {
+  manifest_meta_key=$1
+  manifest_meta_file=$2
+  awk -F= -v wanted="$manifest_meta_key" \
+    '$1 == wanted { sub(/^[^=]*=/, ""); print; exit }' "$manifest_meta_file"
+}
+
+manifest_entry_field() {
+  manifest_entry_relative=$1
+  manifest_entry_field_number=$2
+  awk -F '\t' -v wanted="$manifest_entry_relative" \
+    -v field="$manifest_entry_field_number" \
+    '$1 == "entry" && $3 == wanted { print $field; exit }' "$MANIFEST_PATH"
+}
+
+manifest_has_entry() {
+  [ -n "$(manifest_entry_field "$1" 2)" ]
+}
+
+validate_manifest() {
+  [ -f "$MANIFEST_PATH" ] && [ ! -L "$MANIFEST_PATH" ] || \
+    die "managed installation manifest is missing or not a regular file: $MANIFEST_PATH"
+  [ "$(manifest_meta manifest_version "$MANIFEST_PATH")" = 1 ] || \
+    die "unsupported managed installation manifest: $MANIFEST_PATH"
+  [ "$(manifest_meta harness "$MANIFEST_PATH")" = "$HARNESS" ] || \
+    die "managed installation manifest belongs to another harness"
+  [ "$(manifest_meta scope "$MANIFEST_PATH")" = "$SCOPE" ] || \
+    die "managed installation manifest belongs to another scope"
+  [ "$(manifest_meta base "$MANIFEST_PATH")" = "$MANIFEST_BASE" ] || \
+    die "managed installation manifest base does not match the selected target"
+  manifest_mode=$(manifest_meta mode "$MANIFEST_PATH")
+  case "$manifest_mode" in link|copy) ;; *) die "managed installation manifest has no valid mode" ;; esac
+
+  manifest_entries_found=0
+  while IFS="$(printf '\t')" read -r manifest_marker manifest_kind \
+    manifest_relative manifest_source manifest_fingerprint manifest_link_target; do
+    [ "${manifest_marker:-}" = entry ] || continue
+    manifest_entries_found=$((manifest_entries_found + 1))
+    case "$manifest_kind" in file|dir|bridge) ;; *) die "managed manifest has an invalid entry kind" ;; esac
+    case "$manifest_relative" in
+      ''|/*|..|../*|*/..|*/../*|.|./*|*/./*) die "managed manifest path is unsafe: $manifest_relative" ;;
+    esac
+    manifest_destination=$MANIFEST_BASE/$manifest_relative
+    assert_real_ancestors "$manifest_destination"
+    if [ "$manifest_mode" = link ]; then
+      [ -n "${manifest_link_target:-}" ] || die "managed link entry has no target"
+    else
+      [ -n "${manifest_fingerprint:-}" ] || die "managed copy entry has no fingerprint"
+    fi
+  done <"$MANIFEST_PATH"
+  [ "$manifest_entries_found" -gt 0 ] || die "managed installation manifest has no entries"
+}
+
+load_manifest_mode() {
+  manifest_set_paths
+  if path_exists "$MANIFEST_PATH"; then
+    validate_manifest
+    manifest_mode=$(manifest_meta mode "$MANIFEST_PATH")
+    if [ "$SEEN_MODE" -eq 1 ] && [ "$MODE" != "$manifest_mode" ]; then
+      die "requested mode $MODE does not match managed installation mode $manifest_mode"
+    fi
+    MODE=$manifest_mode
+  elif [ "$ACTION" = update ] || [ "$ACTION" = uninstall ]; then
+    die "no managed installation manifest found; refusing destructive $ACTION"
+  fi
+}
+
+manifest_write() {
+  manifest_set_paths
+  if path_exists "$MANIFEST_PATH"; then
+    [ -f "$MANIFEST_PATH" ] && [ ! -L "$MANIFEST_PATH" ] || \
+      die "managed installation manifest is not a regular file: $MANIFEST_PATH"
+    MANIFEST_WAS_EXISTING=1
+    MANIFEST_BACKUP=$RUN_TMP/manifest-backup
+    cp -p "$MANIFEST_PATH" "$MANIFEST_BACKUP" || \
+      die "could not back up managed installation manifest"
+  else
+    MANIFEST_WAS_EXISTING=0
+  fi
+  ensure_dir "$MANIFEST_DIR"
+  manifest_tmp=$MANIFEST_PATH.tmp.$$
+  begin_create
+  {
+    printf 'manifest_version=1\n'
+    printf 'source_root=%s\n' "$SOURCE_ROOT"
+    printf 'source_version=%s\n' "$(source_version)"
+    printf 'source_commit=%s\n' "$(source_commit)"
+    printf 'harness=%s\n' "$HARNESS"
+    printf 'scope=%s\n' "$SCOPE"
+    printf 'mode=%s\n' "$MODE"
+    printf 'base=%s\n' "$MANIFEST_BASE"
+    printf 'updated_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    while IFS="$(printf '\t')" read -r manifest_marker manifest_kind \
+      manifest_relative manifest_source manifest_fingerprint manifest_link_target; do
+      [ "${manifest_marker:-}" = entry ] || continue
+      manifest_destination=$MANIFEST_BASE/$manifest_relative
+      if [ "$MODE" = link ]; then
+        [ -L "$manifest_destination" ] || die "managed link disappeared before manifest write: $manifest_destination"
+        manifest_link_target=$(readlink "$manifest_destination")
+        manifest_fingerprint=-
+      else
+        [ -f "$manifest_destination" ] && [ ! -L "$manifest_destination" ] || \
+          die "managed copy disappeared before manifest write: $manifest_destination"
+        manifest_fingerprint=$(file_hash "$manifest_destination")
+        manifest_link_target=-
+      fi
+      printf 'entry\t%s\t%s\t%s\t%s\t%s\n' \
+        "$manifest_kind" "$manifest_relative" "$manifest_source" \
+        "$manifest_fingerprint" "$manifest_link_target"
+    done <"$MANIFEST_ENTRIES"
+  } >"$manifest_tmp" || {
+    end_create
+    rm -f "$manifest_tmp"
+    die "could not write managed installation manifest"
+  }
+  record_file "$manifest_tmp"
+  end_create
+  begin_create
+  if ! mv "$manifest_tmp" "$MANIFEST_PATH"; then
+    end_create
+    die "could not publish managed installation manifest: $MANIFEST_PATH"
+  fi
+  end_create
+}
+
+record_backup() {
+  backup_destination=$1
+  if [ -f "$backup_destination" ] && [ ! -L "$backup_destination" ]; then
+    if awk -F '\t' -v wanted="$backup_destination" '$1 == wanted { found=1 } END { exit !found }' \
+      "$BACKUP_RECORDS"; then
+      return
+    fi
+    backup_counter=${STAGE_COUNTER}
+    STAGE_COUNTER=$((STAGE_COUNTER + 1))
+    backup_source=$RUN_TMP/backup.$$.${backup_counter}
+    cp -p "$backup_destination" "$backup_source" || \
+      die "could not back up managed file: $backup_destination"
+    printf '%s\t%s\n' "$backup_destination" "$backup_source" >>"$BACKUP_RECORDS"
+  fi
+}
+
+replace_copy_file() {
+  replace_source=$1
+  replace_destination=$2
+  record_backup "$replace_destination"
+  STAGE_COUNTER=$((STAGE_COUNTER + 1))
+  replace_stage=$replace_destination.swe-forge-stage.$$.$STAGE_COUNTER
+  begin_create
+  if ! cp -p "$replace_source" "$replace_stage"; then
+    end_create
+    die "could not stage updated copied file: $replace_destination"
+  fi
+  record_file "$replace_stage"
+  end_create
+  begin_create
+  if ! mv "$replace_stage" "$replace_destination"; then
+    end_create
+    die "could not publish updated copied file: $replace_destination"
+  fi
+  end_create
+}
+
+print_version() {
+  info "SWE Forge version: $(source_version)"
+  info "source: $SOURCE_ROOT"
+  info "commit: $(source_commit)"
+  info "worktree: $(source_tree_state)"
+}
+
 usage() {
   cat <<'EOF'
 Usage:
+  scripts/swe-forge version
   scripts/swe-forge install <harness> [options]
   scripts/swe-forge verify <harness> [options]
+  scripts/swe-forge status <harness> [options]
+  scripts/swe-forge doctor <harness> [options]
+  scripts/swe-forge update <harness> [options]
+  scripts/swe-forge uninstall <harness> [options]
 
 Options:
   --target PATH       Install into this repository or folder.
   --global            Install into the harness user-level directories.
-  --mode link|copy    Link to this checkout (default) or copy a snapshot.
+  --mode link|copy    Link to this checkout or copy a snapshot.
+  --dry-run           Plan install/update without writing anything.
 
 If --target and --global are omitted, install asks for a target when used from
-an interactive terminal. Non-interactive callers must provide one explicitly.
+an interactive terminal. Other actions require an explicit target or --global.
 EOF
 }
 
@@ -960,6 +1332,319 @@ verify_requested() {
   info "PASS: SWE Forge $HARNESS installation is valid"
 }
 
+select_inspection_mode() {
+  manifest_set_paths
+  if path_exists "$MANIFEST_PATH" && [ -f "$MANIFEST_PATH" ] && [ ! -L "$MANIFEST_PATH" ]; then
+    if (validate_manifest) >/dev/null 2>&1; then
+      MODE=$(manifest_meta mode "$MANIFEST_PATH")
+      return 0
+    fi
+    MODE=link
+  elif [ "$SCOPE" = global ]; then
+    MODE=link
+  elif [ -L "$TARGET/AGENTS.md" ] || [ -L "$TARGET/SWE-FORGE.md" ]; then
+    MODE=link
+  else
+    MODE=copy
+  fi
+}
+
+status_requested() {
+  select_inspection_mode
+  info "source: $SOURCE_ROOT"
+  info "version: $(source_version)"
+  info "commit: $(source_commit)"
+  info "source state: $(source_tree_state)"
+  info "harness: $HARNESS"
+  info "scope: $SCOPE"
+  if [ "$SCOPE" = global ]; then
+    info "target: $HOME"
+  else
+    info "target: $TARGET"
+  fi
+  info "mode: $MODE"
+  if path_exists "$MANIFEST_PATH" && [ -f "$MANIFEST_PATH" ] && [ ! -L "$MANIFEST_PATH" ]; then
+    if (validate_manifest) >/dev/null 2>&1; then
+      info "manifest: $MANIFEST_PATH"
+      info "managed paths: $(awk -F '\t' '$1 == "entry" { count++ } END { print count + 0 }' "$MANIFEST_PATH")"
+      while IFS="$(printf '\t')" read -r status_marker status_kind status_relative \
+        status_source status_fingerprint status_link_target; do
+        [ "${status_marker:-}" = entry ] || continue
+        info "managed: $MANIFEST_BASE/$status_relative"
+      done <"$MANIFEST_PATH"
+      info "manifest source version: $(manifest_meta source_version "$MANIFEST_PATH")"
+      info "manifest source commit: $(manifest_meta source_commit "$MANIFEST_PATH")"
+    else
+      info "manifest: INVALID ($MANIFEST_PATH)"
+    fi
+  else
+    info 'manifest: missing (legacy installation; destructive lifecycle operations refuse)'
+  fi
+  if verify_requested; then
+    info 'verification: PASS'
+    return 0
+  fi
+  info 'verification: FAIL'
+  return 1
+}
+
+doctor_requested() {
+  doctor_status=0
+  status_requested || doctor_status=1
+  if [ "$(source_tree_state)" = dirty ]; then
+    info 'doctor: source checkout has uncommitted changes; review before updating installations'
+  fi
+  if ! path_exists "$MANIFEST_PATH"; then
+    info 'doctor: no managed manifest; recreate the installation before update or uninstall'
+    doctor_status=1
+  elif ! (validate_manifest) >/dev/null 2>&1; then
+    info 'doctor: managed manifest is invalid or unsafe'
+    doctor_status=1
+  fi
+  if [ "$doctor_status" -eq 0 ]; then
+    info 'doctor: PASS'
+  else
+    info 'doctor: ACTION REQUIRED'
+  fi
+  return "$doctor_status"
+}
+
+inventory_field() {
+  inventory_relative=$1
+  inventory_field_number=$2
+  awk -F '\t' -v wanted="$inventory_relative" \
+    -v field="$inventory_field_number" \
+    '$1 == "entry" && $3 == wanted { print $field; exit }' "$MANIFEST_ENTRIES"
+}
+
+inventory_has_entry() {
+  [ -n "$(inventory_field "$1" 2)" ]
+}
+
+record_removed_link() {
+  removed_link_path=$1
+  removed_link_target=$(readlink "$removed_link_path")
+  printf '%s\t%s\n' "$removed_link_path" "$removed_link_target" >>"$REMOVED_LINKS"
+}
+
+update_plan() {
+  UPDATE_PLAN=$RUN_TMP/update-plan
+  : >"$UPDATE_PLAN"
+  while IFS="$(printf '\t')" read -r update_marker update_kind update_relative \
+    update_source update_fingerprint update_link_target; do
+    [ "${update_marker:-}" = entry ] || continue
+    update_destination=$MANIFEST_BASE/$update_relative
+    update_old_hash=$(manifest_entry_field "$update_relative" 5)
+    update_old_target=$(manifest_entry_field "$update_relative" 6)
+    if [ "$MODE" = link ]; then
+      if ! path_exists "$update_destination"; then
+        update_action=add
+      elif [ ! -L "$update_destination" ]; then
+        die "managed link was replaced by a non-link: $update_destination"
+      elif [ "$(readlink "$update_destination")" != "$update_link_target" ]; then
+        [ "$(readlink "$update_destination")" = "$update_old_target" ] || \
+          die "managed link was modified: $update_destination"
+        update_action=relink
+      else
+        update_action=noop
+      fi
+      printf 'action\t%s\t%s\t%s\t%s\t%s\n' "$update_action" "$update_kind" \
+        "$update_relative" "$update_source" "$update_link_target" >>"$UPDATE_PLAN"
+    else
+      if ! path_exists "$update_destination"; then
+        update_action=add
+      elif [ ! -f "$update_destination" ] || [ -L "$update_destination" ]; then
+        die "managed copy is not a regular file: $update_destination"
+      else
+        update_current_hash=$(file_hash "$update_destination")
+        if [ "$update_current_hash" = "$update_fingerprint" ]; then
+          update_action=noop
+        elif [ -n "$update_old_hash" ] && [ "$update_current_hash" = "$update_old_hash" ]; then
+          update_action=update
+        else
+          die "managed copy was modified; refusing update: $update_destination"
+        fi
+      fi
+      printf 'action\t%s\t%s\t%s\t%s\t-\n' "$update_action" "$update_kind" \
+        "$update_relative" "$update_source" >>"$UPDATE_PLAN"
+    fi
+  done <"$MANIFEST_ENTRIES"
+
+  while IFS="$(printf '\t')" read -r update_marker update_kind update_relative \
+    update_source update_fingerprint update_link_target; do
+    [ "${update_marker:-}" = entry ] || continue
+    inventory_has_entry "$update_relative" && continue
+    update_destination=$MANIFEST_BASE/$update_relative
+    if ! path_exists "$update_destination"; then
+      continue
+    fi
+    if [ "$MODE" = link ]; then
+      [ -L "$update_destination" ] || die "stale managed entry is not a link: $update_destination"
+      [ "$(readlink "$update_destination")" = "$update_link_target" ] || \
+        die "stale managed link was modified: $update_destination"
+    else
+      [ -f "$update_destination" ] && [ ! -L "$update_destination" ] || \
+        die "stale managed entry is not a regular file: $update_destination"
+      [ "$(file_hash "$update_destination")" = "$update_fingerprint" ] || \
+        die "stale managed copy was modified: $update_destination"
+    fi
+    printf 'action\tremove\t%s\t%s\t%s\n' "$update_relative" "$update_source" \
+      "$update_link_target" >>"$UPDATE_PLAN"
+  done <"$MANIFEST_PATH"
+}
+
+print_update_plan() {
+  update_plan_action_count=0
+  while IFS="$(printf '\t')" read -r update_marker update_action update_kind \
+    update_relative update_source update_target; do
+    [ "${update_marker:-}" = action ] || continue
+    case "$update_action" in
+      noop) ;;
+      *)
+        update_plan_action_count=$((update_plan_action_count + 1))
+        info "would $update_action: $MANIFEST_BASE/$update_relative"
+        ;;
+    esac
+  done <"$UPDATE_PLAN"
+  [ "$update_plan_action_count" -gt 0 ] || info 'would do nothing: installation is current'
+}
+
+execute_update_plan() {
+  while IFS="$(printf '\t')" read -r update_marker update_action update_kind \
+    update_relative update_source update_target; do
+    [ "${update_marker:-}" = action ] || continue
+    update_destination=$MANIFEST_BASE/$update_relative
+    case "$update_action" in
+      noop) ;;
+      add|relink)
+        if [ "$update_action" = relink ]; then
+          record_removed_link "$update_destination"
+          rm -f "$update_destination"
+        fi
+        case "$update_kind" in
+          bridge) install_bridge "$update_destination" ;;
+          dir) install_dir_link "$update_source" "$update_destination" ;;
+          file) install_file "$update_source" "$update_destination" ;;
+          *) die "unsupported managed update kind: $update_kind" ;;
+        esac
+        ;;
+      update)
+        if [ "$update_kind" = bridge ]; then
+          update_source=$RUN_TMP/claude-bridge
+        fi
+        replace_copy_file "$update_source" "$update_destination"
+        ;;
+      remove)
+        if [ "$MODE" = link ]; then
+          record_removed_link "$update_destination"
+          rm -f "$update_destination"
+        else
+          record_backup "$update_destination"
+          rm -f "$update_destination"
+        fi
+        ;;
+      *) die "unsupported managed update action: $update_action" ;;
+    esac
+  done <"$UPDATE_PLAN"
+}
+
+update_requested() {
+  validate_manifest
+  build_manifest_inventory
+  update_plan
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: no files, links, locks, or manifests will be changed"
+    print_update_plan
+    return 0
+  fi
+  TRANSACTION_ACTIVE=1
+  execute_update_plan
+  verify_requested || die 'updated installation failed verification'
+  manifest_write
+  TRANSACTION_ACTIVE=0
+  info "updated: $MANIFEST_PATH"
+  info "source version: $(source_version)"
+  info "mode: $MODE"
+}
+
+manifest_is_shared() {
+  shared_relative=$1
+  shared_manifest_list=$RUN_TMP/other-manifests
+  find "$MANIFEST_DIR" -type f -name '*.tsv' -print 2>/dev/null >"$shared_manifest_list"
+  while IFS= read -r other_manifest; do
+    [ "$other_manifest" != "$MANIFEST_PATH" ] || continue
+    if awk -F '\t' -v wanted="$shared_relative" \
+      '$1 == "entry" && $3 == wanted { found=1 } END { exit !found }' "$other_manifest"; then
+      return 0
+    fi
+  done <"$shared_manifest_list"
+  return 1
+}
+
+uninstall_requested() {
+  validate_manifest
+  uninstall_count=0
+  while IFS="$(printf '\t')" read -r uninstall_marker uninstall_kind \
+    uninstall_relative uninstall_source uninstall_fingerprint uninstall_link_target; do
+    [ "${uninstall_marker:-}" = entry ] || continue
+    uninstall_destination=$MANIFEST_BASE/$uninstall_relative
+    if ! path_exists "$uninstall_destination"; then
+      info "already absent: $uninstall_destination"
+      continue
+    fi
+    if [ "$MODE" = link ]; then
+      [ -L "$uninstall_destination" ] || \
+        die "managed link is no longer a link; refusing uninstall: $uninstall_destination"
+      [ "$(readlink "$uninstall_destination")" = "$uninstall_link_target" ] || \
+        die "managed link was modified; refusing uninstall: $uninstall_destination"
+    else
+      [ -f "$uninstall_destination" ] && [ ! -L "$uninstall_destination" ] || \
+        die "managed copy is not a regular file; refusing uninstall: $uninstall_destination"
+      [ "$(file_hash "$uninstall_destination")" = "$uninstall_fingerprint" ] || \
+        die "managed copy was modified; refusing uninstall: $uninstall_destination"
+    fi
+    if manifest_is_shared "$uninstall_relative"; then
+      info "keep shared entry: $uninstall_destination"
+    else
+      uninstall_count=$((uninstall_count + 1))
+    fi
+  done <"$MANIFEST_PATH"
+
+  MANIFEST_WAS_EXISTING=1
+  MANIFEST_BACKUP=$RUN_TMP/uninstall-manifest-backup
+  cp -p "$MANIFEST_PATH" "$MANIFEST_BACKUP" || die 'could not back up uninstall manifest'
+  TRANSACTION_ACTIVE=1
+  while IFS="$(printf '\t')" read -r uninstall_marker uninstall_kind \
+    uninstall_relative uninstall_source uninstall_fingerprint uninstall_link_target; do
+    [ "${uninstall_marker:-}" = entry ] || continue
+    uninstall_destination=$MANIFEST_BASE/$uninstall_relative
+    path_exists "$uninstall_destination" || continue
+    manifest_is_shared "$uninstall_relative" && continue
+    if [ "$MODE" = link ]; then
+      record_removed_link "$uninstall_destination"
+      rm -f "$uninstall_destination"
+    else
+      record_backup "$uninstall_destination"
+      rm -f "$uninstall_destination"
+    fi
+  done <"$MANIFEST_PATH"
+  rm -f "$MANIFEST_PATH"
+  rmdir "$MANIFEST_DIR" 2>/dev/null || true
+  TRANSACTION_ACTIVE=0
+  info "uninstalled: $HARNESS ($SCOPE)"
+  info "removed managed entries: $uninstall_count"
+}
+
+install_dry_run() {
+  build_manifest_inventory
+  info 'dry-run: no files, links, locks, or manifests will be changed'
+  while IFS="$(printf '\t')" read -r dry_marker dry_kind dry_relative \
+    dry_source dry_fingerprint dry_link_target; do
+    [ "${dry_marker:-}" = entry ] || continue
+    info "would manage: $MANIFEST_BASE/$dry_relative"
+  done <"$MANIFEST_ENTRIES"
+}
+
 choose_destination() {
   if [ "$SCOPE" = global ]; then
     [ -z "$TARGET" ] || die "--target cannot be combined with --global"
@@ -967,7 +1652,7 @@ choose_destination() {
   fi
 
   if [ -z "$TARGET" ]; then
-    if [ ! -t 0 ]; then
+    if [ "$ACTION" != install ] || [ ! -t 0 ]; then
       die "no target supplied; use --target PATH or --global"
     fi
     printf 'Install SWE Forge into a repository/folder, or type global: '
@@ -1036,7 +1721,7 @@ parse_args() {
   shift 2
 
   case "$ACTION" in
-    install|verify) ;;
+    install|verify|status|doctor|update|uninstall) ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown action: $ACTION" ;;
   esac
@@ -1072,6 +1757,12 @@ parse_args() {
         esac
         shift 2
         ;;
+      --dry-run)
+        [ "$ACTION" = install ] || [ "$ACTION" = update ] || \
+          die "--dry-run is supported only for install and update"
+        DRY_RUN=1
+        shift
+        ;;
       global|globally)
         [ "$SEEN_GLOBAL" -eq 0 ] || die "global scope supplied more than once"
         SEEN_GLOBAL=1
@@ -1096,34 +1787,70 @@ parse_args() {
 }
 
 main() {
+  if [ "$#" -eq 1 ] && [ "$1" = version ]; then
+    print_version
+    exit 0
+  fi
+
   parse_args "$@"
   prepare_manifests
   printf '%s\n' '@AGENTS.md' >"$RUN_TMP/claude-bridge"
   choose_destination
   validate_scope
   validate_harness_scope
+  manifest_set_paths
 
-  if [ "$ACTION" = install ]; then
-    acquire_lock
-    preflight_install
-    TRANSACTION_ACTIVE=1
-    install_requested
-    if verify_requested; then
-      TRANSACTION_ACTIVE=0
-      info "source: $SOURCE_ROOT"
-      if [ "$SCOPE" = global ]; then
-        info "scope: global harness configuration"
-      else
-        info "target: $TARGET"
+  case "$ACTION" in
+    install)
+      load_manifest_mode
+      if [ "$DRY_RUN" -eq 1 ]; then
+        preflight_install
+        install_dry_run
+        exit 0
       fi
-      info "mode: $MODE"
-      invocation_hint
-    else
-      die "installation completed but verification failed"
-    fi
-  else
-    verify_requested || die "verification failed"
-  fi
+      acquire_lock
+      preflight_install
+      build_manifest_inventory
+      TRANSACTION_ACTIVE=1
+      install_requested
+      if verify_requested; then
+        manifest_write
+        TRANSACTION_ACTIVE=0
+        info "source: $SOURCE_ROOT"
+        if [ "$SCOPE" = global ]; then
+          info "scope: global harness configuration"
+        else
+          info "target: $TARGET"
+        fi
+        info "mode: $MODE"
+        info "manifest: $MANIFEST_PATH"
+        invocation_hint
+      else
+        die "installation completed but verification failed"
+      fi
+      ;;
+    verify)
+      verify_requested || die "verification failed"
+      ;;
+    status)
+      status_requested || exit 1
+      ;;
+    doctor)
+      doctor_requested || exit 1
+      ;;
+    update)
+      load_manifest_mode
+      if [ "$DRY_RUN" -eq 0 ]; then
+        acquire_lock
+      fi
+      update_requested
+      ;;
+    uninstall)
+      load_manifest_mode
+      acquire_lock
+      uninstall_requested
+      ;;
+  esac
 }
 
 main "$@"
