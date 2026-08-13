@@ -86,10 +86,13 @@ state=$(clean_feature_state "$repo")
     --forge-version 0.1.0-alpha.1 --harness Pi --harness-version 0.84.1 \
     --requested-mode AUTO --selected-mode SOLO --execution-provider NONE \
     --model-provider openai-codex --routing-reason 'tightly coupled test fixture' \
-    --model test-model --output "$TMP_ROOT/receipt.md" >/dev/null
+    --model test-model --context-status compacted \
+    --context-evidence 'manual fixture compaction' --output "$TMP_ROOT/receipt.md" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "accepted receipt is missing final status"
+grep -F 'Context: compacted — manual fixture compaction' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "receipt is missing context evidence"
 grep -F 'Fresh review: PASS — 1 findings, 1 repaired' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "receipt is missing review summary"
 grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || \

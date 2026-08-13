@@ -110,6 +110,8 @@ require_text 'Execution provider:' .swe-forge/contracts/receipt.md
 require_text 'Model provider:' .swe-forge/contracts/receipt.md
 require_text '--execution-provider' .swe-forge/tools/swe-forge-gate
 require_text '--model-provider' .swe-forge/tools/swe-forge-gate
+require_text '--context-status' .swe-forge/tools/swe-forge-gate
+require_text '--context-evidence' .swe-forge/tools/swe-forge-gate
 require_text '--forge-version' .swe-forge/tools/swe-forge-gate
 require_text 'plan-check' .swe-forge/policies/evidence.md
 require_text 'record-check-status' .swe-forge/policies/evidence.md

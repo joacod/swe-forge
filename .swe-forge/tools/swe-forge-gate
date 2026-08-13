@@ -58,6 +58,8 @@ Receipt metadata options:
   --model-provider PROVIDER     Public model provider label when safe.
   --routing-reason TEXT         Short routing rationale.
   --model MODEL                 Model label when safe to publish.
+  --context-status STATUS       healthy, compacted, overflow-recovered, not-observed, or blocked.
+  --context-evidence TEXT       Short observed context/compaction evidence.
 
   --provider PROVIDER           Compatibility alias for --execution-provider.
 
@@ -1190,6 +1192,7 @@ receipt_text() {
   printf 'Branch: %s\n' "$branch"
   printf 'Head: %s\n' "$short_head"
   printf 'Evidence fingerprint: %s\n' "$short_fp"
+  printf 'Context: %s — %s\n' "$receipt_context_status" "$receipt_context_evidence"
   printf 'Generated at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'Commits: %s (%s validated %s)\n' "$commit_count" "$checkpoint_count" "$slice_label"
   printf 'Verification:\n'
@@ -1224,6 +1227,8 @@ receipt_run() {
   receipt_model_provider=
   receipt_routing_reason=
   receipt_model=
+  receipt_context_status=not-observed
+  receipt_context_evidence='no context limit reached'
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --verify)
@@ -1305,6 +1310,16 @@ receipt_run() {
         receipt_model=$2
         shift 2
         ;;
+      --context-status)
+        [ "$#" -ge 2 ] || fail "--context-status requires a value"
+        receipt_context_status=$2
+        shift 2
+        ;;
+      --context-evidence)
+        [ "$#" -ge 2 ] || fail "--context-evidence requires a value"
+        receipt_context_evidence=$2
+        shift 2
+        ;;
       -h|--help) usage; exit 0 ;;
       *) fail "unknown receipt option: $1" ;;
     esac
@@ -1319,9 +1334,11 @@ receipt_run() {
   case "$receipt_requested_mode" in ''|AUTO|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid requested topology metadata" ;; esac
   case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid selected topology metadata" ;; esac
   case "$receipt_provider" in ''|NONE|NATIVE|HERDR) ;; *) fail "invalid provider metadata" ;; esac
+  case "$receipt_context_status" in healthy|compacted|overflow-recovered|not-observed|blocked) ;; *) fail "invalid context status metadata" ;; esac
   for receipt_value in "$receipt_forge_version" "$receipt_harness" "$receipt_harness_version" \
     "$receipt_requested_mode" "$receipt_selected_mode" "$receipt_provider" \
-    "$receipt_model_provider" "$receipt_routing_reason" "$receipt_model"; do
+    "$receipt_model_provider" "$receipt_routing_reason" "$receipt_model" \
+    "$receipt_context_status" "$receipt_context_evidence"; do
     reject_control_chars "$receipt_value"
   done
   if [ -n "$PR_URL" ]; then
@@ -1368,10 +1385,12 @@ receipt_verify() {
   receipt_branch=$(awk -F': ' '$1 == "Branch" { print $2; exit }' "$receipt_file")
   receipt_repo=$(awk -F': ' '$1 == "Repository" { print $2; exit }' "$receipt_file")
   receipt_status=$(awk -F': ' '$1 == "Final status" { print $2; exit }' "$receipt_file")
+  receipt_context=$(awk -F': ' '$1 == "Context" { print $2; exit }' "$receipt_file")
   [ -n "$receipt_head" ] || fail "receipt is missing Head"
   [ -n "$receipt_fp" ] || fail "receipt is missing Evidence fingerprint"
   [ -n "$receipt_branch" ] || fail "receipt is missing Branch"
   [ -n "$receipt_repo" ] || fail "receipt is missing Repository"
+  [ -n "$receipt_context" ] || fail "receipt is missing Context"
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
   current_short_head=$(git -C "$CHECKOUT" rev-parse --short "$current_head")
   [ "$current_short_head" = "$receipt_head" ] || fail "receipt is stale: Head does not match current HEAD"
