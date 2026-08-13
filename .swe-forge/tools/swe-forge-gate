@@ -569,9 +569,22 @@ check_requirements() {
   found=0
   current_evidence=0
   blockers=
+  slice_checks=0
+  while IFS="$TAB" read -r name requirement condition final_required; do
+    [ -n "${name:-}" ] || continue
+    [ "$final_required" = false ] || continue
+    slice_checks=1
+    break
+  done <"$STATE/plan.tsv"
   while IFS="$TAB" read -r name requirement condition final_required; do
     [ -n "${name:-}" ] || continue
     if [ "$final_mode" = yes ] && [ "$final_required" != true ]; then
+      continue
+    fi
+    if [ "$final_mode" != yes ] && [ "$final_required" = true ] && \
+      [ "$slice_checks" -eq 1 ]; then
+      # Final-only checks may be planned up front without forcing a full
+      # repository run at every slice checkpoint.
       continue
     fi
     found=$((found + 1))

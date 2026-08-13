@@ -61,7 +61,7 @@ validate_registry() {
 
 sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
-  "$ROOT/scripts/test-swe-forge-isolated" \
+  "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
   "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
@@ -75,11 +75,14 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/swe-forge-state" ] || fail "run-state wrapper is not executable"
 [ -x "$ROOT/scripts/swe-forge-isolated-gate" ] || fail "isolated gate wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
+[ -x "$ROOT/scripts/validate-swe-forge" ] || fail "validation batch is not executable"
 [ -x "$ROOT/scripts/check-release" ] || fail "release checker is not executable"
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
 require_text 'fetch-depth: 0' .github/workflows/ci.yml
 require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
 require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
+require_text './scripts/validate-swe-forge' .github/workflows/ci.yml
+require_text 'Validation cadence and batching' .swe-forge/policies/verification.md
 validate_registry
 
 [ -f "$ROOT/VERSION" ] || fail "missing release version file"

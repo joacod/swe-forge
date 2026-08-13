@@ -256,9 +256,12 @@ preflight, each current slice, and current-HEAD final checks; keep that ledger
 outside the repository or under an already ignored path. Mark slice-local
 checks with `--final-required false` and register final checks separately.
 Classify each check as `required`, `conditional`, or `informational`; every
-conditional check must include its observable condition. Validation,
-checkpoint, and commit evidence is bound to the exact candidate fingerprint.
-Inspect commands
+conditional check must include its observable condition. Use targeted checks
+for each slice and batch independent final checks when the repository provides
+an inspected runner; batching must preserve per-check results and fail when a
+required check fails. Do not use batching to bypass current-candidate
+fingerprint binding. Validation, checkpoint, and commit evidence is bound to the
+exact candidate fingerprint. Inspect commands
 before execution for filesystem mutation, credentials, networking, migrations,
 deployment, publication, production access, or shared-environment effects.
 Classify delivery commands separately: local commit, branch push, PR creation,

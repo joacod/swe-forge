@@ -132,6 +132,27 @@ test "$(git -C "$repo" rev-list --count main..HEAD)" -eq 2 || \
 git -C "$repo" show HEAD:SECOND.md | grep -Fx 'second slice' >/dev/null || \
   fail "second slice was not committed"
 
+# Regression: final-only checks can be planned before a slice without forcing
+# the full final suite to run before the slice commit.
+repo=$(make_repo deferred-final)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name slice-check \
+    --requirement required --final-required false >/dev/null
+  "$GATE" plan-check --state "$state" --name final-check \
+    --requirement required >/dev/null
+  printf 'deferred final\n' >>README.md
+  "$GATE" validate --state "$state" --name slice-check -- \
+    grep -q 'deferred final' README.md >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  "$GATE" commit-slice --state "$state" --checkpoint 1 \
+    --message 'Commit before final validation' --authorized-by PR >/dev/null
+)
+expect_repo_failure 'required or applicable final validation' "$repo" "$GATE" \
+  deliver-pr --state "$state"
+
 # Regression: an out-of-band commit is still rejected instead of being mixed
 # into the next evidence checkpoint.
 repo=$(make_repo out-of-band)
