@@ -40,6 +40,21 @@ branch push, and one final PR. It never authorizes worker branch pushes, worker
 PRs, publication, deployment, force-push, or merge. Publication and merge
 remain separate human actions.
 
+### PR commit plan
+
+Before the first edit, a `PR` working spec records an ordered commit plan. Each
+step has one cohesive objective, owned paths, dependencies, targeted
+validation, and a repository-appropriate commit subject. The orchestrator then
+implements one step, runs that step's required checks, and creates its local
+delivery commit before starting the next step. It must not accumulate all steps
+and create one catch-all commit at the end.
+
+A step may contain implementation and tests that are inseparable at the
+observable boundary. Do not manufacture commits for unrelated formatting or
+ceremonial phases: a one-step ticket correctly produces one commit. When the
+plan has multiple meaningful steps, the PR history must contain one commit per
+step; review repairs are additional atomic commits rather than a squash.
+
 ## One delivery boundary
 
 A normal run uses one task/delivery branch. An isolated run uses one

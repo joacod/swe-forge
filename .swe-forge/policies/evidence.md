@@ -22,7 +22,8 @@ Register the expected checks before executing them:
 ```sh
 .swe-forge/tools/swe-forge-gate preflight --state "$STATE" --branch "$BRANCH" --base "$BASE"
 .swe-forge/tools/swe-forge-gate plan-check --state "$STATE" \
-  --name "structural checks" --requirement required --condition always
+  --name "structural checks" --requirement required --final-required false \
+  --condition always
 .swe-forge/tools/swe-forge-gate validate --state "$STATE" \
   --name "structural checks" -- ./scripts/check-swe-forge
 .swe-forge/tools/swe-forge-gate checkpoint --state "$STATE" \
@@ -42,18 +43,28 @@ checks remain visible and do not block. `validate` and
 `record-check-status` reject unregistered check names. Receipts render the
 latest status per planned check; attempt history remains private.
 
+Use `--final-required false` for a targeted check owned by the current
+implementation slice, and register final checks separately with the default
+`--final-required true`. A checkpoint records which slice checks passed. Later
+checkpoints do not require an earlier slice check to match the new candidate
+fingerprint, but every new slice still needs current evidence. Final checks
+always require an exact current-candidate result. This keeps per-slice commits
+independent without weakening the final evidence gate.
+
 `validate` records the candidate fingerprint before and after the command. A
 normal command that changes candidate source content fails evidence binding. A
 mutation-producing check must declare its mutation scope and reason and binds
 to the post-command fingerprint. The deterministic fingerprint includes current
-`HEAD`, tracked staged/unstaged modifications, deletions, renames exposed by
-Git, sorted untracked paths, and content hashes for untracked files. It is
-computed with Git-native and POSIX tools and is not a changed-path list.
+`HEAD`, candidate path/type/mode/content records, deletions, renames exposed by
+Git, sorted untracked paths, and content hashes. It is computed with Git-native
+and POSIX tools and is not a changed-path list. The gate uses a checksum marker
+to avoid repeating the full run-state schema scan when the state file is
+unchanged; candidate fingerprints and validation commands are never skipped.
 
-A checkpoint records its exact path boundary and candidate fingerprint. Every
-required and applicable conditional check must pass for that fingerprint.
-`commit-slice` refuses candidate fingerprint drift, staged-tree drift, and path
-set drift. It never pushes.
+A checkpoint records its exact path boundary and candidate fingerprint.
+Required current-slice and applicable conditional checks must pass for that
+candidate. `commit-slice` refuses candidate fingerprint drift, staged-tree
+drift, and path set drift. It never pushes.
 
 The guard stores command output outside the repository and does not authorize
 migrations, deployment, publication, credentials, production access, or shared

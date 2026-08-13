@@ -10,6 +10,9 @@ change between alpha releases.
 - Final alpha hardening adds exact candidate-content evidence binding,
   schema-v2 run state, machine-valid isolated worker results, executable
   isolated Git conformance, head-bound receipts, and release-readiness checks.
+- PR runs now plan meaningful implementation slices before editing, preserve one
+  validated commit per slice, and support sequential slice evidence without
+  repeating unchanged run-state validation.
 - Continue collecting real-run reports across supported harnesses.
 - `v0.1.0-alpha.1` remains unpublished; tagged installation instructions are
   usable after manual publication, while `main` remains development-only.

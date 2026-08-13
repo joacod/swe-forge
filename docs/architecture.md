@@ -123,14 +123,16 @@ authorization. In `GUIDED`, explicit isolated selection creates only a plan;
 commit. Neither permits push, PR, publication, deployment, or merge. `PR`
 authorizes the accepted local setup, worker transfer commits, validated central
 commits, one final push, and one final PR, never publication, deployment, or
-merge. Other files reference this rule rather than redefining it.
+merge. A PR working spec also owns an ordered commit plan; each meaningful
+validated step receives its own local or central commit before the next step.
+Other files reference this rule rather than redefining it.
 
 `policies/evidence.md` owns evidence semantics. The executable gate registers
 planned checks, binds validation/checkpoints/commits to exact candidate
-fingerprints, rejects undeclared mutations and missing/unavailable required
-checks, and renders latest statuses. Receipts include final `Head`, evidence
-fingerprint, and UTC generation time; read-only verification detects stale
-receipts.
+fingerprints, supports independent sequential slice checkpoints, rejects
+undeclared mutations and missing/unavailable required checks, and renders latest
+statuses. Receipts include final `Head`, evidence fingerprint, and UTC generation
+time; read-only verification detects stale receipts.
 
 ## Environment and shared artifacts
 

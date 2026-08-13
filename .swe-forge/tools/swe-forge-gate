@@ -102,6 +102,24 @@ meta_value() {
   awk -F= -v wanted="$key" '$1 == wanted { sub(/^[^=]*=/, ""); print; exit }' "$file"
 }
 
+state_signature() {
+  cksum "$STATE/run-state.yaml" | awk '{ print $1 ":" $2 }'
+}
+
+validate_run_state() {
+  [ -f "$STATE/run-state.yaml" ] || return 0
+  [ -x "$SCRIPT_DIR/swe-forge-state" ] || return 0
+  signature=$(state_signature)
+  marker=$STATE/run-state.valid
+  if [ -f "$marker" ] && [ "$(cat "$marker")" = "$signature" ]; then
+    return 0
+  fi
+  "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  marker_tmp=$marker.tmp.$$
+  printf '%s\n' "$signature" >"$marker_tmp"
+  mv "$marker_tmp" "$marker"
+}
+
 state_meta() {
   [ -n "${STATE:-}" ] || fail "--state is required"
   [ -f "$STATE/meta.env" ] || fail "state has not been initialized: $STATE"
@@ -111,9 +129,7 @@ state_meta() {
   CHECKOUT=$(meta_value checkout_path "$STATE/meta.env")
   [ -n "$CHECKOUT" ] || fail "state is missing checkout_path"
   [ -d "$CHECKOUT" ] || fail "recorded checkout no longer exists: $CHECKOUT"
-  if [ -f "$STATE/run-state.yaml" ] && [ -x "$SCRIPT_DIR/swe-forge-state" ]; then
-    "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
-  fi
+  validate_run_state
 }
 
 ensure_meta_state() {
@@ -299,6 +315,19 @@ update_state_checkout() {
   mv "$tmp" "$state_file"
 }
 
+update_meta_checkout() {
+  new_head=$1
+  meta_tmp=$STATE/meta.env.tmp.$$
+  awk -F= -v wanted="$new_head" '
+    $1 == "checkout_head" {
+      print "checkout_head=" wanted
+      next
+    }
+    { print }
+  ' "$STATE/meta.env" >"$meta_tmp"
+  mv "$meta_tmp" "$STATE/meta.env"
+}
+
 preflight() {
   expected_branch=
   baseline_ref=HEAD
@@ -350,53 +379,69 @@ preflight() {
   : >"$STATE/validations.tsv"
   : >"$STATE/checkpoints.tsv"
   write_run_state "$base_head" "$branch" "$remote_default" "$head"
-  "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  validate_run_state
   printf 'PASS: preflight baseline recorded at %s\n' "$STATE"
   printf 'BASELINE_HEAD: %s\n' "$base_head"
   printf 'CHECKOUT_HEAD: %s\n' "$head"
   printf 'BRANCH: %s\n' "$branch"
 }
 
+candidate_paths_for_checkout() {
+  root=$1
+  {
+    git -C "$root" diff --name-only --find-renames HEAD --
+    git -C "$root" ls-files --others --exclude-standard
+  } | LC_ALL=C sort -u
+}
+
 fingerprint_for_checkout() {
   root=$1
   [ -d "$root" ] || fail "checkout does not exist: $root"
   git -C "$root" rev-parse --show-toplevel >/dev/null 2>&1 || fail "not a Git checkout: $root"
-  untracked=$(git -C "$root" ls-files --others --exclude-standard | LC_ALL=C sort -u)
-  if [ -n "$untracked" ]; then
+  paths=$(candidate_paths_for_checkout "$root")
+  if [ -n "$paths" ]; then
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       reject_control_chars "$path"
       case "$path" in
         /*|../*|*/../*|..)
-          fail "untracked path is not repository-relative: $path" ;;
+          fail "candidate path is not repository-relative: $path" ;;
       esac
-    done <<EOF_UNTRACKED
-$untracked
-EOF_UNTRACKED
+    done <<EOF_PATHS
+$paths
+EOF_PATHS
   fi
   {
     printf 'HEAD\t%s\n' "$(git -C "$root" rev-parse HEAD)"
-    printf 'TRACKED_CANDIDATE_BEGIN\n'
-    git -C "$root" diff --binary --full-index --find-renames HEAD --
-    printf 'TRACKED_CANDIDATE_END\n'
-    printf 'UNTRACKED_BEGIN\n'
-    if [ -n "$untracked" ]; then
+    printf 'CANDIDATE_BEGIN\n'
+    if [ -n "$paths" ]; then
       while IFS= read -r path; do
         [ -n "$path" ] || continue
-        if [ -L "$root/$path" ]; then
+        full_path=$root/$path
+        if [ -L "$full_path" ]; then
           type=symlink
-        elif [ -f "$root/$path" ]; then
+          mode=symlink
+          hash=$(readlink "$full_path")
+        elif [ -f "$full_path" ]; then
           type=regular
-        else
+          if [ -x "$full_path" ]; then mode=executable; else mode=regular; fi
+          if hash=$(CDPATH= cd "$root" && git hash-object -- "$path" 2>/dev/null); then :; else hash=unreadable; fi
+        elif [ -e "$full_path" ]; then
           type=other
+          mode=other
+          if hash=$(CDPATH= cd "$root" && git hash-object -- "$path" 2>/dev/null); then :; else hash=unreadable; fi
+        else
+          type=deleted
+          mode=deleted
+          hash=deleted
         fi
-        hash=$(git -C "$root" hash-object -- "$path" 2>/dev/null || printf 'unreadable')
-        printf '%s\t%s\t%s\n' "$path" "$type" "$hash"
-      done <<EOF_PATHS
-$untracked
-EOF_PATHS
+        reject_control_chars "$hash"
+        printf '%s\t%s\t%s\t%s\n' "$path" "$type" "$mode" "$hash"
+      done <<EOF_CANDIDATE
+$paths
+EOF_CANDIDATE
     fi
-    printf 'UNTRACKED_END\n'
+    printf 'CANDIDATE_END\n'
   } | git -C "$root" hash-object --stdin
 }
 
@@ -418,11 +463,7 @@ fingerprint_run() {
 }
 
 changed_paths_for_checkout() {
-  root=$1
-  {
-    git -C "$root" diff --name-only --find-renames HEAD --
-    git -C "$root" ls-files --others --exclude-standard
-  } | LC_ALL=C sort -u
+  candidate_paths_for_checkout "$1"
 }
 
 scope_allows() {
@@ -513,10 +554,20 @@ latest_status() {
   ' "$STATE/validations.tsv"
 }
 
+checkpoint_has_check() {
+  wanted=$1
+  for checks_file in "$STATE"/checkpoint.*.checks; do
+    [ -f "$checks_file" ] || continue
+    grep -Fx "$wanted" "$checks_file" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
 check_requirements() {
   wanted_fp=$1
   final_mode=$2
   found=0
+  current_evidence=0
   blockers=
   while IFS="$TAB" read -r name requirement condition final_required; do
     [ -n "${name:-}" ] || continue
@@ -530,6 +581,14 @@ check_requirements() {
     result=$(latest_status "$name" "$wanted_fp" "$final_mode")
     status=${result%%"$TAB"*}
     reason=${result#*"$TAB"}
+    if [ "$status" != missing ]; then
+      current_evidence=$((current_evidence + 1))
+    elif [ "$final_mode" != yes ] && [ "$final_required" = false ] && \
+      checkpoint_has_check "$name"; then
+      # A slice-local check already passed at an earlier committed checkpoint.
+      # New slice checks still have to produce evidence for this candidate.
+      continue
+    fi
     okay=no
     case "$requirement:$status" in
       required:passed) okay=yes ;;
@@ -545,6 +604,10 @@ check_requirements() {
     printf 'planned validation is not passing: no planned checks\n' >&2
     return 1
   }
+  if [ "$final_mode" != yes ] && [ "$current_evidence" -eq 0 ]; then
+    printf 'planned validation is not passing: no current-slice evidence\n' >&2
+    return 1
+  fi
   if [ -n "$blockers" ]; then
     printf 'planned validation is not passing: %s\n' "$blockers" >&2
     return 1
@@ -800,11 +863,13 @@ checkpoint_run() {
   committed_tmp=$STATE/committed.$$
   changed_paths_for_checkout "$CHECKOUT" >"$CHANGED_TMP"
   baseline_head=$(meta_value baseline_head "$STATE/meta.env")
+  last_known_head=$(meta_value checkout_head "$STATE/meta.env")
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
-  git -C "$CHECKOUT" diff --name-only --find-renames "$baseline_head..$current_head" | LC_ALL=C sort -u >"$committed_tmp"
-  if [ -s "$CHANGED_TMP" ] && [ -s "$committed_tmp" ]; then
-    fail "checkpoint mixes worktree changes with committed changes; start a new preflight"
+  [ -n "$last_known_head" ] || fail "state is missing checkout_head"
+  if [ "$last_known_head" != "$current_head" ]; then
+    fail "checkout HEAD changed outside SWE Forge slice delivery; start a new preflight"
   fi
+  git -C "$CHECKOUT" diff --name-only --find-renames "$baseline_head..$current_head" | LC_ALL=C sort -u >"$committed_tmp"
   if [ ! -s "$CHANGED_TMP" ] && [ "$baseline_head" != "$current_head" ]; then
     cp "$committed_tmp" "$CHANGED_TMP"
   fi
@@ -825,12 +890,26 @@ checkpoint_run() {
   id=$(awk 'END { print NR + 1 }' "$STATE/checkpoints.tsv")
   paths_file=$STATE/checkpoint.$(printf '%04d' "$id").paths
   scope_file=$STATE/checkpoint.$(printf '%04d' "$id").scope
+  checks_file=$STATE/checkpoint.$(printf '%04d' "$id").checks
   cp "$CHANGED_TMP" "$paths_file"
   cp "$SCOPE_TMP" "$scope_file"
+  : >"$checks_file"
+  while IFS="$TAB" read -r name requirement condition final_required; do
+    [ -n "${name:-}" ] || continue
+    case "$requirement" in informational) continue ;; esac
+    result=$(latest_status "$name" "$candidate_fp" no)
+    status=${result%%"$TAB"*}
+    reason=${result#*"$TAB"}
+    case "$requirement:$status" in
+      required:passed|conditional:passed) printf '%s\n' "$name" >>"$checks_file" ;;
+      conditional:not_applicable)
+        [ -n "$reason" ] && printf '%s\n' "$name" >>"$checks_file" ;;
+    esac
+  done <"$STATE/plan.tsv"
   branch=$(current_branch)
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$current_head" \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$current_head" \
     "$candidate_fp" "$(basename "$paths_file")" "$(basename "$scope_file")" \
-    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >>"$STATE/checkpoints.tsv"
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$(basename "$checks_file")" >>"$STATE/checkpoints.tsv"
   printf 'PASS: checkpoint %s recorded (%s changed files)\n' "$id" "$changed_count"
   printf 'CHECKPOINT_ID: %s\n' "$id"
   rm -f "$committed_tmp"
@@ -907,6 +986,7 @@ commit_slice() {
   git -C "$CHECKOUT" commit -m "$message"
   new_head=$(git -C "$CHECKOUT" rev-parse HEAD)
   update_state_checkout "$new_head"
+  update_meta_checkout "$new_head"
   rm -f "$current_paths" "$staged_before" "$staged_tmp" "$unstaged_tmp"
   printf 'PASS: committed checkpoint %s\n' "$checkpoint_id"
   printf 'COMMIT: %s\n' "$new_head"
