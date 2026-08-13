@@ -189,12 +189,13 @@ automatically.
 
 Use `/swe-forge pr <ticket>` when the change is clear enough for low-touch
 execution. Forge performs a short alignment interview only when important
-requirements are missing, keeps the working spec temporary, commits each
-validated implementation slice separately, runs the full verification and
-review gates, and stops with one PR available to review. For `ISOLATED`, it
-central-integrates worker transfer commits into one integration/delivery branch
-and still creates exactly one final PR. Its PR description is kept concise and
-informative; it still never merges.
+requirements are missing, keeps the working spec temporary, and records an
+ordered commit plan before editing. Each meaningful plan step is validated and
+committed separately; a one-step ticket is not split artificially. Forge then
+runs the full verification and review gates and stops with one PR available to
+review. For `ISOLATED`, it central-integrates worker transfer commits into one
+integration/delivery branch and still creates exactly one final PR. Its PR
+description is kept concise and informative; it still never merges.
 
 The delivery helpers are intentionally atomic: `/git-push` only pushes; use
 `/git-pr` separately to create or report the pull request. In PR mode, a compact

@@ -46,8 +46,8 @@ specific files:
   isolated ticket has one integration/delivery branch; worker branches are
   local-only and cannot create PRs
 - `go` commits only the reviewed guided slice or accepted central integration
-  unit; PR mode commits validated slices separately before final review, push,
-  and one pull-request creation
+  unit; PR mode plans meaningful slices before editing and commits each validated
+  slice separately before final review, push, and one pull-request creation
 - pushing never creates a PR, and syncing verifies `MERGED` before changing the
   checkout
 - when available, `.swe-forge/tools/swe-forge-gate` provides executable

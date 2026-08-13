@@ -42,10 +42,13 @@ and is never committed.
 
 ## Execution
 
-The agent implements and validates cohesive slices, creating one local commit
-for each passing slice with a concise subject. For `ISOLATED`, those become
-central integration commits on the one integration/delivery branch after each
-accepted worker unit; worker branches remain local-only. It runs the final required
+Before editing, the working spec records an ordered commit plan. Each step names
+one cohesive objective, scope, dependencies, targeted validation, and commit
+subject. The agent implements and validates one step, creates its local commit,
+and then starts the next step; it does not defer commits until the end. A single
+inseparable step remains one commit. For `ISOLATED`, those become central
+integration commits on the one integration/delivery branch after each accepted
+worker unit; worker branches remain local-only. It runs the final required
 checks, performs a fresh review, repairs blocking findings as additional
 commits, and inspects the final diff. It does not stop after each slice for user
 approval.
