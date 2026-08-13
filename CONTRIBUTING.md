@@ -19,12 +19,20 @@ canonical workflow and harness-specific projections.
 Run the repository checks from the project root:
 
 ```sh
-./scripts/check-swe-forge
-./scripts/test-swe-forge
-./scripts/test-swe-forge-gate
-sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/swe-forge-gate scripts/test-swe-forge-gate scripts/test-swe-forge-isolated scripts/check-release scripts/swe-forge-state scripts/swe-forge-isolated-gate .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-isolated-gate
+./scripts/validate-swe-forge
+# Or use --serial when tracing a fixture failure.
+# ./scripts/validate-swe-forge --serial
 git diff --check
 ```
+
+The validation batch runs the independent installer, evidence-gate, and
+isolated-worktree fixtures concurrently after syntax and structural checks. It
+runs every suite and returns failure if any required suite fails; it does not
+weaken the final quality gate. During an implementation loop, use only the
+focused suite affected by the current slice and run the batch once on the final
+candidate. Focused changes may run the directly affected suite, such as
+`scripts/test-swe-forge-gate` or `scripts/test-swe-forge-isolated`, before the
+final batch.
 
 Documentation-only changes still need the structural checks and a final diff
 review. Changes to the evidence gate, isolated guard, run-state validator,

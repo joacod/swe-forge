@@ -35,6 +35,20 @@ Code inspection alone cannot establish that a relevant behavior works.
 - `PR` delivery: complete all required local checks and fresh review before
   commit, push, or pull-request creation
 
+### Validation cadence and batching
+
+Use targeted checks for each implementation slice and reserve complete
+repository suites for the final integrated candidate unless a slice changes a
+behavior that requires an earlier full check. Do not rerun an unchanged full
+suite merely because another check or commit boundary was reached.
+
+When independent checks share the same candidate and have no shared runtime or
+filesystem state, run them through one inspected batch when the repository
+provides one. A batch is only a scheduling optimization: it must preserve the
+identity and result of every check, report every failure or unavailable check,
+and return failure if any required check fails. It must not replace current-HEAD
+fingerprint binding, targeted slice evidence, or final review.
+
 ### Testing Decision
 
 For every ticket, record a concise testing decision before implementation:

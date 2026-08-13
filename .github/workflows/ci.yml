@@ -17,20 +17,8 @@ jobs:
           # The formatting check compares commits, not the clean checkout.
           fetch-depth: 0
 
-      - name: Check shell syntax
-        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/swe-forge-gate scripts/test-swe-forge-gate .swe-forge/tools/swe-forge-gate
-
-      - name: Run structural checks
-        run: ./scripts/check-swe-forge
-
-      - name: Run installer fixture tests
-        run: ./scripts/test-swe-forge
-
-      - name: Run executable gate tests
-        run: ./scripts/test-swe-forge-gate
-
-      - name: Run isolated worktree fixtures
-        run: ./scripts/test-swe-forge-isolated
+      - name: Run validation batch
+        run: ./scripts/validate-swe-forge
 
       - name: Check diff formatting
         env:
@@ -65,7 +53,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check shell syntax
-        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/test-swe-forge-gate scripts/test-swe-forge-isolated scripts/swe-forge-gate scripts/swe-forge-state scripts/swe-forge-isolated-gate .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-isolated-gate
+        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/validate-swe-forge scripts/test-swe-forge-gate scripts/test-swe-forge-isolated scripts/swe-forge-gate scripts/swe-forge-state scripts/swe-forge-isolated-gate .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-isolated-gate
 
       - name: Run structural checks
         run: ./scripts/check-swe-forge

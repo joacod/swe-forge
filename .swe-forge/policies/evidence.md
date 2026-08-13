@@ -44,12 +44,14 @@ checks remain visible and do not block. `validate` and
 latest status per planned check; attempt history remains private.
 
 Use `--final-required false` for a targeted check owned by the current
-implementation slice, and register final checks separately with the default
-`--final-required true`. A checkpoint records which slice checks passed. Later
-checkpoints do not require an earlier slice check to match the new candidate
-fingerprint, but every new slice still needs current evidence. Final checks
-always require an exact current-candidate result. This keeps per-slice commits
-independent without weakening the final evidence gate.
+implementation slice and the default `--final-required true` for final checks.
+Final-only checks may be registered before implementation, but slice
+checkpoints evaluate only the slice-local checks; this avoids forcing a full
+repository run before every commit. A checkpoint records which slice checks
+passed. Later checkpoints do not require an earlier slice check to match the
+new candidate fingerprint, but every new slice still needs current evidence.
+Final checks always require an exact current-candidate result. This keeps
+per-slice commits independent without weakening the final evidence gate.
 
 `validate` records the candidate fingerprint before and after the command. A
 normal command that changes candidate source content fails evidence binding. A
