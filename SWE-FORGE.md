@@ -272,8 +272,11 @@ when the ticket needs clarification, keeps the working spec outside the
 repository, and proceeds through implementation without interactive
 checkpoints. Before the first edit, the working spec contains an ordered commit
 plan with one cohesive objective, scope, targeted validation, and commit subject
-per step. The orchestrator validates and commits each step before beginning the
-next; it does not accumulate a broad diff and create one catch-all commit. A
+per step. The working spec also records a `review_focus` with one clear review goal,
+the acceptance criteria to check, relevant in-scope quality concerns,
+non-goals, and a finding rule for deferring unrelated work. The orchestrator
+validates and commits each step before beginning the next; it does not
+accumulate a broad diff and create one catch-all commit. A
 one-step ticket remains one commit rather than being split artificially. For
 `SOLO` and `SUBAGENTS`, it uses the one dedicated delivery branch. For
 `ISOLATED`, it uses one integration/delivery branch, planned local worker
@@ -346,9 +349,13 @@ lifecycle is:
     by the orchestrator.
 11. Verify with relevant repository quality gates and record current-HEAD
     evidence when using the executable gate.
-12. Review from fresh context using evidence, not implementation chatter.
-13. Repair relevant findings and rerun affected validation.
-14. Compare the final diff against the original ticket and acceptance criteria.
+12. Review from fresh context using the review focus and evidence, not
+    implementation chatter; check every acceptance criterion before relevant
+    quality concerns.
+13. Repair relevant in-scope findings and rerun affected validation; defer
+    unrelated follow-ups unless the user changes scope.
+14. Compare the final diff against the original ticket, acceptance criteria,
+    and review focus.
 15. Perform only the delivery actions authorized by the selected mode or a
     later explicit user instruction.
 16. Report the result concisely.
@@ -469,7 +476,8 @@ Declare success only when all applicable conditions are met:
   not-applicable rationale
 - relevant tests pass
 - relevant typecheck, lint, build, and repository checks pass
-- no blocking review finding under `.swe-forge/contracts/review.md` remains
+- no blocking in-scope review finding under `.swe-forge/contracts/review.md`
+  remains, and every review-focus acceptance criterion has been checked
 - no unintended changes remain
 - the final integrated diff has been inspected
 - any generated receipt is truthful, contains no transcript, and reports

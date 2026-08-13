@@ -13,6 +13,9 @@ transient, behavior-first, and proportional to the selected delivery mode.
 - `PR` mode always builds a working spec before writable implementation. It may
   skip the interview when the ticket already contains a concrete intent,
   bounded scope, observable behavior, non-goals, and validation expectations.
+  The spec also records a `review_focus` with one review goal, the acceptance
+  criteria to check, relevant in-scope quality concerns, non-goals, and a rule
+  for separating actionable findings from deferred follow-ups.
 - Any mode may pause for a decision when an ambiguity changes behavior, scope,
   compatibility, safety, or delivery authorization.
 
@@ -61,6 +64,8 @@ Before implementation, the working spec must expose:
 - in-scope behavior and explicit non-goals
 - a small set of observable requirements and scenarios
 - acceptance and validation evidence to collect
+- a `review_focus` that names the review goal, criteria, relevant quality
+  concerns, non-goals, and finding boundary
 - compatibility, external-effect, and delivery risks
 - unresolved decisions and their recovery path
 

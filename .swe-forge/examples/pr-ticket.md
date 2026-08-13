@@ -36,8 +36,10 @@ $TMPDIR/swe-forge/<run-id>/working-spec.md
 ```
 
 The spec contains observable requirements, scenarios, assumptions, affected
-paths, a testing decision, validation, and delivery authorization. It is
-deleted during cleanup
+paths, a testing decision, validation, a `review_focus` brief, and delivery
+authorization. The review focus names the ticket goal, acceptance criteria,
+relevant quality concerns, non-goals, and the boundary for actionable findings.
+It is deleted during cleanup
 and is never committed.
 
 ## Execution
@@ -49,9 +51,10 @@ and then starts the next step; it does not defer commits until the end. A single
 inseparable step remains one commit. For `ISOLATED`, those become central
 integration commits on the one integration/delivery branch after each accepted
 worker unit; worker branches remain local-only. It runs the final required
-checks, performs a fresh review, repairs blocking findings as additional
-commits, and inspects the final diff. It does not stop after each slice for user
-approval.
+checks, performs a fresh acceptance-first review within the review focus,
+repairs blocking in-scope findings as additional commits, and inspects the
+final diff. Unrelated improvements are recorded as deferred follow-ups rather
+than pulled into the PR. It does not stop after each slice for user approval.
 
 After all final gates pass, `PR` mode pushes the one task branch (or the one
 isolated integration/delivery branch) and creates exactly one pull request with

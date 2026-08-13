@@ -54,6 +54,19 @@ requirements:
 acceptance:
   - <checkable condition>
 
+review_focus:
+  goal: <one-sentence review objective>
+  acceptance_criteria:
+    - <criterion ID or statement the reviewer must check>
+  in_scope:
+    - <changed behavior, relevant repository practice, or concrete risk>
+  non_goals:
+    - <unrelated cleanup, refactor, or future work>
+  finding_rule: >
+    Raise a finding only when it affects an acceptance criterion, explicit
+    constraint, or concrete relevant risk in the changed behavior; record useful
+    out-of-scope observations as deferred follow-ups.
+
 commit_plan:
   - id: S1
     objective: <one cohesive observable step>
@@ -156,7 +169,10 @@ open_questions: []
 
 A `ready` working spec has a concrete intent, bounded scope and non-goals,
 observable requirements, acceptance checks, a testing decision, a validation
-plan, and explicit assumptions. It records topology and provider separately.
+plan, and explicit assumptions. In `PR`, it also has a `review_focus` with a
+clear goal, the acceptance criteria to check, relevant in-scope quality
+concerns, non-goals, and a finding rule that keeps unrelated work out of the
+current review. It records topology and provider separately.
 For a long-running or context-risk ticket, it also records a context strategy,
 latest status, capability source, safe compaction action, overflow action, and
 durable-state reference. The provider state is

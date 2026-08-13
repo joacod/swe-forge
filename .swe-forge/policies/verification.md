@@ -125,11 +125,13 @@ block acceptance.
 ## Independent Review
 
 After verification, provide a fresh-context reviewer when the trigger in the
-ticket workflow applies. Give the reviewer the original ticket,
+ticket workflow applies. Give the reviewer the original ticket, `review_focus`,
 acceptance criteria, relevant architecture, final diff, and evidence. The
-reviewer must use `../contracts/review.md` and assess correctness, regressions,
-scope, error handling, compatibility, concurrency, security, performance, and
-tests as relevant.
+reviewer must check every acceptance criterion first, assess only the relevant
+quality areas, and use `../contracts/review.md` to separate in-scope findings
+from deferred out-of-scope follow-ups. Correctness, regressions, scope, error
+handling, compatibility, concurrency, security, performance, and tests remain
+review areas when relevant to the focus.
 
 ## Final Gate
 
