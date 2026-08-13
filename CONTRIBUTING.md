@@ -22,12 +22,14 @@ Run the repository checks from the project root:
 ./scripts/check-swe-forge
 ./scripts/test-swe-forge
 ./scripts/test-swe-forge-gate
-sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/swe-forge-gate scripts/test-swe-forge-gate
+sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/swe-forge-gate scripts/test-swe-forge-gate scripts/test-swe-forge-isolated scripts/check-release scripts/swe-forge-state scripts/swe-forge-isolated-gate .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-isolated-gate
 git diff --check
 ```
 
 Documentation-only changes still need the structural checks and a final diff
-review. Changes to the installer or adapter registry should include focused
+review. Changes to the evidence gate, isolated guard, run-state validator,
+conformance fixture, or release checker also require their executable fixtures
+and `./scripts/check-release prepare`. Changes to the installer or adapter registry should include focused
 fixture coverage for the affected installation or verification behavior.
 
 ## Pull requests

@@ -1,27 +1,23 @@
 #!/bin/sh
 
-# Dependency-free evidence and delivery guard for SWE Forge runs.
-# The state directory is an evidence ledger, not a replacement for the
-# canonical run-state contract. Keep it outside the repository or ignored.
+# Dependency-free Git/evidence guard for SWE Forge runs.
+# The ledger is private supporting evidence, not a replacement for run state.
 
 set -eu
 
+SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 PROGRAM=${0##*/}
 STATE=
 CHECKOUT=
 SCOPE_TMP=
 CHANGED_TMP=
-COMMITTED_TMP=
-SCOPE_VALUES=
 TAB=$(printf '\t')
 NEWLINE='
 '
-UMASK_SET=0
 
 cleanup() {
-  [ -z "$SCOPE_TMP" ] || rm -f "$SCOPE_TMP"
-  [ -z "$CHANGED_TMP" ] || rm -f "$CHANGED_TMP"
-  [ -z "$COMMITTED_TMP" ] || rm -f "$COMMITTED_TMP"
+  [ -z "${SCOPE_TMP:-}" ] || rm -f "$SCOPE_TMP"
+  [ -z "${CHANGED_TMP:-}" ] || rm -f "$CHANGED_TMP"
 }
 
 trap 'status=$?; cleanup; exit "$status"' 0 HUP INT TERM
@@ -35,12 +31,22 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
-  scripts/swe-forge-gate validate --state DIR --requirement TYPE --name NAME [--final] -- COMMAND [ARGS...]
+  scripts/swe-forge-gate plan-check --state DIR --name NAME --requirement TYPE \
+    [--condition TEXT] [--final-required true|false]
+  scripts/swe-forge-gate validate --state DIR --name NAME [--final] \
+    [--mutation-producing --mutation-scope PATH --mutation-reason TEXT] -- COMMAND [ARGS...]
+  scripts/swe-forge-gate record-check-status --state DIR --name NAME \
+    --status passed|failed|unavailable|not-applicable [--reason TEXT] [--final]
+  scripts/swe-forge-gate fingerprint [--checkout PATH]
   scripts/swe-forge-gate checkpoint --state DIR --scope PATH [--scope PATH...]
-  scripts/swe-forge-gate commit-slice --state DIR --checkpoint ID --message MESSAGE --authorized-by PR|GO
-  scripts/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED --source SOURCE [options]
+  scripts/swe-forge-gate commit-slice --state DIR --checkpoint ID \
+    --message MESSAGE --authorized-by PR|GO
+  scripts/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED \
+    --source SOURCE [--findings N] [--repaired N]
   scripts/swe-forge-gate deliver-pr --state DIR
-  scripts/swe-forge-gate receipt --state DIR --execution MODE --delivery GUIDED|PR [metadata options]
+  scripts/swe-forge-gate receipt --state DIR --execution MODE \
+    --delivery GUIDED|PR [metadata options]
+  scripts/swe-forge-gate receipt-verify --state DIR --receipt FILE
 
 Receipt metadata options:
   --forge-version VERSION       SWE Forge release version.
@@ -52,9 +58,8 @@ Receipt metadata options:
   --routing-reason TEXT         Short routing rationale.
   --model MODEL                 Model label when safe to publish.
 
-The state directory is temporary evidence. Keep it outside the repository or
-under an already ignored path. The guard never pushes, creates a pull request,
-or merges.
+The guard never launches agents, controls providers, pushes, creates a PR,
+publishes, deploys, or merges.
 EOF
 }
 
@@ -98,16 +103,24 @@ meta_value() {
 }
 
 state_meta() {
-  [ -n "$STATE" ] || fail "--state is required"
+  [ -n "${STATE:-}" ] || fail "--state is required"
   [ -f "$STATE/meta.env" ] || fail "state has not been initialized: $STATE"
+  if grep -Eq '^state_version=1([[:space:]]|$)' "$STATE/meta.env"; then
+    fail "schema-v1 evidence state is not resumable; migrate explicitly to schema_version: 2"
+  fi
   CHECKOUT=$(meta_value checkout_path "$STATE/meta.env")
   [ -n "$CHECKOUT" ] || fail "state is missing checkout_path"
   [ -d "$CHECKOUT" ] || fail "recorded checkout no longer exists: $CHECKOUT"
+  if [ -f "$STATE/run-state.yaml" ] && [ -x "$SCRIPT_DIR/swe-forge-state" ]; then
+    "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  fi
 }
 
-state_file() {
+ensure_meta_state() {
   state_meta
-  printf '%s\n' "$STATE/$1"
+  [ -f "$STATE/plan.tsv" ] || : >"$STATE/plan.tsv"
+  [ -f "$STATE/validations.tsv" ] || : >"$STATE/validations.tsv"
+  [ -f "$STATE/checkpoints.tsv" ] || : >"$STATE/checkpoints.tsv"
 }
 
 ensure_safe_state_location() {
@@ -117,8 +130,7 @@ ensure_safe_state_location() {
     "$root"/*)
       relative=${STATE#"$root"/}
       git -C "$root" check-ignore -q --no-index "$relative" || \
-        fail "state inside checkout must already be ignored: $STATE"
-      ;;
+        fail "state inside checkout must already be ignored: $STATE" ;;
   esac
 }
 
@@ -165,24 +177,126 @@ assert_identity() {
   identity_safe || fail "checkout identity, branch, or protection state changed"
 }
 
-ensure_meta_state() {
-  state_meta
-  [ -f "$STATE/validations.tsv" ] || : >"$STATE/validations.tsv"
-  [ -f "$STATE/checkpoints.tsv" ] || : >"$STATE/checkpoints.tsv"
+write_run_state() {
+  baseline=$1
+  branch=$2
+  remote_default=$3
+  head=$4
+  run_id=$(basename "$STATE")
+  state_tmp=$STATE/run-state.yaml.tmp.$$
+  {
+    printf 'workflow: swe-forge\n'
+    printf 'workflow_version: 1\n'
+    printf 'schema_version: 2\n'
+    printf 'run_id: %s\n' "$run_id"
+    printf 'status: running\n'
+    printf 'requested_mode: AUTO\n'
+    printf 'execution_mode: SOLO\n'
+    printf 'requested_provider: AUTO\n'
+    printf 'execution_provider: NONE\n'
+    printf 'provider_reason: non-isolated execution\n'
+    printf 'parallel_strategy: NONE\n'
+    printf 'integration_strategy: NONE\n'
+    printf 'requested_delivery: PR\n'
+    printf 'delivery_mode: PR\n'
+    printf 'reason: sequential central implementation\n'
+    printf 'fallback_used: no\n'
+    printf 'invocation_checkout:\n'
+    printf '  path: %s\n' "$CHECKOUT"
+    printf '  branch: %s\n' "$branch"
+    printf '  head_sha: %s\n' "$head"
+    printf '  classification: writable\n'
+    printf '  mutation_allowed: true\n'
+    printf '  baseline_ref: %s\n' "$baseline"
+    printf 'delivery_checkout:\n'
+    printf '  path: %s\n' "$CHECKOUT"
+    printf '  branch: %s\n' "$branch"
+    printf '  kind: task\n'
+    printf '  base_sha: %s\n' "$baseline"
+    printf '  head_sha: %s\n' "$head"
+    printf '  checkpoint_sha: %s\n' "$head"
+    printf '  status: ready\n'
+    printf '  branch_setup: reused\n'
+    printf '  remote_default_evidence: %s\n' "${remote_default:-none}"
+    printf 'isolated_eligibility:\n'
+    printf '  status: ineligible\n'
+    printf '  evidence_ref: routing-policy\n'
+    printf '  blockers: shared-canonical-surfaces\n'
+    printf 'parallel_value:\n'
+    printf '  status: marginal\n'
+    printf '  rationale: ordered shared-surface implementation\n'
+    printf '  overridden_by_user: false\n'
+    printf 'provider_capabilities:\n'
+    for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
+      integration_checkout_protection structured_results central_integration; do
+      printf '  %s:\n' "$capability"
+      printf '    status: unknown\n'
+      printf '    evidence_ref: not-applicable\n'
+    done
+    printf '  lifecycle:\n'
+    for operation in wait inspect cancel cleanup; do
+      printf '    %s:\n' "$operation"
+      printf '      status: unknown\n'
+      printf '      evidence_ref: not-applicable\n'
+    done
+    printf 'delivery:\n'
+    printf '  authorization:\n'
+    printf '    commit: PR\n'
+    printf '    push: PR\n'
+    printf '    create_pull_request: PR\n'
+    printf '    publish: not-authorized\n'
+    printf '    deploy: not-authorized\n'
+    printf '    merge: not-authorized\n'
+    printf '  commit: pending\n'
+    printf '  push: pending\n'
+    printf '  create_pull_request: pending\n'
+    printf 'integration:\n'
+    printf '  source_to_integration: []\n'
+    printf 'workers: {}\n'
+  } >"$state_tmp"
+  mv "$state_tmp" "$STATE/run-state.yaml"
 }
 
 write_meta() {
+  baseline=$1
+  branch=$2
+  remote_default=$3
+  head=$4
   meta_tmp=$STATE/meta.env.tmp.$$
   {
-    printf 'state_version=1\n'
+    printf 'state_version=2\n'
     printf 'checkout_path=%s\n' "$CHECKOUT"
-    printf 'baseline_head=%s\n' "$1"
-    printf 'checkout_head=%s\n' "$4"
-    printf 'baseline_branch=%s\n' "$2"
-    printf 'remote_default=%s\n' "$3"
+    printf 'baseline_head=%s\n' "$baseline"
+    printf 'checkout_head=%s\n' "$head"
+    printf 'baseline_branch=%s\n' "$branch"
+    printf 'remote_default=%s\n' "$remote_default"
     printf 'created_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   } >"$meta_tmp"
   mv "$meta_tmp" "$STATE/meta.env"
+}
+
+update_state_checkout() {
+  new_head=$1
+  state_file=$STATE/run-state.yaml
+  [ -f "$state_file" ] || return 0
+  tmp=$state_file.tmp.$$
+  awk -v wanted="$new_head" '
+    BEGIN { section="" }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+    }
+    section == "delivery_checkout" && $0 ~ /^[[:space:]]{2}head_sha:/ {
+      print "  head_sha: " wanted
+      next
+    }
+    section == "delivery_checkout" && $0 ~ /^[[:space:]]{2}checkpoint_sha:/ {
+      print "  checkpoint_sha: " wanted
+      next
+    }
+    { print }
+  ' "$state_file" >"$tmp"
+  mv "$tmp" "$state_file"
 }
 
 preflight() {
@@ -212,13 +326,11 @@ preflight() {
     esac
   done
 
-  [ -n "$STATE" ] || fail "--state is required"
+  [ -n "${STATE:-}" ] || fail "--state is required"
   CHECKOUT=$(git_root_from_cwd)
   ensure_safe_state_location "$CHECKOUT"
   [ ! -e "$STATE/meta.env" ] || fail "state is already initialized: $STATE"
   umask 077
-  UMASK_SET=1
-
   branch=$(current_branch)
   [ -n "$branch" ] || fail "checkout is detached"
   [ -z "$expected_branch" ] || [ "$branch" = "$expected_branch" ] || \
@@ -234,12 +346,234 @@ preflight() {
     fail "base revision is not an ancestor of the current checkout: $baseline_ref"
   mkdir -p "$STATE"
   write_meta "$base_head" "$branch" "$remote_default" "$head"
+  : >"$STATE/plan.tsv"
   : >"$STATE/validations.tsv"
   : >"$STATE/checkpoints.tsv"
+  write_run_state "$base_head" "$branch" "$remote_default" "$head"
+  "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
   printf 'PASS: preflight baseline recorded at %s\n' "$STATE"
   printf 'BASELINE_HEAD: %s\n' "$base_head"
   printf 'CHECKOUT_HEAD: %s\n' "$head"
   printf 'BRANCH: %s\n' "$branch"
+}
+
+fingerprint_for_checkout() {
+  root=$1
+  [ -d "$root" ] || fail "checkout does not exist: $root"
+  git -C "$root" rev-parse --show-toplevel >/dev/null 2>&1 || fail "not a Git checkout: $root"
+  untracked=$(git -C "$root" ls-files --others --exclude-standard | LC_ALL=C sort -u)
+  if [ -n "$untracked" ]; then
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      reject_control_chars "$path"
+      case "$path" in
+        /*|../*|*/../*|..)
+          fail "untracked path is not repository-relative: $path" ;;
+      esac
+    done <<EOF_UNTRACKED
+$untracked
+EOF_UNTRACKED
+  fi
+  {
+    printf 'HEAD\t%s\n' "$(git -C "$root" rev-parse HEAD)"
+    printf 'TRACKED_CANDIDATE_BEGIN\n'
+    git -C "$root" diff --binary --full-index --find-renames HEAD --
+    printf 'TRACKED_CANDIDATE_END\n'
+    printf 'UNTRACKED_BEGIN\n'
+    if [ -n "$untracked" ]; then
+      while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        if [ -L "$root/$path" ]; then
+          type=symlink
+        elif [ -f "$root/$path" ]; then
+          type=regular
+        else
+          type=other
+        fi
+        hash=$(git -C "$root" hash-object -- "$path" 2>/dev/null || printf 'unreadable')
+        printf '%s\t%s\t%s\n' "$path" "$type" "$hash"
+      done <<EOF_PATHS
+$untracked
+EOF_PATHS
+    fi
+    printf 'UNTRACKED_END\n'
+  } | git -C "$root" hash-object --stdin
+}
+
+fingerprint_run() {
+  root=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --checkout)
+        [ "$#" -ge 2 ] || fail "--checkout requires a path"
+        root=$(absolute_path "$2")
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown fingerprint option: $1" ;;
+    esac
+  done
+  [ -n "$root" ] || root=$(git_root_from_cwd)
+  fingerprint_for_checkout "$root"
+}
+
+changed_paths_for_checkout() {
+  root=$1
+  {
+    git -C "$root" diff --name-only --find-renames HEAD --
+    git -C "$root" ls-files --others --exclude-standard
+  } | LC_ALL=C sort -u
+}
+
+scope_allows() {
+  candidate=$1
+  while IFS= read -r scope; do
+    [ -n "$scope" ] || continue
+    reject_control_chars "$scope"
+    case "$scope" in
+      */\*\*)
+        prefix=${scope%/\*\*}
+        case "$candidate" in
+          "$prefix"|"$prefix"/*) return 0 ;;
+        esac
+        ;;
+      *)
+        [ "$candidate" = "$scope" ] && return 0 ;;
+    esac
+  done <"$SCOPE_TMP"
+  return 1
+}
+
+plan_values() {
+  name=$1
+  awk -F '\t' -v wanted="$name" '$1 == wanted { print; exit }' "$STATE/plan.tsv"
+}
+
+plan_check() {
+  name=
+  requirement=
+  condition=always
+  final_required=true
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --name)
+        [ "$#" -ge 2 ] || fail "--name requires a value"
+        name=$2
+        shift 2
+        ;;
+      --requirement)
+        [ "$#" -ge 2 ] || fail "--requirement requires required, conditional, or informational"
+        requirement=$2
+        shift 2
+        ;;
+      --condition)
+        [ "$#" -ge 2 ] || fail "--condition requires a value"
+        condition=$2
+        shift 2
+        ;;
+      --final-required)
+        [ "$#" -ge 2 ] || fail "--final-required requires true or false"
+        final_required=$2
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown plan-check option: $1" ;;
+    esac
+  done
+  ensure_meta_state
+  [ -n "$name" ] || fail "--name is required"
+  reject_control_chars "$name"
+  reject_control_chars "$condition"
+  case "$requirement" in required|conditional|informational) ;; *) fail "invalid validation requirement: ${requirement:-<missing>}" ;; esac
+  case "$final_required" in true|false) ;; *) fail "--final-required must be true or false" ;; esac
+  [ "$requirement" != conditional ] || [ -n "$condition" ] || fail "conditional checks require a condition"
+  [ -z "$(plan_values "$name")" ] || fail "planned check already exists: $name"
+  printf '%s\t%s\t%s\t%s\n' "$name" "$requirement" "$condition" "$final_required" >>"$STATE/plan.tsv"
+  printf 'PASS: planned check %s\n' "$name"
+}
+
+latest_status() {
+  name=$1
+  wanted_fp=$2
+  final_mode=$3
+  awk -F '\t' -v wanted="$name" -v fp="$wanted_fp" -v final="$final_mode" '
+    $2 == wanted && $13 == fp && (final != "yes" || $17 == "yes") {
+      status=$5
+      reason=$16
+    }
+    END {
+      if (status == "") status="missing"
+      printf "%s\t%s\n", status, reason
+    }
+  ' "$STATE/validations.tsv"
+}
+
+check_requirements() {
+  wanted_fp=$1
+  final_mode=$2
+  found=0
+  blockers=
+  while IFS="$TAB" read -r name requirement condition final_required; do
+    [ -n "${name:-}" ] || continue
+    if [ "$final_mode" = yes ] && [ "$final_required" != true ]; then
+      continue
+    fi
+    found=$((found + 1))
+    case "$requirement" in
+      informational) continue ;;
+    esac
+    result=$(latest_status "$name" "$wanted_fp" "$final_mode")
+    status=${result%%"$TAB"*}
+    reason=${result#*"$TAB"}
+    okay=no
+    case "$requirement:$status" in
+      required:passed) okay=yes ;;
+      conditional:passed) okay=yes ;;
+      conditional:not_applicable)
+        [ -n "$reason" ] && okay=yes ;;
+    esac
+    if [ "$okay" != yes ]; then
+      if [ -n "$blockers" ]; then blockers="$blockers, $name ($status)"; else blockers="$name ($status)"; fi
+    fi
+  done <"$STATE/plan.tsv"
+  [ "$found" -gt 0 ] || {
+    printf 'planned validation is not passing: no planned checks\n' >&2
+    return 1
+  }
+  if [ -n "$blockers" ]; then
+    printf 'planned validation is not passing: %s\n' "$blockers" >&2
+    return 1
+  fi
+}
+
+append_attempt() {
+  name=$1
+  requirement=$2
+  condition=$3
+  result=$4
+  code=$5
+  evidence=$6
+  command_display=$7
+  head_before=$8
+  head_after=$9
+  fp_before=${10}
+  fp_after=${11}
+  bound_fp=${12}
+  mutation=${13}
+  mutation_scope=${14}
+  mutation_reason=${15}
+  final_run=${16}
+  id=$(awk 'END { print NR + 1 }' "$STATE/validations.tsv")
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$id" "$name" "$requirement" "$condition" "$result" "$code" \
+    "$(basename "$evidence")" "$command_display" "$head_before" "$head_after" \
+    "$fp_before" "$fp_after" "$bound_fp" "$mutation" "$mutation_scope" \
+    "$mutation_reason" "$final_run" >>"$STATE/validations.tsv"
 }
 
 join_command() {
@@ -256,9 +590,11 @@ join_command() {
 }
 
 validate_run() {
-  requirement=
   name=
   final_run=no
+  mutation=no
+  mutation_scope=
+  mutation_reason=
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --state)
@@ -266,19 +602,31 @@ validate_run() {
         STATE=$(state_path "$2")
         shift 2
         ;;
-      --requirement)
-        [ "$#" -ge 2 ] || fail "--requirement requires required, conditional, or informational"
-        requirement=$2
-        shift 2
-        ;;
       --name)
         [ "$#" -ge 2 ] || fail "--name requires a label"
         name=$2
         shift 2
         ;;
+      --requirement)
+        [ "$#" -ge 2 ] || fail "--requirement is derived from the plan; do not provide it"
+        fail "validate must refer to a registered check; requirement is stored by plan-check" ;;
       --final)
         final_run=yes
         shift
+        ;;
+      --mutation-producing|--allow-mutation)
+        mutation=yes
+        shift
+        ;;
+      --mutation-scope|--mutation-path)
+        [ "$#" -ge 2 ] || fail "--mutation-scope requires a path"
+        mutation_scope=$2
+        shift 2
+        ;;
+      --mutation-reason)
+        [ "$#" -ge 2 ] || fail "--mutation-reason requires a reason"
+        mutation_reason=$2
+        shift 2
         ;;
       --)
         shift
@@ -288,101 +636,136 @@ validate_run() {
       *) fail "unknown validate option: $1" ;;
     esac
   done
-
-  case "$requirement" in
-    required|conditional|informational) ;;
-    *) fail "invalid validation requirement: ${requirement:-<missing>}" ;;
-  esac
   [ -n "$name" ] || fail "--name is required"
-  reject_control_chars "$name"
   [ "$#" -gt 0 ] || fail "a command is required after --"
   ensure_meta_state
   assert_identity
+  plan=$(plan_values "$name")
+  [ -n "$plan" ] || fail "validate refers to unregistered check: $name"
+  IFS="$TAB" read -r planned_name requirement condition planned_final <<EOF_PLAN
+$plan
+EOF_PLAN
+  reject_control_chars "$mutation_scope"
+  reject_control_chars "$mutation_reason"
+  if [ "$mutation" = yes ]; then
+    [ -n "$mutation_scope" ] || fail "mutation-producing checks require --mutation-scope"
+    [ -n "$mutation_reason" ] || fail "mutation-producing checks require --mutation-reason"
+  else
+    [ -z "$mutation_scope" ] || fail "--mutation-scope requires --mutation-producing"
+    [ -z "$mutation_reason" ] || fail "--mutation-reason requires --mutation-producing"
+  fi
   command_display=$(join_command "$@")
   id=$(awk 'END { print NR + 1 }' "$STATE/validations.tsv")
-  evidence_file="$STATE/validation.$(printf '%04d' "$id").log"
-  head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  evidence_file=$STATE/validation.$(printf '%04d' "$id").log
+  head_before=$(git -C "$CHECKOUT" rev-parse HEAD)
+  fp_before=$(fingerprint_for_checkout "$CHECKOUT")
   if (CDPATH= cd "$CHECKOUT" && "$@") >"$evidence_file" 2>&1; then
-    result=passed
+    command_result=passed
     code=0
   else
     code=$?
-    result=failed
+    command_result=failed
   fi
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$id" "$requirement" "$name" "$result" "$code" \
-    "$(basename "$evidence_file")" "$command_display" "$head" "$final_run" \
-    >>"$STATE/validations.tsv"
+  head_after=$(git -C "$CHECKOUT" rev-parse HEAD)
+  fp_after=$(fingerprint_for_checkout "$CHECKOUT")
+  bound_fp=$fp_after
+  result=$command_result
+  if [ "$fp_before" != "$fp_after" ] && [ "$mutation" != yes ]; then
+    result=failed
+    printf '\nSWE Forge evidence binding failure: command changed candidate source content.\n' >>"$evidence_file"
+    mutation_reason_record='un-declared candidate mutation'
+  else
+    mutation_reason_record=$mutation_reason
+  fi
+  append_attempt "$name" "$requirement" "$condition" "$result" "$code" \
+    "$evidence_file" "$command_display" "$head_before" "$head_after" \
+    "$fp_before" "$fp_after" "$bound_fp" "$mutation" "$mutation_scope" \
+    "$mutation_reason_record" "$final_run"
+  if [ "$fp_before" != "$fp_after" ] && [ "$mutation" != yes ]; then
+    printf 'FAIL: validation changed candidate source content (%s)\n' "$evidence_file" >&2
+  fi
   printf '%s: %s (%s)\n' "$name" "$result" "$evidence_file"
   [ "$result" = passed ]
 }
 
-changed_paths() {
-  {
-    git -C "$CHECKOUT" diff --name-only HEAD
-    git -C "$CHECKOUT" ls-files --others --exclude-standard
-  } | sort -u
-}
-
-scope_allows() {
-  candidate=$1
-  while IFS= read -r scope; do
-    [ -n "$scope" ] || continue
-    reject_control_chars "$scope"
-    case "$scope" in
-      */\*\*)
-        prefix=${scope%/\*\*}
-        case "$candidate" in
-          "$prefix"|"$prefix"/*) return 0 ;;
-        esac
+record_check_status() {
+  name=
+  status=
+  reason=
+  final_run=no
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
         ;;
-      *)
-        [ "$candidate" = "$scope" ] && return 0
+      --name)
+        [ "$#" -ge 2 ] || fail "--name requires a label"
+        name=$2
+        shift 2
         ;;
+      --status)
+        [ "$#" -ge 2 ] || fail "--status requires a value"
+        status=$2
+        shift 2
+        ;;
+      --reason)
+        [ "$#" -ge 2 ] || fail "--reason requires a value"
+        reason=$2
+        shift 2
+        ;;
+      --final)
+        final_run=yes
+        shift
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown record-check-status option: $1" ;;
     esac
-  done <"$SCOPE_TMP"
-  return 1
+  done
+  ensure_meta_state
+  assert_identity
+  [ -n "$name" ] || fail "--name is required"
+  reject_control_chars "$name"
+  reject_control_chars "$reason"
+  plan=$(plan_values "$name")
+  [ -n "$plan" ] || fail "record-check-status refers to unregistered check: $name"
+  IFS="$TAB" read -r planned_name requirement condition planned_final <<EOF_PLAN
+$plan
+EOF_PLAN
+  case "$status" in passed|failed|unavailable|not-applicable) ;; *) fail "invalid check status: ${status:-<missing>}" ;; esac
+  case "$status" in unavailable|not-applicable)
+    [ -n "$reason" ] || fail "$status check status requires --reason" ;;
+  esac
+  [ "$status" != not-applicable ] || [ "$requirement" = conditional ] || \
+    fail "only conditional checks may be not-applicable"
+  head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  fp=$(fingerprint_for_checkout "$CHECKOUT")
+  status_id=$(awk 'END { print NR + 1 }' "$STATE/validations.tsv")
+  evidence=$STATE/status.$(printf '%04d' "$status_id").log
+  printf 'recorded status %s for %s\n' "$status" "$name" >"$evidence"
+  append_attempt "$name" "$requirement" "$condition" "$status" 0 "$evidence" \
+    "record-check-status $name $status" "$head" "$head" "$fp" "$fp" "$fp" \
+    no '' "$reason" "$final_run"
+  printf 'PASS: recorded %s for %s\n' "$status" "$name"
 }
 
-noninformational_status() {
-  awk -F '\t' '
-    $2 != "informational" {
-      names[$3] = 1
-      latest[$3] = $4
-    }
-    END {
-      total=0
-      bad=0
-      for (name in names) {
-        total++
-        if (latest[name] != "passed") bad++
-      }
-      if (total == 0) print "missing"
-      else if (bad != 0) print "failed"
-      else print "passed"
-    }
-  ' "$STATE/validations.tsv"
+checkpoint_field() {
+  id=$1
+  field=$2
+  awk -F '\t' -v wanted="$id" -v number="$field" '$1 == wanted { print $number; exit }' "$STATE/checkpoints.tsv"
 }
 
-current_head_validations() {
-  wanted_head=$1
-  awk -F '\t' -v wanted="$wanted_head" '
-    $2 != "informational" && $9 == "yes" && $8 == wanted {
-      names[$3] = 1
-      latest[$3] = $4
-    }
-    END {
-      total=0
-      bad=0
-      for (name in names) {
-        total++
-        if (latest[name] != "passed") bad++
-      }
-      if (total == 0) print "missing"
-      else if (bad != 0) print "failed"
-      else print "passed"
-    }
-  ' "$STATE/validations.tsv"
+same_path_sets() {
+  first=$1
+  second=$2
+  first_tmp=$STATE/.set-a.$$
+  second_tmp=$STATE/.set-b.$$
+  LC_ALL=C sort -u "$first" >"$first_tmp"
+  LC_ALL=C sort -u "$second" >"$second_tmp"
+  if cmp -s "$first_tmp" "$second_tmp"; then result=0; else result=1; fi
+  rm -f "$first_tmp" "$second_tmp"
+  return "$result"
 }
 
 checkpoint_run() {
@@ -399,11 +782,8 @@ checkpoint_run() {
         [ "$#" -ge 2 ] || fail "--scope requires a path or path/**"
         [ -n "$2" ] || fail "--scope requires a non-empty path"
         reject_control_chars "$2"
-        if [ -n "$SCOPE_VALUES" ]; then
-          SCOPE_VALUES="$SCOPE_VALUES$NEWLINE$2"
-        else
-          SCOPE_VALUES=$2
-        fi
+        case "$2" in /*|../*|*/../*|.. ) fail "checkpoint scope must be repository-relative: $2" ;; esac
+        if [ -n "$SCOPE_VALUES" ]; then SCOPE_VALUES="$SCOPE_VALUES$NEWLINE$2"; else SCOPE_VALUES=$2; fi
         scope_count=$((scope_count + 1))
         shift 2
         ;;
@@ -411,23 +791,22 @@ checkpoint_run() {
       *) fail "unknown checkpoint option: $1" ;;
     esac
   done
-
   [ "$scope_count" -gt 0 ] || fail "at least one --scope is required"
   ensure_meta_state
   SCOPE_TMP=$STATE/scope.$$
   printf '%s\n' "$SCOPE_VALUES" >"$SCOPE_TMP"
   assert_identity
   CHANGED_TMP=$STATE/changed.$$
-  COMMITTED_TMP=$STATE/committed.$$
-  changed_paths >"$CHANGED_TMP"
+  committed_tmp=$STATE/committed.$$
+  changed_paths_for_checkout "$CHECKOUT" >"$CHANGED_TMP"
   baseline_head=$(meta_value baseline_head "$STATE/meta.env")
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
-  git -C "$CHECKOUT" diff --name-only "$baseline_head..$current_head" | sort -u >"$COMMITTED_TMP"
-  if [ -s "$CHANGED_TMP" ] && [ -s "$COMMITTED_TMP" ]; then
+  git -C "$CHECKOUT" diff --name-only --find-renames "$baseline_head..$current_head" | LC_ALL=C sort -u >"$committed_tmp"
+  if [ -s "$CHANGED_TMP" ] && [ -s "$committed_tmp" ]; then
     fail "checkpoint mixes worktree changes with committed changes; start a new preflight"
   fi
   if [ ! -s "$CHANGED_TMP" ] && [ "$baseline_head" != "$current_head" ]; then
-    cp "$COMMITTED_TMP" "$CHANGED_TMP"
+    cp "$committed_tmp" "$CHANGED_TMP"
   fi
   changed_count=0
   out_of_scope=
@@ -441,42 +820,20 @@ checkpoint_run() {
   done <"$CHANGED_TMP"
   [ "$changed_count" -gt 0 ] || fail "checkpoint has no changed files"
   [ -z "$out_of_scope" ] || fail "changed files outside checkpoint scope: $out_of_scope"
-  validation_status=$(noninformational_status)
-  [ "$validation_status" = passed ] || \
-    fail "required or conditional validation is not passing: $validation_status"
-
+  candidate_fp=$(fingerprint_for_checkout "$CHECKOUT")
+  check_requirements "$candidate_fp" no
   id=$(awk 'END { print NR + 1 }' "$STATE/checkpoints.tsv")
-  paths_file="$STATE/checkpoint.$(printf '%04d' "$id").paths"
+  paths_file=$STATE/checkpoint.$(printf '%04d' "$id").paths
+  scope_file=$STATE/checkpoint.$(printf '%04d' "$id").scope
   cp "$CHANGED_TMP" "$paths_file"
-  head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  cp "$SCOPE_TMP" "$scope_file"
   branch=$(current_branch)
-  printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$head" \
-    "$(basename "$paths_file")" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
-    >>"$STATE/checkpoints.tsv"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$current_head" \
+    "$candidate_fp" "$(basename "$paths_file")" "$(basename "$scope_file")" \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >>"$STATE/checkpoints.tsv"
   printf 'PASS: checkpoint %s recorded (%s changed files)\n' "$id" "$changed_count"
   printf 'CHECKPOINT_ID: %s\n' "$id"
-}
-
-checkpoint_paths() {
-  id=$1
-  paths=$(awk -F '\t' -v wanted="$id" '$1 == wanted { print $4; exit }' "$STATE/checkpoints.tsv")
-  [ -n "$paths" ] || fail "unknown checkpoint: $id"
-  [ -f "$STATE/$paths" ] || fail "checkpoint paths are missing: $paths"
-  printf '%s\n' "$STATE/$paths"
-}
-
-same_path_sets() {
-  first=$1
-  second=$2
-  sort -u "$first" >"$STATE/.set-a.$$"
-  sort -u "$second" >"$STATE/.set-b.$$"
-  if cmp -s "$STATE/.set-a.$$" "$STATE/.set-b.$$"; then
-    result=0
-  else
-    result=1
-  fi
-  rm -f "$STATE/.set-a.$$" "$STATE/.set-b.$$"
-  return "$result"
+  rm -f "$committed_tmp"
 }
 
 commit_slice() {
@@ -509,38 +866,50 @@ commit_slice() {
       *) fail "unknown commit-slice option: $1" ;;
     esac
   done
-
-  [ "$authorized_by" = PR ] || [ "$authorized_by" = GO ] || \
-    fail "commit-slice requires explicit PR or GO authorization"
+  [ "$authorized_by" = PR ] || [ "$authorized_by" = GO ] || fail "commit-slice requires explicit PR or GO authorization"
   [ -n "$message" ] || fail "--message is required"
   reject_control_chars "$message"
   message_length=$(printf '%s' "$message" | awk '{ print length }')
   [ "$message_length" -le 72 ] || fail "commit subject exceeds 72 characters"
   ensure_meta_state
   assert_identity
-  checkpoint_file=$(checkpoint_paths "$checkpoint_id")
-  validation_status=$(noninformational_status)
-  [ "$validation_status" = passed ] || \
-    fail "cannot commit a checkpoint without passing validation"
-  if ! git -C "$CHECKOUT" diff --cached --quiet; then
-    fail "staged changes exist before commit-slice"
-  fi
-  CHANGED_TMP=$STATE/commit-changed.$$
-  changed_paths >"$CHANGED_TMP"
-  same_path_sets "$checkpoint_file" "$CHANGED_TMP" || \
-    fail "current changed paths differ from checkpoint $checkpoint_id"
+  checkpoint_path=$(checkpoint_field "$checkpoint_id" 5)
+  checkpoint_fp=$(checkpoint_field "$checkpoint_id" 4)
+  checkpoint_head=$(checkpoint_field "$checkpoint_id" 3)
+  [ -n "$checkpoint_path" ] || fail "unknown checkpoint: $checkpoint_id"
+  [ -f "$STATE/$checkpoint_path" ] || fail "checkpoint paths are missing: $checkpoint_path"
+  current_fp=$(fingerprint_for_checkout "$CHECKOUT")
+  [ "$current_fp" = "$checkpoint_fp" ] || fail "candidate fingerprint differs from checkpoint $checkpoint_id"
+  current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  [ "$current_head" = "$checkpoint_head" ] || fail "current HEAD differs from checkpoint $checkpoint_id"
+  current_paths=$STATE/commit-changed.$$
+  changed_paths_for_checkout "$CHECKOUT" >"$current_paths"
+  same_path_sets "$STATE/$checkpoint_path" "$current_paths" || fail "current changed paths differ from checkpoint $checkpoint_id"
+  staged_before=$STATE/staged-before.$$
+  git -C "$CHECKOUT" diff --cached --name-only -M HEAD | LC_ALL=C sort -u >"$staged_before"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    grep -Fx "$path" "$STATE/$checkpoint_path" >/dev/null 2>&1 || \
+      fail "staged path is outside checkpoint $checkpoint_id: $path"
+  done <"$staged_before"
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     git -C "$CHECKOUT" add -- "$path"
-  done <"$checkpoint_file"
-  STAGED_TMP=$STATE/staged.$$
-  git -C "$CHECKOUT" diff --cached --name-only | sort -u >"$STAGED_TMP"
-  same_path_sets "$checkpoint_file" "$STAGED_TMP" || \
-    fail "staged paths differ from checkpoint $checkpoint_id"
+  done <"$STATE/$checkpoint_path"
+  staged_tmp=$STATE/staged.$$
+  git -C "$CHECKOUT" diff --cached --name-only -M HEAD | LC_ALL=C sort -u >"$staged_tmp"
+  same_path_sets "$STATE/$checkpoint_path" "$staged_tmp" || fail "staged paths differ from checkpoint $checkpoint_id"
+  unstaged_tmp=$STATE/unstaged.$$
+  git -C "$CHECKOUT" diff --name-only --find-renames | LC_ALL=C sort -u >"$unstaged_tmp"
+  [ ! -s "$unstaged_tmp" ] || fail "staged tree does not represent checkpointed content exactly"
+  staged_fp=$(fingerprint_for_checkout "$CHECKOUT")
+  [ "$staged_fp" = "$checkpoint_fp" ] || fail "staged tree fingerprint differs from checkpoint $checkpoint_id"
   git -C "$CHECKOUT" commit -m "$message"
-  rm -f "$STAGED_TMP"
+  new_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  update_state_checkout "$new_head"
+  rm -f "$current_paths" "$staged_before" "$staged_tmp" "$unstaged_tmp"
   printf 'PASS: committed checkpoint %s\n' "$checkpoint_id"
-  printf 'COMMIT: %s\n' "$(git -C "$CHECKOUT" rev-parse HEAD)"
+  printf 'COMMIT: %s\n' "$new_head"
 }
 
 review_run() {
@@ -579,15 +948,15 @@ review_run() {
       *) fail "unknown review option: $1" ;;
     esac
   done
-
-  [ "$result" = PASS ] || [ "$result" = CHANGES_REQUIRED ] || \
-    fail "invalid review result: ${result:-<missing>}"
+  [ "$result" = PASS ] || [ "$result" = CHANGES_REQUIRED ] || fail "invalid review result: ${result:-<missing>}"
   [ -n "$source" ] || fail "--source is required"
+  reject_control_chars "$source"
   case "$findings" in ''|*[!0-9]*) fail "findings must be a non-negative integer" ;; esac
   case "$repaired" in ''|*[!0-9]*) fail "repaired must be a non-negative integer" ;; esac
   ensure_meta_state
   assert_identity
   head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  fp=$(fingerprint_for_checkout "$CHECKOUT")
   review_tmp=$STATE/review.env.tmp.$$
   {
     printf 'result=%s\n' "$result"
@@ -595,6 +964,7 @@ review_run() {
     printf 'findings=%s\n' "$findings"
     printf 'repaired=%s\n' "$repaired"
     printf 'head=%s\n' "$head"
+    printf 'fingerprint=%s\n' "$fp"
     printf 'recorded_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   } >"$review_tmp"
   mv "$review_tmp" "$STATE/review.env"
@@ -608,29 +978,37 @@ blocker() {
   printf 'BLOCKED: %s\n' "$*" >&2
 }
 
+repository_identity() {
+  identity=$(git -C "$CHECKOUT" remote get-url origin 2>/dev/null || true)
+  if [ -n "$identity" ]; then
+    printf '%s\n' "$identity"
+  else
+    root=$(git -C "$CHECKOUT" rev-parse --show-toplevel)
+    printf 'local:%s\n' "$(printf '%s' "$root" | git -C "$CHECKOUT" hash-object --stdin)"
+  fi
+}
+
 check_final_state() {
   require_pr_url=$1
   final_blockers=0
   ensure_meta_state
-  if ! identity_safe; then
-    blocker "checkout identity, branch, or protection state is not safe"
-  fi
+  if ! identity_safe; then blocker "checkout identity, branch, or protection state is not safe"; fi
   status=$(status_porcelain)
   [ -z "$status" ] || blocker "checkout is dirty"
   baseline_head=$(meta_value baseline_head "$STATE/meta.env")
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
-  git -C "$CHECKOUT" merge-base --is-ancestor "$baseline_head" "$current_head" || \
-    blocker "current HEAD is not based on the recorded baseline"
+  git -C "$CHECKOUT" merge-base --is-ancestor "$baseline_head" "$current_head" || blocker "current HEAD is not based on the recorded baseline"
   checkpoint_count=$(awk 'END { print NR }' "$STATE/checkpoints.tsv")
   [ "$checkpoint_count" -gt 0 ] || blocker "no checkpoint evidence was recorded"
-  validation_status=$(current_head_validations "$current_head")
-  [ "$validation_status" = passed ] || \
-    blocker "required or conditional validation is not passing at current HEAD: $validation_status"
+  fp=$(fingerprint_for_checkout "$CHECKOUT")
+  if ! check_requirements "$fp" yes >/dev/null 2>&1; then blocker "required or applicable final validation is not passing for current candidate"; fi
   if [ -f "$STATE/review.env" ]; then
     review_result=$(meta_value result "$STATE/review.env")
     review_head=$(meta_value head "$STATE/review.env")
+    review_fp=$(meta_value fingerprint "$STATE/review.env")
     [ "$review_result" = PASS ] || blocker "fresh review is not PASS: ${review_result:-missing}"
     [ "$review_head" = "$current_head" ] || blocker "review evidence is not for current HEAD"
+    [ "$review_fp" = "$fp" ] || blocker "review evidence is not for current candidate fingerprint"
   else
     blocker "review evidence is missing"
   fi
@@ -658,21 +1036,40 @@ deliver_pr() {
   printf 'HEAD: %s\n' "$(git -C "$CHECKOUT" rev-parse HEAD)"
 }
 
+receipt_status_display() {
+  name=$1
+  fp=$2
+  final_required=$3
+  if [ "$final_required" = true ]; then
+    final_mode=yes
+  else
+    final_mode=no
+  fi
+  result=$(latest_status "$name" "$fp" "$final_mode")
+  status=${result%%"$TAB"*}
+  case "$status" in
+    passed) printf 'passed\n' ;;
+    failed) printf 'failed\n' ;;
+    unavailable) printf 'unavailable\n' ;;
+    not-applicable) printf 'not-applicable\n' ;;
+    *) printf 'missing\n' ;;
+  esac
+}
+
 receipt_text() {
   execution=$1
   delivery=$2
   pr_url=$3
   baseline_head=$(meta_value baseline_head "$STATE/meta.env")
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  current_fp=$(fingerprint_for_checkout "$CHECKOUT")
   branch=$(current_branch)
   short_base=$(git -C "$CHECKOUT" rev-parse --short "$baseline_head")
+  short_head=$(git -C "$CHECKOUT" rev-parse --short "$current_head")
+  short_fp=$(printf '%s' "$current_fp" | cut -c 1-12)
   commit_count=$(git -C "$CHECKOUT" rev-list --count "$baseline_head..$current_head")
   checkpoint_count=$(awk 'END { print NR }' "$STATE/checkpoints.tsv")
-  if [ "$checkpoint_count" -eq 1 ]; then
-    slice_label=slice
-  else
-    slice_label=slices
-  fi
+  if [ "$checkpoint_count" -eq 1 ]; then slice_label=slice; else slice_label=slices; fi
   printf '## SWE Forge receipt\n\n'
   printf 'Execution: %s\n' "$execution"
   printf 'Delivery: %s\n' "$delivery"
@@ -683,53 +1080,35 @@ receipt_text() {
     printf 'Run metadata:\n'
     [ -z "${receipt_forge_version:-}" ] || printf -- '- SWE Forge: %s\n' "$receipt_forge_version"
     if [ -n "${receipt_harness:-}" ] || [ -n "${receipt_harness_version:-}" ]; then
-      if [ -n "${receipt_harness_version:-}" ]; then
-        printf -- '- Harness: %s %s\n' "$receipt_harness" "$receipt_harness_version"
-      else
-        printf -- '- Harness: %s\n' "$receipt_harness"
-      fi
+      if [ -n "${receipt_harness_version:-}" ]; then printf -- '- Harness: %s %s\n' "$receipt_harness" "$receipt_harness_version"; else printf -- '- Harness: %s\n' "$receipt_harness"; fi
     fi
-    if [ -n "${receipt_requested_mode:-}" ] || [ -n "${receipt_selected_mode:-}" ]; then
-      printf -- '- Routing: %s -> %s\n' "${receipt_requested_mode:-unknown}" "${receipt_selected_mode:-unknown}"
-    fi
+    if [ -n "${receipt_requested_mode:-}" ] || [ -n "${receipt_selected_mode:-}" ]; then printf -- '- Routing: %s -> %s\n' "${receipt_requested_mode:-unknown}" "${receipt_selected_mode:-unknown}"; fi
     [ -z "${receipt_provider:-}" ] || printf -- '- Provider: %s\n' "$receipt_provider"
     [ -z "${receipt_model:-}" ] || printf -- '- Model: %s\n' "$receipt_model"
     [ -z "${receipt_routing_reason:-}" ] || printf -- '- Routing reason: %s\n' "$receipt_routing_reason"
   fi
+  printf 'Repository: %s\n' "$(repository_identity)"
   printf 'Base: %s\n' "$short_base"
   printf 'Branch: %s\n' "$branch"
+  printf 'Head: %s\n' "$short_head"
+  printf 'Evidence fingerprint: %s\n' "$short_fp"
+  printf 'Generated at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   printf 'Commits: %s (%s validated %s)\n' "$commit_count" "$checkpoint_count" "$slice_label"
   printf 'Verification:\n'
-  while IFS="$(printf '\t')" read -r id requirement name result code evidence command head final_run; do
-    [ -n "${id:-}" ] || continue
-    case "$result" in
-      passed) display=passed ;;
-      failed) display=failed ;;
-      skipped) display=skipped ;;
-      unavailable) display=unavailable ;;
-      *) display=$result ;;
-    esac
-    printf -- '- %s: %s\n' "$name" "$display"
-  done <"$STATE/validations.tsv"
+  while IFS="$TAB" read -r name requirement condition final_required; do
+    [ -n "${name:-}" ] || continue
+    printf -- '- %s: %s\n' "$name" "$(receipt_status_display "$name" "$current_fp" "$final_required")"
+  done <"$STATE/plan.tsv"
   if [ -f "$STATE/review.env" ]; then
     review_result=$(meta_value result "$STATE/review.env")
     review_findings=$(meta_value findings "$STATE/review.env")
     review_repaired=$(meta_value repaired "$STATE/review.env")
-    printf 'Fresh review: %s — %s findings, %s repaired\n' \
-      "$review_result" "$review_findings" "$review_repaired"
+    printf 'Fresh review: %s — %s findings, %s repaired\n' "$review_result" "$review_findings" "$review_repaired"
   else
     printf 'Fresh review: NOT RUN\n'
   fi
-  if [ -n "$pr_url" ]; then
-    printf 'Pull request: %s\n' "$pr_url"
-  else
-    printf 'Pull request: not-created\n'
-  fi
-  if [ "$final_blockers" -eq 0 ]; then
-    printf 'Final status: ACCEPTED\n'
-  else
-    printf 'Final status: BLOCKED\n'
-  fi
+  if [ -n "$pr_url" ]; then printf 'Pull request: %s\n' "$pr_url"; else printf 'Pull request: not-created\n'; fi
+  if [ "$final_blockers" -eq 0 ]; then printf 'Final status: ACCEPTED\n'; else printf 'Final status: BLOCKED\n'; fi
   printf 'Merge performed: no\n'
 }
 
@@ -738,6 +1117,7 @@ receipt_run() {
   delivery=
   PR_URL=
   output=
+  verify_mode=no
   receipt_forge_version=
   receipt_harness=
   receipt_harness_version=
@@ -748,6 +1128,10 @@ receipt_run() {
   receipt_model=
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --verify)
+        verify_mode=yes
+        shift
+        ;;
       --state)
         [ "$#" -ge 2 ] || fail "--state requires a directory"
         STATE=$(state_path "$2")
@@ -766,6 +1150,11 @@ receipt_run() {
       --pr-url)
         [ "$#" -ge 2 ] || fail "--pr-url requires a URL"
         PR_URL=$2
+        shift 2
+        ;;
+      --receipt|--file)
+        [ "$#" -ge 2 ] || fail "--receipt requires a file"
+        output=$2
         shift 2
         ;;
       --output)
@@ -814,21 +1203,23 @@ receipt_run() {
         shift 2
         ;;
       -h|--help) usage; exit 0 ;;
-      *) fail "unknown receipt option: $1" ;
+      *) fail "unknown receipt option: $1" ;;
     esac
   done
-
+  if [ "$verify_mode" = yes ]; then
+    [ -n "$output" ] || fail "receipt verification requires --receipt"
+    receipt_verify --state "$STATE" --receipt "$output"
+    return
+  fi
   case "$execution" in SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid execution topology: ${execution:-<missing>}" ;; esac
   case "$delivery" in GUIDED|PR) ;; *) fail "invalid delivery mode: ${delivery:-<missing>}" ;; esac
   case "$receipt_requested_mode" in ''|AUTO|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid requested topology metadata" ;; esac
   case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid selected topology metadata" ;; esac
   case "$receipt_provider" in ''|NONE|NATIVE|HERDR) ;; *) fail "invalid provider metadata" ;; esac
-  for receipt_value in "$receipt_forge_version" "$receipt_harness" \
-    "$receipt_harness_version" "$receipt_requested_mode" "$receipt_selected_mode" \
-    "$receipt_provider" "$receipt_routing_reason" "$receipt_model"; do
+  for receipt_value in "$receipt_forge_version" "$receipt_harness" "$receipt_harness_version" \
+    "$receipt_requested_mode" "$receipt_selected_mode" "$receipt_provider" "$receipt_routing_reason" "$receipt_model"; do
     reject_control_chars "$receipt_value"
   done
-  [ "$delivery" != PR ] || [ -n "$PR_URL" ] || PR_URL=
   if [ -n "$PR_URL" ]; then
     case "$PR_URL" in http://*|https://*) ;; *) fail "PR URL must use http:// or https://" ;; esac
   fi
@@ -840,23 +1231,56 @@ receipt_run() {
   else
     output_tmp=$STATE/receipt.$$.md
   fi
-  if [ "$delivery" = PR ] && [ -z "$PR_URL" ]; then
-    PR_URL=
-  fi
-  if [ "$delivery" = PR ]; then
-    check_final_state yes
-  else
-    check_final_state no
-  fi
+  if [ "$delivery" = PR ]; then check_final_state yes; else check_final_state no; fi
   receipt_text "$execution" "$delivery" "$PR_URL" >"$output_tmp"
-  if [ -n "$output" ]; then
-    mv "$output_tmp" "$output"
-    cat "$output"
-  else
-    cat "$output_tmp"
-    rm -f "$output_tmp"
-  fi
+  if [ -n "$output" ]; then mv "$output_tmp" "$output"; cat "$output"; else cat "$output_tmp"; rm -f "$output_tmp"; fi
   [ "$final_blockers" -eq 0 ]
+}
+
+receipt_verify() {
+  receipt_file=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        STATE=$(state_path "$2")
+        shift 2
+        ;;
+      --receipt|--file)
+        [ "$#" -ge 2 ] || fail "--receipt requires a file"
+        receipt_file=$2
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown receipt-verify option: $1" ;;
+    esac
+  done
+  [ -n "$receipt_file" ] || fail "--receipt is required"
+  [ -f "$receipt_file" ] || fail "receipt does not exist: $receipt_file"
+  ensure_meta_state
+  assert_identity
+  receipt_head=$(awk -F': ' '$1 == "Head" { print $2; exit }' "$receipt_file")
+  receipt_fp=$(awk -F': ' '$1 == "Evidence fingerprint" { print $2; exit }' "$receipt_file")
+  receipt_branch=$(awk -F': ' '$1 == "Branch" { print $2; exit }' "$receipt_file")
+  receipt_repo=$(awk -F': ' '$1 == "Repository" { print $2; exit }' "$receipt_file")
+  receipt_status=$(awk -F': ' '$1 == "Final status" { print $2; exit }' "$receipt_file")
+  [ -n "$receipt_head" ] || fail "receipt is missing Head"
+  [ -n "$receipt_fp" ] || fail "receipt is missing Evidence fingerprint"
+  [ -n "$receipt_branch" ] || fail "receipt is missing Branch"
+  [ -n "$receipt_repo" ] || fail "receipt is missing Repository"
+  current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  current_short_head=$(git -C "$CHECKOUT" rev-parse --short "$current_head")
+  [ "$current_short_head" = "$receipt_head" ] || fail "receipt is stale: Head does not match current HEAD"
+  current_fp=$(fingerprint_for_checkout "$CHECKOUT")
+  current_short_fp=$(printf '%s' "$current_fp" | cut -c 1-12)
+  [ "$current_short_fp" = "$receipt_fp" ] || fail "receipt is stale: evidence fingerprint does not match current candidate"
+  [ "$receipt_branch" = "$(current_branch)" ] || fail "receipt is stale: branch does not match current branch"
+  [ "$receipt_repo" = "$(repository_identity)" ] || fail "receipt repository identity does not match current repository"
+  [ "$receipt_status" = ACCEPTED ] || fail "receipt does not report ACCEPTED"
+  delivery=$(awk -F': ' '$1 == "Delivery" { print $2; exit }' "$receipt_file")
+  if [ "$delivery" = PR ]; then PR_URL=$(awk -F': ' '$1 == "Pull request" { print $2; exit }' "$receipt_file"); check_final_state yes; else check_final_state no; fi
+  [ "$final_blockers" -eq 0 ] || exit 1
+  printf 'PASS: receipt is current and evidence-bound\n'
 }
 
 main() {
@@ -865,12 +1289,16 @@ main() {
   shift
   case "$command" in
     preflight) preflight "$@" ;;
+    plan-check) plan_check "$@" ;;
     validate) validate_run "$@" ;;
+    record-check-status) record_check_status "$@" ;;
+    fingerprint) fingerprint_run "$@" ;;
     checkpoint) checkpoint_run "$@" ;;
     commit-slice) commit_slice "$@" ;;
     review) review_run "$@" ;;
     deliver-pr) deliver_pr "$@" ;;
     receipt) receipt_run "$@" ;;
+    receipt-verify|verify-receipt) receipt_verify "$@" ;;
     -h|--help) usage ;;
     *) fail "unknown command: $command" ;;
   esac

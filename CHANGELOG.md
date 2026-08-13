@@ -7,7 +7,12 @@ change between alpha releases.
 
 ## [Unreleased]
 
+- Final alpha hardening adds exact candidate-content evidence binding,
+  schema-v2 run state, machine-valid isolated worker results, executable
+  isolated Git conformance, head-bound receipts, and release-readiness checks.
 - Continue collecting real-run reports across supported harnesses.
+- `v0.1.0-alpha.1` remains unpublished; tagged installation instructions are
+  usable after manual publication, while `main` remains development-only.
 
 ## [0.1.0-alpha.1] - 2026-08-12
 

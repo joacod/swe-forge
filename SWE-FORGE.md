@@ -43,7 +43,8 @@ The source of truth is deliberately separated:
   and state formats.
 - `.swe-forge/policies/` defines routing, provider selection, delegation,
   model, specification, delivery, verification, evidence, recovery, and
-  optional specialist-skill rules.
+  optional specialist-skill rules. `policies/delivery.md` is the sole
+  canonical owner of delivery and local-resource authorization.
 - `.swe-forge/providers/` defines optional execution-provider runbooks such as
   Herdr without defining canonical workflow behavior.
 - `.swe-forge/adapters/` exposes those definitions through harness-native
@@ -93,9 +94,11 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Preserve a human checkpoint in `GUIDED` mode and keep delivery actions
   separately authorized.
 - Keep commits, pushes, publication, and global configuration changes
-  separately authorized. `PR` mode authorizes its documented per-slice commits,
-  push, and PR creation; `go` authorizes only the current guided slice's local
-  commit. Never infer merge authorization.
+  separately authorized. `PR` mode authorizes only the bounded local setup,
+  worker transfer commits, validated central commits, one final push, and one
+  final PR described by `policies/delivery.md`; `go` authorizes only one
+  reviewed guided central commit. Never infer publication, deployment, or merge
+  authorization.
 
 ## Execution Topology
 
@@ -132,7 +135,8 @@ migration guidance to use `isolated` and to request Herdr as an execution-
 provider preference instead of silently accepting that token as a mode. A
 missing ticket after either token is incomplete input.
 
-Every run records the request, selected modes, provider decision, and reasons:
+Every run records the request, selected modes, provider decision, hard
+isolated eligibility, economic parallel value, and reasons:
 
 ```text
 requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
@@ -146,7 +150,14 @@ requested_delivery: DEFAULT | GUIDED | PR
 delivery_mode: GUIDED | PR
 reason: <why this is the smallest useful topology>
 fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
+
+isolated_eligibility: status: eligible | ineligible; evidence_ref: <ref>; blockers: []
+parallel_value: status: beneficial | marginal | unknown; rationale: <evidence>; overridden_by_user: true | false
 ```
+
+An explicit isolated request cannot bypass hard eligibility. If hard eligibility
+fails, route safely to `SUBAGENTS` or `SOLO`, or return `BLOCKED`. Explicit
+selection may override only economic preference.
 
 `execution_provider` is meaningful only when `execution_mode` is `ISOLATED`.
 Non-isolated runs record `execution_provider: NONE`,
@@ -207,13 +218,13 @@ material critical-path or context benefit, and one accountable orchestrator.
 The routing policy also lists conditions that require serialization.
 
 `ISOLATED` authorizes the workflow shape, not an implementation provider. The
-provider-selection policy prefers `NATIVE` when the harness demonstrably
-provides isolated writable worktrees and lifecycle control. It may prefer
-`HERDR` when separate processes, harnesses, visible panes, persistent sessions,
-strong supervision, or an explicit user preference materially help. Herdr is
-optional and must pass its `HERDR_ENV=1` ownership guard. If neither provider
-can safely preserve isolation, fall back to sequential `SUBAGENTS` or `SOLO`
-when safe, or return `BLOCKED` when required isolation would be lost.
+provider-selection policy requires structured proof for concurrent writable
+workers, dedicated worktrees, exact bases, integration checkout protection,
+structured results, wait/inspect/cancel/cleanup lifecycle, and central
+integration. `NATIVE` is not selected while a mandatory capability is unknown or
+unavailable. Herdr remains optional and must pass its `HERDR_ENV=1` ownership
+guard. If neither provider can safely preserve isolation, fall back to
+sequential `SUBAGENTS` or `SOLO` when safe, or return `BLOCKED`.
 
 After routing selects `ISOLATED`, load
 `.swe-forge/workflows/isolated-execution.md`. That workflow owns the dependency
@@ -236,13 +247,13 @@ worker worktrees. The orchestrator plans cohesive implementation slices,
 validates each slice, and stops at a checkpoint with the diff boundary,
 evidence, risks, and next step.
 
-An explicit `isolated` invocation authorizes the bounded local integration
-worktree, planned worker branches/worktrees, and worker-local transfer commits.
-It does not authorize integration-branch commits, pushes, pull requests, or
-merges. When `AUTO` selects `ISOLATED` under `GUIDED`, the orchestrator shows
-one setup checkpoint before creating multiple worker resources. The user's
-`continue` authorizes only that planned local setup. At each integration unit,
-`go` remains the authorization for a commit on the actual delivery branch.
+An explicit `isolated` invocation selects the topology but does not authorize
+concrete resources before planning. The canonical setup checkpoint,
+`continue`, `go`, and `PR` meanings are owned by
+`.swe-forge/policies/delivery.md`; this section only summarizes them. In
+particular, `continue` authorizes only the exact reviewed local setup, `go`
+authorizes one central commit, and neither authorizes push, PR creation,
+publication, deployment, or merge.
 
 The user may reply `continue` to proceed without delivery, `revise: ...` to
 reshape the slice, or `go` to commit the reviewed slice with a generated,
@@ -331,6 +342,27 @@ lifecycle is:
 The workflow must adapt its depth. A typo does not require an architect,
 security reviewer, isolated worktree, or ceremonial test plan.
 
+The canonical ownership/load map is:
+
+```text
+activation and lifecycle -> SWE-FORGE.md
+ticket procedure -> workflows/ticket.md
+isolated operational sequence -> workflows/isolated-execution.md
+routing eligibility -> policies/execution-routing.md
+provider capability -> policies/provider-selection.md
+authorization and delivery -> policies/delivery.md
+evidence semantics -> policies/evidence.md
+data shapes -> contracts/*
+provider command translation -> providers/*
+harness loading -> adapters/*
+```
+
+Minimal load set: `SOLO` needs `SWE-FORGE.md`, `workflows/ticket.md`, the
+orchestrator role, and relevant verification/evidence/delivery contracts;
+`SUBAGENTS` additionally loads task/result/review contracts and the relevant
+worker roles; `ISOLATED` additionally loads execution-routing,
+provider-selection, delivery, result-bundle, run-state, the isolated workflow,
+the selected provider runbook, and the isolated Git/evidence guard contract.
 ## State and Contracts
 
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
@@ -365,15 +397,15 @@ non-protected task/delivery branch. If it is already on a suitable
 non-protected branch or worktree, reuse that same branch for every slice.
 Never create another normal delivery branch during the run.
 
-For `ISOLATED`, leave the user's original checkout untouched, create one
-run-owned integration worktree, and create or reuse one safe non-protected
-integration/delivery branch for the whole ticket. Give the integration
-worktree exclusively to the orchestrator. Worker branches and worktrees are
-bounded, local, ephemeral transfer resources; they are never delivery
-branches, never pushed, and never used to create PRs. Use namespaced names that
-include the run ID and task ID. The isolated workflow records the integration
-path, branch, base and checkpoint SHAs, provider state, worker identities,
-and cleanup evidence.
+For `ISOLATED`, leave the user's original invocation checkout untouched, create
+one run-owned integration worktree, and create or reuse one safe
+non-protected integration/delivery branch for the whole ticket. Give the
+integration worktree exclusively to the orchestrator. Worker branches and
+worktrees are bounded, local, ephemeral transfer resources; they are never
+delivery branches, never pushed, and never used to create PRs. Use namespaced
+names that include the run ID and task ID. The isolated workflow records the
+invocation and delivery checkout identities, branch, base and checkpoint SHAs,
+provider capabilities, worker identities, and cleanup evidence.
 
 If the checkout is dirty, detached, or cannot be classified safely, stop and
 ask the user to resolve it; do not reset, clean, stash, overwrite, or include
@@ -382,15 +414,13 @@ requested branch name already belongs to another task, use a safe run suffix or
 ask rather than silently reusing it. A user-provided branch or worktree
 preference may replace the default when it passes the same gates.
 
-Record a pre-edit baseline containing the checkout path, HEAD, branch,
-remote-default evidence, integration/worktree setup, and staged, unstaged, and
-untracked files. Normal branch setup is workflow authorization only. Normal
-`GUIDED` invocation authorizes implementation and safe branch setup, not
-commits, pushes, pull requests, or merges. An explicit `PR` delivery token
-authorizes its per-slice commits, final integration-branch push, and one pull
-request after the required gates. An ambiguous request for extra branches or
-worktrees requires clarification. Merging always requires a separate explicit
-instruction and is not part of the ticket lifecycle.
+Record a pre-edit baseline containing invocation checkout identity, delivery
+checkout setup, HEAD, branch, remote-default evidence, and staged, unstaged,
+and untracked files. Branch/worktree setup and delivery authorization are
+owned by `.swe-forge/policies/delivery.md`; this section only requires the
+orchestrator to record the resulting state. An ambiguous request for extra
+branches or worktrees requires clarification. Merging always requires a
+separate explicit instruction and is not part of the ticket lifecycle.
 
 ## Failure Handling
 

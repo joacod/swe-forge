@@ -33,6 +33,8 @@ automatically.
 
 ## Available Provider Documentation
 
+- [Native provider runbook](native/README.md): capability proof, fallback,
+  and harness/orchestrator boundary
 - [Herdr](herdr/README.md): optional environment-level provider
 - [Herdr runbook](herdr/runbook.md): bounded worktree, lifecycle, integration,
   and cleanup guidance

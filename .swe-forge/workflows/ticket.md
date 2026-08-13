@@ -247,11 +247,13 @@ validation. When test-first is selected, work in vertical red-green-refactor
 slices rather than writing a speculative test suite upfront.
 
 Record what will be run before implementation when the task is delegated.
-When `.swe-forge/tools/swe-forge-gate` is available, use its evidence ledger
-for preflight, inspected validation commands, checkpoints, and current-HEAD
-final checks; keep that ledger outside the repository or under an already
-ignored path. Classify each check as `required`, `conditional`, or
-`informational`; every conditional check must include its observable condition.
+When `.swe-forge/tools/swe-forge-gate` is available, register the expected
+checks with `plan-check`, then use `validate` or `record-check-status` for
+preflight, inspected validation commands, checkpoints, and current-HEAD final
+checks; keep that ledger outside the repository or under an already ignored
+path. Classify each check as `required`, `conditional`, or `informational`;
+every conditional check must include its observable condition. Validation,
+checkpoint, and commit evidence is bound to the exact candidate fingerprint.
 Inspect commands
 before execution for filesystem mutation, credentials, networking, migrations,
 deployment, publication, production access, or shared-environment effects.
@@ -365,7 +367,9 @@ check requires a revised task contract.
 For `ISOLATED`, require worker-level targeted validation, integrated-state
 validation after each integration unit, wave-level validation after each wave,
 complete applicable repository checks after all integration, and evidence that
-the final integration commits were built centrally.
+the final integration commits were built centrally. Use the fixed result bundle
+and canonical isolated Git/evidence guard; provider completion alone is never
+eligibility evidence.
 
 ### 11. Review
 

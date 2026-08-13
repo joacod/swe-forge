@@ -58,12 +58,11 @@ Use a shared workspace only for read-only research or when one writer owns the
 checkout. Concurrent writable workers require separate Git worktrees.
 
 Selecting an execution provider does not authorize unplanned worktree creation.
-For an explicit `isolated` invocation, the bounded local integration worktree,
-planned worker worktrees, and worker-local transfer commits are allowed by the
-workflow, but integration-branch commits, pushes, PRs, and merges still need
-their `GUIDED`/`PR` authorization. When `AUTO` selects `ISOLATED` under
-`GUIDED`, show the setup checkpoint and wait for `continue` before creating
-multiple worker resources.
+For an explicit `isolated` invocation, follow the setup checkpoint and
+`continue`/`go` meanings in the canonical `.swe-forge/policies/delivery.md`;
+provider selection alone never authorizes concrete resources or delivery. When
+`AUTO` selects `ISOLATED` under `GUIDED`, show the setup checkpoint and wait for
+`continue` before creating multiple worker resources.
 
 The orchestrator creates one integration worktree and one safe non-protected
 integration/delivery branch for the ticket. Each concurrent worker receives a

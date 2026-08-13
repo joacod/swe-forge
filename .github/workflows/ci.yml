@@ -29,6 +29,9 @@ jobs:
       - name: Run executable gate tests
         run: ./scripts/test-swe-forge-gate
 
+      - name: Run isolated worktree fixtures
+        run: ./scripts/test-swe-forge-isolated
+
       - name: Check diff formatting
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -52,3 +55,29 @@ jobs:
           else
             git diff --check "$BEFORE_SHA..$CURRENT_SHA"
           fi
+
+  macos-core:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check shell syntax
+        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/test-swe-forge-gate scripts/test-swe-forge-isolated scripts/swe-forge-gate scripts/swe-forge-state scripts/swe-forge-isolated-gate .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-isolated-gate
+
+      - name: Run structural checks
+        run: ./scripts/check-swe-forge
+
+      - name: Run executable evidence fixtures
+        run: ./scripts/test-swe-forge-gate
+
+      - name: Run isolated worktree fixtures
+        run: ./scripts/test-swe-forge-isolated
+
+      - name: Prepare release readiness
+        run: ./scripts/check-release prepare --allow-dirty
+
+      - name: Check diff formatting
+        run: git diff --check

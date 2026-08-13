@@ -68,13 +68,15 @@ state=$(clean_feature_state "$repo")
 (
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'changed\n' >>README.md
-  "$GATE" validate --state "$state" --requirement required --name smoke -- \
+  "$GATE" validate --state "$state" --name smoke -- \
     sh -c 'grep -q changed README.md' >/dev/null
   "$GATE" checkpoint --scope README.md --state "$state" >/dev/null
   "$GATE" commit-slice --state "$state" --checkpoint 1 \
     --message 'Record gate evidence' --authorized-by PR >/dev/null
-  "$GATE" validate --state "$state" --requirement required --name final-smoke \
+  "$GATE" plan-check --state "$state" --name final-smoke --requirement required >/dev/null
+  "$GATE" validate --state "$state" --name final-smoke \
     --final -- sh -c 'grep -q changed README.md' >/dev/null
   "$GATE" review --state "$state" --result PASS --source fresh-context \
     --findings 1 --repaired 1 >/dev/null
@@ -109,7 +111,8 @@ state=$TMP_ROOT/committed.state
 (
   cd "$repo"
   "$GATE" preflight --state "$state" --base HEAD~1 >/dev/null
-  "$GATE" validate --state "$state" --requirement required --name committed-smoke \
+  "$GATE" plan-check --state "$state" --name committed-smoke --requirement required >/dev/null
+  "$GATE" validate --state "$state" --name committed-smoke \
     --final -- sh -c 'grep -q committed README.md' >/dev/null
   "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
   "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
@@ -143,9 +146,10 @@ state=$(clean_feature_state "$repo")
 (
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name scope-smoke --requirement required >/dev/null
   printf 'allowed\n' >>README.md
   printf 'forbidden\n' >OTHER.md
-  "$GATE" validate --state "$state" --requirement required --name scope-smoke -- \
+  "$GATE" validate --state "$state" --name scope-smoke -- \
     sh -c 'test -f OTHER.md' >/dev/null
 )
 expect_failure 'outside checkpoint scope' "$GATE" checkpoint --state "$state" --scope README.md
@@ -155,8 +159,9 @@ state=$(clean_feature_state "$repo")
 (
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'change\n' >>README.md
-  "$GATE" validate --state "$state" --requirement required --name smoke -- \
+  "$GATE" validate --state "$state" --name smoke -- \
     sh -c 'grep -q change README.md' >/dev/null
   "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
 )
@@ -169,15 +174,171 @@ state=$(clean_feature_state "$repo")
 (
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'change\n' >>README.md
-  "$GATE" validate --state "$state" --requirement required --name smoke -- \
+  "$GATE" validate --state "$state" --name smoke -- \
     sh -c 'grep -q change README.md' >/dev/null
   "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
   "$GATE" commit-slice --state "$state" --checkpoint 1 \
     --message 'Record gate evidence' --authorized-by PR >/dev/null
+  "$GATE" plan-check --state "$state" --name final-smoke --requirement required >/dev/null
+  "$GATE" validate --state "$state" --name final-smoke --final -- \
+    sh -c 'grep -q change README.md' >/dev/null
   "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
+  "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
+    --pr-url https://github.com/example/repo/pull/2 \
+    --output "$TMP_ROOT/final-evidence-receipt.md" >/dev/null
+  printf 'later change\n' >>README.md
+  git add README.md
+  git commit -qm 'Change after receipt'
 )
-expect_failure 'current HEAD' "$GATE" receipt --state "$state" \
-  --execution SOLO --delivery PR --pr-url https://github.com/example/repo/pull/2
+expect_failure 'receipt is stale' "$GATE" receipt-verify --state "$state" \
+  --receipt "$TMP_ROOT/final-evidence-receipt.md"
+
+# Regression: an unregistered check cannot be validated.
+repo=$(make_repo unregistered)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+)
+expect_failure 'unregistered check' "$GATE" validate --state "$state" \
+  --name missing-check -- true
+
+# Regression: a validation command that mutates candidate content is rejected.
+repo=$(make_repo mutation)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name mutation --requirement required >/dev/null
+)
+expect_failure 'changed candidate source content' "$GATE" validate --state "$state" \
+  --name mutation -- sh -c 'printf mutation >>README.md'
+
+# Receipt verification remains read-only and compares repository identity.
+repo=$(make_repo receipt-identity)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name check --requirement required --final-required false >/dev/null
+  printf change >>README.md
+  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  "$GATE" commit-slice --state "$state" --checkpoint 1 --message change --authorized-by PR >/dev/null
+  "$GATE" plan-check --state "$state" --name final --requirement required >/dev/null
+  "$GATE" validate --state "$state" --name final --final -- sh -c 'test -f README.md' >/dev/null
+  "$GATE" review --state "$state" --result PASS --source fresh >/dev/null
+  "$GATE" receipt --state "$state" --execution SOLO --delivery GUIDED --output "$TMP_ROOT/identity-receipt.md" >/dev/null
+)
+sed 's/^Repository:.*/Repository: forged/' "$TMP_ROOT/identity-receipt.md" >"$TMP_ROOT/tampered-receipt.md"
+expect_failure 'receipt repository identity does not match' "$GATE" receipt-verify \
+  --state "$state" --receipt "$TMP_ROOT/tampered-receipt.md"
+
+# Regression: missing, unavailable, and unjustified conditional evidence block.
+repo=$(make_repo missing-check)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name required-check --requirement required >/dev/null
+  printf change >>README.md
+)
+expect_failure 'planned validation is not passing' "$GATE" checkpoint \
+  --state "$state" --scope README.md
+
+repo=$(make_repo unavailable-check)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name required-check --requirement required >/dev/null
+  "$GATE" record-check-status --state "$state" --name required-check \
+    --status unavailable --reason 'fixture unavailable' >/dev/null
+  printf change >>README.md
+)
+expect_failure 'planned validation is not passing' "$GATE" checkpoint \
+  --state "$state" --scope README.md
+
+repo=$(make_repo conditional-check)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name conditional-check \
+    --requirement conditional --condition 'only when enabled' >/dev/null
+)
+expect_failure 'not-applicable check status requires --reason' \
+  "$GATE" record-check-status --state "$state" --name conditional-check \
+  --status not-applicable
+
+# Regression: same-path edits, untracked-content edits, and replacements are
+# rejected even when the changed path set remains unchanged.
+repo=$(make_repo same-path)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
+  printf one >>README.md
+  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
+  printf two >>README.md
+)
+expect_failure 'planned validation is not passing' "$GATE" checkpoint \
+  --state "$state" --scope README.md
+
+repo=$(make_repo after-checkpoint)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
+  printf one >>README.md
+  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  printf two >>README.md
+)
+expect_failure 'candidate fingerprint differs' "$GATE" commit-slice \
+  --state "$state" --checkpoint 1 --message 'Reject stale content' --authorized-by PR
+
+repo=$(make_repo untracked-content)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
+  printf one >new.txt
+  "$GATE" validate --state "$state" --name check -- sh -c 'test -f new.txt' >/dev/null
+  printf two >new.txt
+)
+expect_failure 'planned validation is not passing' "$GATE" checkpoint \
+  --state "$state" --scope new.txt
+
+repo=$(make_repo replacement)
+state=$(clean_feature_state "$repo")
+(
+  cd "$repo"
+  "$GATE" preflight --state "$state" >/dev/null
+  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
+  printf one >README.md
+  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
+  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
+  rm README.md
+  printf replacement >README.md
+)
+expect_failure 'candidate fingerprint differs' "$GATE" commit-slice \
+  --state "$state" --checkpoint 1 --message 'Reject replacement' --authorized-by PR
+
+# Schema-v1 state is rejected rather than guessed into a new shape.
+v1=$TMP_ROOT/schema-v1.yaml
+cat >"$v1" <<'EOF_V1'
+workflow: swe-forge
+version: 1
+checkout:
+  path: /tmp/legacy
+EOF_V1
+expect_failure 'schema-v1 state is not resumable' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$v1"
 
 printf '%s\n' 'PASS: executable gate tests'

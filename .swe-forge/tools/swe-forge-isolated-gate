@@ -1,0 +1,916 @@
+#!/bin/sh
+
+# Narrow Git/evidence boundary for isolated SWE Forge workers.
+# This helper never launches workers, controls a provider, pushes, creates PRs,
+# publishes, deploys, merges, or force-cleans a resource.
+
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
+GATE="$SCRIPT_DIR/swe-forge-gate"
+STATE=
+TAB=$(printf '\t')
+NEWLINE='
+'
+TMP_FILES=
+
+cleanup() {
+  if [ -n "${TMP_FILES:-}" ]; then
+    for file in $TMP_FILES; do rm -f "$file"; done
+  fi
+}
+trap 'status=$?; cleanup; exit "$status"' 0 HUP INT TERM
+
+fail() {
+  printf 'BLOCKED: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/swe-forge-isolated-gate init --state DIR --repo INVOCATION_CHECKOUT \
+    --run-id ID --provider NATIVE|HERDR --capabilities-ref REF
+    (the invocation checkout remains untouched; register-integration supplies
+    the separate orchestrator delivery worktree)
+  scripts/swe-forge-isolated-gate register-integration --state DIR \
+    --path WORKTREE --branch BRANCH --base-sha SHA --worker-order A,B
+  scripts/swe-forge-isolated-gate register-worker --state DIR --task-id ID \
+    --path WORKTREE --branch BRANCH --base-sha SHA --integration-order N \
+    --scope PATH [--scope PATH...] --check NAME [--check NAME...]
+  scripts/swe-forge-isolated-gate validate-result --state DIR \
+    --task-id ID --result RESULT_DIR
+  scripts/swe-forge-isolated-gate next --state DIR [--task-id ID]
+  scripts/swe-forge-isolated-gate verify-integration --state DIR
+  scripts/swe-forge-isolated-gate transfer --state DIR --task-id ID \
+    [--preflight|--apply]
+  scripts/swe-forge-isolated-gate map --state DIR --task-id ID \
+    --source-sha SHA --integration-sha SHA
+  scripts/swe-forge-isolated-gate cleanup-eligible --state DIR \
+    [--task-id ID|--all]
+  scripts/swe-forge-isolated-gate recover --state DIR
+
+Result bundle:
+  result/meta.tsv commits.txt files.txt validations.tsv scope-exceptions.txt
+  staged.txt unstaged.txt untracked.txt resources.tsv
+
+The result bundle is fixed, line-oriented evidence. Empty dirty-state files
+are required evidence of cleanliness. Force cleanup is never supported.
+EOF
+}
+
+reject_control_chars() {
+  value=$1
+  case "$value" in
+    *"$TAB"*|*"$NEWLINE"*) fail "unsupported tab or newline in isolated evidence" ;;
+  esac
+}
+
+absolute_path() {
+  value=$1
+  reject_control_chars "$value"
+  case "$value" in
+    /*) printf '%s\n' "$value" ;;
+    *) printf '%s/%s\n' "$PWD" "$value" ;;
+  esac
+}
+
+state_path() {
+  value=$(absolute_path "$1")
+  if [ -e "$value" ] || [ -L "$value" ]; then
+    [ -d "$value" ] && [ ! -L "$value" ] || fail "state must be a real directory: $value"
+    CDPATH= cd "$value" && pwd -P
+  else
+    parent=$(dirname "$value")
+    [ -d "$parent" ] && [ ! -L "$parent" ] || fail "state parent is not a real directory: $parent"
+    CDPATH= cd "$parent" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$value")"
+  fi
+}
+
+repo_root() {
+  value=$1
+  [ -d "$value" ] || fail "checkout does not exist: $value"
+  git -C "$value" rev-parse --show-toplevel 2>/dev/null || fail "not a Git checkout: $value"
+}
+
+branch_at() {
+  git -C "$1" symbolic-ref --quiet --short HEAD 2>/dev/null || true
+}
+
+assert_delivery_branch() {
+  branch=$1
+  case "$branch" in
+    ''|main|master) fail "protected integration/worker branch is not writable: ${branch:-detached}" ;;
+  esac
+}
+
+meta_value() {
+  key=$1
+  awk -F= -v wanted="$key" '$1 == wanted { sub(/^[^=]*=/, ""); print; exit }' "$STATE/meta.env"
+}
+
+require_state() {
+  [ -n "$STATE" ] || fail "--state is required"
+  [ -f "$STATE/meta.env" ] || fail "isolated evidence state is not initialized: $STATE"
+  [ -f "$STATE/run-state.yaml" ] || fail "isolated state is missing run-state.yaml"
+  "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  REPO=$(meta_value repository_path)
+  [ -d "$REPO" ] || fail "recorded repository no longer exists: $REPO"
+  [ -f "$STATE/integration.tsv" ] || fail "integration checkout is not registered"
+  [ -f "$STATE/workers.tsv" ] || : >"$STATE/workers.tsv"
+  [ -f "$STATE/worker-plan.tsv" ] || : >"$STATE/worker-plan.tsv"
+  [ -f "$STATE/mappings.tsv" ] || : >"$STATE/mappings.tsv"
+  [ -f "$STATE/transfers.tsv" ] || : >"$STATE/transfers.tsv"
+  if [ -x "$SCRIPT_DIR/swe-forge-state" ]; then
+    "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  fi
+}
+
+full_sha() {
+  field=$1
+  value=$2
+  case "$value" in
+    ''|*[!0123456789abcdefABCDEF]*) fail "$field must be a full hexadecimal SHA" ;;
+  esac
+  [ "${#value}" -eq 40 ] || fail "$field must be a full 40-character SHA"
+}
+
+relative_path() {
+  value=$1
+  reject_control_chars "$value"
+  case "$value" in
+    ''|/*|../*|*/../*|..|*"$TAB"*) fail "path is not repository-relative: $value" ;;
+  esac
+}
+
+worktree_identity() {
+  root=$1
+  path=$2
+  branch=$3
+  [ -d "$path" ] || return 1
+  actual=$(repo_root "$path") || return 1
+  path=$(CDPATH= cd "$path" && pwd -P)
+  actual=$(CDPATH= cd "$actual" && pwd -P)
+  [ "$actual" = "$path" ] || return 1
+  actual_branch=$(branch_at "$path")
+  [ "$actual_branch" = "$branch" ] || return 1
+  git -C "$root" worktree list --porcelain | awk -v wanted="$path" -v branch="refs/heads/$branch" '
+    $1 == "worktree" { path_ok=($2 == wanted) }
+    $1 == "branch" && path_ok && $2 == branch { found=1 }
+    END { exit(found ? 0 : 1) }
+  '
+}
+
+clean_checkout() {
+  [ -z "$(git -C "$1" status --porcelain=v1 --untracked-files=all)" ]
+}
+
+integration_values() {
+  awk -F '\t' 'NR == 1 { print; exit }' "$STATE/integration.tsv"
+}
+
+worker_values() {
+  task=$1
+  awk -F '\t' -v wanted="$task" '$1 == wanted { print; exit }' "$STATE/workers.tsv"
+}
+
+mapping_for_task() {
+  task=$1
+  awk -F '\t' -v wanted="$task" '$1 == wanted { print; exit }' "$STATE/mappings.tsv"
+}
+
+worker_field() {
+  values=$1
+  field=$2
+  printf '%s\n' "$values" | awk -F '\t' -v number="$field" '{ print $number; exit }'
+}
+
+integration_field() {
+  field=$1
+  integration_values | awk -F '\t' -v number="$field" '{ print $number; exit }'
+}
+
+write_run_state() {
+  repo=$1
+  branch=$2
+  base=$3
+  head=$4
+  delivery_path=${5:-$repo}
+  delivery_branch=${6:-$branch}
+  delivery_kind=${7:-task}
+  provider=${8:-NATIVE}
+  capabilities_ref=${9:-isolated-gate}
+  state_tmp=$STATE/run-state.yaml.tmp.$$
+  {
+    printf 'workflow: swe-forge\n'
+    printf 'workflow_version: 1\n'
+    printf 'schema_version: 2\n'
+    printf 'run_id: %s\n' "$(meta_value run_id)"
+    printf 'status: running\n'
+    printf 'requested_mode: ISOLATED\n'
+    printf 'execution_mode: ISOLATED\n'
+    printf 'requested_provider: AUTO\n'
+    printf 'execution_provider: %s\n' "$provider"
+    printf 'provider_reason: capability evidence recorded at %s\n' "$capabilities_ref"
+
+    printf 'parallel_strategy: COMPOSE\n'
+    printf 'integration_strategy: CHERRY_PICK\n'
+    printf 'requested_delivery: PR\n'
+    printf 'delivery_mode: PR\n'
+    printf 'reason: bounded isolated composition\n'
+    printf 'fallback_used: no\n'
+    printf 'invocation_checkout:\n'
+    printf '  path: %s\n' "$repo"
+    printf '  branch: %s\n' "$branch"
+    printf '  head_sha: %s\n' "$head"
+    printf '  classification: writable\n'
+    printf '  mutation_allowed: false\n'
+    printf '  baseline_ref: %s\n' "$base"
+    printf 'delivery_checkout:\n'
+    printf '  path: %s\n' "$delivery_path"
+    printf '  branch: %s\n' "$delivery_branch"
+    printf '  kind: %s\n' "$delivery_kind"
+    printf '  base_sha: %s\n' "$base"
+    printf '  head_sha: %s\n' "$head"
+    printf '  checkpoint_sha: %s\n' "$head"
+    printf '  status: ready\n'
+    printf '  branch_setup: provided\n'
+    printf '  remote_default_evidence: recorded-by-orchestrator\n'
+    printf 'isolated_eligibility:\n'
+    printf '  status: eligible\n'
+    printf '  evidence_ref: isolated-gate\n'
+    printf '  blockers: []\n'
+    printf 'parallel_value:\n'
+    printf '  status: beneficial\n'
+    printf '  rationale: explicitly bounded isolated plan\n'
+    printf '  overridden_by_user: false\n'
+    printf 'provider_capabilities:\n'
+    for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
+      integration_checkout_protection structured_results central_integration; do
+      printf '  %s:\n' "$capability"
+      printf '    status: proven\n'
+      printf '    evidence_ref: %s\n' "$capabilities_ref"
+    done
+    printf '  lifecycle:\n'
+    for operation in wait inspect cancel cleanup; do
+      printf '    %s:\n' "$operation"
+      printf '      status: proven\n'
+      printf '      evidence_ref: %s\n' "$capabilities_ref"
+    done
+    printf 'delivery:\n'
+    printf '  authorization:\n'
+    printf '    worker_transfer_commit: PR\n'
+    printf '    commit: PR\n'
+    printf '    push: PR\n'
+    printf '    create_pull_request: PR\n'
+    printf '    publish: not-authorized\n'
+    printf '    deploy: not-authorized\n'
+    printf '    merge: not-authorized\n'
+    printf '  commit: pending\n'
+    printf '  push: pending\n'
+    printf '  create_pull_request: pending\n'
+    printf 'integration:\n'
+    printf '  source_to_integration: []\n'
+    printf 'workers: {}\n'
+  } >"$state_tmp"
+  mv "$state_tmp" "$STATE/run-state.yaml"
+}
+
+init_state() {
+  state_arg=
+  repo_arg=
+  run_id=
+  provider=
+  capabilities_ref=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; state_arg=$(state_path "$2"); shift 2 ;;
+      --repo|--checkout) [ "$#" -ge 2 ] || fail "--repo requires a checkout"; repo_arg=$(absolute_path "$2"); shift 2 ;;
+      --run-id) [ "$#" -ge 2 ] || fail "--run-id requires an ID"; run_id=$2; shift 2 ;;
+      --provider) [ "$#" -ge 2 ] || fail "--provider requires NATIVE or HERDR"; provider=$2; shift 2 ;;
+      --capabilities-ref) [ "$#" -ge 2 ] || fail "--capabilities-ref requires a reference"; capabilities_ref=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown init option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail "--state is required"
+  [ -n "$repo_arg" ] || fail "--repo is required"
+  [ -n "$run_id" ] || fail "--run-id is required"
+  case "$provider" in NATIVE|HERDR) ;; *) fail "--provider must be NATIVE or HERDR" ;; esac
+  [ -n "$capabilities_ref" ] || fail "--capabilities-ref is required"
+  reject_control_chars "$run_id"
+  reject_control_chars "$capabilities_ref"
+  REPO=$(repo_root "$repo_arg")
+  branch=$(branch_at "$REPO")
+  [ -n "$branch" ] || fail "invocation checkout is detached"
+  clean_checkout "$REPO" || fail "invocation checkout must be clean at initialization"
+  base=$(git -C "$REPO" rev-parse HEAD)
+  [ ! -e "$state_arg/meta.env" ] || fail "state is already initialized: $state_arg"
+  STATE=$state_arg
+  mkdir -p "$STATE"
+  umask 077
+  {
+    printf 'schema_version=2\n'
+    printf 'workflow_version=1\n'
+    printf 'repository_path=%s\n' "$REPO"
+    printf 'run_id=%s\n' "$run_id"
+    printf 'integration_branch=%s\n' "$branch"
+    printf 'integration_worktree=%s\n' "$REPO"
+    printf 'integration_base_sha=%s\n' "$base"
+    printf 'integration_head_sha=%s\n' "$base"
+  } >"$STATE/meta.env"
+  : >"$STATE/workers.tsv"
+  : >"$STATE/worker-plan.tsv"
+  : >"$STATE/mappings.tsv"
+  : >"$STATE/transfers.tsv"
+  : >"$STATE/conflicts.log"
+  : >"$STATE/integration.tsv"
+  write_run_state "$REPO" "$branch" "$base" "$base" "$REPO" "$branch" task "$provider" "$capabilities_ref"
+  "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  printf 'PASS: isolated evidence state initialized at %s\n' "$STATE"
+}
+
+register_integration() {
+  path=
+  branch=
+  base=
+  order=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      --path|--worktree) [ "$#" -ge 2 ] || fail "--path requires a worktree"; path=$(absolute_path "$2"); shift 2 ;;
+      --branch) [ "$#" -ge 2 ] || fail "--branch requires a name"; branch=$2; shift 2 ;;
+      --base-sha|--base) [ "$#" -ge 2 ] || fail "--base-sha requires a SHA"; base=$2; shift 2 ;;
+      --worker-order|--order) [ "$#" -ge 2 ] || fail "--worker-order requires a comma-separated order"; order=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown register-integration option: $1" ;;
+    esac
+  done
+  require_state
+  [ -n "$path" ] || fail "--path is required"
+  [ -n "$branch" ] || fail "--branch is required"
+  [ -n "$base" ] || fail "--base-sha is required"
+  [ -n "$order" ] || fail "--worker-order is required"
+  full_sha base "$base"
+  reject_control_chars "$branch"
+  reject_control_chars "$order"
+  path=$(repo_root "$path")
+  [ "$path" != "$(meta_value repository_path)" ] || fail "integration checkout must differ from invocation checkout"
+  assert_delivery_branch "$branch"
+  worktree_identity "$REPO" "$path" "$branch" || fail "integration path or branch identity does not match actual Git worktree"
+  [ "$(git -C "$path" rev-parse HEAD)" = "$base" ] || fail "integration HEAD differs from exact registered base"
+  clean_checkout "$path" || fail "integration checkout is dirty"
+  git -C "$path" merge-base --is-ancestor "$base" "$(git -C "$path" rev-parse HEAD)" || fail "integration base is not an ancestor"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$path" "$branch" "$base" "$base" "$base" "$order" 0 >"$STATE/integration.tsv"
+  tmp=$STATE/run-state.$$.tmp
+  awk -v path="$path" -v branch="$branch" -v base="$base" '
+    BEGIN { section="" }
+    /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
+    section == "delivery_checkout" && $0 ~ /^  path:/ { print "  path: " path; next }
+    section == "delivery_checkout" && $0 ~ /^  branch:/ { print "  branch: " branch; next }
+    section == "delivery_checkout" && $0 ~ /^  kind:/ { print "  kind: integration"; next }
+    section == "delivery_checkout" && $0 ~ /^  base_sha:/ { print "  base_sha: " base; next }
+    section == "delivery_checkout" && $0 ~ /^  head_sha:/ { print "  head_sha: " base; next }
+    section == "delivery_checkout" && $0 ~ /^  checkpoint_sha:/ { print "  checkpoint_sha: " base; next }
+    { print }
+  ' "$STATE/run-state.yaml" >"$tmp"
+  mv "$tmp" "$STATE/run-state.yaml"
+  "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  printf 'PASS: integration checkout registered in planned order %s\n' "$order"
+}
+
+scope_is_allowed() {
+  candidate=$1
+  scopes=$2
+  old_ifs=$IFS
+  IFS=';'
+  for scope in $scopes; do
+    IFS=$old_ifs
+    case "$scope" in
+      */\*\*) prefix=${scope%/\*\*}; case "$candidate" in "$prefix"|"$prefix"/*) IFS=$old_ifs; return 0 ;; esac ;;
+      *) [ "$candidate" = "$scope" ] && { IFS=$old_ifs; return 0; } ;;
+    esac
+    IFS=';'
+  done
+  IFS=$old_ifs
+  return 1
+}
+
+scope_covers() {
+  scope=$1
+  candidate_path=$2
+  case "$scope" in
+    */\*\*)
+      prefix=${scope%/\*\*}
+      case "$candidate_path" in "$prefix"|"$prefix"/*) return 0 ;; esac
+      ;;
+    *) [ "$scope" = "$candidate_path" ] && return 0 ;;
+  esac
+  return 1
+}
+
+scopes_overlap() {
+  first=$1
+  second=$2
+  old_ifs=$IFS
+  IFS=';'
+  first_values=$first
+  second_values=$second
+  for a in $first_values; do
+    IFS=$old_ifs
+    old_ifs2=$IFS
+    IFS=';'
+    for b in $second_values; do
+      IFS=$old_ifs2
+      if scope_covers "$a" "$b" || scope_covers "$b" "$a"; then
+        IFS=$old_ifs
+        return 0
+      fi
+      IFS=';'
+    done
+    IFS=$old_ifs
+    IFS=';'
+  done
+  IFS=$old_ifs
+  return 1
+}
+
+register_worker() {
+  task=
+  path=
+  branch=
+  base=
+  order=
+  scopes=
+  checks=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      --task-id|--task) [ "$#" -ge 2 ] || fail "--task-id requires an ID"; task=$2; shift 2 ;;
+      --path|--worktree) [ "$#" -ge 2 ] || fail "--path requires a worktree"; path=$(absolute_path "$2"); shift 2 ;;
+      --branch) [ "$#" -ge 2 ] || fail "--branch requires a name"; branch=$2; shift 2 ;;
+      --base-sha|--base) [ "$#" -ge 2 ] || fail "--base-sha requires a SHA"; base=$2; shift 2 ;;
+      --integration-order|--order) [ "$#" -ge 2 ] || fail "--integration-order requires an integer"; order=$2; shift 2 ;;
+      --scope|--allowed-scope)
+        [ "$#" -ge 2 ] || fail "--scope requires a path"; relative_path "$2";
+        if [ -n "$scopes" ]; then scopes="$scopes;$2"; else scopes=$2; fi; shift 2 ;;
+      --check|--planned-check)
+        [ "$#" -ge 2 ] || fail "--check requires a name"; reject_control_chars "$2";
+        if [ -n "$checks" ]; then checks="$checks;$2"; else checks=$2; fi; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown register-worker option: $1" ;;
+    esac
+  done
+  require_state
+  [ -n "$task" ] || fail "--task-id is required"
+  [ -n "$path" ] || fail "--path is required"
+  [ -n "$branch" ] || fail "--branch is required"
+  [ -n "$base" ] || fail "--base-sha is required"
+  [ -n "$order" ] || fail "--integration-order is required"
+  [ -n "$scopes" ] || fail "at least one --scope is required"
+  [ -n "$checks" ] || fail "at least one --check is required"
+  reject_control_chars "$task"; reject_control_chars "$branch"; reject_control_chars "$order"
+  case "$order" in ''|*[!0-9]*) fail "integration order must be an integer" ;; esac
+  full_sha base "$base"
+  assert_delivery_branch "$branch"
+  [ -z "$(worker_values "$task")" ] || fail "worker is already registered: $task"
+  path=$(repo_root "$path")
+  worktree_identity "$REPO" "$path" "$branch" || fail "worker path or branch identity does not match actual Git worktree"
+  [ "$base" = "$(integration_field 4)" ] || fail "worker base SHA differs from current integration head"
+  [ "$(git -C "$path" rev-parse HEAD)" = "$base" ] || fail "worker does not start from exact base SHA"
+  clean_checkout "$path" || fail "worker checkout must be clean at registration"
+  if git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$branch"; then fail "worker branch has an unauthorized remote-tracking ref"; fi
+  if [ -n "$(git -C "$path" remote get-url origin 2>/dev/null || true)" ] && \
+    git -C "$path" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+    fail "worker branch is already published to origin"
+  fi
+  while IFS="$TAB" read -r existing_task existing_branch existing_path existing_base existing_head existing_order existing_scopes existing_checks existing_status existing_result; do
+    [ -n "${existing_task:-}" ] || continue
+    if scopes_overlap "$existing_scopes" "$scopes"; then fail "planned writable scopes overlap: $existing_task and $task"; fi
+  done <"$STATE/workers.tsv"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tready\t\t\n' \
+    "$task" "$branch" "$path" "$base" "$base" "$order" "$scopes" "$checks" >>"$STATE/workers.tsv"
+  old_ifs=$IFS; IFS=';'
+  for check in $checks; do
+    IFS=$old_ifs
+    case "$check" in
+      *:*:*) check_name=${check%%:*}; rest=${check#*:}; check_requirement=${rest%%:*}; check_condition=${rest#*:} ;;
+      *:*) check_name=${check%%:*}; check_requirement=${check#*:}; check_condition=always ;;
+      *) check_name=$check; check_requirement=required; check_condition=always ;;
+    esac
+    case "$check_requirement" in required|conditional|informational) ;; *) fail "invalid worker check requirement: $check_requirement" ;; esac
+    [ "$check_requirement" != conditional ] || [ -n "$check_condition" ] || fail "conditional worker check needs a condition"
+    reject_control_chars "$check_name"; reject_control_chars "$check_condition"
+    printf '%s\t%s\t%s\t%s\ttrue\n' "$task" "$check_name" "$check_requirement" "$check_condition" >>"$STATE/worker-plan.tsv"
+    IFS=';'
+  done
+  IFS=$old_ifs
+  printf 'PASS: worker %s registered at exact base %s\n' "$task" "$base"
+}
+
+bundle_required_files='meta.tsv commits.txt files.txt validations.tsv scope-exceptions.txt staged.txt unstaged.txt untracked.txt resources.tsv'
+
+validate_bundle_meta() {
+  result_dir=$1
+  meta=$result_dir/meta.tsv
+  [ -f "$meta" ] || fail "result bundle is missing meta.tsv"
+  seen=
+  while IFS="$TAB" read -r key value extra; do
+    [ -n "${key:-}" ] || fail "meta.tsv contains an empty key"
+    [ -z "${extra:-}" ] || fail "meta.tsv fields must be exactly key<TAB>value"
+    reject_control_chars "$key"; reject_control_chars "$value"
+    case "|$seen|" in *"|$key|"*) fail "meta.tsv repeats field: $key" ;; esac
+    case "$key" in
+      schema_version|task_id|status|provider|branch|worktree|base_sha|head_sha|candidate_fingerprint) ;;
+      *) fail "meta.tsv contains unknown field: $key" ;;
+    esac
+    seen="$seen|$key"
+  done <"$meta"
+  for key in schema_version task_id status provider branch worktree base_sha head_sha candidate_fingerprint; do
+    case "|$seen|" in *"|$key|"*) ;; *) fail "meta.tsv is missing field: $key" ;; esac
+  done
+  [ "$(awk -F "$TAB" '$1 == "schema_version" { print $2; exit }' "$meta")" = 1 ] || fail "result schema_version must be 1"
+  task=$(awk -F "$TAB" '$1 == "task_id" { print $2; exit }' "$meta")
+  status=$(awk -F "$TAB" '$1 == "status" { print $2; exit }' "$meta")
+  provider=$(awk -F "$TAB" '$1 == "provider" { print $2; exit }' "$meta")
+  branch=$(awk -F "$TAB" '$1 == "branch" { print $2; exit }' "$meta")
+  path=$(awk -F "$TAB" '$1 == "worktree" { print $2; exit }' "$meta")
+  base=$(awk -F "$TAB" '$1 == "base_sha" { print $2; exit }' "$meta")
+  head=$(awk -F "$TAB" '$1 == "head_sha" { print $2; exit }' "$meta")
+  candidate=$(awk -F "$TAB" '$1 == "candidate_fingerprint" { print $2; exit }' "$meta")
+  case "$status" in DONE|BLOCKED|FAILED) ;; *) fail "invalid worker result status: $status" ;; esac
+  case "$provider" in NATIVE|HERDR) ;; *) fail "isolated worker provider must be NATIVE or HERDR" ;; esac
+  full_sha base_sha "$base"; full_sha head_sha "$head"; full_sha candidate_fingerprint "$candidate"
+}
+
+require_empty_evidence_file() {
+  file=$1
+  [ -f "$file" ] || fail "result bundle is missing $(basename "$file")"
+  [ ! -s "$file" ] || fail "dirty-state evidence is not empty: $(basename "$file")"
+}
+
+validate_path_file() {
+  file=$1
+  [ -f "$file" ] || fail "result bundle is missing $(basename "$file")"
+  while IFS= read -r path; do
+    [ -n "$path" ] || fail "path evidence contains an empty line: $(basename "$file")"
+    relative_path "$path"
+  done <"$file"
+}
+
+validate_result() {
+  task=
+  result_dir=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      --task-id|--task) [ "$#" -ge 2 ] || fail "--task-id requires an ID"; task=$2; shift 2 ;;
+      --result|--bundle) [ "$#" -ge 2 ] || fail "--result requires a directory"; result_dir=$(absolute_path "$2"); shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown validate-result option: $1" ;;
+    esac
+  done
+  require_state
+  [ -n "$task" ] || fail "--task-id is required"
+  [ -d "$result_dir" ] || fail "result bundle does not exist: $result_dir"
+  worker=$(worker_values "$task")
+  [ -n "$worker" ] || fail "worker is not registered: $task"
+  validate_bundle_meta "$result_dir"
+  result_status=$status
+  [ "$task" = "$(awk -F "$TAB" '$1 == "task_id" { print $2; exit }' "$result_dir/meta.tsv")" ] || fail "result task_id does not match requested worker"
+  expected_branch=$(worker_field "$worker" 2)
+  expected_path=$(worker_field "$worker" 3)
+  expected_base=$(worker_field "$worker" 4)
+  allowed_scopes=$(worker_field "$worker" 7)
+  planned_checks=$(awk -F "$TAB" -v wanted="$task" '$1 == wanted { print $2 "\t" $3 "\t" $4 "\t" $5 }' "$STATE/worker-plan.tsv")
+  result_branch=$(awk -F "$TAB" '$1 == "branch" { print $2; exit }' "$result_dir/meta.tsv")
+  result_path=$(awk -F "$TAB" '$1 == "worktree" { print $2; exit }' "$result_dir/meta.tsv")
+  result_path=$(repo_root "$result_path")
+  result_path=$(CDPATH= cd "$result_path" && pwd -P)
+  result_base=$(awk -F "$TAB" '$1 == "base_sha" { print $2; exit }' "$result_dir/meta.tsv")
+  result_head=$(awk -F "$TAB" '$1 == "head_sha" { print $2; exit }' "$result_dir/meta.tsv")
+  [ "$result_branch" = "$expected_branch" ] || fail "worker branch identity mismatch"
+  expected_path=$(CDPATH= cd "$expected_path" && pwd -P)
+  [ "$result_path" = "$expected_path" ] || fail "worker worktree identity mismatch"
+  [ "$result_base" = "$expected_base" ] || fail "worker base SHA mismatch"
+  worktree_identity "$REPO" "$expected_path" "$expected_branch" || fail "actual worker worktree identity is not proven"
+  [ "$(git -C "$expected_path" rev-parse HEAD)" = "$result_head" ] || fail "worker head does not match actual Git state"
+  if [ "$result_status" = DONE ]; then
+    [ "$result_head" != "$result_base" ] || fail "DONE worker has no transfer commit"
+  fi
+  git -C "$expected_path" merge-base --is-ancestor "$result_base" "$result_head" || fail "worker head is not based on exact worker base"
+  clean_checkout "$expected_path" || fail "worker checkout is dirty or has untracked state"
+  if git -C "$expected_path" show-ref --verify --quiet "refs/remotes/origin/$expected_branch"; then fail "worker has an unauthorized remote-tracking branch"; fi
+  if [ -n "$(git -C "$expected_path" remote get-url origin 2>/dev/null || true)" ] && \
+    git -C "$expected_path" ls-remote --exit-code --heads origin "$expected_branch" >/dev/null 2>&1; then
+    fail "worker branch was published to origin"
+  fi
+  if [ -n "$(git -C "$expected_path" config --get remote.origin.pushurl 2>/dev/null || true)" ]; then
+    fail "worker has an unauthorized origin push URL"
+  fi
+  commits=$result_dir/commits.txt
+  files=$result_dir/files.txt
+  validations=$result_dir/validations.tsv
+  [ -f "$commits" ] || fail "result bundle is missing commits.txt"
+  validate_path_file "$files"
+  [ -f "$validations" ] || fail "result bundle is missing validations.tsv"
+  for dirty_file in staged.txt unstaged.txt untracked.txt; do require_empty_evidence_file "$result_dir/$dirty_file"; done
+  for required_file in scope-exceptions.txt resources.tsv; do
+    [ -f "$result_dir/$required_file" ] || fail "result bundle is missing $required_file"
+    while IFS= read -r resource_line; do reject_control_chars "$resource_line"; done <"$result_dir/$required_file"
+  done
+  [ ! -s "$result_dir/scope-exceptions.txt" ] || fail "worker scope exceptions require an explicit contract revision"
+  while IFS= read -r sha; do
+    [ -n "$sha" ] || fail "commits.txt contains an empty line"
+    full_sha commit "$sha"
+    git -C "$expected_path" cat-file -e "$sha^{commit}" 2>/dev/null || fail "declared commit is not present: $sha"
+    git -C "$expected_path" merge-base --is-ancestor "$result_base" "$sha" || fail "declared commit is outside worker base"
+  done <"$commits"
+  actual_commits=$STATE/actual-commits.$$
+  declared_commits=$STATE/declared-commits.$$
+  actual_paths=$STATE/actual-paths.$$
+  declared_paths=$STATE/declared-paths.$$
+  TMP_FILES="$TMP_FILES $actual_commits $declared_commits $actual_paths $declared_paths"
+  git -C "$expected_path" rev-list "$result_base..$result_head" | LC_ALL=C sort >"$actual_commits"
+  LC_ALL=C sort "$commits" >"$declared_commits"
+  cmp -s "$actual_commits" "$declared_commits" || fail "declared commit range differs from actual worker history"
+  git -C "$expected_path" diff --name-only --find-renames "$result_base..$result_head" | LC_ALL=C sort -u >"$actual_paths"
+  LC_ALL=C sort -u "$files" >"$declared_paths"
+  cmp -s "$actual_paths" "$declared_paths" || fail "declared changed paths differ from actual Git state"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    scope_is_allowed "$path" "$allowed_scopes" || fail "worker changed path outside allowed scope: $path"
+  done <"$actual_paths"
+  while IFS="$TAB" read -r name requirement condition final_required; do
+    [ -n "${name:-}" ] || continue
+    result_count=$(awk -F "$TAB" -v wanted="$name" '$1 == wanted { count++ } END { print count + 0 }' "$validations")
+    [ "$result_count" -eq 1 ] || fail "worker validation is missing or repeated: $name"
+    result_line=$(awk -F "$TAB" -v wanted="$name" '$1 == wanted { print; exit }' "$validations")
+    validation_name=$(printf '%s\n' "$result_line" | awk -F "$TAB" '{ print $1 }')
+    status=$(printf '%s\n' "$result_line" | awk -F "$TAB" '{ print $2 }')
+    validation_fp=$(printf '%s\n' "$result_line" | awk -F "$TAB" '{ print $3 }')
+    validation_reason=$(printf '%s\n' "$result_line" | awk -F "$TAB" '{ print $4 }')
+    validation_extra=$(printf '%s\n' "$result_line" | awk -F "$TAB" '{ print $5 }')
+    [ "$validation_name" = "$name" ] || fail "worker validation name mismatch: expected $name"
+    [ -z "$validation_extra" ] || fail "worker validation has too many fields: $name"
+    case "$status" in passed|failed|unavailable|not-applicable) ;; *) fail "malformed worker validation status: $status" ;; esac
+    full_sha validation_fingerprint "$validation_fp"
+    [ "$validation_fp" = "$(awk -F "$TAB" '$1 == "candidate_fingerprint" { print $2; exit }' "$result_dir/meta.tsv")" ] || fail "worker validation fingerprint differs from result candidate"
+    case "$requirement:$status" in
+      required:passed|conditional:passed) ;;
+      conditional:not-applicable) [ -n "$validation_reason" ] || fail "conditional not-applicable worker validation needs a reason" ;;
+      *) fail "worker validation is not passing: $name ($status)" ;;
+    esac
+  done <<EOF_PLAN
+$planned_checks
+EOF_PLAN
+  actual_candidate=$("$GATE" fingerprint --checkout "$expected_path")
+  declared_candidate=$(awk -F "$TAB" '$1 == "candidate_fingerprint" { print $2; exit }' "$result_dir/meta.tsv")
+  [ "$actual_candidate" = "$declared_candidate" ] || fail "worker candidate fingerprint differs from actual Git state"
+  for key in setup copied ports databases docker_projects temporary external cleanup; do
+    :
+  done
+  if [ "$result_status" = BLOCKED ] || [ "$result_status" = FAILED ]; then
+    fail "worker result is not eligible: $result_status"
+  fi
+  tmp_workers=$STATE/workers.$$.tmp
+  awk -F "$TAB" -v wanted="$task" -v head="$result_head" -v result="$result_dir" '
+    $1 == wanted { $5=head; $9="validated"; $10=result; print; next }
+    { print }
+  ' OFS="$TAB" "$STATE/workers.tsv" >"$tmp_workers"
+  mv "$tmp_workers" "$STATE/workers.tsv"
+  printf 'PASS: worker result %s is eligible for integration\n' "$task"
+}
+
+planned_order_task() {
+  order=$1
+  mapped_tasks=$(awk -F "$TAB" '{ print $1 }' "$STATE/mappings.tsv")
+  old_ifs=$IFS; IFS=','
+  for task in $order; do
+    IFS=$old_ifs
+    case "$NEWLINE$mapped_tasks$NEWLINE" in *"$NEWLINE$task$NEWLINE"*) ;; *) printf '%s\n' "$task"; IFS=$old_ifs; return 0 ;; esac
+    IFS=','
+  done
+  IFS=$old_ifs
+  return 1
+}
+
+next_run() {
+  requested=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      --task-id|--task) [ "$#" -ge 2 ] || fail "--task-id requires an ID"; requested=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown next option: $1" ;;
+    esac
+  done
+  require_state
+  integration=$(integration_values)
+  path=$(integration_field 1); branch=$(integration_field 2); head=$(integration_field 4); order=$(integration_field 6)
+  worktree_identity "$REPO" "$path" "$branch" || fail "integration checkout identity is not proven"
+  [ "$(git -C "$path" rev-parse HEAD)" = "$head" ] || fail "integration-head drift detected"
+  clean_checkout "$path" || fail "integration checkout is not clean"
+  task=$(planned_order_task "$order") || fail "all planned workers are already mapped"
+  [ -n "$(worker_values "$task")" ] || fail "planned worker is not registered: $task"
+  status=$(worker_field "$(worker_values "$task")" 9)
+  [ "$status" = validated ] || fail "next planned worker is not validated: $task ($status)"
+  [ -z "$requested" ] || [ "$requested" = "$task" ] || fail "worker is not next in planned integration order: expected $task, got $requested"
+  printf 'NEXT: %s\n' "$task"
+}
+
+verify_integration() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown verify-integration option: $1" ;;
+    esac
+  done
+  require_state
+  path=$(integration_field 1); branch=$(integration_field 2); expected=$(integration_field 4)
+  worktree_identity "$REPO" "$path" "$branch" || fail "integration checkout identity or branch mismatch"
+  [ "$(git -C "$path" rev-parse HEAD)" = "$expected" ] || fail "integration-head drift detected"
+  clean_checkout "$path" || fail "integration checkout is dirty"
+  printf 'PASS: integration checkout is clean at expected checkpoint %s\n' "$expected"
+}
+
+transfer_run() {
+  task=
+  action=preflight
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      --task-id|--task) [ "$#" -ge 2 ] || fail "--task-id requires an ID"; task=$2; shift 2 ;;
+      --preflight) action=preflight; shift ;;
+      --apply) action=apply; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown transfer option: $1" ;;
+    esac
+  done
+  require_state
+  [ -n "$task" ] || fail "--task-id is required"
+  next_run --state "$STATE" --task-id "$task" >/dev/null
+  worker=$(worker_values "$task")
+  path=$(integration_field 1); integration_head=$(integration_field 4); worker_path=$(worker_field "$worker" 3); result_dir=$(worker_field "$worker" 10)
+  [ "$(git -C "$path" rev-parse HEAD)" = "$integration_head" ] || fail "integration-head drift detected before transfer"
+  clean_checkout "$path" || fail "integration checkout must be clean before transfer"
+  source_file=$result_dir/commits.txt
+  [ -f "$source_file" ] || fail "worker result is missing transfer commits"
+  if [ "$action" = preflight ]; then
+    printf 'PASS: transfer preflight for %s (%s)\n' "$task" "$(tr '\n' ' ' <"$source_file")"
+    exit 0
+  fi
+  if awk -F "$TAB" -v wanted="$task" '$1 == wanted && $6 == "applied" { found=1 } END { exit(found ? 0 : 1) }' "$STATE/transfers.tsv"; then
+    fail "worker transfer is already applied and awaits mapping: $task"
+  fi
+  pre_head=$(git -C "$path" rev-parse HEAD)
+  printf '%s\t%s\t%s\t%s\t%s\tstarted\n' "$task" "$pre_head" "$pre_head" "$worker_path" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >>"$STATE/transfers.tsv"
+  started=no
+  conflict=no
+  while IFS= read -r source_sha; do
+    [ -n "$source_sha" ] || continue
+    if git -C "$path" cherry-pick --no-commit "$source_sha"; then
+      started=yes
+    else
+      started=yes
+      conflict=yes
+      break
+    fi
+  done <"$source_file"
+  if [ "$conflict" = yes ]; then
+    printf '%s\t%s\t%s\tconflict\n' "$task" "$pre_head" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >>"$STATE/conflicts.log"
+    if [ "$started" = yes ]; then git -C "$path" cherry-pick --abort >/dev/null 2>&1 || true; fi
+    restored=yes
+    [ "$(git -C "$path" rev-parse HEAD)" = "$pre_head" ] || restored=no
+    clean_checkout "$path" || restored=no
+    [ "$restored" = yes ] || fail "conflict restoration cannot be proven; integration checkout is preserved"
+    fail "integration conflict recorded; worker branch and worktree preserved"
+  fi
+  tmp=$STATE/transfers.$$.tmp
+  awk -F "$TAB" -v wanted="$task" -v status=applied '$1 == wanted {$6=status; print; next} {print}' OFS="$TAB" "$STATE/transfers.tsv" >"$tmp"
+  mv "$tmp" "$STATE/transfers.tsv"
+  printf 'PASS: applied worker transfer %s with cherry-pick --no-commit\n' "$task"
+}
+
+map_run() {
+  task=
+  source_sha=
+  integration_sha=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      --task-id|--task) [ "$#" -ge 2 ] || fail "--task-id requires an ID"; task=$2; shift 2 ;;
+      --source-sha|--source) [ "$#" -ge 2 ] || fail "--source-sha requires a SHA"; source_sha=$2; shift 2 ;;
+      --integration-sha|--integration) [ "$#" -ge 2 ] || fail "--integration-sha requires a SHA"; integration_sha=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown map option: $1" ;;
+    esac
+  done
+  require_state
+  [ -n "$task" ] || fail "--task-id is required"; [ -n "$source_sha" ] || fail "--source-sha is required"; [ -n "$integration_sha" ] || fail "--integration-sha is required"
+  full_sha source_sha "$source_sha"; full_sha integration_sha "$integration_sha"
+  worker=$(worker_values "$task"); [ -n "$worker" ] || fail "worker is not registered: $task"
+  result_dir=$(worker_field "$worker" 10); path=$(integration_field 1); expected_order=$(worker_field "$worker" 6)
+  awk -F "$TAB" -v wanted="$task" '$1 == wanted && $6 == "applied" { found=1 } END { exit(found ? 0 : 1) }' "$STATE/transfers.tsv" || fail "worker transfer has not been applied: $task"
+  [ "$(git -C "$path" rev-parse HEAD)" = "$integration_sha" ] || fail "integration SHA does not match actual integration HEAD"
+  clean_checkout "$path" || fail "integration checkout must be clean before mapping"
+  grep -Fx "$source_sha" "$result_dir/commits.txt" >/dev/null 2>&1 || fail "source SHA is not a declared worker commit"
+  [ -z "$(mapping_for_task "$task")" ] || fail "source-to-integration mapping already exists: $task"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$task" "$source_sha" "$integration_sha" "$expected_order" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >>"$STATE/mappings.tsv"
+  tmp=$STATE/workers.$$.tmp
+  awk -F "$TAB" -v wanted="$task" '$1 == wanted {$9="mapped"; print; next} {print}' OFS="$TAB" "$STATE/workers.tsv" >"$tmp"
+  mv "$tmp" "$STATE/workers.tsv"
+  tmp=$STATE/integration.$$.tmp
+  awk -F "$TAB" -v head="$integration_sha" '$1 != "" {$4=head; $5=head; print}' OFS="$TAB" "$STATE/integration.tsv" >"$tmp"
+  mv "$tmp" "$STATE/integration.tsv"
+  printf 'PASS: mapped %s -> %s at integration order %s\n' "$source_sha" "$integration_sha" "$expected_order"
+}
+
+cleanup_eligible_run() {
+  task=
+  all=no
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      --task-id|--task) [ "$#" -ge 2 ] || fail "--task-id requires an ID"; task=$2; shift 2 ;;
+      --all) all=yes; shift ;;
+      --force|-f) fail "force cleanup is refused by the isolated Git/evidence guard" ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown cleanup-eligible option: $1" ;;
+    esac
+  done
+  require_state
+  [ "$all" = yes ] || [ -n "$task" ] || fail "provide --task-id or --all"
+  if [ "$all" = yes ]; then
+    while IFS="$TAB" read -r each_task each_branch each_path each_base each_head each_order each_scopes each_checks each_status each_result; do
+      [ -n "${each_task:-}" ] || continue
+      cleanup_eligible_one "$each_task"
+    done <"$STATE/workers.tsv"
+    printf 'PASS: all accepted worker resources are cleanup-eligible\n'
+  else
+    cleanup_eligible_one "$task"
+    printf 'PASS: worker %s is cleanup-eligible\n' "$task"
+  fi
+}
+
+cleanup_eligible_one() {
+  task=$1
+  mapping_for_task "$task" | grep . >/dev/null 2>&1 || fail "cleanup is not eligible before accepted commit mapping: $task"
+  worker=$(worker_values "$task"); [ -n "$worker" ] || fail "worker is not registered: $task"
+  path=$(worker_field "$worker" 3); branch=$(worker_field "$worker" 2)
+  worktree_identity "$REPO" "$path" "$branch" || fail "worker worktree is stale or identity is ambiguous: $task"
+  clean_checkout "$path" || fail "worker is dirty; preserve it: $task"
+  printf 'CLEANUP_ELIGIBLE: %s\n' "$task"
+}
+
+recover_run() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; STATE=$(state_path "$2"); shift 2; require_state ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown recover option: $1" ;;
+    esac
+  done
+  require_state
+  path=$(integration_field 1); branch=$(integration_field 2); head=$(integration_field 4)
+  printf 'RECOVERABLE_STATE\n'
+  printf 'integration_path: %s\n' "$path"
+  printf 'integration_branch: %s\n' "$branch"
+  printf 'recorded_integration_head: %s\n' "$head"
+  if worktree_identity "$REPO" "$path" "$branch"; then
+    printf 'integration_identity: proven\n'
+    printf 'actual_integration_head: %s\n' "$(git -C "$path" rev-parse HEAD)"
+    if clean_checkout "$path"; then printf 'integration_clean: yes\n'; else printf 'integration_clean: no (preserve)\n'; fi
+  else
+    printf 'integration_identity: unavailable (preserve)\n'
+  fi
+  if [ -s "$STATE/conflicts.log" ]; then printf 'conflicts: recorded\n'; else printf 'conflicts: none recorded\n'; fi
+  while IFS="$TAB" read -r task branch path base head order scopes checks status result; do
+    [ -n "${task:-}" ] || continue
+    printf 'worker: %s status=%s path=%s\n' "$task" "$status" "$path"
+  done <"$STATE/workers.tsv"
+}
+
+main() {
+  [ "$#" -gt 0 ] || { usage >&2; exit 2; }
+  command=$1
+  shift
+  case "$command" in
+    init) init_state "$@" ;;
+    register-integration) register_integration "$@" ;;
+    register-worker) register_worker "$@" ;;
+    validate-result) validate_result "$@" ;;
+    next) next_run "$@" ;;
+    verify-integration) verify_integration "$@" ;;
+    transfer) transfer_run "$@" ;;
+    map) map_run "$@" ;;
+    cleanup-eligible) cleanup_eligible_run "$@" ;;
+    recover) recover_run "$@" ;;
+    cleanup) fail "cleanup is not an operation of the isolated Git/evidence guard; use cleanup-eligible and a safe Git command" ;;
+    -h|--help) usage ;;
+    *) fail "unknown command: $command" ;;
+  esac
+}
+
+main "$@"
