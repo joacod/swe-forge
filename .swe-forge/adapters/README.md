@@ -50,6 +50,11 @@ specific files:
   slice separately before final review, push, and one pull-request creation
 - pushing never creates a PR, and syncing verifies `MERGED` before changing the
   checkout
+- context management is capability-negotiated: adapters document observed
+  usage telemetry, context-window knowledge, proactive compaction, and
+  overflow recovery; they do not assume a universal signal or command. At a
+  reliable near-limit boundary, the canonical context policy persists state,
+  compacts before continuing, and rechecks the actual checkout.
 - when available, `.swe-forge/tools/swe-forge-gate` provides executable
   preflight, checkpoint, validation, delivery, and receipt evidence without
   redefining the canonical workflow

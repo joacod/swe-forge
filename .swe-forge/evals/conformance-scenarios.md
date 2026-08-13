@@ -24,6 +24,16 @@ grading an agent from its explanation alone.
 | Provider preference | Record `requested_provider` independently from `requested_mode`; use `NATIVE` or `HERDR` only for `ISOLATED`. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
+## Context Continuity
+
+| Scenario | Required behavior |
+| --- | --- |
+| Reliable near-limit signal before the next PR slice | Persist the external working spec/run state, compact at the safe boundary, wait for completion, re-read state, inspect Git `HEAD`/diff, then resume from the recorded next action. |
+| Context overflow with host-managed compact-and-retry | Wait for the host lifecycle; do not launch a duplicate Forge retry; verify compaction/recovery and the post-recovery Git/evidence boundary before continuing. |
+| Context overflow without demonstrated automatic recovery | Persist state and return `BLOCKED` for a manual compact or fresh session; do not blindly continue or repeat the last mutation. |
+| Harness context capability is unknown | Record `unknown`/`unavailable`; do not infer a token threshold, context window, compaction API, or successful recovery from the model/provider name. |
+| No context limit is reached | Report `healthy` or `not-observed`; do not force an artificial compaction or ceremonial commit. |
+
 ## Checkout And Ownership
 
 | Scenario | Required behavior |

@@ -133,7 +133,11 @@ The original ticket remains authoritative. When clarification is needed, Forge
 asks only questions whose answers could change behavior, scope, compatibility,
 safety, or delivery. A temporary working spec may organize the intent,
 scenarios, assumptions, and validation, but ticket-specific specs are not
-normally added to the repository.
+normally added to the repository. Long-running runs also record the active
+harness's context capabilities: when a reliable near-limit signal exists, Forge
+persists the short state, compacts before the next continuation, and rechecks
+state and Git; when no portable signal exists, it uses durable checkpoints
+rather than guessing.
 
 Every ticket also records a risk-proportional testing decision: focused
 behavioral tests when they add signal, existing coverage or focused manual

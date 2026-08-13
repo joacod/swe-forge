@@ -102,7 +102,9 @@ preference.
 Record the requested behavior, explicit constraints, affected users or systems,
 non-goals, and any requested validation. Preserve important wording from the
 original ticket. Record whether the user wants review checkpoints or low-touch
-PR delivery; do not treat a delivery preference as permission to merge.
+PR delivery; do not treat a delivery preference as permission to merge. Preserve
+context-management concerns as ticket constraints rather than assuming that a
+model or harness will compact at the desired time.
 
 ### 2. Discover
 
@@ -120,7 +122,11 @@ references.
 Check available harness and provider capabilities without claiming them from
 installation alone. In particular, an installed provider is not evidence that
 it can safely create isolated writable worktrees, collect structured results,
-or preserve central integration.
+or preserve central integration. For a context-risk ticket, inspect whether
+the active host exposes usage telemetry, a known context window, proactive
+compaction, overflow classification/retry, and a persistent session. Record
+unknown capabilities explicitly; there is no universal cross-harness context
+API.
 
 ### 3. Specify
 
@@ -134,9 +140,11 @@ most a short high-leverage interview when the ticket is underspecified, and
 build the transient artifact described by
 `.swe-forge/contracts/working-spec.md`. Do not write ticket-specific specs to
 the repository. When a specialist skill is considered, the working spec records
-its source, selection status, and reason. A reasonable, low-risk assumption may
-be recorded and used; a blocking user decision must be asked rather than
-guessed.
+its source, selection status, and reason. For long-running or context-risk work,
+the spec also records the safe pre-continuation compaction action, overflow
+recovery, and external durable-state reference. A reasonable, low-risk
+assumption may be recorded and used; a blocking user decision must be asked
+rather than guessed.
 
 ### 4. Architect
 
@@ -292,6 +300,23 @@ inspect setup side effects, and serialize when safe resource isolation is not
 available. Migrations and shared persistent environments require separate
 authorization.
 
+### Context continuity gate
+
+For a long-running or context-risk ticket, load and follow
+`.swe-forge/policies/context.md`. A `near-limit` signal is handled before the
+next meaningful continuation: stop at a safe turn/slice boundary, persist the
+external working spec and run state, invoke the host-native or adapter-provided
+compaction, wait for it to settle, then re-read state and inspect the current
+Git `HEAD` and diff before resuming. Do not use a guessed token percentage when
+the host exposes a remaining-budget signal, and do not compact during an
+ambiguous mutation.
+
+An `overflow` response is not a Forge task retry. If the host documents
+compact-and-retry, wait for that lifecycle and verify its result before
+continuing. Otherwise persist state and block for a manual compact or fresh
+session. Never repeat the last write, commit, or validation command merely
+because a compacted summary omitted it.
+
 ### 8. Implement
 
 Execute dependency waves while preserving bounded scope. A worker owns only the
@@ -303,7 +328,9 @@ commit for the reviewed slice, then resumes. In `PR`, finalize the first
 commit-plan step only after its targeted checks pass, create exactly that
 step's local commit, and then begin the next step. Keep the planned history
 separate; do not defer all commits until the end or collapse multiple steps
-into one catch-all commit. Stop only for a blocking decision or failed gate.
+into one catch-all commit. Refresh the short working-spec and run-state
+checkpoint after each validated step and before a context-triggered
+compaction. Stop only for a blocking decision or failed gate.
 
 Two writing workers must never edit the same checkout concurrently. Read-only
 workers may inspect the integration checkout. `ISOLATED` writable workers each
@@ -363,7 +390,9 @@ integration unit's required targeted checks must pass before its local
 integration commit, and final verification and fresh review must pass before
 push or PR creation. Run `deliver-pr` before external push or PR actions when
 the executable gate is available. In `GUIDED`, a checkpoint may report a passing
-slice while final acceptance remains pending. Checks may include targeted
+slice while final acceptance remains pending. If context recovery occurred,
+final checks and fresh review must bind to the post-recovery `HEAD`. Checks may
+include targeted
 tests, the complete test suite, typecheck, lint, build, static analysis,
 packaging, or repository-specific structural and installer checks.
 
@@ -441,6 +470,8 @@ Return only the decision-relevant result:
   fallback
 - requested and selected delivery mode
 - implementation approach and important decisions
+- context capability/status, compaction or overflow recovery evidence, and
+  durable-state/Git recheck result
 - files changed
 - tests and other validation with results
 - independent review status

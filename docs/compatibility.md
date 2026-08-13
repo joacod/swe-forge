@@ -14,6 +14,20 @@ promise that future harness releases remain compatible without review.
 | Cursor | Not installed in the validation environment | Project and global | Shared Agent Skill projection; validate with the target Cursor release |
 | Herdr (optional provider) | 0.8.0 | Not an installer target | Provider runbook only; never installed by SWE Forge |
 
+## Context-management snapshot
+
+Context behavior is reported separately because there is no common harness API
+for usage telemetry, context-window limits, compaction, or overflow recovery.
+The canonical policy uses only capabilities demonstrated by the active host:
+
+| Harness | Observed context capability | Adapter consequence |
+| --- | --- | --- |
+| Pi 0.84.1 | Native usage display, threshold compaction, overflow compact-and-retry once, and manual `/compact` | Use host recovery, but re-read durable state and Git before continuing; the prompt loader cannot call extension APIs. |
+| OpenCode 1.18.16 | Not measured by the SWE Forge adapter snapshot | Do not claim proactive detection; rely on documented host behavior or manual checkpoint/resume until revalidated. |
+| Claude Code 2.1.37 | Not measured by the SWE Forge adapter snapshot | Do not claim proactive detection; rely on documented host behavior or manual checkpoint/resume until revalidated. |
+| Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
+| Cursor | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
+
 The adapters intentionally avoid hard-coded model IDs, permissions, or vendor
 configuration. Harnesses should be treated as supported when their current
 instruction, command, skill, or Agent Skill behavior matches the documented

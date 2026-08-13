@@ -110,13 +110,22 @@ require_text 'Execution provider:' .swe-forge/contracts/receipt.md
 require_text 'Model provider:' .swe-forge/contracts/receipt.md
 require_text '--execution-provider' .swe-forge/tools/swe-forge-gate
 require_text '--model-provider' .swe-forge/tools/swe-forge-gate
+require_text '--context-status' .swe-forge/tools/swe-forge-gate
+require_text '--context-evidence' .swe-forge/tools/swe-forge-gate
 require_text '--forge-version' .swe-forge/tools/swe-forge-gate
 require_text 'plan-check' .swe-forge/policies/evidence.md
 require_text 'record-check-status' .swe-forge/policies/evidence.md
 require_text 'candidate fingerprint' .swe-forge/policies/evidence.md
+require_text 'context continuity and compaction' SWE-FORGE.md
+require_text 'Pre-continuation protocol' .swe-forge/policies/context.md
+require_text 'Overflow protocol' .swe-forge/policies/context.md
 require_text 'Head:' .swe-forge/contracts/receipt.md
 require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
 require_text 'Generated at:' .swe-forge/contracts/receipt.md
+require_text 'Context: healthy | compacted | overflow-recovered' .swe-forge/contracts/receipt.md
+require_text 'context:' .swe-forge/contracts/run-state.md
+require_text 'context_strategy:' .swe-forge/contracts/working-spec.md
+require_text 'last_compaction:' .swe-forge/contracts/working-spec.md
 require_text 'workflow_version: 1' .swe-forge/contracts/run-state.md
 require_text 'schema_version: 2' .swe-forge/contracts/run-state.md
 require_text 'invocation_checkout:' .swe-forge/contracts/run-state.md
@@ -173,6 +182,8 @@ require_text 'refactor-design-patterns' docs/adding-a-skill.md
 require_text 'ui-design-token-refactor' docs/adding-a-skill.md
 require_text 'Ticket names an optional specialist skill' .swe-forge/evals/conformance-scenarios.md
 require_text 'Behavior-changing ticket with a test seam' .swe-forge/evals/conformance-scenarios.md
+require_text '## Context Continuity' .swe-forge/evals/conformance-scenarios.md
+require_text 'Reliable near-limit signal' .swe-forge/evals/conformance-scenarios.md
 require_text 'explicit test-first' docs/adding-a-skill.md
 require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
 require_text 'git-sync' .swe-forge/policies/delivery.md
@@ -277,6 +288,8 @@ require_text 'https://cursor.com/docs' .swe-forge/adapters/shared/agent-skill/RE
 require_text 'shared adapter behavior' .swe-forge/adapters/claude-code/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/opencode/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/pi/README.md
+require_text '### Context management' .swe-forge/adapters/pi/README.md
+require_text 'Pi 0.84.1' docs/compatibility.md
 require_text 'shared adapter behavior' .swe-forge/adapters/shared/agent-skill/README.md
 require_text 'actually `MERGED`' .swe-forge/evals/conformance-scenarios.md
 require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/project/agents/openai.yaml

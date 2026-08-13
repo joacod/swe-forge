@@ -130,6 +130,16 @@ working_spec_ref: <external temporary spec, active context, or none>
 acceptance_ref: <acceptance criteria reference>
 current_wave: research | foundation | <integer> | integration | review | cleanup
 
+context:
+  status: healthy | near-limit | overflow | compacting | recovered | unknown | blocked
+  capability_status: proven | partial | unknown | unavailable
+  signal_source: <adapter, host event, telemetry, or none>
+  usage_tokens: <number or unknown>
+  context_window: <number or unknown>
+  last_checkpoint: <external state or evidence reference>
+  last_compaction: <event, session entry, timestamp, or none>
+  recovery_action: none | checkpoint | compact | wait | blocked
+
 # Authorization and action status only; no duplicate integration identity.
 delivery:
   authorization:
@@ -225,6 +235,11 @@ and tested before it can normalize state.
   orchestrator decision.
 - A resumed run inspects real checkout, branch, worktree, provider, and process
   state before trusting this snapshot.
+- Context state is updated before a planned compaction and after recovery; the
+  snapshot never replaces actual Git or host evidence.
+- After compaction or overflow recovery, re-read the working spec and run state,
+  inspect the current `HEAD` and diff, and resume only from the recorded next
+  action. Do not launch a duplicate Forge retry for a host-managed retry.
 - only a dependency in `done` satisfies a downstream task.
 - Completion order never changes planned `integration_order`.
 - Worker lifecycle state is scheduling evidence, not task acceptance.

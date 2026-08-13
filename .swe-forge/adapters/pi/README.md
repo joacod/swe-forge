@@ -55,6 +55,28 @@ separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync` prompts load the
 canonical delivery policy. See [shared adapter behavior](../README.md) for the
 workflow and delivery rules.
 
+### Context management
+
+The inspected Pi 0.84.1 runtime provides native context telemetry in its
+interactive footer and automatic compaction by default. Its documented
+threshold is `contextTokens > contextWindow - reserveTokens`; the defaults are
+`reserveTokens: 16384` and `keepRecentTokens: 20000`. Pi also recognizes a
+provider-reported overflow or recoverable length response, compacts, and
+retries the interrupted turn once. Threshold compaction happens at a safe
+session boundary and does not mean that a completed response is replayed.
+
+This is host evidence, not a portable SWE Forge guarantee. The prompt-template
+adapter is a thin loader and cannot call Pi's extension APIs directly, so the
+canonical workflow must not pretend that it can inspect `ctx.getContextUsage()`
+or invoke `ctx.compact()` on every host. Keep automatic compaction enabled,
+consider a larger response reserve for unusually long reasoning/tool turns,
+and use `/compact <instructions>` as the manual fallback at a completed
+boundary. After Pi compacts or retries, follow the canonical context policy:
+re-read the external working spec and run state, inspect the current Git
+`HEAD`, and resume only from the recorded next action. A model/provider label,
+including a large advertised context window, is not evidence that its overflow
+errors will be classified by Pi.
+
 Pi does not provide native writable isolated workers by default. If
 `SUBAGENTS` is unavailable, the canonical workflow falls back to `SOLO` or
 sequential execution according to its routing and safety rules. `ISOLATED` is
