@@ -84,9 +84,9 @@ state=$(clean_feature_state "$repo")
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 \
     --forge-version 0.1.0-alpha.1 --harness Pi --harness-version 0.84.1 \
-    --requested-mode AUTO --selected-mode SOLO --provider NONE \
-    --routing-reason 'tightly coupled test fixture' --model test-model \
-    --output "$TMP_ROOT/receipt.md" >/dev/null
+    --requested-mode AUTO --selected-mode SOLO --execution-provider NONE \
+    --model-provider openai-codex --routing-reason 'tightly coupled test fixture' \
+    --model test-model --output "$TMP_ROOT/receipt.md" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "accepted receipt is missing final status"
@@ -96,8 +96,13 @@ grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "receipt is missing harness metadata"
 grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "receipt is missing routing metadata"
-grep -F -- '- Provider: NONE' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "receipt is missing provider metadata"
+grep -F -- '- Execution provider: NONE' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "receipt is missing execution-provider metadata"
+grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null || \
+  fail "receipt is missing model-provider metadata"
+if grep -F 'Merge performed: no' "$TMP_ROOT/receipt.md" >/dev/null; then
+  fail "receipt exposes a merge status that becomes stale after PR creation"
+fi
 if grep -F 'grep -q' "$TMP_ROOT/receipt.md" >/dev/null; then
   fail "receipt leaked validation command output"
 fi
@@ -187,7 +192,7 @@ state=$TMP_ROOT/committed.state
   "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
   "$GATE" deliver-pr --state "$state" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery GUIDED \
-    --output "$TMP_ROOT/committed-receipt.md" >/dev/null
+    --provider NONE --output "$TMP_ROOT/committed-receipt.md" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/committed-receipt.md" >/dev/null || \
   fail "committed-range receipt is missing final status"

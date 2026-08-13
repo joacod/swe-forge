@@ -54,9 +54,12 @@ Receipt metadata options:
   --harness-version VERSION     Harness version when known.
   --requested-mode MODE         AUTO, SOLO, SUBAGENTS, or ISOLATED.
   --selected-mode MODE          SOLO, SUBAGENTS, or ISOLATED.
-  --provider PROVIDER           NONE, NATIVE, or HERDR.
+  --execution-provider PROVIDER NONE, NATIVE, or HERDR.
+  --model-provider PROVIDER     Public model provider label when safe.
   --routing-reason TEXT         Short routing rationale.
   --model MODEL                 Model label when safe to publish.
+
+  --provider PROVIDER           Compatibility alias for --execution-provider.
 
 The guard never launches agents, controls providers, pushes, creates a PR,
 publishes, deploys, or merges.
@@ -1169,14 +1172,16 @@ receipt_text() {
   if [ -n "${receipt_forge_version:-}" ] || [ -n "${receipt_harness:-}" ] || \
     [ -n "${receipt_harness_version:-}" ] || [ -n "${receipt_requested_mode:-}" ] || \
     [ -n "${receipt_selected_mode:-}" ] || [ -n "${receipt_provider:-}" ] || \
-    [ -n "${receipt_routing_reason:-}" ] || [ -n "${receipt_model:-}" ]; then
+    [ -n "${receipt_model_provider:-}" ] || [ -n "${receipt_routing_reason:-}" ] || \
+    [ -n "${receipt_model:-}" ]; then
     printf 'Run metadata:\n'
     [ -z "${receipt_forge_version:-}" ] || printf -- '- SWE Forge: %s\n' "$receipt_forge_version"
     if [ -n "${receipt_harness:-}" ] || [ -n "${receipt_harness_version:-}" ]; then
       if [ -n "${receipt_harness_version:-}" ]; then printf -- '- Harness: %s %s\n' "$receipt_harness" "$receipt_harness_version"; else printf -- '- Harness: %s\n' "$receipt_harness"; fi
     fi
     if [ -n "${receipt_requested_mode:-}" ] || [ -n "${receipt_selected_mode:-}" ]; then printf -- '- Routing: %s -> %s\n' "${receipt_requested_mode:-unknown}" "${receipt_selected_mode:-unknown}"; fi
-    [ -z "${receipt_provider:-}" ] || printf -- '- Provider: %s\n' "$receipt_provider"
+    [ -z "${receipt_provider:-}" ] || printf -- '- Execution provider: %s\n' "$receipt_provider"
+    [ -z "${receipt_model_provider:-}" ] || printf -- '- Model provider: %s\n' "$receipt_model_provider"
     [ -z "${receipt_model:-}" ] || printf -- '- Model: %s\n' "$receipt_model"
     [ -z "${receipt_routing_reason:-}" ] || printf -- '- Routing reason: %s\n' "$receipt_routing_reason"
   fi
@@ -1202,7 +1207,6 @@ receipt_text() {
   fi
   if [ -n "$pr_url" ]; then printf 'Pull request: %s\n' "$pr_url"; else printf 'Pull request: not-created\n'; fi
   if [ "$final_blockers" -eq 0 ]; then printf 'Final status: ACCEPTED\n'; else printf 'Final status: BLOCKED\n'; fi
-  printf 'Merge performed: no\n'
 }
 
 receipt_run() {
@@ -1217,6 +1221,7 @@ receipt_run() {
   receipt_requested_mode=
   receipt_selected_mode=
   receipt_provider=
+  receipt_model_provider=
   receipt_routing_reason=
   receipt_model=
   while [ "$#" -gt 0 ]; do
@@ -1280,9 +1285,14 @@ receipt_run() {
         receipt_selected_mode=$2
         shift 2
         ;;
-      --provider)
-        [ "$#" -ge 2 ] || fail "--provider requires a value"
+      --execution-provider|--provider)
+        [ "$#" -ge 2 ] || fail "$1 requires a value"
         receipt_provider=$2
+        shift 2
+        ;;
+      --model-provider)
+        [ "$#" -ge 2 ] || fail "--model-provider requires a value"
+        receipt_model_provider=$2
         shift 2
         ;;
       --routing-reason)
@@ -1310,7 +1320,8 @@ receipt_run() {
   case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid selected topology metadata" ;; esac
   case "$receipt_provider" in ''|NONE|NATIVE|HERDR) ;; *) fail "invalid provider metadata" ;; esac
   for receipt_value in "$receipt_forge_version" "$receipt_harness" "$receipt_harness_version" \
-    "$receipt_requested_mode" "$receipt_selected_mode" "$receipt_provider" "$receipt_routing_reason" "$receipt_model"; do
+    "$receipt_requested_mode" "$receipt_selected_mode" "$receipt_provider" \
+    "$receipt_model_provider" "$receipt_routing_reason" "$receipt_model"; do
     reject_control_chars "$receipt_value"
   done
   if [ -n "$PR_URL" ]; then

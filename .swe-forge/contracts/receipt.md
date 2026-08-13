@@ -15,7 +15,8 @@ Run metadata: (optional)
 - SWE Forge: <release version>
 - Harness: <name> <version>
 - Routing: <requested topology> -> <selected topology>
-- Provider: NONE | NATIVE | HERDR
+- Execution provider: NONE | NATIVE | HERDR
+- Model provider: <safe public model provider label>
 - Routing reason: <short rationale>
 Repository: <repository identity>
 Base: <short base SHA>
@@ -29,12 +30,17 @@ Verification:
 Fresh review: PASS | CHANGES_REQUIRED | NOT RUN — <findings> findings, <repaired> repaired
 Pull request: <URL or not-created>
 Final status: ACCEPTED | BLOCKED | FAILED
-Merge performed: no
 ```
 
 Receipts render the latest relevant status for every planned check, not an
 undifferentiated history of attempts. Historical attempts stay in the private
 ledger.
+
+`Execution provider` describes the isolated worker lifecycle and is `NONE` for
+non-isolated runs; it is not the model backend. Record a `Model provider`
+separately only when a safe public label is available. Omit unavailable
+metadata rather than guessing, and never publish credentials, private paths,
+raw transcripts, or private ticket details.
 
 ## Required evidence
 

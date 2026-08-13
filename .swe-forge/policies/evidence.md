@@ -87,7 +87,10 @@ Generated at: <UTC timestamp>
 current `HEAD`, current candidate fingerprint, and final evidence. A receipt
 created before a later commit or same-path content change is stale. Receipts
 never contain transcripts, raw logs, secrets, or private ticket content and
-never upgrade a blocked status by hand.
+never upgrade a blocked status by hand. `Execution provider` is the isolated
+worker provider and must be `NONE` for non-isolated runs; a model provider is a
+separate optional public metadata field. Merge state is intentionally not
+included because a receipt is not updated after a human merges the PR.
 
 ## Isolated guard
 

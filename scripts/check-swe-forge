@@ -106,6 +106,10 @@ require_text 'scripts/swe-forge status' README.md
 require_text 'scripts/swe-forge update' docs/installation.md
 require_text 'The manifest records' docs/installation.md
 require_text 'Run metadata:' .swe-forge/contracts/receipt.md
+require_text 'Execution provider:' .swe-forge/contracts/receipt.md
+require_text 'Model provider:' .swe-forge/contracts/receipt.md
+require_text '--execution-provider' .swe-forge/tools/swe-forge-gate
+require_text '--model-provider' .swe-forge/tools/swe-forge-gate
 require_text '--forge-version' .swe-forge/tools/swe-forge-gate
 require_text 'plan-check' .swe-forge/policies/evidence.md
 require_text 'record-check-status' .swe-forge/policies/evidence.md
@@ -141,6 +145,7 @@ require_text 'Run the repository checks' CONTRIBUTING.md
 require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md
 require_text 'evidence ledger' .swe-forge/policies/evidence.md
 require_text 'Final status: ACCEPTED | BLOCKED | FAILED' .swe-forge/contracts/receipt.md
+reject_text 'Merge performed: no' .swe-forge/contracts/receipt.md
 require_text 'pre-edit baseline' SWE-FORGE.md
 require_text 'delivery_mode: GUIDED | PR' SWE-FORGE.md
 require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' SWE-FORGE.md
