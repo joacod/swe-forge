@@ -109,6 +109,14 @@ fi
 if grep -F 'grep -q' "$TMP_ROOT/receipt.md" >/dev/null; then
   fail "receipt leaked validation command output"
 fi
+if "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
+  --pr-url https://github.com/example/repo/pull/1 \
+  --context-status blocked --context-evidence 'recovery unavailable' \
+  --output "$TMP_ROOT/blocked-receipt.md" >/dev/null 2>&1; then
+  fail "blocked context produced an accepted receipt"
+fi
+grep -F 'Final status: BLOCKED' "$TMP_ROOT/blocked-receipt.md" >/dev/null || \
+  fail "blocked context receipt is missing blocked status"
 
 # Regression: PR mode can validate and commit multiple sequential slices in one
 # run, including a newly added file whose fingerprint is stable before and after
