@@ -23,12 +23,13 @@ fallback.
 
 ## Install
 
-For the eventual experimental `v0.1.0-alpha.1` release, pin the source
-checkout after the tag is published. The tag is not currently published;
+The planned first experimental release is `v0.1.0-alpha.1`. It is reserved
+but not currently published, so no released tag is available yet. Pin the
+source checkout only after the tag and release are published. Until then,
 `main` is development-only:
 
 ```bash
-# Usable after v0.1.0-alpha.1 is published:
+# Use only after the v0.1.0-alpha.1 tag and release are published:
 git clone --branch v0.1.0-alpha.1 --depth 1 \
   https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
@@ -54,10 +55,11 @@ Installation does not install Herdr. Herdr is an optional execution provider
 and may be used only when already available and selected safely by the canonical
 provider policy.
 
-See the [compatibility snapshot](docs/compatibility.md) for the harness versions
-validated for this alpha release and the [changelog](CHANGELOG.md) for known
-limitations. Run `scripts/check-release prepare` before manually preparing an
-alpha release; Forge never creates or publishes the tag or release.
+See the [compatibility snapshot](docs/compatibility.md) for the pre-release
+harness validation snapshot for the planned alpha and the
+[changelog](CHANGELOG.md) for known limitations. Run
+`scripts/check-release prepare` when preparing a future alpha release; Forge
+never creates or publishes the tag or release.
 
 ## Installer lifecycle
 
@@ -220,7 +222,7 @@ Redact credentials, private ticket details, transcripts, and personal paths.
 - [Installation guide](docs/installation.md)
 - [Compatibility snapshot](docs/compatibility.md)
 - [Changelog](CHANGELOG.md)
-- [v0.1.0-alpha.1 release notes](docs/releases/v0.1.0-alpha.1.md)
+- [Planned v0.1.0-alpha.1 release notes](docs/releases/v0.1.0-alpha.1.md)
 - [Architecture](docs/architecture.md)
 - [Adapter index](.swe-forge/adapters/README.md)
 - [Execution providers](.swe-forge/providers/README.md)
