@@ -419,8 +419,9 @@ delegated, the change spans components, risk is medium or higher, or security,
 data integrity, compatibility, concurrency, or external effects are relevant.
 For a trivial localized `SOLO` change, the orchestrator may perform final diff
 review in the active context and record `review: skipped` with the reason.
-Provide the original ticket, `review_focus`, acceptance criteria, architecture
-decisions, final diff, and validation evidence. Do not provide the
+Provide the original ticket, the `review_focus` from the PR working spec (or
+one derived from the ticket for other modes), acceptance criteria,
+architecture decisions, final diff, and validation evidence. Do not provide the
 implementer's entire conversational history.
 
 The reviewer starts with the review goal and checks every acceptance criterion

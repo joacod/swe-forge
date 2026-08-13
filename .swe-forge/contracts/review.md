@@ -1,11 +1,12 @@
 # Review Contract
 
 Use this contract for independent review after implementation and verification.
-Reviewers should receive the original ticket, acceptance criteria, relevant
-architecture decisions, final integrated diff, and validation evidence, not the
-full implementer transcript. For isolated execution, provider lifecycle state
-is scheduling evidence only; review the integration branch, source-to-
-integration mappings, and actual Git state.
+Reviewers should receive the original ticket, a `review_focus` from the PR
+working spec or a concise focus derived from the ticket for other modes,
+acceptance criteria, relevant architecture decisions, final integrated diff,
+and validation evidence, not the full implementer transcript. For isolated
+execution, provider lifecycle state is scheduling evidence only; review the
+integration branch, source-to-integration mappings, and actual Git state.
 
 ## Template
 

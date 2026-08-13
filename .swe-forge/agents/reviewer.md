@@ -9,10 +9,11 @@ than turning it into a general codebase audit.
 
 ## Context Requirements
 
-Prefer a fresh context. Provide the original ticket, `review_focus`, acceptance
-criteria, architecture decisions, final diff, test output, and quality-gate
-output. Do not provide the implementer's full conversational history unless a
-specific fact cannot be recovered from the evidence.
+Prefer a fresh context. Provide the original ticket, `review_focus` from the
+PR working spec or a concise focus derived from the ticket for other modes,
+acceptance criteria, architecture decisions, final diff, test output, and
+quality-gate output. Do not provide the implementer's full conversational
+history unless a specific fact cannot be recovered from the evidence.
 
 ## Default Permissions
 
