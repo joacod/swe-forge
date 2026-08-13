@@ -76,6 +76,13 @@ routing:
   reason: <why this topology and provider are the smallest safe choice>
   fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
 
+context_strategy:
+  capability_status: proven | partial | unknown | unavailable
+  signal_source: <adapter, host event, telemetry, or none>
+  near_limit_action: <checkpoint and native/adapter compaction, or manual fallback>
+  overflow_action: <host recovery and recheck, or blocked/manual resume>
+  durable_state_ref: <external working spec and run-state reference>
+
 isolated_plan:
   delivery_checkout:
     path: <absolute orchestrator integration worktree or none>
@@ -145,7 +152,10 @@ open_questions: []
 
 A `ready` working spec has a concrete intent, bounded scope and non-goals,
 observable requirements, acceptance checks, a testing decision, a validation
-plan, and explicit assumptions. It records topology and provider separately. The provider state is
+plan, and explicit assumptions. It records topology and provider separately.
+For a long-running or context-risk ticket, it also records a context strategy,
+capability source, safe compaction action, overflow action, and durable-state
+reference. The provider state is
 conditional: non-isolated execution uses `NONE` for provider and strategies,
 while `ISOLATED` uses `NATIVE` or `HERDR`, `COMPOSE`, and `CHERRY_PICK`.
 An isolated plan

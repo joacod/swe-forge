@@ -91,6 +91,10 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Keep a transient working spec proportional to the ticket; never create
   ticket-specific planning documents in the repository just to coordinate one
   session.
+- Treat context pressure as a harness lifecycle event: at a reliable near-limit
+  signal, persist the short working state, compact at a safe boundary before
+  continuing, then re-read state and inspect Git. Never assume a universal
+  context signal or launch a duplicate retry for host-managed overflow recovery.
 - Preserve a human checkpoint in `GUIDED` mode and keep delivery actions
   separately authorized.
 - Keep commits, pushes, publication, and global configuration changes
@@ -321,7 +325,9 @@ lifecycle is:
    or clearly matching optional specialist skill using its policy.
 3. Specify observable acceptance criteria and blocking ambiguity; in `PR` mode,
    create a transient working spec and run the brief alignment interview only
-   when the ticket is underspecified.
+   when the ticket is underspecified. For long-running or context-risk work,
+   record the host capability signal, safe compaction action, overflow recovery,
+   and external durable-state reference.
 4. Architect the smallest compatible approach.
 5. Decompose only where useful and define bounded task ownership or guided
    review slices.
@@ -332,7 +338,10 @@ lifecycle is:
    foundation and provider decision; otherwise implement dependency waves in
    the selected checkout.
 9. Implement dependency waves within task scope, stopping at guided
-   checkpoints when `delivery_mode` is `GUIDED`.
+   checkpoints when `delivery_mode` is `GUIDED`. At a reliable near-limit
+   signal, persist state and compact before the next continuation; after any
+   compaction or overflow recovery, re-read state and verify the actual Git
+   boundary before resuming.
 10. Integrate isolated work centrally, with final commits built and validated
     by the orchestrator.
 11. Verify with relevant repository quality gates and record current-HEAD
@@ -356,6 +365,7 @@ isolated operational sequence -> workflows/isolated-execution.md
 routing eligibility -> policies/execution-routing.md
 provider capability -> policies/provider-selection.md
 authorization and delivery -> policies/delivery.md
+context continuity and compaction -> policies/context.md
 evidence semantics -> policies/evidence.md
 data shapes -> contracts/*
 provider command translation -> providers/*
@@ -364,16 +374,20 @@ harness loading -> adapters/*
 
 Minimal load set: `SOLO` needs `SWE-FORGE.md`, `workflows/ticket.md`, the
 orchestrator role, and relevant verification/evidence/delivery contracts;
-`SUBAGENTS` additionally loads task/result/review contracts and the relevant
-worker roles; `ISOLATED` additionally loads execution-routing,
-provider-selection, delivery, result-bundle, run-state, the isolated workflow,
-the selected provider runbook, and the isolated Git/evidence guard contract.
+load `policies/context.md`, the working-spec contract, and the run-state
+contract for long-running or context-risk tickets. `SUBAGENTS` additionally
+loads task/result/review contracts and the relevant worker roles; `ISOLATED`
+additionally loads execution-routing, provider-selection, delivery,
+result-bundle, run-state, the isolated workflow, the selected provider runbook,
+and the isolated Git/evidence guard contract.
 ## State and Contracts
 
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
 state must survive context changes. In `PR` mode, the working-spec contract
 provides a short behavior-first brief; it is temporary and is not a repository
-artifact. When a specialist skill is considered, the working spec records its
+artifact. For context-risk work, it also records the capability source,
+pre-continuation compaction action, overflow recovery, and durable-state
+reference. When a specialist skill is considered, the working spec records its
 source, selection status, and reason for not or using it. An optional executable
 evidence ledger may support preflight, checkpoints, validation, and receipt
 generation; it is not a second source of truth. A run state is temporary by
@@ -464,6 +478,9 @@ Declare success only when all applicable conditions are met:
   one integration/delivery branch and exactly one final pull request
 - every accepted isolated worker commit has an integration mapping and final
   commits were built and validated centrally
+- when context pressure occurred, the context recovery evidence records the
+  host signal, compaction or manual-resume result, durable-state re-read, and
+  Git/evidence recheck; when it did not occur, the run reports `not-observed`
 - when `delivery_mode: PR`, the authorized commit, push, and pull-request
   actions complete or the run is reported `BLOCKED`; `GUIDED` may finish with a
   reviewed local diff and delivery actions not authorized
@@ -487,6 +504,7 @@ Return a concise report containing:
 - requested and selected provider when relevant, with reason and any fallback
 - requested and selected delivery mode
 - implementation approach and important decisions
+- context capability/status and any compaction or overflow recovery evidence
 - files changed
 - testing decision, tests, and validation performed with results
 - reviewer result and repaired findings

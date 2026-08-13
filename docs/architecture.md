@@ -20,6 +20,7 @@ isolated operational sequence -> workflows/isolated-execution.md
 routing eligibility -> policies/execution-routing.md
 provider capability -> policies/provider-selection.md
 authorization and delivery -> policies/delivery.md
+context continuity and compaction -> policies/context.md
 evidence semantics -> policies/evidence.md
 data shapes -> contracts/*
 provider command translation -> providers/*
@@ -33,6 +34,9 @@ Minimal load sets:
 
 - `SOLO`: `SWE-FORGE.md`, `workflows/ticket.md`, orchestrator role, relevant
   verification/evidence/delivery policy and contracts
+- Long-running or context-risk tickets add `policies/context.md`, the
+  working-spec contract, and the run-state contract to the selected topology's
+  load set.
 - `SUBAGENTS`: the `SOLO` set plus task/result/review contracts and the
   relevant researcher, implementer, test, or reviewer roles
 - `ISOLATED`: the `SUBAGENTS` set plus execution-routing, provider-selection,
@@ -131,8 +135,11 @@ Other files reference this rule rather than redefining it.
 planned checks, binds validation/checkpoints/commits to exact candidate
 fingerprints, supports independent sequential slice checkpoints, rejects
 undeclared mutations and missing/unavailable required checks, and renders latest
-statuses. Receipts include final `Head`, evidence fingerprint, and UTC generation
-time; read-only verification detects stale receipts.
+statuses. `policies/context.md` owns the portable near-limit and overflow
+recovery protocol; it requires durable-state and Git rechecks after host
+compaction without assuming a universal harness API. Receipts include final
+`Head`, evidence fingerprint, and UTC generation time; read-only verification
+detects stale receipts.
 
 ## Environment and shared artifacts
 
@@ -161,6 +168,7 @@ tree. The adapter catalog is not installed into target projects.
 ticket/raw invocation
   -> parsed modes and immutable raw ticket
   -> acceptance and transient PR working spec
+  -> context capability and durable-state plan when relevant
   -> architecture, ownership, and validation plan
   -> hard/economic routing and provider evidence
   -> one task or integration/delivery checkout
