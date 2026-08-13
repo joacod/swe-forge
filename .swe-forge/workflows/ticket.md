@@ -139,12 +139,14 @@ context unless a durable run artifact is needed. In `PR`, follow
 most a short high-leverage interview when the ticket is underspecified, and
 build the transient artifact described by
 `.swe-forge/contracts/working-spec.md`. Do not write ticket-specific specs to
-the repository. When a specialist skill is considered, the working spec records
-its source, selection status, and reason. For long-running or context-risk work,
-the spec also records the safe pre-continuation compaction action, overflow
-recovery, and external durable-state reference. A reasonable, low-risk
-assumption may be recorded and used; a blocking user decision must be asked
-rather than guessed.
+the repository. The PR working spec must also contain a `review_focus` with one
+clear review goal, the acceptance criteria to check, relevant quality concerns,
+explicit non-goals, and a finding rule. When a specialist skill is considered,
+the working spec records its source, selection status, and reason. For
+long-running or context-risk work, the spec also records the safe
+pre-continuation compaction action, overflow recovery, and external
+durable-state reference. A reasonable, low-risk assumption may be recorded
+and used; a blocking user decision must be asked rather than guessed.
 
 ### 4. Architect
 
@@ -417,25 +419,29 @@ delegated, the change spans components, risk is medium or higher, or security,
 data integrity, compatibility, concurrency, or external effects are relevant.
 For a trivial localized `SOLO` change, the orchestrator may perform final diff
 review in the active context and record `review: skipped` with the reason.
-Provide the original ticket, acceptance criteria, architecture decisions, final
-diff, and validation evidence. Do not provide the implementer's entire
-conversational history.
+Provide the original ticket, the `review_focus` from the PR working spec (or
+one derived from the ticket for other modes), acceptance criteria,
+architecture decisions, final diff, and validation evidence. Do not provide the
+implementer's entire conversational history.
 
-Review correctness, missing requirements, regressions, abstractions, scope,
-error handling, compatibility, concurrency, security, performance, tests, and
-unrelated changes. For isolated work also review provider boundaries, exact
-base SHAs, worker scope, shared-artifact ownership, environment isolation,
-integration order, source-to-integration mappings, and conservative cleanup.
-Return findings using `.swe-forge/contracts/review.md`.
+The reviewer starts with the review goal and checks every acceptance criterion
+against the final diff and evidence. It then inspects only good practices and
+risk areas relevant to the changed behavior or explicit constraints, including
+isolated-execution evidence when applicable. A finding must identify its
+acceptance criterion, explicit constraint, or concrete relevant risk. Unrelated
+refactors, style preferences, speculative enhancements, and future-session work
+are deferred follow-ups rather than findings or repair tasks. Return the result
+using `.swe-forge/contracts/review.md`.
 
 Apply the blocking matrix in `.swe-forge/contracts/review.md`. Low-confidence
 stylistic opinions do not block completion by themselves.
 
 ### 12. Repair
 
-Repair relevant findings within the original scope. Re-run affected tests and
-quality gates. Escalate to a debugger only when root cause is uncertain or a
-failure remains unexplained.
+Repair only relevant findings within the original scope. Do not pull deferred
+follow-ups into the current ticket without an explicit scope decision. Re-run
+affected tests and quality gates. Escalate to a debugger only when root cause
+is uncertain or a failure remains unexplained.
 
 Limit review and repair cycles. If a finding cannot be safely resolved, report
 the evidence, impact, and remaining risk instead of looping indefinitely.
@@ -445,8 +451,10 @@ repair commits; do not rewrite accepted integration history automatically.
 ### 13. Final Acceptance
 
 Compare the final integrated diff to the original ticket, acceptance criteria,
-and explicit constraints. Check for missing functionality, accidental changes,
-scope creep, unresolved failures, and unreviewed generated files.
+review focus, and explicit constraints. Check for missing functionality,
+accidental changes, scope creep, unresolved failures, and unreviewed generated
+files. Deferred follow-ups do not expand the current acceptance scope unless the
+user explicitly changes it.
 
 Success requires the acceptance gate in `SWE-FORGE.md`. For an isolated ticket,
 verify that the integration/delivery branch is the only published branch, every
