@@ -14,12 +14,14 @@ change between alpha releases.
   validated commit per slice, and support sequential slice evidence without
   repeating unchanged run-state validation.
 - Continue collecting real-run reports across supported harnesses.
-- `v0.1.0-alpha.1` remains unpublished; tagged installation instructions are
-  usable after manual publication, while `main` remains development-only.
+- The planned first alpha, `v0.1.0-alpha.1`, remains unpublished. Its tagged
+  installation instructions become usable only after a separate manual
+  publication; until then, `main` remains development-only.
 
-## [0.1.0-alpha.1] - 2026-08-12
+## [0.1.0-alpha.1] (planned; not yet published)
 
-See the [release notes](docs/releases/v0.1.0-alpha.1.md) for installation,
+These are the candidate changes for the planned first alpha. See the [planned
+release notes](docs/releases/v0.1.0-alpha.1.md) for installation,
 compatibility, and known limitations.
 
 ### Added
@@ -34,7 +36,7 @@ compatibility, and known limitations.
 
 ### Known limitations
 
-- This release is experimental and does not promise stable compatibility.
+- The planned release is experimental and does not promise stable compatibility.
 - Pi installation is global-only; global installations are source-linked.
 - Copy installations require an available managed manifest for safe update or
   uninstall. Legacy installations are inspectable but destructive operations

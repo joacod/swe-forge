@@ -1,8 +1,9 @@
 # Compatibility
 
-SWE Forge is an alpha release. The table below records the validation snapshot
-for `v0.1.0-alpha.1`; it is evidence of the adapter shape, not a promise that
-future harness releases remain compatible without review.
+SWE Forge is preparing its first alpha release. The table below records the
+pre-release validation snapshot for the planned `v0.1.0-alpha.1`; its tag and
+release are not yet published. This is evidence of the adapter shape, not a
+promise that future harness releases remain compatible without review.
 
 | Harness or provider | Version observed | Installation scope | Validation posture |
 | --- | --- | --- | --- |
