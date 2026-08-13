@@ -125,6 +125,7 @@ require_text 'Generated at:' .swe-forge/contracts/receipt.md
 require_text 'Context: healthy | compacted | overflow-recovered' .swe-forge/contracts/receipt.md
 require_text 'context:' .swe-forge/contracts/run-state.md
 require_text 'context_strategy:' .swe-forge/contracts/working-spec.md
+require_text 'last_compaction:' .swe-forge/contracts/working-spec.md
 require_text 'workflow_version: 1' .swe-forge/contracts/run-state.md
 require_text 'schema_version: 2' .swe-forge/contracts/run-state.md
 require_text 'invocation_checkout:' .swe-forge/contracts/run-state.md

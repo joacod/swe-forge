@@ -1353,6 +1353,9 @@ receipt_run() {
     output_tmp=$STATE/receipt.$$.md
   fi
   if [ "$delivery" = PR ]; then check_final_state yes; else check_final_state no; fi
+  if [ "$receipt_context_status" = blocked ]; then
+    final_blockers=$((final_blockers + 1))
+  fi
   receipt_text "$execution" "$delivery" "$PR_URL" >"$output_tmp"
   if [ -n "$output" ]; then mv "$output_tmp" "$output"; cat "$output"; else cat "$output_tmp"; rm -f "$output_tmp"; fi
   [ "$final_blockers" -eq 0 ]
@@ -1386,6 +1389,8 @@ receipt_verify() {
   receipt_repo=$(awk -F': ' '$1 == "Repository" { print $2; exit }' "$receipt_file")
   receipt_status=$(awk -F': ' '$1 == "Final status" { print $2; exit }' "$receipt_file")
   receipt_context=$(awk -F': ' '$1 == "Context" { print $2; exit }' "$receipt_file")
+  receipt_context_status=$(printf '%s\n' "$receipt_context" | awk -F' — ' '{ print $1; exit }')
+  case "$receipt_context_status" in healthy|compacted|overflow-recovered|not-observed|blocked) ;; *) fail "receipt has invalid Context status" ;; esac
   [ -n "$receipt_head" ] || fail "receipt is missing Head"
   [ -n "$receipt_fp" ] || fail "receipt is missing Evidence fingerprint"
   [ -n "$receipt_branch" ] || fail "receipt is missing Branch"
