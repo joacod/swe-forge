@@ -69,8 +69,12 @@ routing:
   fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
 
 isolated_plan:
-  integration_branch: <one integration/delivery branch or none>
-  integration_worktree: <absolute orchestrator worktree or none>
+  delivery_checkout:
+    path: <absolute orchestrator integration worktree or none>
+    branch: <one integration/delivery branch or none>
+    base_sha: <exact base or none>
+  integration_branch: <reference delivery_checkout.branch; do not duplicate identity>
+  integration_worktree: <reference delivery_checkout.path; do not duplicate identity>
   foundation: []
   tasks: []
   current_wave: <wave or none>

@@ -183,14 +183,11 @@ be `CHERRY_PICK`. `requested_provider` records preference and may remain
 `authorization` records each delivery or user-directed setup action
 independently. `not-authorized` is the default. Automatic setup of one normal
 branch from a clean protected default is recorded in
-`checkout_baseline.branch_setup` and never conveys delivery authority. An
-explicit `isolated` invocation may authorize planned local integration and
-worker resources and worker transfer commits, but not integration-branch
-commits, pushes, PRs, or merges. An explicit `PR` delivery token authorizes
-validated integration commits, the final integration-branch push, and one PR
-after all gates pass. Neither authorizes `merge`. Worker contracts must keep
-worker `push`, `create_pull_request`, `publish`, `deploy`, and `merge` actions
-not authorized.
+`checkout_baseline.branch_setup` and never conveys delivery authority. The
+canonical meanings of explicit `isolated`, guided `continue`/`go`, and `PR`
+authorization are owned by `../policies/delivery.md`; worker contracts must
+keep worker `push`, `create_pull_request`, `publish`, `deploy`, and `merge`
+actions not authorized.
 
 `delegation.allowed` defaults to `false`. When it is `true`, the contract must
 also define `max_depth`, `max_workers`, allowed roles, writable isolation, and
@@ -223,7 +220,9 @@ cannot reset or increase them.
   isolation alone does not isolate ports, databases, Docker projects, or
   external services
 - authorization may only transmit an explicit user instruction; a task
-  contract cannot create authority itself
+  contract cannot create authority itself. Canonical delivery and local-resource
+  authorization is owned by `../policies/delivery.md`; this contract records
+  the resulting per-action status.
 - authorization for one action never implies authorization for another action
 - `delivery_mode: GUIDED` must stop at declared review checkpoints unless the
   user resumes it; `delivery_mode: PR` may proceed without those checkpoints but
@@ -231,6 +230,11 @@ cannot reset or increase them.
 - workers must not push, create PRs, merge, publish, deploy, or create more
   worktrees unless separately authorized; isolated worker branches are local
   transfer resources only
+- explicit `isolated` selects a topology but does not pre-authorize concrete
+  resources; guided `continue` authorizes only the reviewed setup, while `go`
+  authorizes one reviewed central commit. Explicit `PR` authorizes the bounded
+  local setup, worker transfer commits, validated central commits, one final
+  push, and one final PR, never publication, deployment, or merge.
 - workers must not delegate when `delegation.allowed` is false or exceed its
   declared depth, worker, role, or isolation limits
 - the orchestrator evaluates the result against this contract before

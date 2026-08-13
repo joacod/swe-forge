@@ -3,100 +3,86 @@
 ## Objective
 
 Make safety-critical workflow boundaries executable without pretending that a
-shell helper can enforce agent reasoning. The canonical helper is:
+shell helper can enforce agent reasoning. The canonical helpers are:
 
 ```text
 .swe-forge/tools/swe-forge-gate
+.swe-forge/tools/swe-forge-isolated-gate
+.swe-forge/tools/swe-forge-state
 ```
 
-It is dependency-free, can be used by an adapter or a repository checkout, and
-keeps its evidence ledger outside the repository or under an already ignored
-`.swe-forge/runs/` path. The ledger is a supporting evidence artifact, not a
-replacement for the canonical run-state contract.
+They are dependency-free. The evidence ledger belongs outside the repository or
+under an already ignored `.swe-forge/runs/` path and supports, but does not
+replace, canonical run state.
 
-## Commands
+## Planned validation and exact content
 
-Run the commands from a clean, classified checkout and use a fresh temporary
-state directory for each run:
+Register the expected checks before executing them:
 
 ```sh
 .swe-forge/tools/swe-forge-gate preflight --state "$STATE" --branch "$BRANCH" --base "$BASE"
-.swe-forge/tools/swe-forge-gate validate \
-  --state "$STATE" --requirement required --name "structural checks" -- \
-  ./scripts/check-swe-forge
-.swe-forge/tools/swe-forge-gate checkpoint \
-  --state "$STATE" --scope .swe-forge/policies/** --scope README.md
-.swe-forge/tools/swe-forge-gate commit-slice \
-  --state "$STATE" --checkpoint 1 --message "Document evidence policy" \
-  --authorized-by PR
-.swe-forge/tools/swe-forge-gate review \
-  --state "$STATE" --result PASS --source fresh-context
+.swe-forge/tools/swe-forge-gate plan-check --state "$STATE" \
+  --name "structural checks" --requirement required --condition always
+.swe-forge/tools/swe-forge-gate validate --state "$STATE" \
+  --name "structural checks" -- ./scripts/check-swe-forge
+.swe-forge/tools/swe-forge-gate checkpoint --state "$STATE" \
+  --scope .swe-forge/policies/** --scope README.md
+.swe-forge/tools/swe-forge-gate commit-slice --state "$STATE" \
+  --checkpoint 1 --message "Document evidence policy" --authorized-by PR
+.swe-forge/tools/swe-forge-gate review --state "$STATE" \
+  --result PASS --source fresh-context
 .swe-forge/tools/swe-forge-gate deliver-pr --state "$STATE"
 ```
 
-The command boundaries are intentionally separate:
+The smallest interface is `plan-check`, `validate`, and
+`record-check-status`. A required check must pass. An applicable conditional
+check must pass; it may be recorded as not applicable only with a reason. An
+unavailable required or applicable conditional check blocks. Informational
+checks remain visible and do not block. `validate` and
+`record-check-status` reject unregistered check names. Receipts render the
+latest status per planned check; attempt history remains private.
 
-- `preflight` rejects dirty, detached, protected, or branch-drifted checkouts
-  and records the baseline. An explicit `--base REF` can record a clean
-  checkout whose already-created commits are being resumed and must be an
-  ancestor of the current HEAD.
-- `validate` executes one inspected local check, records its exit status, and
-  stores command output outside the repository. Use `--final` for every
-  required or conditional check run against the final HEAD.
-- `checkpoint` records changed paths and requires them to stay within the
-  declared scope with passing required and conditional evidence. It can record
-  either current worktree changes or committed changes since the recorded base
-  when a run is resumed after delivery work.
-- `commit-slice` stages only the paths recorded by a passing checkpoint and
-  requires explicit `PR` or guided `GO` authorization. It never pushes.
-- `review` records only the structured review result and finding counts; it
-  does not accept a review based on a transcript.
-- `deliver-pr` checks the final clean branch, current-HEAD validation, review,
-  and checkpoint evidence before external push or pull-request actions. It
-  never pushes or creates a pull request.
-- `receipt` renders a compact Markdown receipt without command output or
-  transcripts. A PR receipt requires the created PR URL.
+`validate` records the candidate fingerprint before and after the command. A
+normal command that changes candidate source content fails evidence binding. A
+mutation-producing check must declare its mutation scope and reason and binds
+to the post-command fingerprint. The deterministic fingerprint includes current
+`HEAD`, tracked staged/unstaged modifications, deletions, renames exposed by
+Git, sorted untracked paths, and content hashes for untracked files. It is
+computed with Git-native and POSIX tools and is not a changed-path list.
 
-Inspect every validation command for migrations, deployment, publication,
-credentials, production access, or shared-environment effects before running
-it. The helper records command results; it does not authorize external effects.
+A checkpoint records its exact path boundary and candidate fingerprint. Every
+required and applicable conditional check must pass for that fingerprint.
+`commit-slice` refuses candidate fingerprint drift, staged-tree drift, and path
+set drift. It never pushes.
 
-## Receipt rules
+The guard stores command output outside the repository and does not authorize
+migrations, deployment, publication, credentials, production access, or shared
+environment effects. It never launches agents or providers.
 
-A generated receipt may contain optional public run metadata when the
-orchestrator has structured evidence for it:
+## Receipts
+
+Receipts are generated only from structured evidence and actual Git state. They
+include:
 
 ```text
-## SWE Forge receipt
-Execution: SOLO
-Delivery: PR
-Run metadata:
-- SWE Forge: 0.1.0-alpha.1
-- Harness: Pi 0.84.1
-- Routing: AUTO -> SOLO
-- Provider: NONE
-- Routing reason: tightly coupled installer and receipt changes
-Base: abc123
-Commits: 4 (4 validated slices)
-Verification:
-- unit tests: passed
-- lint: passed
-Fresh review: PASS — 2 findings, 2 repaired
-Pull request: https://github.com/example/project/pull/1
-Final status: ACCEPTED
-Merge performed: no
+Head: <short final SHA>
+Evidence fingerprint: <short final fingerprint>
+Generated at: <UTC timestamp>
 ```
 
-The helper reports `BLOCKED` rather than `ACCEPTED` when required or
-conditional final checks are missing or failing, the checkout is dirty, the
-review is not `PASS` for the current HEAD, the branch is unsafe, or a PR URL is
-missing for `PR` delivery. Skipped and unavailable checks remain visible and do
-not become passes.
+`receipt-verify` is read-only and compares repository identity, current branch,
+current `HEAD`, current candidate fingerprint, and final evidence. A receipt
+created before a later commit or same-path content change is stale. Receipts
+never contain transcripts, raw logs, secrets, or private ticket content and
+never upgrade a blocked status by hand.
 
-Receipts are public evidence summaries, not proof that the review was
-independent or that a remote check passed. They must be generated from the
-ledger and actual Git state, contain no transcripts or secrets, and never be
-hand-edited to upgrade their status. Optional model, harness, and routing
-metadata must be omitted when unavailable or unsafe to publish. The canonical
-run state remains the source of truth for topology, authorization, worker
-state, and recovery.
+## Isolated guard
+
+`.swe-forge/tools/swe-forge-isolated-gate` is a narrow Git/evidence helper. It
+initializes isolated evidence state, registers actual integration and worker
+worktrees, validates the fixed worker-result bundle, enforces planned order,
+checks integration drift, applies a documented `cherry-pick --no-commit`
+transfer, records conflicts and source-to-integration mappings, reports
+recoverable state, and verifies cleanup eligibility. It does not control Herdr,
+launch agents, schedule work, push, create PRs, publish, deploy, merge, or
+force-clean.

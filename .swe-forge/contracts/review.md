@@ -19,8 +19,11 @@ scope:
   parallel_strategy: NONE | COMPOSE
   integration_strategy: NONE | CHERRY_PICK
   delivery_mode: GUIDED | PR
-  integration_branch: <one branch or none>
-  integration_worktree: <path or none>
+  delivery_checkout:
+    branch: <one integration/delivery branch or none>
+    path: <integration worktree or none>
+  integration_branch: <reference delivery_checkout.branch>
+  integration_worktree: <reference delivery_checkout.path>
   worker_resources_reviewed: []
 
 findings:

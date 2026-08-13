@@ -61,9 +61,21 @@ validate_registry() {
 
 sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
+  "$ROOT/scripts/test-swe-forge-isolated" \
   "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
-  "$ROOT/.swe-forge/tools/swe-forge-gate"
+  "$ROOT/.swe-forge/tools/swe-forge-gate" \
+  "$ROOT/.swe-forge/tools/swe-forge-state" \
+  "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
+  "$ROOT/scripts/swe-forge-state" \
+  "$ROOT/scripts/swe-forge-isolated-gate" \
+  "$ROOT/scripts/check-release"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-gate" ] || fail "evidence gate is not executable"
+[ -x "$ROOT/.swe-forge/tools/swe-forge-state" ] || fail "run-state validator is not executable"
+[ -x "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" ] || fail "isolated gate is not executable"
+[ -x "$ROOT/scripts/swe-forge-state" ] || fail "run-state wrapper is not executable"
+[ -x "$ROOT/scripts/swe-forge-isolated-gate" ] || fail "isolated gate wrapper is not executable"
+[ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
+[ -x "$ROOT/scripts/check-release" ] || fail "release checker is not executable"
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
 require_text 'fetch-depth: 0' .github/workflows/ci.yml
 require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
@@ -92,6 +104,33 @@ require_text 'scripts/swe-forge update' docs/installation.md
 require_text 'The manifest records' docs/installation.md
 require_text 'Run metadata:' .swe-forge/contracts/receipt.md
 require_text '--forge-version' .swe-forge/tools/swe-forge-gate
+require_text 'plan-check' .swe-forge/policies/evidence.md
+require_text 'record-check-status' .swe-forge/policies/evidence.md
+require_text 'candidate fingerprint' .swe-forge/policies/evidence.md
+require_text 'Head:' .swe-forge/contracts/receipt.md
+require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
+require_text 'Generated at:' .swe-forge/contracts/receipt.md
+require_text 'workflow_version: 1' .swe-forge/contracts/run-state.md
+require_text 'schema_version: 2' .swe-forge/contracts/run-state.md
+require_text 'invocation_checkout:' .swe-forge/contracts/run-state.md
+require_text 'delivery_checkout:' .swe-forge/contracts/run-state.md
+require_text 'isolated_eligibility:' .swe-forge/contracts/run-state.md
+require_text 'provider_capabilities:' .swe-forge/contracts/run-state.md
+require_text 'delivery_checkout:' .swe-forge/contracts/working-spec.md
+require_text 'delivery_checkout:' .swe-forge/contracts/review.md
+require_text 'schema-v1 evidence state is not resumable' .swe-forge/tools/swe-forge-gate
+require_text 'schema-v1 state is not resumable' .swe-forge/tools/swe-forge-state
+require_text 'result-bundle.md' .swe-forge/contracts/result.md
+require_text 'swe-forge-isolated-gate' .swe-forge/policies/evidence.md
+require_text 'result-bundle.md' .swe-forge/workflows/isolated-execution.md
+require_text 'capabilities-ref' .swe-forge/tools/swe-forge-isolated-gate
+require_text 'result/meta.tsv' .swe-forge/contracts/result-bundle.md
+require_text 'Do not use `eval`' .swe-forge/contracts/result-bundle.md
+require_text 'prepare' scripts/check-release
+require_text 'published' scripts/check-release
+require_text 'allow-dirty' scripts/check-release
+require_text 'remote tag evidence' scripts/check-release
+require_text 'macos-core:' .github/workflows/ci.yml
 
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
 require_text 'actions/workflows/ci.yml' README.md
@@ -132,6 +171,7 @@ require_text 'git-sync' .swe-forge/policies/delivery.md
 require_text 'one dedicated task branch' .swe-forge/policies/delivery.md
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text 'provider state is `MERGED`' .swe-forge/policies/delivery.md
+require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text '`go` to commit' SWE-FORGE.md
 require_text 'working_spec_ref:' .swe-forge/contracts/run-state.md
 require_text 'requirement: required' .swe-forge/contracts/task.md
@@ -156,7 +196,10 @@ require_text '/swe-forge isolated <ticket>' .swe-forge/workflows/ticket.md
 require_text 'The `herdr` topology token was removed' .swe-forge/workflows/ticket.md
 require_text 'use Herdr as the provider for this' .swe-forge/workflows/ticket.md
 require_text 'requested_provider: HERDR' .swe-forge/workflows/ticket.md
-require_text 'Automatic `ISOLATED` routing requires every condition' .swe-forge/policies/execution-routing.md
+require_text 'Hard isolated eligibility' .swe-forge/policies/execution-routing.md
+require_text 'Economic preference' .swe-forge/policies/execution-routing.md
+require_text 'Hard isolated eligibility' .swe-forge/policies/execution-routing.md
+require_text 'Economic preference' .swe-forge/policies/execution-routing.md
 require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
 require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
 require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
@@ -195,7 +238,7 @@ require_text 'worker-local transfer commit' .swe-forge/workflows/isolated-execut
 require_text 'Completion order never determines integration order' .swe-forge/workflows/isolated-execution.md
 require_text 'integrated-state validation' .swe-forge/workflows/isolated-execution.md
 require_text 'never use forced removal automatically' .swe-forge/workflows/isolated-execution.md
-require_text 'evidence_ledger_ref:' .swe-forge/contracts/run-state.md
+require_text 'validation_ref:' .swe-forge/contracts/run-state.md
 require_text 'receipt_ref:' .swe-forge/contracts/run-state.md
 
 while IFS='|' read -r file action; do

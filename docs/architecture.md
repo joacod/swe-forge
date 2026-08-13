@@ -3,13 +3,41 @@
 SWE Forge is a portable specification layer above coding harnesses. Its
 architecture separates canonical workflow logic from role definitions,
 contracts, policies, execution providers, and harness integrations. Execution
-topology, execution provider, and delivery mode are orthogonal:
+topology, provider, and delivery are orthogonal:
 
-- topology controls coordination (`SOLO`, `SUBAGENTS`, or `ISOLATED`)
-- provider supplies isolated lifecycle capabilities only when `ISOLATED` is
-  selected (`NATIVE`, optional `HERDR`, or `NONE` for non-isolated runs)
-- delivery controls human checkpoints and authorized repository delivery
-  (`GUIDED` or `PR`)
+- topology controls coordination: `SOLO`, `SUBAGENTS`, or `ISOLATED`
+- provider supplies isolated lifecycle capabilities only after hard eligibility:
+  `NATIVE` or optional `HERDR` (`NONE` for non-isolated runs)
+- delivery controls human checkpoints and authorized repository delivery:
+  `GUIDED` or `PR`
+
+## Canonical ownership and load map
+
+```text
+activation and lifecycle -> SWE-FORGE.md
+ticket procedure -> workflows/ticket.md
+isolated operational sequence -> workflows/isolated-execution.md
+routing eligibility -> policies/execution-routing.md
+provider capability -> policies/provider-selection.md
+authorization and delivery -> policies/delivery.md
+evidence semantics -> policies/evidence.md
+data shapes -> contracts/*
+provider command translation -> providers/*
+harness loading -> adapters/*
+```
+
+This map is normative for ownership. Files outside the owner summarize or
+reference the rule; they do not redefine low-level behavior.
+
+Minimal load sets:
+
+- `SOLO`: `SWE-FORGE.md`, `workflows/ticket.md`, orchestrator role, relevant
+  verification/evidence/delivery policy and contracts
+- `SUBAGENTS`: the `SOLO` set plus task/result/review contracts and the
+  relevant researcher, implementer, test, or reviewer roles
+- `ISOLATED`: the `SUBAGENTS` set plus execution-routing, provider-selection,
+  delivery, run-state, result-bundle, isolated-execution, the selected
+  provider runbook, and the isolated Git/evidence guard
 
 ## Layers
 
@@ -17,15 +45,12 @@ topology, execution provider, and delivery mode are orthogonal:
                               User
                                 |
                       explicit "Use SWE Forge"
-                                |
                                 v
                          SWE-FORGE.md
-                      canonical workflow layer
                                 |
         +-----------------------+-----------------------+
         |                       |                       |
    role specs              contracts                 policies
-        |                       |                       |
         +-----------------------+-----------------------+
                                 |
                          root orchestrator
@@ -33,271 +58,117 @@ topology, execution provider, and delivery mode are orthogonal:
        +----------------+-------+----------------+
        |                |                        |
      SOLO           SUBAGENTS                ISOLATED
-   one context    native read-only or       isolated writable
-                  sequential writers       execution environments
+   one context    read-only or               isolated writable
+                  sequential writers        worktrees
                                                 |
                                   +-------------+-------------+
                                   |                           |
                               NATIVE                       HERDR
-                         harness worktrees        optional provider panes,
-                           when demonstrable      sessions, and worktrees
+                         harness capability          optional provider
                                                 |
                          central integration and delivery
-                                                |
-                                   verify, review, result
 ```
 
-`NATIVE` and `HERDR` are providers, not additional topology branches. The
-workflow remains portable even when a particular harness cannot provide
-`ISOLATED`; routing records the limitation and falls back safely or blocks.
+Providers are not topology branches. The orchestrator remains accountable for
+foundation, Git/evidence validation, central integration, final verification,
+review, delivery, and cleanup.
 
-## Canonical Layer
+## Routing boundary
 
-`SWE-FORGE.md` owns activation, topology principles, provider/delivery
-orthogonality, lifecycle, acceptance, failure boundaries, and final reporting.
-The ticket procedure is loaded from `.swe-forge/workflows/ticket.md` after
-explicit activation. It loads `.swe-forge/workflows/isolated-execution.md` only
-after routing selects `ISOLATED` and provider selection records the provider
-boundary.
+Hard isolated eligibility requires at least two composable writable tasks,
+satisfied dependencies, non-overlapping ownership, one owner for shared and
+generated artifacts, a stable foundation, independent acceptance criteria,
+realistic worker validation, safely isolated runtime resources, and one central
+integrator. An explicit isolated request cannot bypass these conditions. When a
+condition fails, safely downgrade to `SUBAGENTS` or `SOLO`, or return
+`BLOCKED` when required isolation would be lost.
 
-`AGENTS.md` is intentionally small. It tells compatible agents that Forge
-exists and prevents automatic activation. `CLAUDE.md` only imports `AGENTS.md`
-for Claude Code compatibility.
+Automatic routing separately records economic parallel value: `beneficial`,
+`marginal`, or `unknown`. Explicit selection may override only that economic
+preference. At most two writable workers run concurrently by default.
 
-## Role Layer
-
-Roles in `.swe-forge/agents/` describe responsibilities, permissions,
-constraints, and output expectations in harness-neutral Markdown. They are not
-native agent configuration files. A harness adapter may wrap a role with native
-frontmatter, but the wrapper must load the canonical role rather than copy it.
-
-The orchestrator is the hub. Workers do not form an unrestricted peer network
-or own final acceptance. An execution provider may supervise lifecycle state,
-but provider state is scheduling evidence only.
-
-Optional specialist skills are domain playbooks loaded on demand. They may
-inform architecture, implementation, or review, but they do not own a task,
-override canonical instructions, or authorize delivery actions. Keep their
-bundled references and tooling subject to the same scope and validation gates.
-
-## Contract Layer
-
-Contracts make coordination explicit without using agent conversation as shared
-state:
-
-- task contracts bind objective, ownership, scope, dependencies, exact bases,
-  waves, shared-artifact owners, environment isolation, acceptance, validation,
-  checkout identity, recursive delegation, and per-action authorization
-- worker results expose status, provider/branch/worktree identity, base and head
-  SHAs, local transfer commits, files, validation, scope exceptions, checkout
-  cleanliness, environment resources, assumptions, risks, and follow-ups
-- review results expose severity, confidence, location, evidence, integration
-  mappings, and action
-- receipt contracts define the compact public evidence summary and its
-  non-claiming rules
-- run state records temporary topology/provider and delivery mode, integration
-  branch/worktree, ephemeral worker resources, tasks and dependencies, waves,
-  source-to-integration mappings, authorization, validation, review, retries,
-  environment resources, checkpoints, and cleanup
-
-Run state is external or ignored by default. It is not application source and
-must not contain secrets or full transcripts. The integration/delivery branch
-is distinct from ephemeral worker branches; worker transfer commits are
-distinct from final central integration commits. An optional executable
-evidence ledger records preflight, validation, checkpoints, and receipts
-without becoming a second source of truth.
-
-## Policy Layer
-
-Policies define how to route, select a provider, delegate, select capability
-classes, specify, deliver, verify, record evidence, and recover. They are
-deliberately separate from role descriptions so a routing or human-control
-change does not silently redefine worker responsibilities.
-
-`execution-routing.md` defines the automatic `ISOLATED` gate and the distinction
-between read-only/sequential `SUBAGENTS` and concurrent writable isolated
-worktrees. `provider-selection.md` defines demonstrable native capabilities,
-optional Herdr benefits and guard, and conservative fallback. The only isolated
-v1 strategy is `COMPOSE`; the orchestrator integrates worker transfer artifacts
-using the planned `CHERRY_PICK` behavior.
-
-## Execution Topologies
-
-`SOLO` is a complete workflow with one context, not a shortcut around
-verification. `SUBAGENTS` uses native workers for independent read-only work or
-sequential bounded writable delegation in one checkout. Concurrent writable
-workers with separate worktrees are `ISOLATED`, even when a harness provides
-the worktrees natively.
-
-`ISOLATED` is used when concurrent writable work requires separate execution
-environments. SWE Forge may use native harness worktree agents or Herdr as the
-provider. It still produces one integration branch and one final PR.
-
-The automatic isolated gate requires two ready writable tasks, satisfied
-dependencies, non-overlapping scopes, explicit shared-artifact ownership,
-independent acceptance and validation, a stable foundation, safe runtime
-resources, material critical-path benefit, and one accountable orchestrator.
-Shared schemas, migrations, unsettled architecture, unsafe resources, root
-lockfile conflicts, frequent cross-worker decisions, one ordered reasoning
-chain, unverified submodules, or excessive integration overhead require
-serialization.
-
-## Isolated Integration Boundary
-
-An isolated ticket uses:
+## Isolated integration boundary
 
 ```text
-original checkout (untouched)
-  -> one run-owned integration worktree
-  -> one safe integration/delivery branch
-  -> wave 0 shared foundation
-  -> wave 1..N local-only worker branches/worktrees
-  -> planned central integration order
-  -> one final pushed branch and one PR
+invocation checkout (untouched)
+  -> one orchestrator-owned integration/delivery worktree
+  -> one non-protected integration branch
+  -> shared foundation
+  -> wave of local-only worker branches/worktrees
+  -> fixed machine-valid result bundles
+  -> planned central transfer order
+  -> central validation and integration commits
+  -> one pushed integration branch and one final PR
 ```
 
-Every worker gets a dedicated worktree, local branch, exact base SHA, bounded
-task contract, and no integration-checkout or delivery authority. At most two
-concurrent writable workers are used by default. All workers in a wave start
-from the same integration `HEAD`; wave barriers wait for every result, verify
-Git and validation evidence, integrate in dependency/plan order, and run
-wave-level validation before launching the next wave. Completion order never
-determines integration order.
+Run state distinguishes `invocation_checkout` from `delivery_checkout`; the
+latter is the sole writable checkout owning final commits. Worker resources are
+recorded only under `workers`. Completion order never determines integration
+order. Source-to-integration mappings are recorded after central validation.
 
-The orchestrator applies worker transfer commits without immediately finalizing
-the central commit, validates the integrated state, creates the final
-repository-appropriate commit, and records the source-to-integration mapping.
-It does not blindly merge branches or copy worktrees. A conflict among tasks
-classified as independent is a decomposition error to preserve and re-evaluate,
-not a silent-resolution opportunity.
+The fixed worker bundle is `result/meta.tsv`, `commits.txt`, `files.txt`,
+`validations.tsv`, `scope-exceptions.txt`, `staged.txt`, `unstaged.txt`,
+`untracked.txt`, and `resources.tsv`. The isolated Git/evidence guard verifies
+actual worktree/branch identity, exact base/head, commit range, paths, scope,
+cleanliness, fingerprints, planned checks, integration order, conflict
+restoration, mappings, remote refs, and cleanup eligibility. It never launches
+agents, controls Herdr, pushes, creates PRs, publishes, deploys, merges, or
+force-cleans.
 
-## Environment and Shared Artifacts
+## Delivery and evidence
+
+`policies/delivery.md` is the sole owner of local-resource and delivery
+authorization. In `GUIDED`, explicit isolated selection creates only a plan;
+`continue` authorizes the exact setup and `go` authorizes one reviewed central
+commit. Neither permits push, PR, publication, deployment, or merge. `PR`
+authorizes the accepted local setup, worker transfer commits, validated central
+commits, one final push, and one final PR, never publication, deployment, or
+merge. Other files reference this rule rather than redefining it.
+
+`policies/evidence.md` owns evidence semantics. The executable gate registers
+planned checks, binds validation/checkpoints/commits to exact candidate
+fingerprints, rejects undeclared mutations and missing/unavailable required
+checks, and renders latest statuses. Receipts include final `Head`, evidence
+fingerprint, and UTC generation time; read-only verification detects stale
+receipts.
+
+## Environment and shared artifacts
 
 Worktrees do not isolate ports, databases, Docker projects, temporary paths,
-external services, credentials, or Git refs. Isolated plans record setup
-commands, explicitly allowlisted ignored files, unique resources, external
-effects, and cleanup commands. Setup commands are inspected before execution;
-migrations and shared persistent environments need separate authorization.
+external services, credentials, or Git refs. Plans record allowlisted ignored
+files, unique runtime resources, setup side effects, and cleanup. Shared
+schemas, contracts, root lockfiles, generated artifacts, changelogs, and
+versions have one explicit owner.
 
-Root lockfiles, shared type indexes, generated clients, schemas, snapshots,
-migration registries, root exports, changelogs, and version files have one
-explicit owner. Prefer package-local worker ownership and central integration
-ownership for shared generated artifacts.
+## Providers and adapters
 
-## Delivery Modes
+Providers live under `.swe-forge/providers/`. Herdr is optional, requires its
+existing `HERDR_ENV=1` ownership guard, and its lifecycle state is scheduling
+evidence only. Native selection requires structured proof of all mandatory
+capabilities; harnesses may expose them differently and no universal launcher
+is implied.
 
-Delivery is orthogonal to topology and provider:
+Adapters under `.swe-forge/adapters/` are thin loaders. The registry is the
+installation source of truth, and adapters must resolve canonical references
+from the active installation root rather than a project-local `.swe-forge/`
+tree. The adapter catalog is not installed into target projects.
 
-- `GUIDED` is the default human-control path. For normal work it creates or
-  reuses one task branch; for `ISOLATED` it shows a setup checkpoint before
-  multiple worker resources and keeps one integration/delivery branch. `go`
-  commits the reviewed current central slice; push, PR, and merge remain
-  separate actions.
-- `PR` is an explicit low-touch path. It creates a transient working spec when
-  needed, commits each validated slice or central integration unit separately,
-  runs required verification and fresh review, then pushes one delivery branch
-  and creates one concise PR. It never merges.
-
-An explicit `isolated` token authorizes bounded local integration and worker
-resources and local worker transfer commits, not integration-branch commits,
-pushes, PRs, or merges. An explicit `PR` token authorizes validated central
-commits, the final push, and one PR. Worker branches never receive delivery
-actions.
-
-The canonical delivery policy owns branch/worktree setup, action
-authorization, PR history and descriptions, compact receipt placement, central
-integration, cleanup, and
-the post-merge `git-sync` boundary. Harness commands and prompts are thin
-loaders, so pushing cannot accidentally create a PR or syncing cannot assume
-that a PR was merged.
-
-## Provider Boundary
-
-Providers are documented under `.swe-forge/providers/`, not under harness
-adapters. Herdr is optional and must not be installed automatically. It does
-not define SWE Forge behavior or replace the coding harness. Its control
-commands require `HERDR_ENV=1`; its lifecycle state is scheduling evidence
-only. Structured worker results, Git evidence, validation, and central
-integration remain authoritative.
-
-A native harness can satisfy the same provider contract when it can launch at
-least two concurrent writable worktree workers from exact bases, keep them out
-of the integration checkout, return structured results, expose wait/inspect/
-cancel/cleanup, and leave integration with the root orchestrator. If neither
-provider can preserve required isolation, route to sequential `SUBAGENTS` or
-`SOLO` when safe or return `BLOCKED`.
-
-## Adapter Boundary
-
-Adapters under `.swe-forge/adapters/` expose canonical behavior through current
-harness features. The `registry.tsv` file is the installation source of truth:
-it maps one harness and scope to an artifact kind, source payload, destination,
-and optional global canonical support directory.
-
-The installer consumes the registry generically for preflight, link/copy,
-verification, and collision handling. Registry rows are validated as managed
-relative paths before any target is written, so a malformed adapter cannot
-redirect an installation outside its selected destination. Adding a harness
-should normally add a payload folder and registry rows rather than new
-installer branches.
-
-Adapter artifacts may be:
-
-- explicit commands, skills, or prompt templates that load the canonical
-  workflow
-- native role bridges that load one portable role
-- shared projections such as the Agent Skill package used by Codex and Cursor
-- host capability documentation that does not redefine provider behavior
-
-Permissions, models, and capability mappings remain host-owned. An adapter may
-be incomplete without affecting natural-language activation, which keeps the
-portable repository usable in a harness with no native command, subagent, or
-isolated-worker support. The adapter catalog is source-only; project
-installations receive only the selected projection.
-
-## State Flow
+## State flow
 
 ```text
-ticket and raw invocation
-  -> parsed modes/providers and immutable original ticket
-  -> acceptance criteria and assumptions
-  -> transient working spec when PR mode needs alignment
-  -> evidence and architecture
-  -> foundation and bounded task graph or guided review slices
-  -> topology and provider decision
-  -> one normal task branch or one isolated integration branch/worktree
-  -> optional isolated worker waves and structured results
-  -> central integration, mappings, and wave validation
-  -> quality gates
-  -> fresh review
-  -> repair if needed
-  -> authorized commits, one push, and one PR when applicable
-  -> verified human merge and explicit post-merge sync
-  -> final acceptance report and conservative cleanup
+ticket/raw invocation
+  -> parsed modes and immutable raw ticket
+  -> acceptance and transient PR working spec
+  -> architecture, ownership, and validation plan
+  -> hard/economic routing and provider evidence
+  -> one task or integration/delivery checkout
+  -> bounded implementation or isolated waves
+  -> exact-content evidence and central integration
+  -> repository checks and fresh review
+  -> authorized delivery actions
+  -> one final report and conservative cleanup
 ```
 
-The original ticket remains authoritative at every step. A transient working
-spec may organize intent, scenarios, assumptions, and validation, but it is
-never committed or treated as a second source of truth. Worker summaries,
-provider lifecycle state, stale run state, and model confidence cannot override
-final diff inspection and integrated verification.
-
-## Extensibility
-
-The repository currently has one general ticket workflow and one conditional
-isolated-execution workflow. Add another workflow only when real tickets
-demonstrate that a distinct lifecycle and acceptance strategy is worth
-maintaining.
-
-Optional specialist skills are a separate extension path for guidance that is
-useful on some tickets but too specific for the default context. Keep
-third-party skills outside the canonical tree and expose them through thin,
-explicitly invoked harness loaders when useful. Do not add an installer registry
-entry or permanent workflow phase until representative tickets demonstrate a
-repeatable benefit.
-
-Harness compatibility should prefer a shared projection when vendors support
-the same standard. Keep vendor-specific files only for native syntax or
-behavior that cannot be represented by the shared artifact. `ISOLATED` is
-portable as a workflow contract, not a promise that every harness has the
-required provider capability.
+Run state is temporary or ignored and schema-v2 only. A discovered schema-v1
+state is rejected with a compatibility message; it is never guessed into a
+new shape.

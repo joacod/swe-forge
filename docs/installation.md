@@ -4,9 +4,9 @@ SWE Forge is a portable repository first. Keep one stable clone as the source
 of truth and install links to that checkout. Installation into another project
 or global harness configuration is always an explicit user action.
 
-The repository includes a dependency-free installer. The public alpha example
-pins the source checkout to `v0.1.0-alpha.1`; use a `main` checkout only for
-personal development:
+The repository includes a dependency-free installer. The first alpha tag
+`v0.1.0-alpha.1` is reserved but not currently published; use a `main` checkout
+only for personal development until the tag is available:
 
 ```bash
 scripts/swe-forge version
@@ -32,13 +32,18 @@ repository, folder, or `global`. Non-interactive callers must use `--target` or
 
 ## Recommended Installation
 
-Keep a tagged source checkout at a stable path:
+After the first alpha tag is published, keep a tagged source checkout at a
+stable path:
 
 ```bash
+# Usable after v0.1.0-alpha.1 is published:
 git clone --branch v0.1.0-alpha.1 --depth 1 \
   https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
 ```
+
+Before publication, use a development clone without claiming that the tag is
+downloadable.
 
 For development-only checkouts, `git pull` may follow `main`. Do not use a
 mutable development checkout in public installation instructions.
@@ -185,7 +190,9 @@ or other personal configuration. It stops on conflicts instead of replacing
 them.
 
 Do not commit generated global support directories, machine-specific paths,
-credentials, local model IDs, or personal run state.
+credentials, local model IDs, or personal run state. Run
+`scripts/check-release prepare` for release-readiness evidence; tag and release
+publication remain manual.
 
 ## Lifecycle commands
 

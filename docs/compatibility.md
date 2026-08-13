@@ -18,6 +18,11 @@ configuration. Harnesses should be treated as supported when their current
 instruction, command, skill, or Agent Skill behavior matches the documented
 adapter contract and the installation smoke test succeeds.
 
+The dependency-free core is checked on Ubuntu and macOS in CI, including
+shell syntax, structural checks, executable evidence, isolated-worktree
+fixtures, release-readiness preparation, and diff formatting. Windows is not a
+claimed compatibility target.
+
 For a new harness release, run the repository checks, install the relevant
 projection in a disposable target, run `status` and `doctor`, and invoke a
 small explicit `/swe-forge <ticket>` (or the harness equivalent) before relying

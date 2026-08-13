@@ -1,0 +1,187 @@
+#!/bin/sh
+
+# Dependency-free structural validator for SWE Forge run-state schema v2.
+# It deliberately rejects schema-v1 state instead of guessing a migration.
+
+set -eu
+
+PROGRAM=${0##*/}
+TAB=$(printf '\t')
+NEWLINE='
+'
+
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  swe-forge-state validate --state FILE|DIRECTORY
+
+The validator accepts only workflow_version 1 / schema_version 2 state.
+Schema-v1 state must be explicitly migrated by a higher-level workflow.
+EOF
+}
+
+control_chars() {
+  case "$1" in
+    *"$TAB"*|*"$NEWLINE"*)
+      fail "state contains unsupported tab or newline data" ;;
+  esac
+}
+
+state_file() {
+  value=$1
+  control_chars "$value"
+  if [ -d "$value" ] && [ ! -L "$value" ]; then
+    value=$value/run-state.yaml
+  fi
+  [ -f "$value" ] || fail "run-state file does not exist: $value"
+  printf '%s\n' "$value"
+}
+
+top_level() {
+  key=$1
+  file=$2
+  awk -v wanted="$key" '
+    $0 ~ "^" wanted ":([[:space:]]|$)" { found=1; count++ }
+    END { if (count == 1) exit 0; exit 1 }
+  ' "$file"
+}
+
+nested_key() {
+  section=$1
+  key=$2
+  file=$3
+  awk -v section="$section" -v wanted="$key" '
+    /^[^[:space:]#][^:]*:/ { current=$1; sub(/:$/, "", current); next }
+    current == section && $0 ~ "^  " wanted ":([[:space:]]|$)" { found=1; count++ }
+    END { if (count == 1) exit 0; exit 1 }
+  ' "$file"
+}
+
+lifecycle_key() {
+  key=$1
+  file=$2
+  awk -v wanted="$key" '
+    /^[^[:space:]#][^:]*:/ { current=$1; sub(/:$/, "", current); next }
+    current == "provider_capabilities" && $0 ~ "^    " wanted ":([[:space:]]|$)" { found=1; count++ }
+    END { if (count == 1) exit 0; exit 1 }
+  ' "$file"
+}
+
+value_for() {
+  key=$1
+  file=$2
+  awk -v wanted="$key" '$1 == wanted ":" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$file"
+}
+
+validate_sha_field() {
+  field=$1
+  value=$2
+  case "$value" in
+    ''|*[!0123456789abcdefABCDEF]*) fail "$field is not a hexadecimal SHA" ;;
+  esac
+  [ "${#value}" -eq 40 ] || fail "$field must contain a full 40-character SHA"
+}
+
+validate_state() {
+  file=$(state_file "$1")
+
+  if grep -Eq '^[[:space:]]*version:[[:space:]]*1([[:space:]]|$)' "$file"; then
+    fail "schema-v1 state is not resumable; migrate it explicitly to schema_version: 2"
+  fi
+  if grep -Eq '^[[:space:]]*checkout:[[:space:]]*$' "$file"; then
+    fail "legacy checkout identity is not accepted; use invocation_checkout and delivery_checkout"
+  fi
+
+  for key in workflow workflow_version schema_version invocation_checkout delivery_checkout \
+    isolated_eligibility parallel_value provider_capabilities delivery; do
+    top_level "$key" "$file" || fail "schema-v2 state is missing top-level key: $key"
+  done
+
+  [ "$(value_for workflow "$file")" = swe-forge ] || fail "workflow must be swe-forge"
+  [ "$(value_for workflow_version "$file")" = 1 ] || fail "workflow_version must be 1"
+  [ "$(value_for schema_version "$file")" = 2 ] || \
+    fail "schema-v2 state is required (schema_version must be 2)"
+
+  for key in path branch head_sha classification mutation_allowed baseline_ref; do
+    nested_key invocation_checkout "$key" "$file" || \
+      fail "invocation_checkout is missing $key"
+  done
+  for key in path branch kind base_sha head_sha checkpoint_sha status branch_setup \
+    remote_default_evidence; do
+    nested_key delivery_checkout "$key" "$file" || \
+      fail "delivery_checkout is missing $key"
+  done
+  for key in status evidence_ref blockers; do
+    nested_key isolated_eligibility "$key" "$file" || \
+      fail "isolated_eligibility is missing $key"
+  done
+  for key in status rationale overridden_by_user; do
+    nested_key parallel_value "$key" "$file" || \
+      fail "parallel_value is missing $key"
+  done
+  for key in concurrent_writable_workers dedicated_worktrees exact_base_sha \
+    integration_checkout_protection structured_results central_integration; do
+    nested_key provider_capabilities "$key" "$file" || \
+      fail "provider_capabilities is missing $key"
+  done
+  for key in wait inspect cancel cleanup; do
+    lifecycle_key "$key" "$file" || \
+      fail "provider_capabilities.lifecycle is missing $key"
+  done
+
+  for field in invocation_checkout_head_sha delivery_checkout_base_sha \
+    delivery_checkout_head_sha delivery_checkout_checkpoint_sha; do
+    case "$field" in
+      invocation_checkout_head_sha) value=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file") ;;
+      delivery_checkout_base_sha) value=$(awk '$1 == "base_sha:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file") ;;
+      delivery_checkout_head_sha) value=$(awk '$1 == "head_sha:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file") ;;
+      delivery_checkout_checkpoint_sha) value=$(awk '$1 == "checkpoint_sha:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file") ;;
+    esac
+    case "$value" in
+      ''|null|none|NONE) ;;
+      *) validate_sha_field "$field" "$value" ;;
+    esac
+  done
+
+  kind=$(awk '$1 == "kind:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
+  case "$kind" in task|integration) ;; *) fail "delivery_checkout.kind must be task or integration" ;; esac
+  classification=$(awk '$1 == "classification:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
+  case "$classification" in writable|protected|detached|unclassifiable) ;; *) fail "invalid invocation checkout classification" ;; esac
+  mutation_allowed=$(awk '$1 == "mutation_allowed:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
+  case "$mutation_allowed" in true|false) ;; *) fail "invocation_checkout.mutation_allowed must be true or false" ;; esac
+
+  printf 'PASS: schema-v2 run state is structurally valid: %s\n' "$file"
+}
+
+main() {
+  [ "$#" -gt 0 ] || { usage >&2; exit 2; }
+  command=$1
+  shift
+  case "$command" in
+    validate)
+      state=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --state)
+            [ "$#" -ge 2 ] || fail "--state requires a file or directory"
+            state=$2
+            shift 2
+            ;;
+          -h|--help) usage; exit 0 ;;
+          *) fail "unknown validate option: $1" ;;
+        esac
+      done
+      [ -n "$state" ] || fail "--state is required"
+      validate_state "$state"
+      ;;
+    -h|--help) usage ;;
+    *) fail "unknown command: $command" ;;
+  esac
+}
+
+main "$@"

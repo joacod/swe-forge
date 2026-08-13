@@ -1,107 +1,73 @@
 # Isolated Execution-Provider Selection Policy
 
-## Objective
-
-Select the smallest trustworthy provider for an already selected
-`execution_mode: ISOLATED`. This policy does not select the topology, define
-SWE Forge behavior, authorize delivery, or replace the coding harness.
-
-Record these fields in run state and the isolated plan:
+Use this policy only after hard routing eligibility selects
+`execution_mode: ISOLATED`. It defines capability evidence, not workflow
+behavior or delivery authorization.
 
 ```yaml
 requested_provider: AUTO | NATIVE | HERDR | NONE
 execution_provider: NATIVE | HERDR | NONE
-provider_reason: <why this provider satisfies the isolated-execution requirements>
+provider_reason: <evidence-backed reason>
 parallel_strategy: NONE | COMPOSE
 integration_strategy: NONE | CHERRY_PICK
 ```
 
-`execution_provider` applies only to `ISOLATED`. For `SOLO` and `SUBAGENTS`,
-record `execution_provider: NONE`, `parallel_strategy: NONE`, and
-`integration_strategy: NONE`. Isolated v1 supports only `COMPOSE`: several
-non-overlapping worker results contribute to one integrated result. Its only
-integration strategy is `CHERRY_PICK` as a behavioral description of applying
-worker transfer commits in planned order. Do not add alternative
-implementations, best-of-N, stacked PRs, or `SELECT_ONE`.
+## Mandatory capability evidence
 
-## NATIVE
+Before selecting `NATIVE` or `HERDR`, prove every required capability:
 
-Prefer `NATIVE` when the current coding harness can demonstrably:
-
-- launch at least two concurrent writable workers
-- give every worker a dedicated Git worktree
-- create every worker from the exact requested integration commit
-- keep workers from writing to the integration checkout
-- return structured task results
-- expose enough lifecycle control to wait, inspect, cancel, and clean workers
-- leave final integration under the root orchestrator
-
-A native provider may be a harness capability, not a separate service. Native
-read-only subagents that cannot provide these writable isolation guarantees do
-not satisfy `ISOLATED`; use `SUBAGENTS` instead.
-
-## HERDR
-
-Prefer `HERDR` only when it is safely available and one or more of these
-materially helps the ticket:
-
-- the native harness lacks required isolated-worker capabilities
-- different harnesses or models are intentionally used for different tasks
-- persistent panes, servers, tests, or sessions are useful
-- visible interactive worker panes are valuable
-- stronger process supervision or remote reattachment is useful
-- the user explicitly prefers Herdr as the provider
-
-Herdr is optional. It does not define SWE Forge behavior, replace the coding
-harness, or authorize delivery. Do not install it automatically. An official
-Herdr skill may be used when it is already installed and the user or harness
-makes it available. Before Herdr control commands, require the existing
-ownership guard:
-
-```bash
-test "${HERDR_ENV:-}" = 1
+```yaml
+provider_capabilities:
+  concurrent_writable_workers: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+  dedicated_worktrees: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+  exact_base_sha: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+  integration_checkout_protection: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+  structured_results: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+  lifecycle:
+    wait: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+    inspect: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+    cancel: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+    cleanup: {status: proven | unavailable | unknown, evidence_ref: <ref>}
+  central_integration: {status: proven | unavailable | unknown, evidence_ref: <ref>}
 ```
 
-Herdr lifecycle state is scheduling evidence only. Structured worker results,
-branch and worktree Git evidence, worker and integrated validation, and central
-orchestrator integration remain authoritative. See
-`.swe-forge/providers/herdr/README.md` and `runbook.md` for the provider-specific
-coordination boundary.
+Prefer `NATIVE` when every mandatory capability is proven and no material
+provider-specific reason favors Herdr. Do not select `NATIVE` while any
+mandatory capability is `unknown` or `unavailable`. A native read-only worker does not prove isolated writable
+capabilities. `NATIVE` must be able to create at least two concurrent writable
+workers from one exact integration SHA, keep them out of the integration
+checkout, return structured results, expose wait/inspect/cancel/cleanup, and
+leave integration to the orchestrator.
 
-## Selection
+`HERDR` requires `test "${HERDR_ENV:-}" = 1` and the provider's own capability
+proof. It may be preferred when separate processes/harnesses, visible panes,
+persistent sessions, stronger supervision, or explicit user preference
+materially helps. A natural-language request such as "use Herdr as the provider for this isolated run" records `requested_provider: HERDR`. Herdr is optional, never installed automatically, and never authorizes delivery. Its existing documentation and ownership guard remain
+canonical under `.swe-forge/providers/herdr/`.
 
-1. Record `requested_provider`. A natural-language provider preference (for
-   example, "use Herdr as the provider for this isolated run") is separate
-   from any topology token. The former topology token `herdr` is not accepted
-   as an alias; return migration guidance to use `isolated` and ask for Herdr as
-   a provider preference.
-2. Verify the selected provider's capabilities against the task contract and
-   the current integration commit.
-3. Prefer `NATIVE` when it satisfies every required isolated-worker capability
-   and no material provider-specific reason favors Herdr.
-4. Prefer `HERDR` when it passes the ownership guard and one or more listed
-   benefits materially improves safe execution.
-5. Record `execution_provider`, `provider_reason`,
-   `parallel_strategy: COMPOSE`, and `integration_strategy: CHERRY_PICK` before
-   creating worker resources.
-6. Keep the root orchestrator accountable for foundation, integration, final
-   validation, review, and delivery.
+## Native provider runbook
 
-Do not select a provider merely because it is installed, because the ticket is
-large, because many files are involved, or because strong context isolation is
-appealing. Do not create a generic provider shim that reports lifecycle events
-without reliable isolation, result collection, cancellation, and cleanup.
+The native provider boundary is deliberately harness-specific:
+
+1. The harness proves each capability with its documented operation or an
+   executable fixture; installation alone is not proof.
+2. The root orchestrator records evidence and creates the exact local plan.
+3. The provider/harness launches only bounded workers from the recorded base,
+   returns the fixed worker-result bundle, and exposes its actual lifecycle
+   operations.
+4. The root orchestrator owns Git/evidence validation, central integration,
+   final validation, review, delivery, and cleanup.
+5. If a harness cannot expose one required operation, record `unavailable` or
+   `unknown` and fall back rather than pretending the operation exists.
+
+No provider-independent agent launcher is implied. Harnesses may expose
+capabilities differently; this contract does not claim that every harness has
+an equivalent operation.
 
 ## Fallback
 
-If neither `NATIVE` nor `HERDR` can supply the required isolation:
-
-- fall back to sequential `SUBAGENTS` or `SOLO` when safe
-- return `BLOCKED` when the ticket requires isolation and falling back would
-  lose it
-- record the requested mode, requested provider, provider limitation,
-  selected fallback, and why it is safe or blocked
-
-A provider failure never permits concurrent writable workers in one checkout.
-Changing provider or topology requires the orchestrator to preserve the task
-contracts, re-evaluate the gate, and record the change in run state.
+If no provider can safely satisfy the contract, fall back to sequential
+`SUBAGENTS` or `SOLO` when isolation is not required, or return `BLOCKED` when
+required isolation would be lost. Record the requested provider, evidence gap,
+selected fallback, and reason. Never place concurrent writable workers in one
+checkout.

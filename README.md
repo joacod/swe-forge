@@ -23,14 +23,19 @@ fallback.
 
 ## Install
 
-For the experimental `v0.1.0-alpha.1` release, pin the source checkout rather
-than following mutable `main`:
+For the eventual experimental `v0.1.0-alpha.1` release, pin the source
+checkout after the tag is published. The tag is not currently published;
+`main` is development-only:
 
 ```bash
+# Usable after v0.1.0-alpha.1 is published:
 git clone --branch v0.1.0-alpha.1 --depth 1 \
   https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
 ```
+
+For development before publication, clone the repository normally and treat
+that checkout as development-only.
 
 For development, a personal checkout may follow `main`, but public
 installations should use a release tag. For Pi, install the global prompt
@@ -51,7 +56,8 @@ provider policy.
 
 See the [compatibility snapshot](docs/compatibility.md) for the harness versions
 validated for this alpha release and the [changelog](CHANGELOG.md) for known
-limitations.
+limitations. Run `scripts/check-release prepare` before manually preparing an
+alpha release; Forge never creates or publishes the tag or release.
 
 ## Installer lifecycle
 
@@ -147,7 +153,9 @@ order. Worker branches never receive pushes or PRs.
 
 The detailed lifecycle lives in the [workflow specification](SWE-FORGE.md),
 [ticket procedure](.swe-forge/workflows/ticket.md), and
-[isolated execution workflow](.swe-forge/workflows/isolated-execution.md).
+[isolated execution workflow](.swe-forge/workflows/isolated-execution.md). The
+canonical ownership/load map and minimal topology load sets are in
+[architecture](docs/architecture.md).
 
 ## Delivery modes
 
@@ -216,6 +224,7 @@ Redact credentials, private ticket details, transcripts, and personal paths.
 - [Adapter index](.swe-forge/adapters/README.md)
 - [Execution providers](.swe-forge/providers/README.md)
 - [Executable evidence and receipts](.swe-forge/policies/evidence.md)
+- [Release readiness](scripts/check-release)
 - [Adding a harness](docs/adding-a-harness.md)
 - [Adding an optional specialist skill](docs/adding-a-skill.md)
 - [Contributing](CONTRIBUTING.md)
