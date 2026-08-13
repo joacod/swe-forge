@@ -12,14 +12,14 @@ fail() {
 require_text() {
   needle=$1
   file=$2
-  grep -F "$needle" "$ROOT/$file" >/dev/null 2>&1 || \
+  grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1 || \
     fail "$file does not contain required text: $needle"
 }
 
 reject_text() {
   needle=$1
   file=$2
-  if grep -F "$needle" "$ROOT/$file" >/dev/null 2>&1; then
+  if grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1; then
     fail "$file contains obsolete text: $needle"
   fi
 }
@@ -69,6 +69,29 @@ require_text 'fetch-depth: 0' .github/workflows/ci.yml
 require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
 require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
 validate_registry
+
+[ -f "$ROOT/VERSION" ] || fail "missing release version file"
+release_version=$(awk 'NR == 1 { print; exit }' "$ROOT/VERSION")
+case "$release_version" in
+  *.*) ;;
+  *) fail "VERSION is not a release version: ${release_version:-<empty>}" ;;
+esac
+[ -f "$ROOT/CHANGELOG.md" ] || fail "missing changelog"
+[ -f "$ROOT/docs/compatibility.md" ] || fail "missing compatibility snapshot"
+[ -f "$ROOT/docs/releases/v0.1.0-alpha.1.md" ] || fail "missing alpha release notes"
+for issue_template in \
+  .github/ISSUE_TEMPLATE/installation-adapter.md \
+  .github/ISSUE_TEMPLATE/workflow-behavior.md \
+  .github/ISSUE_TEMPLATE/real-run-report.md; do
+  [ -f "$ROOT/$issue_template" ] || fail "missing issue template: $issue_template"
+done
+require_text 'v0.1.0-alpha.1' README.md
+require_text 'issues/new/choose' README.md
+require_text 'scripts/swe-forge status' README.md
+require_text 'scripts/swe-forge update' docs/installation.md
+require_text 'The manifest records' docs/installation.md
+require_text 'Run metadata:' .swe-forge/contracts/receipt.md
+require_text '--forge-version' .swe-forge/tools/swe-forge-gate
 
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
 require_text 'actions/workflows/ci.yml' README.md

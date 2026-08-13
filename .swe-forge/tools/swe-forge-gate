@@ -40,7 +40,17 @@ Usage:
   scripts/swe-forge-gate commit-slice --state DIR --checkpoint ID --message MESSAGE --authorized-by PR|GO
   scripts/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED --source SOURCE [options]
   scripts/swe-forge-gate deliver-pr --state DIR
-  scripts/swe-forge-gate receipt --state DIR --execution MODE --delivery GUIDED|PR [--pr-url URL] [--output FILE]
+  scripts/swe-forge-gate receipt --state DIR --execution MODE --delivery GUIDED|PR [metadata options]
+
+Receipt metadata options:
+  --forge-version VERSION       SWE Forge release version.
+  --harness NAME                Harness used for the run.
+  --harness-version VERSION     Harness version when known.
+  --requested-mode MODE         AUTO, SOLO, SUBAGENTS, or ISOLATED.
+  --selected-mode MODE          SOLO, SUBAGENTS, or ISOLATED.
+  --provider PROVIDER           NONE, NATIVE, or HERDR.
+  --routing-reason TEXT         Short routing rationale.
+  --model MODEL                 Model label when safe to publish.
 
 The state directory is temporary evidence. Keep it outside the repository or
 under an already ignored path. The guard never pushes, creates a pull request,
@@ -666,6 +676,26 @@ receipt_text() {
   printf '## SWE Forge receipt\n\n'
   printf 'Execution: %s\n' "$execution"
   printf 'Delivery: %s\n' "$delivery"
+  if [ -n "${receipt_forge_version:-}" ] || [ -n "${receipt_harness:-}" ] || \
+    [ -n "${receipt_harness_version:-}" ] || [ -n "${receipt_requested_mode:-}" ] || \
+    [ -n "${receipt_selected_mode:-}" ] || [ -n "${receipt_provider:-}" ] || \
+    [ -n "${receipt_routing_reason:-}" ] || [ -n "${receipt_model:-}" ]; then
+    printf 'Run metadata:\n'
+    [ -z "${receipt_forge_version:-}" ] || printf -- '- SWE Forge: %s\n' "$receipt_forge_version"
+    if [ -n "${receipt_harness:-}" ] || [ -n "${receipt_harness_version:-}" ]; then
+      if [ -n "${receipt_harness_version:-}" ]; then
+        printf -- '- Harness: %s %s\n' "$receipt_harness" "$receipt_harness_version"
+      else
+        printf -- '- Harness: %s\n' "$receipt_harness"
+      fi
+    fi
+    if [ -n "${receipt_requested_mode:-}" ] || [ -n "${receipt_selected_mode:-}" ]; then
+      printf -- '- Routing: %s -> %s\n' "${receipt_requested_mode:-unknown}" "${receipt_selected_mode:-unknown}"
+    fi
+    [ -z "${receipt_provider:-}" ] || printf -- '- Provider: %s\n' "$receipt_provider"
+    [ -z "${receipt_model:-}" ] || printf -- '- Model: %s\n' "$receipt_model"
+    [ -z "${receipt_routing_reason:-}" ] || printf -- '- Routing reason: %s\n' "$receipt_routing_reason"
+  fi
   printf 'Base: %s\n' "$short_base"
   printf 'Branch: %s\n' "$branch"
   printf 'Commits: %s (%s validated %s)\n' "$commit_count" "$checkpoint_count" "$slice_label"
@@ -708,6 +738,14 @@ receipt_run() {
   delivery=
   PR_URL=
   output=
+  receipt_forge_version=
+  receipt_harness=
+  receipt_harness_version=
+  receipt_requested_mode=
+  receipt_selected_mode=
+  receipt_provider=
+  receipt_routing_reason=
+  receipt_model=
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --state)
@@ -735,6 +773,46 @@ receipt_run() {
         output=$2
         shift 2
         ;;
+      --forge-version)
+        [ "$#" -ge 2 ] || fail "--forge-version requires a value"
+        receipt_forge_version=$2
+        shift 2
+        ;;
+      --harness)
+        [ "$#" -ge 2 ] || fail "--harness requires a value"
+        receipt_harness=$2
+        shift 2
+        ;;
+      --harness-version)
+        [ "$#" -ge 2 ] || fail "--harness-version requires a value"
+        receipt_harness_version=$2
+        shift 2
+        ;;
+      --requested-mode)
+        [ "$#" -ge 2 ] || fail "--requested-mode requires a value"
+        receipt_requested_mode=$2
+        shift 2
+        ;;
+      --selected-mode)
+        [ "$#" -ge 2 ] || fail "--selected-mode requires a value"
+        receipt_selected_mode=$2
+        shift 2
+        ;;
+      --provider)
+        [ "$#" -ge 2 ] || fail "--provider requires a value"
+        receipt_provider=$2
+        shift 2
+        ;;
+      --routing-reason)
+        [ "$#" -ge 2 ] || fail "--routing-reason requires a value"
+        receipt_routing_reason=$2
+        shift 2
+        ;;
+      --model)
+        [ "$#" -ge 2 ] || fail "--model requires a value"
+        receipt_model=$2
+        shift 2
+        ;;
       -h|--help) usage; exit 0 ;;
       *) fail "unknown receipt option: $1" ;
     esac
@@ -742,6 +820,14 @@ receipt_run() {
 
   case "$execution" in SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid execution topology: ${execution:-<missing>}" ;; esac
   case "$delivery" in GUIDED|PR) ;; *) fail "invalid delivery mode: ${delivery:-<missing>}" ;; esac
+  case "$receipt_requested_mode" in ''|AUTO|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid requested topology metadata" ;; esac
+  case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid selected topology metadata" ;; esac
+  case "$receipt_provider" in ''|NONE|NATIVE|HERDR) ;; *) fail "invalid provider metadata" ;; esac
+  for receipt_value in "$receipt_forge_version" "$receipt_harness" \
+    "$receipt_harness_version" "$receipt_requested_mode" "$receipt_selected_mode" \
+    "$receipt_provider" "$receipt_routing_reason" "$receipt_model"; do
+    reject_control_chars "$receipt_value"
+  done
   [ "$delivery" != PR ] || [ -n "$PR_URL" ] || PR_URL=
   if [ -n "$PR_URL" ]; then
     case "$PR_URL" in http://*|https://*) ;; *) fail "PR URL must use http:// or https://" ;; esac
