@@ -28,7 +28,10 @@ harness loading -> adapters/*
 ```
 
 This map is normative for ownership. Files outside the owner summarize or
-reference the rule; they do not redefine low-level behavior.
+reference the rule; they do not redefine low-level behavior. Delivery branches
+use the canonical `<type>/<short-kebab-case-description>` form without a
+project-name prefix; only ephemeral isolated worker branches use internal
+run/task namespacing.
 
 Minimal load sets:
 

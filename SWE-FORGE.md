@@ -421,7 +421,12 @@ For `SOLO` or `SUBAGENTS`, if a clean checkout is currently on a protected
 default branch, the normal workflow automatically creates one safe, dedicated
 non-protected task/delivery branch. If it is already on a suitable
 non-protected branch or worktree, reuse that same branch for every slice.
-Never create another normal delivery branch during the run.
+Never create another normal delivery branch during the run. Name the
+normal task/delivery branch with the canonical
+`<type>/<short-kebab-case-description>` convention from
+`.swe-forge/policies/delivery.md` (for example, `fix/branch-naming`); never
+force the project name into the prefix. Only ephemeral isolated worker
+branches may use internal run/task namespacing.
 
 For `ISOLATED`, leave the user's original invocation checkout untouched, create
 one run-owned integration worktree, and create or reuse one safe
@@ -429,8 +434,10 @@ non-protected integration/delivery branch for the whole ticket. Give the
 integration worktree exclusively to the orchestrator. Worker branches and
 worktrees are bounded, local, ephemeral transfer resources; they are never
 delivery branches, never pushed, and never used to create PRs. Use namespaced
-names that include the run ID and task ID. The isolated workflow records the
-invocation and delivery checkout identities, branch, base and checkpoint SHAs,
+names that include the run ID and task ID for those ephemeral worker resources
+only; the integration/delivery branch still follows the canonical delivery
+branch naming convention. The isolated workflow records the invocation and
+delivery checkout identities, branch, base and checkpoint SHAs,
 provider capabilities, worker identities, and cleanup evidence.
 
 If the checkout is dirty, detached, or cannot be classified safely, stop and

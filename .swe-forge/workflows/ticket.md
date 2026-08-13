@@ -340,8 +340,12 @@ receive a dedicated worktree and local branch from the exact recorded
 integration `HEAD`; they cannot access the integration checkout. The
 integration worktree belongs exclusively to the orchestrator.
 
-Before the first edit, confirm that writable work is on a dedicated,
-non-protected branch or worktree. Protected branches include repository-declared
+Before the first edit, name the normal task/delivery branch or isolated
+integration/delivery branch with the canonical
+`<type>/<short-kebab-case-description>` convention in
+`.swe-forge/policies/delivery.md`; do not use the project name as a generic
+prefix. Then confirm that writable work is on a dedicated, non-protected branch
+or worktree. Protected branches include repository-declared
 protected branches, the locally known remote default branch, `main`, and
 `master`. From a clean protected default, automatically create and record one
 safe non-protected task/delivery branch for `SOLO` or `SUBAGENTS`. For
