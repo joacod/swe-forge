@@ -59,8 +59,8 @@ step; review repairs are additional atomic commits rather than a squash.
 
 Branches, commits, pull-request titles, and pull-request bodies (PR
 descriptions) are project-facing artifacts. They must read like normal
-software-engineering work,
-regardless of the repository or the tool that performed the run. Follow the
+software-engineering work, regardless of the repository or the tool that
+performed the run. Follow the
 repository's existing conventions first; otherwise use this compact default
 shape for a pull-request body:
 
