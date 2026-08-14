@@ -214,7 +214,9 @@ SWE Forge receipt can be generated after the PR URL exists as private run
 evidence; it is never copied into the PR description. Commit and PR messages
 follow the repository delivery policy: concise imperative subjects, clear
 subject/body separation, and bodies that preserve what/why context when needed,
-without tool attribution or unrelated detail. See the harness adapter
+without tool attribution or unrelated detail. The final harness output also
+starts with a short plain-language work summary of what changed, what improved,
+and any material notes, separate from the private receipt. See the harness adapter
 documentation for the available
 `git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
 

@@ -149,6 +149,11 @@ require_text 'remote tag evidence' scripts/check-release
 require_text 'macos-core:' .github/workflows/ci.yml
 
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
+require_text 'Work summary' SWE-FORGE.md
+require_text 'plain human' SWE-FORGE.md
+require_text 'Work summary' .swe-forge/workflows/ticket.md
+require_text 'Work summary' .swe-forge/examples/pr-ticket.md
+require_text 'Final run report' .swe-forge/evals/conformance-scenarios.md
 require_text 'actions/workflows/ci.yml' README.md
 require_text 'Run the repository checks' CONTRIBUTING.md
 require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md

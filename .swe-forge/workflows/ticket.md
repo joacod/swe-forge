@@ -474,6 +474,12 @@ the ticket and recovery limits.
 
 ### 14. Report
 
+Begin the final harness output with a short `Work summary` in plain human
+language. Explain what changed and what it improves, then add only material
+notes when they help; scale the summary to the ticket and omit empty sections.
+Keep this summary separate from the private receipt and the project-facing PR
+description.
+
 Return only the decision-relevant result:
 
 - final status: `ACCEPTED`, `BLOCKED`, or `FAILED`
