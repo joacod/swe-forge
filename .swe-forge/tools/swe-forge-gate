@@ -1167,6 +1167,10 @@ receipt_status_display() {
   fi
   result=$(latest_status "$name" "$fp" "$final_mode")
   status=${result%%"$TAB"*}
+  if [ "$status" = missing ] && [ "$final_required" = false ] && \
+    checkpoint_has_check "$name"; then
+    status=passed
+  fi
   case "$status" in
     passed) printf 'passed\n' ;;
     failed) printf 'failed\n' ;;

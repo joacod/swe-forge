@@ -93,6 +93,8 @@ state=$(clean_feature_state "$repo")
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 >/dev/null
   test -f "$state/receipt.md"
+  grep -F -- '- smoke: passed' "$state/receipt.md" >/dev/null
+  grep -F -- '- final-smoke: passed' "$state/receipt.md" >/dev/null
   "$GATE" receipt --verify --state "$state" >/dev/null
   "$GATE" receipt-verify --state "$state" >/dev/null
 )
