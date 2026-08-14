@@ -164,7 +164,7 @@ require_text 'macos-core:' .github/workflows/ci.yml
 require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
 require_text 'Work summary' SWE-FORGE.md
 require_text 'plain human' SWE-FORGE.md
-require_text 'Work summary' .swe-forge/workflows/ticket.md
+require_text 'canonical final-report' .swe-forge/workflows/ticket.md
 require_text 'Work summary' .swe-forge/examples/pr-ticket.md
 require_text 'Final run report' .swe-forge/evals/conformance-scenarios.md
 require_text 'actions/workflows/ci.yml' README.md
@@ -172,19 +172,22 @@ require_text 'Run the repository checks' CONTRIBUTING.md
 require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md
 require_text 'evidence ledger' .swe-forge/policies/evidence.md
 require_text '`$STATE/receipt.md`' .swe-forge/policies/evidence.md
+require_text 'Acceptance handoff' .swe-forge/policies/verification.md
+reject_text '## Final Gate' .swe-forge/policies/verification.md
 require_text 'receipt_ref' .swe-forge/contracts/run-state.md
 require_text 'receipt_ref' .swe-forge/tools/swe-forge-gate
 require_text 'Final status: ACCEPTED | BLOCKED | FAILED' .swe-forge/contracts/receipt.md
 reject_text 'Merge performed: no' .swe-forge/contracts/receipt.md
 require_text 'pre-edit baseline' SWE-FORGE.md
-require_text 'delivery_mode: GUIDED | PR' SWE-FORGE.md
-require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' SWE-FORGE.md
-require_text 'execution_mode: SOLO | SUBAGENTS | ISOLATED' SWE-FORGE.md
+require_text 'Execution topology and delivery mode are orthogonal' SWE-FORGE.md
 require_text '/swe-forge isolated <ticket>' SWE-FORGE.md
-require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' SWE-FORGE.md
-require_text 'execution_provider: NATIVE | HERDR | NONE' SWE-FORGE.md
-require_text 'parallel_strategy: NONE | COMPOSE' SWE-FORGE.md
-require_text 'integration_strategy: NONE | CHERRY_PICK' SWE-FORGE.md
+require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
+require_text 'execution_mode: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
+require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
+require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
+require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
+require_text 'integration_strategy: NONE | CHERRY_PICK' .swe-forge/policies/provider-selection.md
+require_text 'delivery_mode: GUIDED | PR' .swe-forge/contracts/run-state.md
 reject_text 'requested_mode: AUTO | SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
 reject_text 'execution_mode: SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
 reject_text 'execution_mode: HERDR' SWE-FORGE.md
@@ -203,6 +206,17 @@ require_text 'refactor-design-patterns' docs/adding-a-skill.md
 require_text 'ui-design-token-refactor' docs/adding-a-skill.md
 require_text 'Ticket names an optional specialist skill' .swe-forge/evals/conformance-scenarios.md
 require_text 'Behavior-changing ticket with a test seam' .swe-forge/evals/conformance-scenarios.md
+require_text '## Canonical Load Ordering And Behavior Preservation' .swe-forge/evals/conformance-scenarios.md
+require_text 'Normal `SOLO` ticket' .swe-forge/evals/conformance-scenarios.md
+require_text '`PR` specification and delivery' .swe-forge/evals/conformance-scenarios.md
+require_text 'Delivery before first write' .swe-forge/evals/conformance-scenarios.md
+require_text 'Executable evidence and candidate binding' .swe-forge/evals/conformance-scenarios.md
+require_text 'Delegated implementer with reduced context' .swe-forge/evals/conformance-scenarios.md
+require_text 'Independent review' .swe-forge/evals/conformance-scenarios.md
+require_text 'Isolated routing candidate' .swe-forge/evals/conformance-scenarios.md
+require_text 'Context-risk or pressure path' .swe-forge/evals/conformance-scenarios.md
+require_text '`BLOCKED`/`FAILED` recovery path' .swe-forge/evals/conformance-scenarios.md
+require_text 'Final acceptance' .swe-forge/evals/conformance-scenarios.md
 require_text '## Context Continuity' .swe-forge/evals/conformance-scenarios.md
 require_text 'Reliable near-limit signal' .swe-forge/evals/conformance-scenarios.md
 require_text 'explicit test-first' docs/adding-a-skill.md
@@ -211,7 +225,6 @@ require_text 'git-sync' .swe-forge/policies/delivery.md
 require_text 'one dedicated task branch' .swe-forge/policies/delivery.md
 require_text '<type>/<short-kebab-case-description>' .swe-forge/policies/delivery.md
 require_text 'repository/project name' .swe-forge/policies/delivery.md
-require_text 'fix/branch-naming' SWE-FORGE.md
 require_text 'feat/order-cancellation' .swe-forge/examples/isolated-ticket.md
 reject_text 'swe-forge/<run-id>/integration' .swe-forge/examples/isolated-ticket.md
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
@@ -220,12 +233,12 @@ require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text 'Project-facing delivery artifacts' .swe-forge/policies/delivery.md
 require_text 'The same rule applies to SWE Forge' .swe-forge/policies/delivery.md
 require_text 'Receipts remain private run-evidence artifacts' .swe-forge/policies/delivery.md
-require_text 'for private run evidence only' SWE-FORGE.md
+require_text 'private run-evidence artifacts' .swe-forge/policies/delivery.md
 require_text 'never copied into the PR description' README.md
 require_text 'Project-facing PR content' .swe-forge/evals/conformance-scenarios.md
 reject_text 'add it to the PR description' SWE-FORGE.md
 reject_text 'add it to the PR description' README.md
-require_text '`go` to commit' SWE-FORGE.md
+require_text '`go` authorizes one reviewed' .swe-forge/policies/delivery.md
 require_text 'working_spec_ref:' .swe-forge/contracts/run-state.md
 require_text 'requirement: required' .swe-forge/contracts/task.md
 require_text 'create_pull_request: {status: not-authorized' .swe-forge/contracts/task.md
@@ -347,10 +360,10 @@ require_text 'parallel_strategy:' .swe-forge/contracts/run-state.md
 require_text 'cleanup_status:' .swe-forge/contracts/run-state.md
 require_text 'provider: NATIVE | HERDR | NONE' .swe-forge/contracts/review.md
 require_text 'integrated_validation_checked:' .swe-forge/contracts/review.md
-require_text 'worker branches are local-only' .swe-forge/policies/delivery.md
-require_text 'Completion order never determines integration order' .swe-forge/policies/delivery.md
-require_text 'integrated-state validation' .swe-forge/policies/delivery.md
-require_text 'never use forced removal automatically' .swe-forge/policies/delivery.md
+require_text 'local-only transfer resources' .swe-forge/policies/delivery.md
+require_text 'Completion order' .swe-forge/policies/delivery.md
+require_text 'Integrated-state validation' .swe-forge/policies/delivery.md
+require_text 'forced removal is never automatic' .swe-forge/policies/delivery.md
 reject_text 'execution_mode: HERDR' .swe-forge/contracts/task.md
 reject_text 'execution_mode: HERDR' .swe-forge/contracts/run-state.md
 reject_text 'execution_mode: HERDR' .swe-forge/examples/isolated-ticket.md
@@ -373,7 +386,7 @@ require_ordered_text 'policies/execution-routing.md' 'policies/provider-selectio
 require_ordered_text '### 7. Test Strategy' 'policies/verification.md' .swe-forge/workflows/ticket.md
 require_ordered_text '### 7. Test Strategy' 'policies/evidence.md' .swe-forge/workflows/ticket.md
 require_ordered_text '### 8. Implement' 'policies/delivery.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 11. Review' 'reviewer role' .swe-forge/workflows/ticket.md
+require_ordered_text '### 11. Review' 'agents/reviewer.md' .swe-forge/workflows/ticket.md
 require_ordered_text '### 11. Review' 'contracts/review.md' .swe-forge/workflows/ticket.md
 require_ordered_text '### 12. Repair' 'policies/failure-recovery.md' .swe-forge/workflows/ticket.md
 require_ordered_text '### 13. Final Acceptance' 'canonical Acceptance Gate' .swe-forge/workflows/ticket.md

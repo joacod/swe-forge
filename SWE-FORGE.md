@@ -98,11 +98,9 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Preserve a human checkpoint in `GUIDED` mode and keep delivery actions
   separately authorized.
 - Keep commits, pushes, publication, and global configuration changes
-  separately authorized. `PR` mode authorizes only the bounded local setup,
-  worker transfer commits, validated central commits, one final push, and one
-  final PR described by `policies/delivery.md`; `go` authorizes only one
-  reviewed guided central commit. Never infer publication, deployment, or merge
-  authorization.
+  separately authorized. `PR` follows the bounded delivery actions in
+  `policies/delivery.md`; guided approval never implies publication, deployment,
+  or merge authorization.
 
 ## Execution Topology
 
@@ -139,232 +137,104 @@ migration guidance to use `isolated` and to request Herdr as an execution-
 provider preference instead of silently accepting that token as a mode. A
 missing ticket after either token is incomplete input.
 
-Every run records the request, selected modes, provider decision, hard
-isolated eligibility, economic parallel value, and reasons:
-
-```text
-requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
-execution_mode: SOLO | SUBAGENTS | ISOLATED
-requested_provider: AUTO | NATIVE | HERDR | NONE
-execution_provider: NATIVE | HERDR | NONE
-provider_reason: <why the selected provider satisfies isolated requirements>
-parallel_strategy: NONE | COMPOSE
-integration_strategy: NONE | CHERRY_PICK
-requested_delivery: DEFAULT | GUIDED | PR
-delivery_mode: GUIDED | PR
-reason: <why this is the smallest useful topology>
-fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
-
-isolated_eligibility: status: eligible | ineligible; evidence_ref: <ref>; blockers: []
-parallel_value: status: beneficial | marginal | unknown; rationale: <evidence>; overridden_by_user: true | false
-```
-
-An explicit isolated request cannot bypass hard eligibility. If hard eligibility
-fails, route safely to `SUBAGENTS` or `SOLO`, or return `BLOCKED`. Explicit
-selection may override only economic preference.
-
-`execution_provider` is meaningful only when `execution_mode` is `ISOLATED`.
-Non-isolated runs record `execution_provider: NONE`,
-`parallel_strategy: NONE`, and `integration_strategy: NONE`. Isolated v1
-supports only `parallel_strategy: COMPOSE`: several non-overlapping worker
-results contribute to one centrally integrated result. It does not select an
-alternative implementation, compare best-of-N results, create stacked PRs, or
-use `SELECT_ONE`.
-
-An explicit topology overrides topology preference, not safety, validation,
-scope, or delivery authorization. An explicit `pr` delivery token requests
-low-touch delivery but does not bypass safety, validation, scope, or review.
-Apply the provider and topology fallback policy when a requested capability is
-unavailable. Block instead when falling back would make required isolation
-unsafe or the user prohibited fallback.
+The ticket workflow loads `.swe-forge/policies/execution-routing.md` before the
+final topology decision. That policy owns the routing fields, hard eligibility,
+economic parallel-value decision, and safe fallback. Topology and provider
+remain separate dimensions: non-isolated runs use no execution provider, and an
+isolated run uses only the provider and strategies proven by the loaded
+provider policy. Explicit selections never bypass safety, validation, scope, or
+delivery authorization.
 
 ### SOLO
 
-Use `SOLO` when the work is small, tightly coupled, sequential, or easier to
-verify in one context. The current agent acts as orchestrator and implementer.
-
-Even in `SOLO`, perform lightweight discovery, specify acceptance criteria,
-plan the change, run relevant validation, inspect the final diff, and report
-evidence. Do not create artificial workers.
+`SOLO` keeps orchestration and implementation in one context for small, tightly
+coupled, sequential, or shared-surface work. It still performs discovery,
+specification, proportional validation, final-diff inspection, and evidence
+reporting without artificial workers.
 
 ### SUBAGENTS
 
-Use `SUBAGENTS` when the current harness provides native workers and
-independent research, architecture analysis, bounded implementation, or fresh
-review will materially improve the result without concurrent writable
-worktrees.
-
-`SUBAGENTS` supports parallel read-only work and sequential bounded writable
-delegation in one checkout. A writable worker must not edit the integration
-checkout concurrently with another writer. Any concurrent writable workers
-using separate worktrees are classified as `ISOLATED`, even when the current
-harness provides those worktrees natively. Strong context isolation by itself
-does not justify `ISOLATED`; native read-only workers are usually sufficient.
-Task difficulty, file count, or the presence of Herdr does not justify
-`ISOLATED`.
-
-Use approximately two to four active workers for independent read-only work
-unless evidence justifies a different limit. Keep the orchestrator responsible
-for task dependencies, shared state, integration, and acceptance. Workers must
-not recursively create arbitrary workers unless the task contract explicitly
-authorizes it. If native subagents are unavailable, execute the work
-sequentially or choose `SOLO`; do not simulate subagents with unnecessary
-operating-system processes.
+`SUBAGENTS` uses native workers when independent research, bounded delegation,
+or fresh review materially improves the result without concurrent writable
+worktrees. Read-only work may be parallel; writable work is sequential in one
+checkout unless dedicated worktrees make the topology `ISOLATED`. The
+orchestrator retains task ownership, integration, and acceptance. If workers
+are unavailable, fall back to sequential execution or `SOLO` rather than
+simulating them with unrelated processes. Detailed delegation and worker
+boundaries are owned by the loaded delegation policy and contracts.
 
 ### ISOLATED
 
-Use `ISOLATED` only when the automatic isolated-routing gate passes or the
-user explicitly requests it and the requested isolation can be provided
-safely. The gate requires at least two ready writable tasks with non-overlapping
-ownership, independently observable acceptance and validation, an explicit
-owner for shared artifacts, a stable foundation, safe runtime isolation,
-material critical-path or context benefit, and one accountable orchestrator.
-The routing policy also lists conditions that require serialization.
-
-`ISOLATED` authorizes the workflow shape, not an implementation provider. The
-provider-selection policy requires structured proof for concurrent writable
-workers, dedicated worktrees, exact bases, integration checkout protection,
-structured results, wait/inspect/cancel/cleanup lifecycle, and central
-integration. `NATIVE` is not selected while a mandatory capability is unknown or
-unavailable. Herdr remains optional and must pass its `HERDR_ENV=1` ownership
-guard. If neither provider can safely preserve isolation, fall back to
-sequential `SUBAGENTS` or `SOLO` when safe, or return `BLOCKED`.
-
-After routing selects `ISOLATED`, load
-`.swe-forge/workflows/isolated-execution.md`. That workflow owns the dependency
-DAG, wave barriers, integration worktree, ephemeral worker branches and
-worktrees, environment resources, central commit construction, recovery, and
-conservative cleanup. It produces one integration/delivery branch and exactly
-one final PR for the ticket; worker branches are never pushed and never receive
-PRs.
+`ISOLATED` is selected only when the routing gate and provider capability proof
+make concurrent writable work safe and useful. It authorizes a workflow shape,
+not a provider or concrete resources. After selection, load
+`.swe-forge/workflows/isolated-execution.md` and the selected provider policy;
+the isolated workflow owns waves, worktrees, central integration, recovery,
+and cleanup. The orchestrator remains accountable for one integration/delivery
+branch and one final PR; worker branches are local-only.
 
 ## Delivery Modes
 
 ### GUIDED (default)
 
-`GUIDED` keeps the user in the loop without forcing one large review. For a
-normal run from a clean protected default branch, it automatically creates one
-dedicated task branch and reuses that branch for the whole run. For an
-`ISOLATED` run, the isolated workflow instead creates one run-owned integration
-worktree and one safe integration/delivery branch, then plans bounded local
-worker worktrees. The orchestrator plans cohesive implementation slices,
-validates each slice, and stops at a checkpoint with the diff boundary,
-evidence, risks, and next step.
-
-An explicit `isolated` invocation selects the topology but does not authorize
-concrete resources before planning. The canonical setup checkpoint,
-`continue`, `go`, and `PR` meanings are owned by
-`.swe-forge/policies/delivery.md`; this section only summarizes them. In
-particular, `continue` authorizes only the exact reviewed local setup, `go`
-authorizes one central commit, and neither authorizes push, PR creation,
-publication, deployment, or merge.
-
-The user may reply `continue` to proceed without delivery, `revise: ...` to
-reshape the slice, or `go` to commit the reviewed slice with a generated,
-repository-appropriate message and continue. A guided run never pushes,
-creates a PR, or merges merely because a slice was approved; `go` authorizes
-only its local delivery-branch commit.
+`GUIDED` keeps the user in the loop through bounded review checkpoints. The
+workflow creates or reuses one safe delivery checkout for normal execution and
+uses the isolated plan only when that topology is selected. Before any setup or
+writable operation, load `.swe-forge/policies/delivery.md`; it owns branch,
+resource, checkpoint, commit, and cleanup authorization. `continue`, `go`, and
+all other action meanings come from that policy. Guided approval never implies
+push, PR creation, publication, deployment, or merge.
 
 ### PR
 
-`PR` is the opt-in low-touch path. It runs the lightweight specification policy
-when the ticket needs clarification, keeps the working spec outside the
-repository, and proceeds through implementation without interactive
-checkpoints. Before the first edit, the working spec contains an ordered commit
-plan with one cohesive objective, scope, targeted validation, and commit subject
-per step. The working spec also records a `review_focus` with one clear review goal,
-the acceptance criteria to check, relevant in-scope quality concerns,
-non-goals, and a finding rule for deferring unrelated work. The orchestrator
-validates and commits each step before beginning the next; it does not
-accumulate a broad diff and create one catch-all commit. A
-one-step ticket remains one commit rather than being split artificially. For
-`SOLO` and `SUBAGENTS`, it uses the one dedicated delivery branch. For
-`ISOLATED`, it uses one integration/delivery branch, planned local worker
-resources, and central integration. It creates one local commit after each
-validated slice or integration unit, then runs final verification and fresh
-review before pushing the integration/delivery branch and creating one pull
-request. Worker branches are never pushed and worker PRs are never created. It
-ends with a concise PR URL and never merges. It does not skip automated checks
-or independent review. The PR title and description are project-facing
-artifacts: keep them concise and useful to a reviewer, following
-`.swe-forge/policies/delivery.md` and the repository's conventions. Include only
-the outcome, motivation, relevant validation, and material risks or follow-ups;
-never include tool, harness, model, provider, routing, receipt, run, or other
-workflow metadata. After the PR URL exists, generate a compact receipt using
-`.swe-forge/contracts/receipt.md` for private run evidence only. Never add the
-receipt to the PR description, including for SWE Forge's own repository, and
-never claim checks that were not run. The executable gate retains the default
-receipt in the private run state and records its path in `receipt_ref`.
+`PR` is the opt-in low-touch path. Before clarification or working-spec
+behavior, load `.swe-forge/policies/specification.md` and
+`.swe-forge/contracts/working-spec.md`; before writable work or delivery
+choices, load `.swe-forge/policies/delivery.md`. The transient spec owns an
+ordered commit plan and `review_focus`, and the orchestrator validates and
+commits each cohesive step before starting the next. It then runs final
+verification and independent review before one authorized push and one final
+PR on the single delivery branch. Worker branches are never pushed and worker
+PRs are never created. PR mode never merges; project-facing PR content follows
+the delivery policy, while evidence and receipts remain private under their
+canonical policy and contract.
 
-Use the atomic delivery actions described by `.swe-forge/policies/delivery.md`
-for guided follow-up: `git-commit`, `git-push`, `git-pr`, and `git-sync`.
-Pushing must never unexpectedly create a PR. After a human merges a PR, say
-`merged` in the active run or invoke `git-sync`; Forge verifies the PR state
-before returning to the remote default branch and fast-forwarding it.
+The atomic `git-commit`, `git-push`, `git-pr`, and `git-sync` actions load and
+follow `.swe-forge/policies/delivery.md` separately. Pushing never creates a PR
+as a side effect, and post-merge sync verifies the provider state first.
 
 ## Model Routing
 
-The canonical workflow uses capability classes, not provider names or model
-identifiers:
-
-```yaml
-orchestrator: strongest-reasoning
-architect: strongest-reasoning
-researcher: fast-capable
-implementer: strong-coding
-refactor-specialist: strong-coding
-test-engineer: strong-coding
-reviewer: strong-independent-reasoning
-debugger: strongest-reasoning
-security-reviewer: strongest-reasoning
-performance-reviewer: strongest-reasoning
-```
-
-Harness adapters may map capabilities to user-selected models and harnesses.
-Different models for implementation and review are optional, not required.
+Delegated model assignment uses capability classes and fallback semantics from
+`.swe-forge/policies/model-routing.md`; load that policy before assigning a
+worker capability. Harness adapters may map those classes to user-selected
+models or harnesses. Model diversity is optional and canonical files do not
+name providers or model identifiers.
 
 ## Ticket Lifecycle
 
 Follow the detailed procedure in `.swe-forge/workflows/ticket.md`. The
 lifecycle is:
 
-1. Ingest the ticket, topology token, provider preference, delivery token, and
-   constraints.
-2. Discover relevant repository evidence and evaluate any explicitly supplied
-   or clearly matching optional specialist skill using its policy.
-3. Specify observable acceptance criteria and blocking ambiguity; in `PR` mode,
-   create a transient working spec and run the brief alignment interview only
-   when the ticket is underspecified. For long-running or context-risk work,
-   record the host capability signal, safe compaction action, overflow recovery,
-   and external durable-state reference.
-4. Architect the smallest compatible approach.
-5. Decompose only where useful and define bounded task ownership or guided
-   review slices.
-6. Route explicitly to `SOLO`, `SUBAGENTS`, or `ISOLATED`, then select a
-   provider only when the selected topology is `ISOLATED`.
-7. Select an appropriate test and validation strategy.
-8. If routing selects `ISOLATED`, load the isolated-execution workflow after the
-   foundation and provider decision; otherwise implement dependency waves in
-   the selected checkout.
-9. Implement dependency waves within task scope, stopping at guided
-   checkpoints when `delivery_mode` is `GUIDED`. At a reliable near-limit
-   signal, persist state and compact before the next continuation; after any
-   compaction or overflow recovery, re-read state and verify the actual Git
-   boundary before resuming.
-10. Integrate isolated work centrally, with final commits built and validated
-    by the orchestrator.
-11. Verify with relevant repository quality gates and record current-HEAD
-    evidence when using the executable gate.
-12. Review from fresh context using the review focus and evidence, not
-    implementation chatter; check every acceptance criterion before relevant
-    quality concerns.
-13. Repair relevant in-scope findings and rerun affected validation; defer
-    unrelated follow-ups unless the user changes scope.
-14. Compare the final diff against the original ticket, acceptance criteria,
-    and review focus.
-15. Perform only the delivery actions authorized by the selected mode or a
-    later explicit user instruction.
-16. Report the result concisely.
+1. Ingest the immutable raw invocation and parsed ticket constraints.
+2. Discover repository evidence, quality gates, and any explicitly named
+   optional skill.
+3. Specify observable acceptance criteria and, in `PR`, build the transient
+   working spec after loading its policy and contract.
+4. Architect the smallest compatible approach and identify risks.
+5. Decompose only where useful, loading delegation, role, model, and result
+   sources before assigning work.
+6. Load routing policy before selecting `SOLO`, `SUBAGENTS`, or `ISOLATED`, and
+   load provider and isolated workflow sources only for an isolated result.
+7. Load verification before selecting validation and evidence before using the
+   executable gate, fingerprints, freshness, or receipts.
+8. Load delivery before writable setup or delivery decisions, then implement
+   bounded dependency waves and integrate centrally when needed.
+9. Load context or failure-recovery policy only when their triggers occur.
+10. Verify the current candidate, review from fresh context when warranted,
+    repair relevant findings, and compare the final diff with the ticket.
+11. Apply the canonical Acceptance Gate, perform only authorized delivery, and
+    report the result.
 
 The workflow must adapt its depth. A typo does not require an architect,
 security reviewer, isolated worktree, or ceremonial test plan.
@@ -385,14 +255,15 @@ provider command translation -> providers/*
 harness loading -> adapters/*
 ```
 
-Minimal load set: `SOLO` needs `SWE-FORGE.md`, `workflows/ticket.md`, the
-orchestrator role, and relevant verification/evidence/delivery contracts;
-load `policies/context.md`, the working-spec contract, and the run-state
-contract for long-running or context-risk tickets. `SUBAGENTS` additionally
-loads task/result/review contracts and the relevant worker roles; `ISOLATED`
-additionally loads execution-routing, provider-selection, delivery,
-result-bundle, run-state, the isolated workflow, the selected provider runbook,
-and the isolated Git/evidence guard contract.
+Minimal load sets are stage-triggered rather than a second workflow. Every run
+loads `SWE-FORGE.md`, `workflows/ticket.md`, and the orchestrator role. `PR`
+loads the specification policy and working-spec contract before specification;
+`AUTO` loads execution-routing before its topology decision; delegation loads
+its policy, relevant roles, and contracts; delivery, verification, and evidence
+load before their first operation. Context and failure-recovery remain lazy.
+`ISOLATED` additionally loads provider-selection, delivery, result-bundle,
+run-state, isolated-execution, the selected provider runbook, and the isolated
+Git/evidence guard only after the isolated decision.
 ## State and Contracts
 
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
@@ -419,65 +290,26 @@ environment resources, and cleanup status.
 
 ## Checkout And Delivery Safety
 
-Before writable implementation, classify the checkout and record the baseline.
-Treat repository-declared protected branches, the locally known remote default
-branch, and conventional `main` and `master` as protected.
+Before any writable setup or edit, load and follow
+`.swe-forge/policies/delivery.md`. It owns checkout classification, protected
+branches, canonical task/integration branch naming, local resources, action
+authorization, and the pre-edit baseline. A normal run has one delivery branch;
+an isolated run has one orchestrator-owned integration/delivery branch and
+local-only worker resources. The isolated workflow owns its operational
+identities and integration evidence.
 
-For `SOLO` or `SUBAGENTS`, if a clean checkout is currently on a protected
-default branch, the normal workflow automatically creates one safe, dedicated
-non-protected task/delivery branch. If it is already on a suitable
-non-protected branch or worktree, reuse that same branch for every slice.
-Never create another normal delivery branch during the run. Name the
-normal task/delivery branch with the canonical
-`<type>/<short-kebab-case-description>` convention from
-`.swe-forge/policies/delivery.md` (for example, `fix/branch-naming`); never
-force the project name into the prefix. Only ephemeral isolated worker
-branches may use internal run/task namespacing.
-
-For `ISOLATED`, leave the user's original invocation checkout untouched, create
-one run-owned integration worktree, and create or reuse one safe
-non-protected integration/delivery branch for the whole ticket. Give the
-integration worktree exclusively to the orchestrator. Worker branches and
-worktrees are bounded, local, ephemeral transfer resources; they are never
-delivery branches, never pushed, and never used to create PRs. Use namespaced
-names that include the run ID and task ID for those ephemeral worker resources
-only; the integration/delivery branch still follows the canonical delivery
-branch naming convention. The isolated workflow records the invocation and
-delivery checkout identities, branch, base and checkpoint SHAs,
-provider capabilities, worker identities, and cleanup evidence.
-
-If the checkout is dirty, detached, or cannot be classified safely, stop and
-ask the user to resolve it; do not reset, clean, stash, overwrite, or include
-pre-existing user changes. Do not edit or commit on a protected branch. If the
-requested branch name already belongs to another task, use a safe run suffix or
-ask rather than silently reusing it. A user-provided branch or worktree
-preference may replace the default when it passes the same gates.
-
-Record a pre-edit baseline containing invocation checkout identity, delivery
-checkout setup, HEAD, branch, remote-default evidence, and staged, unstaged,
-and untracked files. Branch/worktree setup and delivery authorization are
-owned by `.swe-forge/policies/delivery.md`; this section only requires the
-orchestrator to record the resulting state. An ambiguous request for extra
-branches or worktrees requires clarification. Merging always requires a
-separate explicit instruction and is not part of the ticket lifecycle.
+Dirty, detached, protected, or ambiguous state is preserved and reported rather
+than reset, cleaned, stashed, overwritten, or delivered. Merging, publication,
+deployment, and other external effects remain separately authorized.
 
 ## Failure Handling
 
-Workers may return `DONE`, `BLOCKED`, or `FAILED`. A blocked worker does not
-automatically terminate the run. The orchestrator may provide missing context,
-retry once, invoke a debugger, serialize conflicting work, change strategy,
-escalate capability, or complete the task itself. Agent lifecycle status never
-replaces a structured result, Git evidence, validation, or central integration.
-
-For isolated work, preserve worker branches and worktrees on conflicts or
-ambiguous dirty state. Restore the integration worktree only to a recorded
-clean checkpoint using a safe Git operation, re-evaluate ownership and
-dependencies, and serialize or recreate the affected task from the current
-integration head. Never force-clean ambiguous resources or silently resolve an
-independence conflict.
-
-Track retries and avoid infinite retry or review loops. Preserve the evidence
-for unresolved failures in the final report.
+Workers and providers never replace structured results, Git evidence, or
+validation. On `BLOCKED` or `FAILED`, load and follow
+`.swe-forge/policies/failure-recovery.md`; it owns retry limits, failure
+classification, debugger escalation, conflict handling, and conservative
+cleanup. Preserve ambiguous resources and report unresolved evidence rather
+than silently changing status or looping.
 
 ## Acceptance Gate
 
