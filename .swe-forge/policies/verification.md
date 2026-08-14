@@ -122,18 +122,12 @@ validation plan or delegated task contract is updated with the reason.
 Conditional and informational outcomes remain visible even when they do not
 block acceptance.
 
-## Independent Review
+## Independent Review Handoff
 
-After verification, provide a fresh-context reviewer when the trigger in the
-ticket workflow applies. Give the reviewer the original ticket, the
-`review_focus` from the PR working spec (or one derived from the ticket for
-other modes), acceptance criteria, relevant architecture, final diff, and
-evidence. The
-reviewer must check every acceptance criterion first, assess only the relevant
-quality areas, and use `../contracts/review.md` to separate in-scope findings
-from deferred out-of-scope follow-ups. Correctness, regressions, scope, error
-handling, compatibility, concurrency, security, performance, and tests remain
-review areas when relevant to the focus.
+The ticket workflow decides when independent review is required. When it is,
+load `.swe-forge/agents/reviewer.md` and `../contracts/review.md` before review.
+Verification supplies current validation evidence; the reviewer role owns review
+behavior and the contract owns the result shape and blocking matrix.
 
 ## Acceptance handoff
 

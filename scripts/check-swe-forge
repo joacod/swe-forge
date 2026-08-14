@@ -98,6 +98,12 @@ require_text './scripts/validate-swe-forge' .github/workflows/ci.yml
 require_text 'Validation cadence and batching' .swe-forge/policies/verification.md
 validate_registry
 
+for role in \
+  orchestrator researcher architect implementer reviewer debugger test-engineer \
+  refactor-specialist security-reviewer performance-reviewer; do
+  [ -f "$ROOT/.swe-forge/agents/$role.md" ] || fail "missing specialist role: $role"
+done
+
 [ -f "$ROOT/VERSION" ] || fail "missing release version file"
 release_version=$(awk 'NR == 1 { print; exit }' "$ROOT/VERSION")
 case "$release_version" in
@@ -172,7 +178,9 @@ require_text 'Run the repository checks' CONTRIBUTING.md
 require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md
 require_text 'evidence ledger' .swe-forge/policies/evidence.md
 require_text '`$STATE/receipt.md`' .swe-forge/policies/evidence.md
+require_text 'Independent Review Handoff' .swe-forge/policies/verification.md
 require_text 'Acceptance handoff' .swe-forge/policies/verification.md
+require_text 'Cleanup Handoff' .swe-forge/policies/failure-recovery.md
 reject_text '## Final Gate' .swe-forge/policies/verification.md
 require_text 'receipt_ref' .swe-forge/contracts/run-state.md
 require_text 'receipt_ref' .swe-forge/tools/swe-forge-gate
