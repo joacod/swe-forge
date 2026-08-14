@@ -112,8 +112,10 @@ force-removes ambiguous state.
 
 Run worker checks, integrated checks after each unit, wave checks, complete
 repository checks, and fresh review. The receipt is generated only from exact
-final `HEAD`, final fingerprint, and final evidence. Read-only receipt
-verification detects a later commit or same-path content mutation.
+final `HEAD`, final fingerprint, and final evidence. It remains private run
+evidence and is never copied into the project-facing PR description, including
+when the repository is SWE Forge itself. Read-only receipt verification detects
+a later commit or same-path content mutation.
 
 After one final PR, the guard can prove cleanup eligibility only when accepted
 commits are mapped and the worker is clean and observable. Remove only run-owned

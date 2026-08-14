@@ -55,6 +55,42 @@ ceremonial phases: a one-step ticket correctly produces one commit. When the
 plan has multiple meaningful steps, the PR history must contain one commit per
 step; review repairs are additional atomic commits rather than a squash.
 
+## Project-facing delivery artifacts
+
+Branches, commits, pull-request titles, and pull-request bodies (PR
+descriptions) are project-facing artifacts. They must read like normal
+software-engineering work,
+regardless of the repository or the tool that performed the run. Follow the
+repository's existing conventions first; otherwise use this compact default
+shape for a pull-request body:
+
+```text
+Summary:
+- <what changed and why it matters>
+
+Validation:
+- <relevant checks actually run>
+
+Notes:
+- <only material risk, compatibility, rollout, or follow-up; omit when empty>
+```
+
+Keep the title concise and imperative. Keep the body focused on the outcome,
+motivation, relevant behavior, reproducible project-level validation, and
+material risks. If the repository provides a pull-request template, follow its
+required sections without adding unrelated detail. Validation belongs in the
+body only when it helps a project reviewer understand or reproduce confidence
+in the change.
+
+Never include a SWE Forge receipt, evidence fingerprint, run metadata, topology,
+execution provider, harness, model, routing, context, internal path,
+transcript, raw log, working-spec, implementation-diary, or other tool-process
+detail in a project-facing pull request. Do not add tool or agent attribution,
+generated-by trailers, or run identifiers to commit messages or branch names.
+The same rule applies to SWE Forge's own pull requests; there is no internal
+exception. Receipts remain private run-evidence artifacts and may be reported
+separately when explicitly useful, but they are never PR content.
+
 ## One delivery boundary
 
 A normal run uses one task/delivery branch. An isolated run uses one

@@ -75,7 +75,8 @@ environment effects. It never launches agents or providers.
 ## Receipts
 
 Receipts are generated only from structured evidence and actual Git state. They
-include:
+are private run-evidence artifacts by default, not project-facing PR content.
+They include:
 
 ```text
 Head: <short final SHA>
@@ -89,8 +90,10 @@ created before a later commit or same-path content change is stale. Receipts
 never contain transcripts, raw logs, secrets, or private ticket content and
 never upgrade a blocked status by hand. `Execution provider` is the isolated
 worker provider and must be `NONE` for non-isolated runs; a model provider is a
-separate optional public metadata field. Merge state is intentionally not
-included because a receipt is not updated after a human merges the PR.
+separate optional metadata field in the private receipt. Never copy receipt
+content or workflow metadata into a pull-request description, commit message,
+or branch name. Merge state is intentionally not included because a receipt is
+not updated after a human merges the PR.
 
 ## Isolated guard
 

@@ -1,9 +1,11 @@
 # SWE Forge Receipt Contract
 
-A receipt is a compact public evidence summary generated from the executable
-evidence ledger. It contains no transcripts, raw logs, secrets, or private
-ticket content. It is not a replacement for run state, review, or final Git
-inspection.
+A receipt is a compact private run-evidence summary generated from the
+executable evidence ledger. It contains no transcripts, raw logs, secrets, or
+private ticket content. It is not a replacement for run state, review, or final
+Git inspection, and it is not a project-facing PR description, commit message,
+branch name, or changelog entry. Never copy a receipt into a PR description;
+this rule applies to every repository, including SWE Forge itself.
 
 ## Template
 
