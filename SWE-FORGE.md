@@ -518,6 +518,18 @@ incorrect or the gate cannot be met within the ticket and recovery limits.
 
 ## Final Report
 
+Begin the final harness output with a short `Work summary` in plain human
+language. Explain what changed and what it improves, then add only material
+notes when they help; scale the summary to the ticket and omit empty sections.
+Keep this summary separate from the private receipt and the project-facing PR
+description.
+
+```text
+Work summary:
+- <what changed and what it improves>
+- <material notes, when useful>
+```
+
 Return a concise report containing:
 
 - final status: `ACCEPTED`, `BLOCKED`, or `FAILED`

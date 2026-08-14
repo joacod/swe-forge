@@ -61,7 +61,16 @@ isolated integration/delivery branch) and creates exactly one pull request with
 a concise, project-facing title and body. The body explains the outcome and
 motivation, lists only relevant validation, and notes material risks or
 follow-ups when needed. It follows repository conventions and never includes a
-receipt, tool/process metadata, transcript, or unrelated detail. The executable
+receipt, tool/process metadata, transcript, or unrelated detail. The harness
+output also starts with a short human-facing summary, separate from the receipt:
+
+```text
+Work summary:
+- Added the health-check endpoint and focused coverage so callers can verify service availability.
+- Notes: no migration or external-service changes.
+```
+
+The executable
 gate keeps the receipt at `$STATE/receipt.md` by default and records its path in
 `receipt_ref`, so the evidence remains available in the private run state
 without changing the PR. The final report contains the PR URL. Merge remains a
