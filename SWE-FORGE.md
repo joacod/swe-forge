@@ -137,10 +137,11 @@ parser rules here.
 The ticket workflow loads `.swe-forge/policies/execution-routing.md` before the
 final topology decision. That policy owns the routing fields, hard eligibility,
 economic parallel-value decision, and safe fallback. Topology and provider
-remain separate dimensions: non-isolated runs use no execution provider, and an
-isolated run uses only the provider and strategies proven by the loaded
-provider policy. Explicit selections never bypass safety, validation, scope, or
-delivery authorization.
+remain separate dimensions: non-isolated runs record
+`execution_provider: NONE`, `parallel_strategy: NONE`, and
+`integration_strategy: NONE`, while an isolated run uses only the provider and
+strategies proven by the loaded provider policy. Explicit selections never
+bypass safety, validation, scope, or delivery authorization.
 
 ### SOLO
 
@@ -261,6 +262,7 @@ load before their first operation. Context and failure-recovery remain lazy.
 `ISOLATED` additionally loads provider-selection, delivery, result-bundle,
 run-state, isolated-execution, the selected provider runbook, and the isolated
 Git/evidence guard only after the isolated decision.
+
 ## State and Contracts
 
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or

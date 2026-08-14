@@ -185,9 +185,11 @@ decision. Do not load isolated-provider machinery for a non-isolated run.
 Record the routing fields and reasons defined by the loaded execution-routing
 policy. Choose the smallest safe topology; explicit requests do not bypass hard
 eligibility, provider capability, validation, scope, or delivery authorization.
-For non-isolated execution, record no execution provider or isolated strategy.
-When `ISOLATED` is selected, follow the loaded provider-selection policy and
-isolated workflow before creating workers or resources.
+For non-isolated execution, record
+`execution_provider: NONE`, `parallel_strategy: NONE`, and
+`integration_strategy: NONE`. When `ISOLATED` is selected, follow the loaded
+provider-selection policy and isolated workflow before creating workers or
+resources.
 
 ### 7. Test Strategy
 
@@ -206,9 +208,9 @@ not-applicable guidance; do not reproduce that decision tree here.
 Register expected checks before running them. Classify each check as required,
 conditional with an observable condition, or informational. For executable
 validation, candidate fingerprints, freshness, checkpoints, or receipts, use
-`policies/evidence.md` and keep its ledger outside the repository. Load the
-isolated task/result contracts and isolated workflow only when routing selects
-`ISOLATED`.
+`policies/evidence.md` and keep its ledger outside the repository. Load task and
+result contracts for delegated work; load the isolated workflow only when
+routing selects `ISOLATED`.
 
 ### Context continuity gate
 
@@ -247,10 +249,10 @@ eligibility check for isolated results.
 
 ### 9. Integrate
 
-For delegated or isolated work, load and follow the relevant task/result
-contracts and isolated workflow before accepting or transferring a worker
-result. Integrate only after scope, base, cleanliness, validation, and evidence
-requirements pass.
+For delegated work, load and follow the relevant task/result contracts before
+accepting or transferring a worker result. For `ISOLATED`, also load and follow
+the isolated workflow. Integrate only after scope, base, cleanliness,
+validation, and evidence requirements pass.
 
 The orchestrator owns integration and accepts only results that satisfy the
 loaded contracts and evidence policy. Preserve the `GUIDED` checkpoint boundary
@@ -272,8 +274,8 @@ adds its worker, integrated-state, wave, and central-build checks.
 
 When the review trigger applies, load
 `.swe-forge/agents/reviewer.md` and `.swe-forge/contracts/review.md` before
-review. The reviewer owns review
-behavior; the contract owns the result shape and blocking matrix.
+review. The reviewer owns review behavior; the contract owns the result shape and
+blocking matrix.
 
 Use a fresh context for independent review when delegation, multi-component
 scope, or medium-or-higher risk makes it useful; this refactor requires it.
