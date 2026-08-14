@@ -129,13 +129,10 @@ pull-request creation:
 /swe-forge pr isolated <ticket>     # same, delivery token first
 ```
 
-The parser accepts a delivery token before or after an explicit topology.
-Lower-case `pr`, `guided`, `solo`, `subagents`, and `isolated` are reserved in
-their command positions; other ticket text is preserved. A leading lowercase
-`herdr` is not an execution-topology alias. The ticket procedure returns
-migration guidance to use `isolated` and to request Herdr as an execution-
-provider preference instead of silently accepting that token as a mode. A
-missing ticket after either token is incomplete input.
+Reserved-token parsing, raw-argument preservation, incomplete-input handling,
+and Herdr migration guidance are owned by the loaded ticket procedure. The
+examples above describe the supported public grammar without duplicating its
+parser rules here.
 
 The ticket workflow loads `.swe-forge/policies/execution-routing.md` before the
 final topology decision. That policy owns the routing fields, hard eligibility,

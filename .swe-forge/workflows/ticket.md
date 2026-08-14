@@ -270,8 +270,9 @@ adds its worker, integrated-state, wave, and central-build checks.
 
 ### 11. Review
 
-When the review trigger applies, load `.swe-forge/agents/reviewer.md` and
-`.swe-forge/contracts/review.md` before review. The reviewer owns review
+When the review trigger applies, load
+`.swe-forge/agents/reviewer.md` and `.swe-forge/contracts/review.md` before
+review. The reviewer owns review
 behavior; the contract owns the result shape and blocking matrix.
 
 Use a fresh context for independent review when delegation, multi-component

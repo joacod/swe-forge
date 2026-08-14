@@ -386,17 +386,17 @@ reject_text 'pushing no longer asks whether' README.md
 # Runtime orchestration must expose canonical policy owners before their
 # decisions or actions are needed. These assertions protect the load path
 # while allowing the detailed rules to remain in their owning files.
-require_ordered_text '### 3. Specify' 'policies/specification.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 5. Decompose' 'policies/delegation.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 5. Decompose' 'policies/model-routing.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 6. Route' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before specification or clarification behavior is needed' 'policies/specification.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'When delegation or an independent review is useful' 'policies/delegation.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'When delegation or an independent review is useful' 'policies/model-routing.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before making the final automatic or explicit topology decision' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'policies/execution-routing.md' 'policies/provider-selection.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 7. Test Strategy' 'policies/verification.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 7. Test Strategy' 'policies/evidence.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 8. Implement' 'policies/delivery.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 11. Review' 'agents/reviewer.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 11. Review' 'contracts/review.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 12. Repair' 'policies/failure-recovery.md' .swe-forge/workflows/ticket.md
-require_ordered_text '### 13. Final Acceptance' 'canonical Acceptance Gate' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before selecting or executing the validation strategy' 'policies/verification.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'When executable gate evidence, candidate' 'policies/evidence.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before the first writable checkout/setup operation' 'policies/delivery.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'When the review trigger applies' 'agents/reviewer.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'When the review trigger applies' 'contracts/review.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before a `BLOCKED` or `FAILED` recovery path' 'policies/failure-recovery.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Compare the final integrated diff' 'canonical gate' .swe-forge/workflows/ticket.md
 
 printf '%s\n' 'PASS: SWE Forge structural checks'
