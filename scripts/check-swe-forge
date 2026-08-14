@@ -24,6 +24,19 @@ reject_text() {
   fi
 }
 
+require_ordered_text() {
+  first=$1
+  second=$2
+  file=$3
+  if ! awk -v first="$first" -v second="$second" '
+    index($0, first) && first_line == 0 { first_line = NR }
+    first_line > 0 && NR > first_line && index($0, second) { found = 1 }
+    END { exit !(first_line > 0 && found) }
+  ' "$ROOT/$file"; then
+    fail "$file does not load '$second' after '$first'"
+  fi
+}
+
 REGISTRY_VALIDATOR=$ROOT/scripts/lib/registry.sh
 [ -f "$REGISTRY_VALIDATOR" ] || fail "missing adapter registry validator"
 . "$REGISTRY_VALIDATOR"
@@ -348,5 +361,21 @@ reject_text 'verify all' scripts/test-swe-forge
 reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
 reject_text 'commit_policy:' .swe-forge/examples/isolated-ticket.md
 reject_text 'pushing no longer asks whether' README.md
+
+# Runtime orchestration must expose canonical policy owners before their
+# decisions or actions are needed. These assertions protect the load path
+# while allowing the detailed rules to remain in their owning files.
+require_ordered_text '### 3. Specify' 'policies/specification.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 5. Decompose' 'policies/delegation.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 5. Decompose' 'policies/model-routing.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 6. Route' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'policies/execution-routing.md' 'policies/provider-selection.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 7. Test Strategy' 'policies/verification.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 7. Test Strategy' 'policies/evidence.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 8. Implement' 'policies/delivery.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 11. Review' 'reviewer role' .swe-forge/workflows/ticket.md
+require_ordered_text '### 11. Review' 'contracts/review.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 12. Repair' 'policies/failure-recovery.md' .swe-forge/workflows/ticket.md
+require_ordered_text '### 13. Final Acceptance' 'canonical Acceptance Gate' .swe-forge/workflows/ticket.md
 
 printf '%s\n' 'PASS: SWE Forge structural checks'

@@ -130,6 +130,9 @@ API.
 
 ### 3. Specify
 
+Before specification or clarification behavior is needed, load and follow
+`.swe-forge/policies/specification.md` and `.swe-forge/contracts/working-spec.md`.
+
 Translate the ticket into observable acceptance criteria. Separate facts from
 assumptions and identify compatibility constraints.
 
@@ -162,6 +165,11 @@ before creating workers.
 
 ### 5. Decompose
 
+When delegation or an independent review is useful, first load
+`.swe-forge/policies/delegation.md`, the relevant task/result/review contracts,
+and the relevant role files. Load `.swe-forge/policies/model-routing.md` before
+assigning a model capability class.
+
 Create bounded tasks only where decomposition provides useful independence.
 Each writable task must state its objective, reason, dependencies, allowed
 scope, forbidden scope, acceptance criteria, validation, risk, and expected
@@ -183,6 +191,13 @@ lockfile, or generated artifact with unsettled ownership requires foundation
 work first and may require serialization.
 
 ### 6. Route
+
+Before making the final automatic or explicit topology decision, load and
+follow `.swe-forge/policies/execution-routing.md`. If `ISOLATED` is selected,
+load `.swe-forge/policies/provider-selection.md` and prove its capabilities
+before worker execution; then load
+`.swe-forge/workflows/isolated-execution.md` after the foundation and provider
+decision. Do not load isolated-provider machinery for a non-isolated run.
 
 Record exactly one execution topology, one provider decision where relevant,
 and one delivery mode with their reasons:
@@ -229,6 +244,11 @@ preference but not safety, provider capability, validation, scope, or delivery
 authorization.
 
 ### 7. Test Strategy
+
+Before selecting or executing the validation strategy, load and follow
+`.swe-forge/policies/verification.md`. When executable gate evidence, candidate
+fingerprints, freshness, or receipts are used, load
+`.swe-forge/policies/evidence.md` before planning or collecting that evidence.
 
 Before implementation, identify the observable behavior and public seam that
 will provide confidence. Record a concise testing decision for every ticket,
@@ -321,6 +341,12 @@ because a compacted summary omitted it.
 
 ### 8. Implement
 
+Before the first writable checkout/setup operation, first edit, or any
+commit/push/PR-related decision, load and follow
+`.swe-forge/policies/delivery.md`. It is the sole detailed owner of local
+resource authorization, checkout and branch ownership, commits, pushes, pull
+requests, synchronization, integration, and cleanup.
+
 Execute dependency waves while preserving bounded scope. A worker owns only the
 task it received and must report scope expansion or blocking issues
 immediately. In `GUIDED`, complete and validate one review slice at a time,
@@ -367,6 +393,11 @@ cleanliness, declared commits, scope, untracked state, worker validation, and
 forbidden delivery actions all pass the checks in the isolated workflow.
 
 ### 9. Integrate
+
+For delegated or isolated work, load and follow the relevant task/result
+contracts and isolated workflow before accepting or transferring a worker
+result. Integrate only after scope, base, cleanliness, validation, and evidence
+requirements pass.
 
 The orchestrator owns integration. Review each result against its task contract
 before combining it with other work. Preserve the checkpoint boundary in
@@ -418,6 +449,10 @@ eligibility evidence.
 
 ### 11. Review
 
+When the review trigger applies, load the reviewer role and
+`.swe-forge/contracts/review.md` before review. The reviewer owns review
+behavior; the contract owns the result shape and blocking matrix.
+
 Use a fresh context for independent review whenever implementation was
 delegated, the change spans components, risk is medium or higher, or security,
 data integrity, compatibility, concurrency, or external effects are relevant.
@@ -442,6 +477,10 @@ stylistic opinions do not block completion by themselves.
 
 ### 12. Repair
 
+Before a `BLOCKED` or `FAILED` recovery path, load and follow
+`.swe-forge/policies/failure-recovery.md`. It owns the recovery ladder, retry
+ceilings, failure classification, and conservative cleanup.
+
 Repair only relevant findings within the original scope. Do not pull deferred
 follow-ups into the current ticket without an explicit scope decision. Re-run
 affected tests and quality gates. Escalate to a debugger only when root cause
@@ -453,6 +492,10 @@ Repairs to an isolated integration branch normally become explicit cohesive
 repair commits; do not rewrite accepted integration history automatically.
 
 ### 13. Final Acceptance
+
+The canonical Acceptance Gate lives in `SWE-FORGE.md`; verification, evidence,
+review, delivery, and recovery policies contribute evidence to that gate and
+do not define a competing final gate.
 
 Compare the final integrated diff to the original ticket, acceptance criteria,
 review focus, and explicit constraints. Check for missing functionality,
