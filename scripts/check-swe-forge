@@ -391,6 +391,9 @@ require_ordered_text 'When delegation or an independent review is useful' 'polic
 require_ordered_text 'When delegation or an independent review is useful' 'policies/model-routing.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before making the final automatic or explicit topology decision' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'policies/execution-routing.md' 'policies/provider-selection.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before worker execution, also load' 'result-bundle.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before worker execution, also load' 'providers/' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before worker execution, also load' 'swe-forge-isolated-gate' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before selecting or executing the validation strategy' 'policies/verification.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'When executable gate evidence, candidate' 'policies/evidence.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before the first writable checkout/setup operation' 'policies/delivery.md' .swe-forge/workflows/ticket.md

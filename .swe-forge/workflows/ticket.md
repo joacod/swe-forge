@@ -180,7 +180,12 @@ follow `.swe-forge/policies/execution-routing.md`. If `ISOLATED` is selected,
 load `.swe-forge/policies/provider-selection.md` and prove its capabilities
 before worker execution; then load
 `.swe-forge/workflows/isolated-execution.md` after the foundation and provider
-decision. Do not load isolated-provider machinery for a non-isolated run.
+decision. Before worker execution, also load
+`.swe-forge/contracts/task.md`, `.swe-forge/contracts/result.md`,
+`.swe-forge/contracts/result-bundle.md`, `.swe-forge/contracts/run-state.md`,
+the selected provider runbook under `.swe-forge/providers/`, and
+`.swe-forge/tools/swe-forge-isolated-gate`. Do not load isolated-provider
+machinery for a non-isolated run.
 
 Record the routing fields and reasons defined by the loaded execution-routing
 policy. Choose the smallest safe topology; explicit requests do not bypass hard
