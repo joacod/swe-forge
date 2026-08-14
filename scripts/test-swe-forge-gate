@@ -88,6 +88,15 @@ state=$(clean_feature_state "$repo")
     --model-provider openai-codex --routing-reason 'tightly coupled test fixture' \
     --model test-model --context-status compacted \
     --context-evidence 'manual fixture compaction' --output "$TMP_ROOT/receipt.md" >/dev/null
+  # The default output is retained in run-local evidence state and is usable
+  # without repeating the output path during verification.
+  "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
+    --pr-url https://github.com/example/repo/pull/1 >/dev/null
+  test -f "$state/receipt.md"
+  grep -F -- '- smoke: passed' "$state/receipt.md" >/dev/null
+  grep -F -- '- final-smoke: passed' "$state/receipt.md" >/dev/null
+  "$GATE" receipt --verify --state "$state" >/dev/null
+  "$GATE" receipt-verify --state "$state" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || \
   fail "accepted receipt is missing final status"
@@ -106,6 +115,9 @@ grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null ||
 if grep -F 'Merge performed: no' "$TMP_ROOT/receipt.md" >/dev/null; then
   fail "receipt exposes a merge status that becomes stale after PR creation"
 fi
+receipt_ref=$(awk -F': ' '$1 == "receipt_ref" { print $2; exit }' "$state/run-state.yaml")
+[ "$receipt_ref" != none ] || fail "run state does not retain the default receipt reference"
+[ -f "$receipt_ref" ] || fail "run state receipt reference does not point to a file"
 if grep -F 'grep -q' "$TMP_ROOT/receipt.md" >/dev/null; then
   fail "receipt leaked validation command output"
 fi

@@ -222,6 +222,7 @@ write_run_state() {
     printf 'delivery_mode: PR\n'
     printf 'reason: sequential central implementation\n'
     printf 'fallback_used: no\n'
+    printf 'receipt_ref: none\n'
     printf 'invocation_checkout:\n'
     printf '  path: %s\n' "$CHECKOUT"
     printf '  branch: %s\n' "$branch"
@@ -316,6 +317,27 @@ update_state_checkout() {
       next
     }
     { print }
+  ' "$state_file" >"$tmp"
+  mv "$tmp" "$state_file"
+}
+
+update_state_receipt_ref() {
+  receipt_ref=$1
+  state_file=$STATE/run-state.yaml
+  [ -f "$state_file" ] || return 0
+  reject_control_chars "$receipt_ref"
+  tmp=$state_file.tmp.$$
+  awk -v wanted="$receipt_ref" '
+    BEGIN { found=0 }
+    /^receipt_ref:/ && found == 0 {
+      print "receipt_ref: " wanted
+      found=1
+      next
+    }
+    { print }
+    END {
+      if (found == 0) print "receipt_ref: " wanted
+    }
   ' "$state_file" >"$tmp"
   mv "$tmp" "$state_file"
 }
@@ -1145,6 +1167,10 @@ receipt_status_display() {
   fi
   result=$(latest_status "$name" "$fp" "$final_mode")
   status=${result%%"$TAB"*}
+  if [ "$status" = missing ] && [ "$final_required" = false ] && \
+    checkpoint_has_check "$name"; then
+    status=passed
+  fi
   case "$status" in
     passed) printf 'passed\n' ;;
     failed) printf 'failed\n' ;;
@@ -1325,7 +1351,8 @@ receipt_run() {
     esac
   done
   if [ "$verify_mode" = yes ]; then
-    [ -n "$output" ] || fail "receipt verification requires --receipt"
+    [ -n "${STATE:-}" ] || fail "--state is required"
+    [ -n "$output" ] || output=$STATE/receipt.md
     receipt_verify --state "$STATE" --receipt "$output"
     return
   fi
@@ -1348,16 +1375,18 @@ receipt_run() {
   if [ -n "$output" ]; then
     reject_control_chars "$output"
     output=$(absolute_path "$output")
-    output_tmp=$output.tmp.$$
   else
-    output_tmp=$STATE/receipt.$$.md
+    output=$STATE/receipt.md
   fi
+  output_tmp=$output.tmp.$$
   if [ "$delivery" = PR ]; then check_final_state yes; else check_final_state no; fi
   if [ "$receipt_context_status" = blocked ]; then
     final_blockers=$((final_blockers + 1))
   fi
   receipt_text "$execution" "$delivery" "$PR_URL" >"$output_tmp"
-  if [ -n "$output" ]; then mv "$output_tmp" "$output"; cat "$output"; else cat "$output_tmp"; rm -f "$output_tmp"; fi
+  mv "$output_tmp" "$output"
+  update_state_receipt_ref "$output"
+  cat "$output"
   [ "$final_blockers" -eq 0 ]
 }
 
@@ -1379,7 +1408,8 @@ receipt_verify() {
       *) fail "unknown receipt-verify option: $1" ;;
     esac
   done
-  [ -n "$receipt_file" ] || fail "--receipt is required"
+  [ -n "${STATE:-}" ] || fail "--state is required"
+  [ -n "$receipt_file" ] || receipt_file=$STATE/receipt.md
   [ -f "$receipt_file" ] || fail "receipt does not exist: $receipt_file"
   ensure_meta_state
   assert_identity

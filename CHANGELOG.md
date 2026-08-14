@@ -13,6 +13,8 @@ change between alpha releases.
 - PR runs now plan meaningful implementation slices before editing, preserve one
   validated commit per slice, and support sequential slice evidence without
   repeating unchanged run-state validation.
+- Receipt generation now keeps a run-local copy by default without adding
+  workflow metadata to pull requests.
 - Continue collecting real-run reports across supported harnesses.
 - The planned first alpha, `v0.1.0-alpha.1`, remains unpublished. Its tagged
   installation instructions become usable only after a separate manual
