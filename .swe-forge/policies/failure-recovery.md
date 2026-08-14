@@ -107,14 +107,12 @@ Classify the finding using the blocking matrix in
 request a focused re-review. Do not loop on nonblocking low-confidence style
 opinions.
 
-## Safe Cleanup
+## Cleanup Handoff
 
-After acceptance, remove only run-owned clean worktrees and safely delete only
-integrated local worker branches. Never force-remove a worktree, clean an
-ambiguous checkout, delete a worker branch with unintegrated changes, or delete
-the integration/delivery branch used for the PR. Removing a Herdr worktree does
-not delete its branch. Preserve and report dirty, blocked, or unresolved
-resources, processes, provider sessions, and environment resources.
+Cleanup authorization and the exact safe-removal rules are owned by
+`../policies/delivery.md`. During recovery, preserve dirty, blocked, stale,
+conflicting, or ambiguous resources and report their state; never use recovery
+as permission for destructive cleanup.
 
 ## Final Failure Reporting
 

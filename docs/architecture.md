@@ -33,18 +33,19 @@ use the canonical `<type>/<short-kebab-case-description>` form without a
 project-name prefix; only ephemeral isolated worker branches use internal
 run/task namespacing.
 
-Minimal load sets:
+Minimal load sets are stage-triggered:
 
-- `SOLO`: `SWE-FORGE.md`, `workflows/ticket.md`, orchestrator role, relevant
-  verification/evidence/delivery policy and contracts
-- Long-running or context-risk tickets add `policies/context.md`, the
-  working-spec contract, and the run-state contract to the selected topology's
-  load set.
-- `SUBAGENTS`: the `SOLO` set plus task/result/review contracts and the
-  relevant researcher, implementer, test, or reviewer roles
-- `ISOLATED`: the `SUBAGENTS` set plus execution-routing, provider-selection,
-  delivery, run-state, result-bundle, isolated-execution, the selected
-  provider runbook, and the isolated Git/evidence guard
+- Every run loads `SWE-FORGE.md`, `workflows/ticket.md`, and the orchestrator
+  role; `PR` adds specification and working-spec sources before specification.
+- `AUTO` loads execution-routing before the topology decision; delegation adds
+  its policy, relevant roles, model-routing when needed, and task/result/review
+  contracts.
+- Delivery loads before writable setup or delivery decisions; verification and
+  evidence load before validation strategy or executable evidence. Long-running
+  or context-risk tickets add context and run-state sources when triggered.
+- `ISOLATED` adds provider-selection, delivery, run-state, result-bundle,
+  isolated-execution, the selected provider runbook, and the isolated
+  Git/evidence guard only after routing selects that topology.
 
 ## Layers
 

@@ -122,35 +122,18 @@ validation plan or delegated task contract is updated with the reason.
 Conditional and informational outcomes remain visible even when they do not
 block acceptance.
 
-## Independent Review
+## Independent Review Handoff
 
-After verification, provide a fresh-context reviewer when the trigger in the
-ticket workflow applies. Give the reviewer the original ticket, the
-`review_focus` from the PR working spec (or one derived from the ticket for
-other modes), acceptance criteria, relevant architecture, final diff, and
-evidence. The
-reviewer must check every acceptance criterion first, assess only the relevant
-quality areas, and use `../contracts/review.md` to separate in-scope findings
-from deferred out-of-scope follow-ups. Correctness, regressions, scope, error
-handling, compatibility, concurrency, security, performance, and tests remain
-review areas when relevant to the focus.
+The ticket workflow decides when independent review is required. When it is,
+load `.swe-forge/agents/reviewer.md` and `../contracts/review.md` before review.
+Verification supplies current validation evidence; the reviewer role owns review
+behavior and the contract owns the result shape and blocking matrix.
 
-## Final Gate
+## Acceptance handoff
 
-Accept only when:
-
-- every original acceptance criterion is addressed
-- relevant quality gates pass
-- no blocking finding under `../contracts/review.md` remains
-- unintended changes are absent
-- the final integrated diff has been inspected
-- a requested `PR` delivery has completed its authorized commit, push, and PR
-  actions, or is explicitly reported as `BLOCKED`
-
-When a gate cannot run, state why and leave the result as a risk rather than
-claiming success. In `PR` mode, an unavailable tool needed to create the
-requested PR produces `BLOCKED` after preserving the reviewed local branch; it
-must not be reported as a completed delivery. In `GUIDED`, an unavailable
-optional delivery tool does not invalidate an accepted reviewed diff when no
-delivery action was requested. A generated receipt must preserve the same
-status and show missing or unavailable evidence explicitly.
+Verification produces testing and quality evidence consumed by the canonical
+Acceptance Gate in `SWE-FORGE.md`. This policy does not define a competing
+final gate. Report unavailable or failed required evidence explicitly and let
+the canonical gate determine whether the run is `ACCEPTED`, `BLOCKED`, or
+`FAILED`; delivery authorization and receipt semantics remain owned by their
+canonical policy and contract.

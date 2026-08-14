@@ -130,23 +130,16 @@ API.
 
 ### 3. Specify
 
-Translate the ticket into observable acceptance criteria. Separate facts from
-assumptions and identify compatibility constraints.
+Before specification or clarification behavior is needed, load and follow
+`.swe-forge/policies/specification.md` and `.swe-forge/contracts/working-spec.md`.
 
-In `GUIDED`, ask only blocking questions and keep the plan in the active
-context unless a durable run artifact is needed. In `PR`, follow
-`.swe-forge/policies/specification.md`: inspect repository facts first, run at
-most a short high-leverage interview when the ticket is underspecified, and
-build the transient artifact described by
-`.swe-forge/contracts/working-spec.md`. Do not write ticket-specific specs to
-the repository. The PR working spec must also contain a `review_focus` with one
-clear review goal, the acceptance criteria to check, relevant quality concerns,
-explicit non-goals, and a finding rule. When a specialist skill is considered,
-the working spec records its source, selection status, and reason. For
-long-running or context-risk work, the spec also records the safe
-pre-continuation compaction action, overflow recovery, and external
-durable-state reference. A reasonable, low-risk assumption may be recorded
-and used; a blocking user decision must be asked rather than guessed.
+Translate the ticket into observable acceptance criteria and separate facts,
+assumptions, compatibility constraints, and blocking decisions. The loaded
+specification policy owns repository fact gathering and clarification; the
+working-spec contract owns the transient shape. In `PR`, make that spec ready
+before writable work without creating a repository artifact. Record its review
+focus, non-goals, specialist-skill decision, and context strategy when
+applicable. Ask only blocking user questions and record low-risk assumptions.
 
 ### 4. Architect
 
@@ -162,374 +155,171 @@ before creating workers.
 
 ### 5. Decompose
 
-Create bounded tasks only where decomposition provides useful independence.
-Each writable task must state its objective, reason, dependencies, allowed
-scope, forbidden scope, acceptance criteria, validation, risk, and expected
-result. For `ISOLATED`, each task additionally records `shared_artifacts`,
-`base_sha`, `wave`, and `integration_order` as required by
-`.swe-forge/workflows/isolated-execution.md`.
+When delegation or an independent review is useful, first load
+`.swe-forge/policies/delegation.md`, the relevant task/result/review contracts,
+and the relevant role files. Load `.swe-forge/policies/model-routing.md` before
+assigning a model capability class.
 
-For `GUIDED`, also divide broad work into cohesive review slices with a small
-observable boundary and an explicit checkpoint. For `PR`, the transient working
-spec must include an ordered commit plan even when execution is `SOLO`. Each
-step owns a cohesive observable boundary, scope, dependencies, targeted
-validation, and commit subject. Keep steps large enough to avoid ceremonial
-commits but small enough that one validated step can be reviewed independently.
+Create bounded tasks only where the loaded delegation policy and contracts
+provide useful independence. Keep each task's ownership and validation
+explicit; isolated task fields come from the loaded contracts and workflow.
 
-Parallelize only when dependencies are satisfied, ownership is non-overlapping,
-and outputs can be independently evaluated. Otherwise use sequential waves or
-`SOLO`. A shared schema, migration, contract, architecture decision, root
-lockfile, or generated artifact with unsettled ownership requires foundation
-work first and may require serialization.
+For `GUIDED`, divide broad work into cohesive review slices. For `PR`, record
+an ordered commit plan in the working spec even in `SOLO`; keep steps cohesive
+and independently reviewable without ceremonial boundaries.
+
+Parallelize only when dependencies are satisfied and ownership is
+non-overlapping. Otherwise use sequential waves or `SOLO`; unsettled shared
+architecture, contracts, schemas, lockfiles, or generated artifacts require
+foundation work first.
 
 ### 6. Route
 
-Record exactly one execution topology, one provider decision where relevant,
-and one delivery mode with their reasons:
+Before making the final automatic or explicit topology decision, load and
+follow `.swe-forge/policies/execution-routing.md`. If `ISOLATED` is selected,
+load `.swe-forge/policies/provider-selection.md` and prove its capabilities
+before worker execution; then load
+`.swe-forge/workflows/isolated-execution.md` after the foundation and provider
+decision. Before worker execution, also load
+`.swe-forge/contracts/task.md`, `.swe-forge/contracts/result.md`,
+`.swe-forge/contracts/result-bundle.md`, `.swe-forge/contracts/run-state.md`,
+the selected provider runbook under `.swe-forge/providers/`, and
+`.swe-forge/tools/swe-forge-isolated-gate`. Do not load isolated-provider
+machinery for a non-isolated run.
 
-```text
-requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
-execution_mode: SOLO | SUBAGENTS | ISOLATED
-requested_provider: AUTO | NATIVE | HERDR | NONE
-execution_provider: NATIVE | HERDR | NONE
-provider_reason: <why this provider satisfies the isolated-execution requirements>
-parallel_strategy: NONE | COMPOSE
-integration_strategy: NONE | CHERRY_PICK
-requested_delivery: DEFAULT | GUIDED | PR
-delivery_mode: GUIDED | PR
-reason: <why this is the smallest useful topology>
-fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
-```
-
-Use `SOLO` for small, tightly coupled, or inherently sequential work. Use
-`SUBAGENTS` for useful native parallel read-only work or sequential bounded
-writable delegation in one checkout. Use `ISOLATED` only when concurrent
-writable work needs separate execution environments and the full automatic
-gate in `.swe-forge/policies/execution-routing.md` passes, or when the user
-explicitly requests it and safe isolation is available.
-
-Any concurrent writable subagents using separate worktrees are `ISOLATED`,
-even when the current harness provides those worktrees natively. Strong context
-isolation alone does not justify `ISOLATED`; difficulty, file count, or the
-presence of Herdr alone does not justify it.
-
-When `execution_mode` is `ISOLATED`, load
-`.swe-forge/policies/provider-selection.md`, select `NATIVE` or `HERDR` only
-when its capabilities are demonstrated, and record `provider_reason`.
-`parallel_strategy` must be `COMPOSE` and `integration_strategy` must be
-`CHERRY_PICK`. If neither provider can supply required isolation, fall back to
-sequential `SUBAGENTS` or `SOLO` when safe, or return `BLOCKED` when required
-isolation would be lost. A non-isolated run records `execution_provider: NONE`,
-`parallel_strategy: NONE`, and `integration_strategy: NONE`.
-
-Never choose a mode merely because the task is difficult or a tool is
-available. For `AUTO`, record why all ten isolated-routing conditions passed or
-which condition caused serialization. An explicit mode bypasses topology
-preference but not safety, provider capability, validation, scope, or delivery
-authorization.
+Record the routing fields and reasons defined by the loaded execution-routing
+policy. Choose the smallest safe topology; explicit requests do not bypass hard
+eligibility, provider capability, validation, scope, or delivery authorization.
+For non-isolated execution, record
+`execution_provider: NONE`, `parallel_strategy: NONE`, and
+`integration_strategy: NONE`. When `ISOLATED` is selected, follow the loaded
+provider-selection policy and isolated workflow before creating workers or
+resources.
 
 ### 7. Test Strategy
 
-Before implementation, identify the observable behavior and public seam that
-will provide confidence. Record a concise testing decision for every ticket,
-even when the result is that no automated test is applicable:
+Before selecting or executing the validation strategy, load and follow
+`.swe-forge/policies/verification.md`. When executable gate evidence, candidate
+fingerprints, freshness, or receipts are used, load
+`.swe-forge/policies/evidence.md` before planning or collecting that evidence.
 
-- `behavior`: the changed user- or caller-observable behavior
-- `seam`: the public interface or observable boundary under test, or `none`
-- `existing_coverage`: relevant tests already present, or `none found`
-- `approach`: `regression`, `acceptance`, `characterization`,
-  `existing-sufficient`, `manual`, or `not-applicable`
-- `development_mode`: `test-first`, `test-after`, or `not-applicable`
-- `rationale`: why this is the smallest useful evidence
+Before implementation, record the testing decision required by
+`policies/verification.md` in the transient working spec or run state. Keep it
+behavior-first: identify the observable behavior, seam, existing coverage,
+smallest useful approach, development mode, rationale, and residual risk. The
+verification policy owns regression, characterization, test-first, manual, and
+not-applicable guidance; do not reproduce that decision tree here.
 
-Select validation proportional to risk and behavior:
-
-- reproduce a bug and add a regression test first when practical
-- use test-first development when it provides useful feedback or design signal
-- establish a green baseline before behavior-preserving refactors
-- use characterization tests when existing behavior needs protection
-- use targeted tests at public seams for new or changed behavior
-- use focused manual or reproduction evidence when automation is unavailable
-  or not justified
-- avoid ceremonial tests for changes with no meaningful test surface
-
-Existing tests can be sufficient; no blanket coverage target is required. A
-behavior change without an automated test needs an executed manual or
-reproduction check and an explicit residual-risk note. A test plan alone is not
-validation. When test-first is selected, work in vertical red-green-refactor
-slices rather than writing a speculative test suite upfront.
-
-Record what will be run before implementation when the task is delegated.
-When `.swe-forge/tools/swe-forge-gate` is available, register the expected
-checks with `plan-check`, then use `validate` or `record-check-status` for
-preflight, each current slice, and current-HEAD final checks; keep that ledger
-outside the repository or under an already ignored path. Mark slice-local
-checks with `--final-required false` and register final checks separately.
-Classify each check as `required`, `conditional`, or `informational`; every
-conditional check must include its observable condition. Mark slice-local
-checks with `--final-required false` and final checks with the default
-`--final-required true`. Use targeted checks for each slice and batch independent
-final checks when the repository provides an inspected runner; batching must
-preserve per-check results and fail when a required check fails. Do not use
-batching to bypass current-candidate fingerprint binding. Validation,
-checkpoint, and commit evidence is bound to the exact candidate fingerprint.
-Inspect commands
-before execution for filesystem mutation, credentials, networking, migrations,
-deployment, publication, production access, or shared-environment effects.
-Classify delivery commands separately: local commit, branch push, PR creation,
-and post-merge sync. A normal guided invocation authorizes local validation and
-one safe task-branch setup from a clean protected default branch, but not
-delivery. `go` authorizes the current guided slice's local commit; `PR` mode
-authorizes per-slice commits, the final integration-branch push, and one PR
-after their applicable gates. Merge always needs a separate instruction.
-
-For `ISOLATED`, add environment isolation to the plan and task contracts:
-
-```yaml
-environment_isolation:
-  setup_commands: []
-  copied_ignored_files: []
-  ports: []
-  databases: []
-  docker_projects: []
-  temporary_directories: []
-  external_resources: []
-  cleanup_commands: []
-```
-
-Copy ignored files only from an explicit allowlist, allocate unique resources,
-inspect setup side effects, and serialize when safe resource isolation is not
-available. Migrations and shared persistent environments require separate
-authorization.
+Register expected checks before running them. Classify each check as required,
+conditional with an observable condition, or informational. For executable
+validation, candidate fingerprints, freshness, checkpoints, or receipts, use
+`policies/evidence.md` and keep its ledger outside the repository. Load task and
+result contracts for delegated work; load the isolated workflow only when
+routing selects `ISOLATED`.
 
 ### Context continuity gate
 
-For a long-running or context-risk ticket, load and follow
-`.swe-forge/policies/context.md`. A `near-limit` signal is handled before the
-next meaningful continuation: stop at a safe turn/slice boundary, persist the
-external working spec and run state, invoke the host-native or adapter-provided
-compaction, wait for it to settle, then re-read state and inspect the current
-Git `HEAD` and diff before resuming. Do not use a guessed token percentage when
-the host exposes a remaining-budget signal, and do not compact during an
-ambiguous mutation.
-
-An `overflow` response is not a Forge task retry. If the host documents
-compact-and-retry, wait for that lifecycle and verify its result before
-continuing. Otherwise persist state and block for a manual compact or fresh
-session. Never repeat the last write, commit, or validation command merely
-because a compacted summary omitted it.
+For a long-running or context-risk ticket, or when the host reports a
+near-limit or overflow condition, load and follow
+`.swe-forge/policies/context.md` before continuing. Record the host capability
+signal, durable-state reference, recovery status, and Git/evidence recheck in
+the transient state. Ordinary tickets do not load this lazy policy and report
+`not-observed` when no context limit is reached.
 
 ### 8. Implement
 
-Execute dependency waves while preserving bounded scope. A worker owns only the
-task it received and must report scope expansion or blocking issues
-immediately. In `GUIDED`, complete and validate one review slice at a time,
-then stop at a checkpoint with the diff boundary and next slice. Resume after
-`continue` or a revision; `go` (or `commit and continue`) first creates a local
-commit for the reviewed slice, then resumes. In `PR`, finalize the first
-commit-plan step only after its targeted checks pass, create exactly that
-step's local commit, and then begin the next step. Keep the planned history
-separate; do not defer all commits until the end or collapse multiple steps
-into one catch-all commit. Refresh the short working-spec and run-state
-checkpoint after each validated step and before a context-triggered
-compaction. Stop only for a blocking decision or failed gate.
+Before the first writable checkout/setup operation, first edit, or any
+commit/push/PR-related decision, load and follow
+`.swe-forge/policies/delivery.md`. It is the sole detailed owner of local
+resource authorization, checkout and branch ownership, commits, pushes, pull
+requests, synchronization, integration, and cleanup.
 
-Two writing workers must never edit the same checkout concurrently. Read-only
-workers may inspect the integration checkout. `ISOLATED` writable workers each
-receive a dedicated worktree and local branch from the exact recorded
-integration `HEAD`; they cannot access the integration checkout. The
-integration worktree belongs exclusively to the orchestrator.
+Implement only the bounded dependency waves selected by the architecture and
+working spec. In `PR`, validate and commit each planned step before beginning
+the next; in `GUIDED`, stop at the declared checkpoint. Keep task ownership,
+scope, and delivery authorization explicit and stop on a blocking gate.
 
-Before the first edit, name the normal task/delivery branch or isolated
-integration/delivery branch with the canonical
-`<type>/<short-kebab-case-description>` convention in
-`.swe-forge/policies/delivery.md`; do not use the project name as a generic
-prefix. Then confirm that writable work is on a dedicated, non-protected branch
-or worktree. Protected branches include repository-declared
-protected branches, the locally known remote default branch, `main`, and
-`master`. From a clean protected default, automatically create and record one
-safe non-protected task/delivery branch for `SOLO` or `SUBAGENTS`. For
-`ISOLATED`, the orchestrator creates one run-owned integration worktree and one
-integration/delivery branch, then creates bounded worker resources only as
-ready waves permit. Leave the user's original checkout untouched.
+Keep concurrent writable work out of one checkout. If routing selects
+`ISOLATED`, follow the loaded isolated workflow and provider contracts; otherwise
+use one selected writable checkout.
 
-Do not write when the relevant checkout is dirty, detached, or cannot be
-classified safely. Stop and ask the user to resolve those conditions rather
-than moving or overwriting work. Record a pre-edit baseline with the absolute
-checkout path, HEAD, branch, remote-default evidence, branch/worktree setup,
-and staged, unstaged, and untracked files. If the request for additional
-branches or worktrees is ambiguous, ask before creating them.
+Before writing, apply the loaded delivery policy to classify the checkout,
+record the pre-edit baseline, and use the one permitted task or integration
+branch. Preserve dirty, detached, protected, or ambiguous state instead of
+resetting, stashing, cleaning, or overwriting it.
 
-Workers must run assigned validation and return a structured result. They must
-not claim success from code inspection alone. A writable isolated result is
-eligible for integration only when branch/worktree identity, exact base,
-cleanliness, declared commits, scope, untracked state, worker validation, and
-forbidden delivery actions all pass the checks in the isolated workflow.
+Delegated workers return the loaded structured result contract and cannot claim
+success from code inspection alone. The isolated guard remains the executable
+eligibility check for isolated results.
 
 ### 9. Integrate
 
-The orchestrator owns integration. Review each result against its task contract
-before combining it with other work. Preserve the checkpoint boundary in
-`GUIDED`; the user reviews the integrated slice before the next writable wave.
-For isolated worktrees, integrate accepted results centrally and sequentially in
-recorded `integration_order`, not completion order.
+For delegated work, load and follow the relevant task/result contracts before
+accepting or transferring a worker result. For `ISOLATED`, also load and follow
+the isolated workflow. Integrate only after scope, base, cleanliness,
+validation, and evidence requirements pass.
 
-For every isolated integration unit, inspect the source commit and result,
-verify scope and base, record a clean checkpoint, apply changes without
-immediately finalizing the integration commit, run integrated validation, then
-create the final repository-appropriate commit and record the
-source-to-integration commit mapping. Do not blindly merge branches or copy
-entire worktrees. Do not resolve conflicts silently.
-
-A conflict between supposedly independent tasks requires stopping safely,
-preserving worker resources, restoring the integration worktree to its recorded
-clean checkpoint with a safe operation, re-evaluating ownership and
- dependencies, and serializing or recreating the affected task. Never force
-cleanup against ambiguous state.
+The orchestrator owns integration and accepts only results that satisfy the
+loaded contracts and evidence policy. Preserve the `GUIDED` checkpoint boundary
+and use the isolated workflow for central transfer, validation, ordering, and
+conflict handling when that topology is selected.
 
 ### 10. Verify
 
-Run the relevant repository quality gates after integration. When using the
-executable evidence gate, mark every required or applicable conditional final
-check with `--final` against the final HEAD. In `PR` mode, each slice or
-integration unit's required targeted checks must pass before its local
-integration commit, and final verification and fresh review must pass before
-push or PR creation. Run `deliver-pr` before external push or PR actions when
-the executable gate is available. In `GUIDED`, a checkpoint may report a passing
-slice while final acceptance remains pending. If context recovery occurred,
-final checks and fresh review must bind to the post-recovery `HEAD`. Checks may
-include targeted
-tests, the complete test suite, typecheck, lint, build, static analysis,
-packaging, or repository-specific structural and installer checks.
-
-Report every check as passed, failed, skipped, or unavailable. Explain why a
-check was not applicable or could not run. Every required check must pass. A
-conditional check must pass when its condition applies or have a recorded
-evidence-backed determination that it does not apply. Informational checks
-never substitute for required evidence. Changing or substituting a delegated
-check requires a revised task contract.
-
-For `ISOLATED`, require worker-level targeted validation, integrated-state
-validation after each integration unit, wave-level validation after each wave,
-complete applicable repository checks after all integration, and evidence that
-the final integration commits were built centrally. Use the fixed result bundle
-and canonical isolated Git/evidence guard; provider completion alone is never
-eligibility evidence.
+Run the relevant repository quality gates after integration by following the
+loaded verification and evidence policies. In `PR`, all applicable slice and
+final checks must pass before the authorized commit, push, and PR actions. In
+`GUIDED`, a checkpoint may report a passing slice while final acceptance remains
+pending. Report every check as passed, failed, skipped, unavailable, or
+not-applicable with its evidence; do not substitute provider status or code
+inspection for validation. If `ISOLATED` is selected, the isolated workflow
+adds its worker, integrated-state, wave, and central-build checks.
 
 ### 11. Review
 
-Use a fresh context for independent review whenever implementation was
-delegated, the change spans components, risk is medium or higher, or security,
-data integrity, compatibility, concurrency, or external effects are relevant.
-For a trivial localized `SOLO` change, the orchestrator may perform final diff
-review in the active context and record `review: skipped` with the reason.
-Provide the original ticket, the `review_focus` from the PR working spec (or
-one derived from the ticket for other modes), acceptance criteria,
-architecture decisions, final diff, and validation evidence. Do not provide the
-implementer's entire conversational history.
+When the review trigger applies, load
+`.swe-forge/agents/reviewer.md` and `.swe-forge/contracts/review.md` before
+review. The reviewer owns review behavior; the contract owns the result shape and
+blocking matrix.
 
-The reviewer starts with the review goal and checks every acceptance criterion
-against the final diff and evidence. It then inspects only good practices and
-risk areas relevant to the changed behavior or explicit constraints, including
-isolated-execution evidence when applicable. A finding must identify its
-acceptance criterion, explicit constraint, or concrete relevant risk. Unrelated
-refactors, style preferences, speculative enhancements, and future-session work
-are deferred follow-ups rather than findings or repair tasks. Return the result
-using `.swe-forge/contracts/review.md`.
-
-Apply the blocking matrix in `.swe-forge/contracts/review.md`. Low-confidence
-stylistic opinions do not block completion by themselves.
+Use a fresh context for independent review when delegation, multi-component
+scope, or medium-or-higher risk makes it useful; this refactor requires it.
+Provide the original ticket, `review_focus`, acceptance criteria, architecture
+decisions, final diff, and validation evidence. The loaded reviewer role and
+review contract define review behavior, relevant findings, and blocking status.
 
 ### 12. Repair
 
-Repair only relevant findings within the original scope. Do not pull deferred
-follow-ups into the current ticket without an explicit scope decision. Re-run
-affected tests and quality gates. Escalate to a debugger only when root cause
-is uncertain or a failure remains unexplained.
+Before a `BLOCKED` or `FAILED` recovery path, load and follow
+`.swe-forge/policies/failure-recovery.md`. It owns the recovery ladder, retry
+ceilings, failure classification, and conservative cleanup.
 
-Limit review and repair cycles. If a finding cannot be safely resolved, report
-the evidence, impact, and remaining risk instead of looping indefinitely.
-Repairs to an isolated integration branch normally become explicit cohesive
-repair commits; do not rewrite accepted integration history automatically.
+Repair only relevant findings within the original scope and rerun affected
+validation. Use the loaded failure-recovery policy for retry ceilings,
+debugger escalation, unresolved findings, and isolated-resource preservation.
 
 ### 13. Final Acceptance
 
-Compare the final integrated diff to the original ticket, acceptance criteria,
-review focus, and explicit constraints. Check for missing functionality,
-accidental changes, scope creep, unresolved failures, and unreviewed generated
-files. Deferred follow-ups do not expand the current acceptance scope unless the
-user explicitly changes it.
+The canonical Acceptance Gate lives in `SWE-FORGE.md`; verification, evidence,
+review, delivery, and recovery policies contribute evidence to that gate and
+do not define a competing final gate.
 
-Success requires the acceptance gate in `SWE-FORGE.md`. For an isolated ticket,
-verify that the integration/delivery branch is the only published branch, every
-accepted source commit has an integration mapping, worker branches remain local
-and safe, and exactly one final PR is planned or created. Do not substitute a
-worker's summary, provider lifecycle status, or passing worker tests for final
-inspection and integrated verification.
-
-Map the run to `ACCEPTED` only when the gate passes, `BLOCKED` when a decision,
-authorization, access, or environment change can enable safe continuation, and
-`FAILED` when attempted work remains incorrect or the gate cannot be met within
-the ticket and recovery limits.
+Compare the final integrated diff with the original ticket, acceptance
+criteria, review focus, and explicit constraints, then apply the canonical gate
+in `SWE-FORGE.md`. Do not substitute worker summaries, provider lifecycle
+status, or passing partial checks for final integrated evidence.
 
 ### 14. Report
 
-Begin the final harness output with a short `Work summary` in plain human
-language. Explain what changed and what it improves, then add only material
-notes when they help; scale the summary to the ticket and omit empty sections.
-Keep this summary separate from the private receipt and the project-facing PR
-description.
-
-Return only the decision-relevant result:
-
-- final status: `ACCEPTED`, `BLOCKED`, or `FAILED`
-- requested and selected execution topology
-- requested and selected provider when `ISOLATED`, including reason and any
-  fallback
-- requested and selected delivery mode
-- implementation approach and important decisions
-- context capability/status, compaction or overflow recovery evidence, and
-  durable-state/Git recheck result
-- files changed
-- tests and other validation with results
-- independent review status
-- assumptions
-- remaining risks or follow-ups
-- delivery result (checkpoint, commits, push, PR URL, or explicit blocked or
-  not-authorized status)
-- receipt result or explicit not-generated status
-- cleanup status and remaining resources when applicable
-
-Do not include internal worker transcripts.
-
-Normal `GUIDED` completion stops with the reviewed diff and validation evidence
-for human approval. The user can say `go` at a checkpoint to commit that slice
-and continue, or use the separate `git-commit`, `git-push`, and `git-pr` actions.
-`PR` completion may create separate local slice commits, then push the one
-integration/delivery branch and create one PR after the final quality gates and
-review. It never authorizes merge. After a human merge, the user can say
-`merged` or invoke `git-sync`; the sync action must verify the PR state before
-switching and fast-forwarding the default branch.
+Use the canonical final-report requirements in `SWE-FORGE.md`, including current
+validation, review, delivery, receipt, context, and cleanup evidence. Keep the
+report separate from private receipt evidence and project-facing PR content;
+never include worker transcripts.
 
 ## Blocking and Recovery
 
-When a worker is `BLOCKED` or `FAILED`, the orchestrator should preserve the
-task graph and choose the smallest recovery action:
-
-1. supply missing context or repository access
-2. clarify the task contract and retry once
-3. run a focused debugger investigation
-4. serialize work that exposed an ownership, environment, or ordering conflict
-5. reduce the task scope to the smallest safe unit
-6. change provider or topology when the required safety properties remain
-   intact
-7. escalate capability or assign the work to the orchestrator
-8. stop and report the unresolved failure when safe progress is not possible
-
-Do not hide a failure by changing the status to `DONE`. For isolated recovery,
-inspect actual Git worktree, branch, checkout, provider, and process state;
-stale run state never overrides repository evidence. Preserve dirty or
-ambiguous worker resources rather than force-removing them.
-
-Track retries in temporary run state. Do not retry indefinitely or conceal a
-failure in the final report.
+When a worker or phase is `BLOCKED` or `FAILED`, load and follow
+`.swe-forge/policies/failure-recovery.md` and preserve the actual checkout,
+provider, process, and evidence state. Use its bounded recovery ladder and
+retry ceiling; never hide failure by changing status, retry indefinitely, or
+force-remove ambiguous resources.

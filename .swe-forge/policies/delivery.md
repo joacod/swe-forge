@@ -96,9 +96,8 @@ separately when explicitly useful, but they are never PR content.
 A normal run uses one task/delivery branch. An isolated run uses one
 integration/delivery branch. The integration branch/worktree identity belongs
 in `delivery_checkout` and `integration` state, not duplicated in `delivery`.
-Worker branches and worktrees are local-only transfer resources and never a
-second delivery boundary. worker branches are local-only
-and cannot create PRs.
+Worker branches and worktrees are local-only transfer resources, never a
+second delivery boundary, and cannot create PRs.
 
 ## Delivery branch naming
 
@@ -148,9 +147,9 @@ The isolated workflow owns decomposition, wave barriers, and operational
 sequence. The canonical authorization here controls only what the plan and
 user action permit. The orchestrator remains accountable for central
 integration, final validation, review, delivery, and cleanup. Completion order
-never determines integration order. Completion order never determines integration order.
-integrated-state validation remains central after every transfer. Conflicts preserve worker resources and return `BLOCKED`
-when safe restoration cannot be proven.
+never determines integration order. Integrated-state validation remains
+central after every transfer. Conflicts preserve worker resources and return
+`BLOCKED` when safe restoration cannot be proven.
 
 ## Cleanup
 
@@ -158,4 +157,4 @@ Only run-owned clean worker resources whose accepted commits are mapped may be
 removed. Dirty, stale, conflicting, manually removed, or ambiguous resources
 remain in place and are reported. Never use `git worktree remove --force`,
 `git clean -fd`, hard reset, force deletion, or equivalent destructive cleanup
-against ambiguous state. never use forced removal automatically.
+against ambiguous state; forced removal is never automatic.

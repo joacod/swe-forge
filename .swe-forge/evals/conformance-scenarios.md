@@ -24,6 +24,22 @@ grading an agent from its explanation alone.
 | Provider preference | Record `requested_provider` independently from `requested_mode`; use `NATIVE` or `HERDR` only for `ISOLATED`. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
+## Canonical Load Ordering And Behavior Preservation
+
+| Scenario | Required behavior |
+| --- | --- |
+| Normal `SOLO` ticket | Preserve lightweight discovery, specification, proportional verification, final-diff inspection, and evidence reporting without loading isolated-provider machinery. |
+| `PR` specification and delivery | Load the specification policy and working-spec contract before clarification/specification, load delivery before the first writable operation, and retain the expected task branch, per-slice commits, final push, and one PR behavior. |
+| Delivery before first write | The workflow exposes a stage-triggered delivery-policy load before checkout setup, branch creation, editing, or any commit/push/PR decision. |
+| Bug ticket with a usable test seam | Load verification before strategy selection and choose a regression test where practical rather than weakening the bug evidence expectation. |
+| Executable evidence and candidate binding | Load evidence policy before fingerprints, freshness, checkpoints, or receipts; evidence remains bound to the exact candidate and stale evidence is rejected. |
+| Delegated implementer with reduced context | Load the task contract and implementer role before work; local scope, write ownership, no opportunistic expansion, no unauthorized delivery, required result/evidence fields, and blocking escalation remain available. |
+| Independent review | Load the reviewer role and review contract before a fresh, read-only review; review remains independent and checks the review focus before general quality concerns. |
+| Isolated routing candidate | Load execution-routing before the final topology decision; load provider selection and isolated execution only after `ISOLATED` is selected, keeping topology separate from provider. |
+| Context-risk or pressure path | Load context policy when its trigger occurs and follow its durable-state, compaction/overflow, Git, and evidence recovery sequence. |
+| `BLOCKED`/`FAILED` recovery path | Load failure-recovery before recovery and apply its bounded retry and preservation rules rather than looping or changing status silently. |
+| Final acceptance | Verification, evidence, review, delivery, and recovery contribute evidence to the one canonical Acceptance Gate in `SWE-FORGE.md`; no policy defines a competing final gate. |
+
 ## Context Continuity
 
 | Scenario | Required behavior |
