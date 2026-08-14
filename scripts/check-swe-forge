@@ -153,6 +153,9 @@ require_text 'actions/workflows/ci.yml' README.md
 require_text 'Run the repository checks' CONTRIBUTING.md
 require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md
 require_text 'evidence ledger' .swe-forge/policies/evidence.md
+require_text '`$STATE/receipt.md`' .swe-forge/policies/evidence.md
+require_text 'receipt_ref' .swe-forge/contracts/run-state.md
+require_text 'receipt_ref' .swe-forge/tools/swe-forge-gate
 require_text 'Final status: ACCEPTED | BLOCKED | FAILED' .swe-forge/contracts/receipt.md
 reject_text 'Merge performed: no' .swe-forge/contracts/receipt.md
 require_text 'pre-edit baseline' SWE-FORGE.md

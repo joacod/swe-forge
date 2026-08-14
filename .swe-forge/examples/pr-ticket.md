@@ -61,8 +61,11 @@ isolated integration/delivery branch) and creates exactly one pull request with
 a concise, project-facing title and body. The body explains the outcome and
 motivation, lists only relevant validation, and notes material risks or
 follow-ups when needed. It follows repository conventions and never includes a
-receipt, tool/process metadata, transcript, or unrelated detail. The final
-report contains the PR URL. Merge remains a human action.
+receipt, tool/process metadata, transcript, or unrelated detail. The executable
+gate keeps the receipt at `$STATE/receipt.md` by default and records its path in
+`receipt_ref`, so the evidence remains available in the private run state
+without changing the PR. The final report contains the PR URL. Merge remains a
+human action.
 
 After the user merges the PR, they can say `merged` or invoke `git-sync merged`.
 The sync action verifies the provider reports `MERGED` before returning to the

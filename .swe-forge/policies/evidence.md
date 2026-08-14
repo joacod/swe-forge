@@ -76,6 +76,13 @@ environment effects. It never launches agents or providers.
 
 Receipts are generated only from structured evidence and actual Git state. They
 are private run-evidence artifacts by default, not project-facing PR content.
+When no output path is supplied, the executable gate writes the receipt to
+`$STATE/receipt.md`, prints it, and records that path in the run state's
+`receipt_ref`. `receipt --verify --state "$STATE"` and
+`receipt-verify --state "$STATE"` use that run-local receipt by default. This
+retains evidence for the lifetime of the private run state without creating a
+repository or PR artifact; longer retention requires an explicit, separately
+managed output path.
 They include:
 
 ```text

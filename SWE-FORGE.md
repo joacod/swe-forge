@@ -293,7 +293,8 @@ never include tool, harness, model, provider, routing, receipt, run, or other
 workflow metadata. After the PR URL exists, generate a compact receipt using
 `.swe-forge/contracts/receipt.md` for private run evidence only. Never add the
 receipt to the PR description, including for SWE Forge's own repository, and
-never claim checks that were not run.
+never claim checks that were not run. The executable gate retains the default
+receipt in the private run state and records its path in `receipt_ref`.
 
 Use the atomic delivery actions described by `.swe-forge/policies/delivery.md`
 for guided follow-up: `git-commit`, `git-push`, `git-pr`, and `git-sync`.

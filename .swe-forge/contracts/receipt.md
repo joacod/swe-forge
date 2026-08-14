@@ -37,7 +37,9 @@ Final status: ACCEPTED | BLOCKED | FAILED
 
 Receipts render the latest relevant status for every planned check, not an
 undifferentiated history of attempts. Historical attempts stay in the private
-ledger.
+ledger. The executable gate retains the default receipt at `$STATE/receipt.md`
+and records that run-local path in `receipt_ref`; an explicit output path may
+replace it.
 
 `Execution provider` describes the isolated worker lifecycle and is `NONE` for
 non-isolated runs; it is not the model backend. Record a `Model provider`
