@@ -140,9 +140,10 @@ fingerprints, supports independent sequential slice checkpoints, rejects
 undeclared mutations and missing/unavailable required checks, and renders latest
 statuses. `policies/context.md` owns the portable near-limit and overflow
 recovery protocol; it requires durable-state and Git rechecks after host
-compaction without assuming a universal harness API. Receipts include final
-`Head`, evidence fingerprint, and UTC generation time; read-only verification
-detects stale receipts.
+compaction without assuming a universal harness API. Receipts are private run
+evidence, include final `Head`, evidence fingerprint, and UTC generation time,
+and are never project-facing PR content; read-only verification detects stale
+receipts.
 
 ## Environment and shared artifacts
 

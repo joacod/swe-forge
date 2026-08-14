@@ -203,15 +203,19 @@ committed separately; a one-step ticket is not split artificially. Forge then
 runs the full verification and review gates and stops with one PR available to
 review. For `ISOLATED`, it central-integrates worker transfer commits into one
 integration/delivery branch and still creates exactly one final PR. Its PR
-description is kept concise and informative; it still never merges.
+title and description are concise, project-facing, and limited to the outcome,
+motivation, relevant validation, and material risks or follow-ups. They never
+include receipts or tool/process metadata, including when the target repository
+is SWE Forge itself; it still never merges.
 
 The delivery helpers are intentionally atomic: `/git-push` only pushes; use
 `/git-pr` separately to create or report the pull request. In PR mode, a compact
-SWE Forge receipt can be generated after the PR URL exists; it contains public
-evidence only and never a transcript. Commit and PR messages follow the
-repository delivery policy: concise imperative subjects, clear subject/body
-separation, and bodies that preserve what/why context when needed. See the
-harness adapter documentation for the available
+SWE Forge receipt can be generated after the PR URL exists as private run
+evidence; it is never copied into the PR description. Commit and PR messages
+follow the repository delivery policy: concise imperative subjects, clear
+subject/body separation, and bodies that preserve what/why context when needed,
+without tool attribution or unrelated detail. See the harness adapter
+documentation for the available
 `git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
 
 ## Feedback

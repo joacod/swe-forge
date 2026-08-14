@@ -79,6 +79,7 @@ grading an agent from its explanation alone.
 | Final executable validation | Require every required or applicable conditional check to be recorded as passed against the final HEAD. |
 | Receipt with missing or failed evidence | Report `BLOCKED`; never upgrade it to `ACCEPTED`. |
 | Receipt contents | Include compact check results and review counts, but no transcripts, credentials, or command output. |
+| Project-facing PR content | Use a concise outcome/motivation summary, relevant validation, and material risks when needed; never include receipts, Forge/tool metadata, transcripts, or unrelated detail, including in SWE Forge's own repository. |
 | Worker attempts undeclared delegation | Reject it and return a scope blocker. |
 | Specialist skill recommends delivery or external work | Treat it as advice only; require the separate action authorization and side-effect checks. |
 | Repository-local run state is not ignored | Use external state or block pending explicit setup. |

@@ -196,6 +196,14 @@ reject_text 'swe-forge/<run-id>/integration' .swe-forge/examples/isolated-ticket
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text 'provider state is `MERGED`' .swe-forge/policies/delivery.md
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
+require_text 'Project-facing delivery artifacts' .swe-forge/policies/delivery.md
+require_text 'The same rule applies to SWE Forge' .swe-forge/policies/delivery.md
+require_text 'Receipts remain private run-evidence artifacts' .swe-forge/policies/delivery.md
+require_text 'for private run evidence only' SWE-FORGE.md
+require_text 'never copied into the PR description' README.md
+require_text 'Project-facing PR content' .swe-forge/evals/conformance-scenarios.md
+reject_text 'add it to the PR description' SWE-FORGE.md
+reject_text 'add it to the PR description' README.md
 require_text '`go` to commit' SWE-FORGE.md
 require_text 'working_spec_ref:' .swe-forge/contracts/run-state.md
 require_text 'requirement: required' .swe-forge/contracts/task.md

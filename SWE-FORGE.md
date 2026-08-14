@@ -285,10 +285,15 @@ validated slice or integration unit, then runs final verification and fresh
 review before pushing the integration/delivery branch and creating one pull
 request. Worker branches are never pushed and worker PRs are never created. It
 ends with a concise PR URL and never merges. It does not skip automated checks
-or independent review. After the PR URL exists, generate a compact receipt using
-`.swe-forge/contracts/receipt.md` and add it to the PR description when the
-provider supports updating the description. Never include transcripts or claim
-checks that were not run.
+or independent review. The PR title and description are project-facing
+artifacts: keep them concise and useful to a reviewer, following
+`.swe-forge/policies/delivery.md` and the repository's conventions. Include only
+the outcome, motivation, relevant validation, and material risks or follow-ups;
+never include tool, harness, model, provider, routing, receipt, run, or other
+workflow metadata. After the PR URL exists, generate a compact receipt using
+`.swe-forge/contracts/receipt.md` for private run evidence only. Never add the
+receipt to the PR description, including for SWE Forge's own repository, and
+never claim checks that were not run.
 
 Use the atomic delivery actions described by `.swe-forge/policies/delivery.md`
 for guided follow-up: `git-commit`, `git-push`, `git-pr`, and `git-sync`.

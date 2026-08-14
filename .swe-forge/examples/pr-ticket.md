@@ -58,7 +58,10 @@ than pulled into the PR. It does not stop after each slice for user approval.
 
 After all final gates pass, `PR` mode pushes the one task branch (or the one
 isolated integration/delivery branch) and creates exactly one pull request with
-a short title and summary, validation, and relevant-risk notes. The final
+a concise, project-facing title and body. The body explains the outcome and
+motivation, lists only relevant validation, and notes material risks or
+follow-ups when needed. It follows repository conventions and never includes a
+receipt, tool/process metadata, transcript, or unrelated detail. The final
 report contains the PR URL. Merge remains a human action.
 
 After the user merges the PR, they can say `merged` or invoke `git-sync merged`.

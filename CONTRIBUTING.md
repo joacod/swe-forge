@@ -47,5 +47,6 @@ commands that were actually run and distinguish skipped or unavailable checks
 from passing checks. Keep pull requests focused; avoid opportunistic refactors.
 
 SWE Forge does not merge pull requests automatically. Reviewers should inspect
-the final diff, validation evidence, and any generated SWE Forge receipt before
-merging.
+the final diff and relevant project-level validation evidence before merging.
+Receipts are private run artifacts; never paste them or other Forge workflow
+metadata into a pull-request description.
