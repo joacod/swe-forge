@@ -28,7 +28,7 @@ grading an agent from its explanation alone.
 
 | Scenario | Required behavior |
 | --- | --- |
-| Normal `SOLO` ticket | Preserve lightweight discovery, specification, proportional verification, final-diff inspection, and evidence reporting without loading isolated-provider machinery. |
+| Normal `SOLO` ticket | Preserve lightweight discovery, load the specification policy before specification/clarification, perform proportional verification, final-diff inspection, and evidence reporting without loading the PR-only working-spec contract or isolated-provider machinery. |
 | `PR` specification and delivery | Load the specification policy and working-spec contract before clarification/specification, load delivery before the first writable operation, and retain the expected task branch, per-slice commits, final push, and one PR behavior. |
 | Delivery before first write | The workflow exposes a stage-triggered delivery-policy load before checkout setup, branch creation, editing, or any commit/push/PR decision. |
 | Bug ticket with a usable test seam | Load verification before strategy selection and choose a regression test where practical rather than weakening the bug evidence expectation. |

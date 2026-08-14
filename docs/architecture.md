@@ -17,13 +17,20 @@ topology, provider, and delivery are orthogonal:
 activation and lifecycle -> SWE-FORGE.md
 ticket procedure -> workflows/ticket.md
 isolated operational sequence -> workflows/isolated-execution.md
-routing eligibility -> policies/execution-routing.md
-provider capability -> policies/provider-selection.md
-authorization and delivery -> policies/delivery.md
+specification and clarification -> policies/specification.md
+execution routing and eligibility -> policies/execution-routing.md
+provider selection and capability -> policies/provider-selection.md
+delegation boundaries -> policies/delegation.md
+model assignment -> policies/model-routing.md
+verification strategy and quality gates -> policies/verification.md
+evidence semantics and receipts -> policies/evidence.md
+delivery and local-resource authorization -> policies/delivery.md
 context continuity and compaction -> policies/context.md
-evidence semantics -> policies/evidence.md
-data shapes -> contracts/*
-provider command translation -> providers/*
+failure classification and recovery -> policies/failure-recovery.md
+specialist-skill selection -> policies/specialist-skills.md
+roles -> agents/*
+contracts and data shapes -> contracts/*
+provider runbooks -> providers/*
 harness loading -> adapters/*
 ```
 
@@ -35,8 +42,10 @@ run/task namespacing.
 
 Minimal load sets are stage-triggered:
 
-- Every run loads `SWE-FORGE.md`, `workflows/ticket.md`, and the orchestrator
-  role; `PR` adds specification and working-spec sources before specification.
+- Every normal run loads `SWE-FORGE.md`, `workflows/ticket.md`, the orchestrator
+  role, and `.swe-forge/policies/specification.md` before specification or clarification.
+  `PR` additionally loads `.swe-forge/contracts/working-spec.md`
+  before building the transient working spec.
 - `AUTO` loads execution-routing before the topology decision; delegation adds
   its policy, relevant roles, model-routing when needed, and task/result/review
   contracts.

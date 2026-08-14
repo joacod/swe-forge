@@ -237,7 +237,6 @@ require_text 'feat/order-cancellation' .swe-forge/examples/isolated-ticket.md
 reject_text 'swe-forge/<run-id>/integration' .swe-forge/examples/isolated-ticket.md
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text 'provider state is `MERGED`' .swe-forge/policies/delivery.md
-require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text 'Project-facing delivery artifacts' .swe-forge/policies/delivery.md
 require_text 'The same rule applies to SWE Forge' .swe-forge/policies/delivery.md
 require_text 'Receipts remain private run-evidence artifacts' .swe-forge/policies/delivery.md
@@ -272,12 +271,6 @@ require_text 'use Herdr as the provider for this' .swe-forge/workflows/ticket.md
 require_text 'requested_provider: HERDR' .swe-forge/workflows/ticket.md
 require_text 'Hard isolated eligibility' .swe-forge/policies/execution-routing.md
 require_text 'Economic preference' .swe-forge/policies/execution-routing.md
-require_text 'Hard isolated eligibility' .swe-forge/policies/execution-routing.md
-require_text 'Economic preference' .swe-forge/policies/execution-routing.md
-require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
-require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
-require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
-require_text 'integration_strategy: NONE | CHERRY_PICK' .swe-forge/policies/provider-selection.md
 require_text 'Prefer `NATIVE`' .swe-forge/policies/provider-selection.md
 require_text 'use Herdr as the provider for this isolated run' .swe-forge/policies/provider-selection.md
 require_text 'Herdr is optional' .swe-forge/providers/herdr/README.md
@@ -309,7 +302,8 @@ require_text '~/.pi/agent/swe-forge/.swe-forge/policies/delivery.md' .swe-forge/
 require_text 'thin loader' .swe-forge/adapters/opencode/commands/git-push.md
 require_text 'clean status' .swe-forge/providers/herdr/runbook.md
 require_text 'worker-local transfer commit' .swe-forge/workflows/isolated-execution.md
-require_text 'Completion order never determines integration order' .swe-forge/workflows/isolated-execution.md
+require_text 'Integration follows dependencies and the' .swe-forge/workflows/isolated-execution.md
+require_text 'recorded plan; completion order never determines integration order.' .swe-forge/workflows/isolated-execution.md
 require_text 'integrated-state validation' .swe-forge/workflows/isolated-execution.md
 require_text 'never use forced removal automatically' .swe-forge/workflows/isolated-execution.md
 require_text 'validation_ref:' .swe-forge/contracts/run-state.md
@@ -383,10 +377,37 @@ reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
 reject_text 'commit_policy:' .swe-forge/examples/isolated-ticket.md
 reject_text 'pushing no longer asks whether' README.md
 
+for owner in \
+  'activation and lifecycle -> SWE-FORGE.md' \
+  'ticket procedure -> workflows/ticket.md' \
+  'isolated operational sequence -> workflows/isolated-execution.md' \
+  'specification and clarification -> policies/specification.md' \
+  'execution routing and eligibility -> policies/execution-routing.md' \
+  'provider selection and capability -> policies/provider-selection.md' \
+  'delegation boundaries -> policies/delegation.md' \
+  'model assignment -> policies/model-routing.md' \
+  'verification strategy and quality gates -> policies/verification.md' \
+  'evidence semantics and receipts -> policies/evidence.md' \
+  'delivery and local-resource authorization -> policies/delivery.md' \
+  'context continuity and compaction -> policies/context.md' \
+  'failure classification and recovery -> policies/failure-recovery.md' \
+  'specialist-skill selection -> policies/specialist-skills.md' \
+  'roles -> agents/*' \
+  'contracts and data shapes -> contracts/*' \
+  'provider runbooks -> providers/*' \
+  'harness loading -> adapters/*'; do
+  require_text "$owner" docs/architecture.md
+done
+
 # Runtime orchestration must expose canonical policy owners before their
 # decisions or actions are needed. These assertions protect the load path
 # while allowing the detailed rules to remain in their owning files.
 require_ordered_text 'Before specification or clarification behavior is needed' 'policies/specification.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'In `PR`, also load' 'contracts/working-spec.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Every normal run loads' 'before specification or clarification' SWE-FORGE.md
+require_ordered_text '`PR` additionally loads' 'building the transient working spec' SWE-FORGE.md
+require_ordered_text 'Every normal run loads' 'before specification or clarification' docs/architecture.md
+require_ordered_text '`PR` additionally loads' 'before building the transient working spec' docs/architecture.md
 require_ordered_text 'When delegation or an independent review is useful' 'policies/delegation.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'When delegation or an independent review is useful' 'policies/model-routing.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before making the final automatic or explicit topology decision' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md

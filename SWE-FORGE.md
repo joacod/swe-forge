@@ -140,7 +140,7 @@ economic parallel-value decision, and safe fallback. Topology and provider
 remain separate dimensions: non-isolated runs record
 `execution_provider: NONE`, `parallel_strategy: NONE`, and
 `integration_strategy: NONE`, while an isolated run uses only the provider and
-strategies proven by the loaded provider policy. Explicit selections never
+strategies proven by the loaded provider-selection policy. Explicit selections never
 bypass safety, validation, scope, or delivery authorization.
 
 ### SOLO
@@ -166,10 +166,11 @@ boundaries are owned by the loaded delegation policy and contracts.
 `ISOLATED` is selected only when the routing gate and provider capability proof
 make concurrent writable work safe and useful. It authorizes a workflow shape,
 not a provider or concrete resources. After selection, load
-`.swe-forge/workflows/isolated-execution.md` and the selected provider policy;
-the isolated workflow owns waves, worktrees, central integration, recovery,
-and cleanup. The orchestrator remains accountable for one integration/delivery
-branch and one final PR; worker branches are local-only.
+`.swe-forge/workflows/isolated-execution.md`, the provider-selection policy,
+and the selected provider runbook; the isolated workflow owns waves, worktrees,
+central integration, recovery, and cleanup. The orchestrator remains accountable
+for one integration/delivery branch and one final PR; worker branches are
+local-only.
 
 ## Delivery Modes
 
@@ -185,17 +186,18 @@ push, PR creation, publication, deployment, or merge.
 
 ### PR
 
-`PR` is the opt-in low-touch path. Before clarification or working-spec
-behavior, load `.swe-forge/policies/specification.md` and
-`.swe-forge/contracts/working-spec.md`; before writable work or delivery
-choices, load `.swe-forge/policies/delivery.md`. The transient spec owns an
-ordered commit plan and `review_focus`, and the orchestrator validates and
-commits each cohesive step before starting the next. It then runs final
-verification and independent review before one authorized push and one final
-PR on the single delivery branch. Worker branches are never pushed and worker
-PRs are never created. PR mode never merges; project-facing PR content follows
-the delivery policy, while evidence and receipts remain private under their
-canonical policy and contract.
+`PR` is the opt-in low-touch path. The normal ticket procedure loads
+`.swe-forge/policies/specification.md` before clarification or specification
+behavior; `PR` additionally loads `.swe-forge/contracts/working-spec.md` before
+building the transient working spec. Before writable work or delivery choices,
+load `.swe-forge/policies/delivery.md`. The transient spec owns an ordered
+commit plan and `review_focus`, and the orchestrator validates and commits each
+cohesive step before starting the next. It then runs final verification and
+independent review before one authorized push and one final PR on the single
+delivery branch. Worker branches are never pushed and worker PRs are never
+created. PR mode never merges; project-facing PR content follows the delivery
+policy, while evidence and receipts remain private under their canonical policy
+and contract.
 
 The atomic `git-commit`, `git-push`, `git-pr`, and `git-sync` actions load and
 follow `.swe-forge/policies/delivery.md` separately. Pushing never creates a PR
@@ -217,8 +219,9 @@ lifecycle is:
 1. Ingest the immutable raw invocation and parsed ticket constraints.
 2. Discover repository evidence, quality gates, and any explicitly named
    optional skill.
-3. Specify observable acceptance criteria and, in `PR`, build the transient
-   working spec after loading its policy and contract.
+3. Specify observable acceptance criteria after loading the specification
+   policy and, in `PR`, build the transient working spec after loading its
+   contract.
 4. Architect the smallest compatible approach and identify risks.
 5. Decompose only where useful, loading delegation, role, model, and result
    sources before assigning work.
@@ -243,22 +246,31 @@ The canonical ownership/load map is:
 activation and lifecycle -> SWE-FORGE.md
 ticket procedure -> workflows/ticket.md
 isolated operational sequence -> workflows/isolated-execution.md
-routing eligibility -> policies/execution-routing.md
-provider capability -> policies/provider-selection.md
-authorization and delivery -> policies/delivery.md
+specification and clarification -> policies/specification.md
+execution routing and eligibility -> policies/execution-routing.md
+provider selection and capability -> policies/provider-selection.md
+delegation boundaries -> policies/delegation.md
+model assignment -> policies/model-routing.md
+verification strategy and quality gates -> policies/verification.md
+evidence semantics and receipts -> policies/evidence.md
+delivery and local-resource authorization -> policies/delivery.md
 context continuity and compaction -> policies/context.md
-evidence semantics -> policies/evidence.md
-data shapes -> contracts/*
-provider command translation -> providers/*
+failure classification and recovery -> policies/failure-recovery.md
+specialist-skill selection -> policies/specialist-skills.md
+roles -> agents/*
+contracts and data shapes -> contracts/*
+provider runbooks -> providers/*
 harness loading -> adapters/*
 ```
 
-Minimal load sets are stage-triggered rather than a second workflow. Every run
-loads `SWE-FORGE.md`, `workflows/ticket.md`, and the orchestrator role. `PR`
-loads the specification policy and working-spec contract before specification;
-`AUTO` loads execution-routing before its topology decision; delegation loads
-its policy, relevant roles, and contracts; delivery, verification, and evidence
-load before their first operation. Context and failure-recovery remain lazy.
+Minimal load sets are stage-triggered rather than a second workflow.
+Every normal run loads `SWE-FORGE.md`, `workflows/ticket.md`, the orchestrator role, and
+`.swe-forge/policies/specification.md` before specification or clarification.
+`PR` additionally loads `.swe-forge/contracts/working-spec.md` before building
+the transient working spec; `AUTO` loads execution-routing before its topology
+decision; delegation loads its policy, relevant roles, and contracts; delivery,
+verification, and evidence load before their first operation. Context and
+failure-recovery remain lazy.
 `ISOLATED` additionally loads provider-selection, delivery, result-bundle,
 run-state, isolated-execution, the selected provider runbook, and the isolated
 Git/evidence guard only after the isolated decision.

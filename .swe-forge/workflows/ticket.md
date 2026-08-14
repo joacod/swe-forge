@@ -131,12 +131,14 @@ API.
 ### 3. Specify
 
 Before specification or clarification behavior is needed, load and follow
-`.swe-forge/policies/specification.md` and `.swe-forge/contracts/working-spec.md`.
+`.swe-forge/policies/specification.md`. In `PR`, also load
+`.swe-forge/contracts/working-spec.md` before building the transient working
+spec.
 
 Translate the ticket into observable acceptance criteria and separate facts,
 assumptions, compatibility constraints, and blocking decisions. The loaded
-specification policy owns repository fact gathering and clarification; the
-working-spec contract owns the transient shape. In `PR`, make that spec ready
+specification policy owns repository fact gathering and clarification; in `PR`,
+the working-spec contract owns the transient shape. In `PR`, make that spec ready
 before writable work without creating a repository artifact. Record its review
 focus, non-goals, specialist-skill decision, and context strategy when
 applicable. Ask only blocking user questions and record low-risk assumptions.
@@ -318,8 +320,5 @@ never include worker transcripts.
 
 ## Blocking and Recovery
 
-When a worker or phase is `BLOCKED` or `FAILED`, load and follow
-`.swe-forge/policies/failure-recovery.md` and preserve the actual checkout,
-provider, process, and evidence state. Use its bounded recovery ladder and
-retry ceiling; never hide failure by changing status, retry indefinitely, or
-force-remove ambiguous resources.
+When a worker or phase is `BLOCKED` or `FAILED`, use the recovery behavior
+defined in `.swe-forge/policies/failure-recovery.md`; see Procedure → Repair.
