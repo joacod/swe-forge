@@ -40,8 +40,8 @@ Represent tasks as a dependency DAG. Every writable task records objective,
 dependencies, allowed and forbidden scope, shared artifacts and one owner,
 acceptance, worker validation, exact `base_sha`, wave, integration order,
 worktree identity, and environment isolation. All tasks in one wave start from
-the same exact integration SHA. Dependencies and planned order, never worker
-completion order, determine integration. Completion order never determines integration order.
+the same exact integration SHA. Integration follows dependencies and the
+recorded plan; completion order never determines integration order.
 
 ## Worker lifecycle
 

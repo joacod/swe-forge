@@ -46,8 +46,8 @@ The canonical parser also supports `/swe-forge solo ...` and
 workflow gives migration guidance to use `isolated` and request Herdr as a
 separate provider preference. To request a provider without changing the
 reserved topology grammar, state it in the ticket, for example: "Use
-`isolated` with Herdr as the execution provider." The provider policy records
-that preference separately.
+`isolated` with Herdr as the execution provider." The provider-selection policy
+records that preference separately.
 
 The template uses Pi's `$ARGUMENTS` expansion and is only processed when the
 user explicitly types `/swe-forge`. Ordinary prompts remain unchanged. The

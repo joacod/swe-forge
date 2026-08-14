@@ -18,8 +18,8 @@ well-specified ticket through verification and pull-request creation.
 environments. SWE Forge may use native harness worktree agents or Herdr as the
 provider. It still produces one integration branch and one final PR. The mode
 is portable at the workflow level, but it is not universally available in every
-harness; the provider policy records demonstrated capabilities and explicit
-fallback.
+harness; the provider-selection policy records demonstrated capabilities and
+explicit fallback.
 
 ## Install
 
@@ -53,7 +53,7 @@ updates, and conflicts.
 
 Installation does not install Herdr. Herdr is an optional execution provider
 and may be used only when already available and selected safely by the canonical
-provider policy.
+provider-selection policy.
 
 See the [compatibility snapshot](docs/compatibility.md) for the pre-release
 harness validation snapshot for the planned alpha and the
