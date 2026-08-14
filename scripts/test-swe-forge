@@ -368,11 +368,13 @@ test "$(readlink "$global_home/.pi/agent/prompts/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" || fail "global Pi prompt link is incorrect"
 test "$(readlink "$global_home/.pi/agent/prompts/git-pr.md")" = \
   "$ROOT/.swe-forge/adapters/pi/prompts/git-pr.md" || fail "global Pi git-pr prompt link is incorrect"
-grep -F 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' "$global_home/.config/opencode/swe-forge/SWE-FORGE.md" \
+grep -F 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' \
+  "$global_home/.config/opencode/swe-forge/.swe-forge/policies/execution-routing.md" \
   >/dev/null || fail "global canonical isolated mode contract is missing"
 grep -F '/swe-forge isolated <ticket>' "$global_home/.pi/agent/prompts/swe-forge.md" \
   >/dev/null || fail "global Pi isolated invocation is missing"
-grep -F 'delivery_mode: GUIDED | PR' "$global_home/.pi/agent/swe-forge/SWE-FORGE.md" \
+grep -F 'delivery_mode: GUIDED | PR' \
+  "$global_home/.pi/agent/swe-forge/.swe-forge/contracts/run-state.md" \
   >/dev/null || fail "global delivery mode contract is missing"
 grep -F '~/.agents/swe-forge' "$global_home/.agents/skills/swe-forge/SKILL.md" \
   >/dev/null || fail "global shared canonical source path is missing"
