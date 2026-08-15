@@ -145,6 +145,11 @@ if (!ctx.compaction) throw new Error("safe-boundary proactive compaction was not
 if (!entries.some((entry) => entry.data.event === "proactive_compaction_requested")) {
   throw new Error("proactive compaction evidence was not recorded");
 }
+ctx.compaction.onComplete?.();
+await handlers.get("agent_settled")({}, ctx);
+if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
+  throw new Error("unchanged state triggered repeated proactive compaction");
+}
 
 const newer = path.join(path.dirname(process.env.SWE_FORGE_RUN_STATE), "..", "new", "run-state.yaml");
 process.env.SWE_FORGE_RUN_STATE = path.resolve(newer);

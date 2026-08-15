@@ -105,7 +105,8 @@ function readPointer(pointer: string): string | undefined {
 	const text = readText(pointer)?.trim();
 	if (!text) return undefined;
 	const firstLine = text.split(/\r?\n/)[0]?.trim();
-	return firstLine && !firstLine.startsWith("#") ? firstLine : undefined;
+	if (!firstLine || firstLine.startsWith("#")) return undefined;
+	return path.isAbsolute(firstLine) ? firstLine : path.resolve(path.dirname(pointer), firstLine);
 }
 
 function addRunDirectory(paths: Set<string>, directory: string): void {
@@ -306,6 +307,7 @@ export default function sweForgeRuntime(pi: any) {
 	let activeRun: ActiveRun | undefined;
 	let compactionInFlight = false;
 	let lastCompactionAt = 0;
+	let lastCompactionState = "";
 
 	const refresh = (cwd: string): ActiveRun | undefined => {
 		activeRun = resolveActiveRun(cwd);
@@ -343,7 +345,6 @@ export default function sweForgeRuntime(pi: any) {
 	});
 
 	on("session_before_compact", (event, ctx) => {
-		compactionInFlight = true;
 		activeRun = refresh(ctx.cwd);
 		appendRuntimeEntry(pi, "compaction_started", activeRun, {
 			reason: event?.reason ?? "unknown",
@@ -367,9 +368,15 @@ export default function sweForgeRuntime(pi: any) {
 		const usage = ctx.getContextUsage();
 		if (!usage) return;
 		const reason = compactionReason(run, usage);
-		if (!reason || Date.now() - lastCompactionAt < COMPACTION_COOLDOWN_MS) return;
+		const stateVersion = `${run.filePath}:${run.updatedAt}`;
+		if (
+			!reason ||
+			stateVersion === lastCompactionState ||
+			Date.now() - lastCompactionAt < COMPACTION_COOLDOWN_MS
+		) return;
 
 		lastCompactionAt = Date.now();
+		lastCompactionState = stateVersion;
 		compactionInFlight = true;
 		appendRuntimeEntry(pi, "proactive_compaction_requested", run, {
 			reason,
