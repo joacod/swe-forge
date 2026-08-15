@@ -108,8 +108,10 @@ model or harness will compact at the desired time.
 
 ### 2. Discover
 
-Before broad discovery, apply the lightweight discovery-shape assessment from
-`policies/execution-routing.md`. Record `discovery_strategy.mode` as
+Before broad discovery, load and follow `policies/execution-routing.md` for
+its lightweight discovery-shape assessment. This early load does not select a
+topology or load provider/isolated machinery. Record
+`discovery_strategy.mode` as
 `ROOT_ONLY` unless there are clearly independent, read-only questions whose
 answers can return concise evidence and materially reduce root-context growth.
 This is an early research strategy, not the final topology decision: do not

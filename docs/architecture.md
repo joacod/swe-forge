@@ -51,8 +51,9 @@ Minimal load sets are stage-triggered:
   role, and `.swe-forge/policies/specification.md` before specification or clarification.
   `PR` additionally loads `.swe-forge/contracts/working-spec.md`
   before building the transient working spec.
-- `AUTO` loads execution-routing before the topology decision; delegation adds
-  its policy, relevant roles, model-routing when needed, and task/result/review
+- `AUTO` loads execution-routing before an early discovery-shape assessment
+  when that trigger applies and before the final topology decision; delegation
+  adds its policy, relevant roles, model-routing when needed, and task/result/review
   contracts.
 - Delivery loads before writable setup or delivery decisions; verification and
   evidence load before validation strategy or executable evidence. Long-running
