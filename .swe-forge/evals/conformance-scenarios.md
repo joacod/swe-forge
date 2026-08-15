@@ -104,11 +104,34 @@ grading an agent from its explanation alone.
 | Isolated worker result | Require exact base, clean checkout, declared transfer commits, scope, worker validation, and environment-resource evidence before integration. |
 | Herdr provider lifecycle | Treat lifecycle state as scheduling evidence; structured results, Git evidence, validation, and central integration remain authoritative. |
 
+## Context-Aware Routing And Continuity
+
+These scenarios evaluate context reducibility and durable lifecycle behavior;
+they must not be graded from prompt length or an agent's explanation alone.
+Record the routing fields, capability profile, state snapshot, lifecycle event,
+and resulting topology/action.
+
+| Scenario | Required behavior |
+| --- | --- |
+| A. Small tightly coupled task | Prefer and select `SOLO`; no unnecessary delegation. |
+| B. Large but globally coupled task | Keep `SOLO`; large prompt/file count is not delegation evidence. Use proactive context management only when host telemetry and a safe boundary justify it. |
+| C. Independent investigations | Prefer/select `SUBAGENTS` when independently evaluable work materially reduces root-context growth and a backend exists; implementation may remain sequential. |
+| D. Long sequential PR implementation | Keep one root integrator responsible for ordered writes; use `SUBAGENTS` for bounded research when useful and compact at validated PR boundaries. |
+| E. Independent writable components | Select `ISOLATED` only when the existing writable-isolation hard gate and provider capability proof pass; high context pressure alone is insufficient. |
+| F. Context-heavy transition | Start `SOLO`, then record `SOLO -> SUBAGENTS` at a safe boundary when new independent work and context pressure make delegation materially useful. Also accept the justified reverse `SUBAGENTS -> SOLO`. |
+| G. PR survives compaction | Persist `delivery: PR`, `awaiting: user_merge`, and `next_action.kind: verify_and_sync_merge`; after compaction, `merged` routes to `/git-sync merged`, which still verifies provider state rather than trusting the word. |
+| H. No subagent backend | Record preferred `SUBAGENTS`, effective `SOLO`, `delegation_backend: NONE`, and a visible backend-unavailable fallback; do not fail or simulate workers. |
+| I. No context telemetry | Record context `unknown`/`unavailable`; use durable checkpoints/manual recovery and do not invent a threshold or claim compaction. |
+| J. Herdr read-only backend | Record `SUBAGENTS` + `delegation_backend: HERDR` + `write_isolation: SHARED` + `execution_provider: NONE`; never infer `ISOLATED` from Herdr. |
+| K. Stale state pointer | When multiple active snapshots match the checkout, choose the newest `continuation.updated_at`/mtime and ignore terminal or inactive state; stale state cannot rewrite shorthand or topology. |
+| L. Bounded worker | Worker receives only objective, relevant context, scope, acceptance, and evidence return fields; it does not create PRs, push, merge, reroute, or recursively delegate by default. |
+
 ## Installation
 
-Run `scripts/test-swe-forge` and `scripts/test-swe-forge-gate`. The latter
-covers executable preflight, scope, authorization, final validation, and
-receipt behavior. The installer suite covers exact target scope, conflicting files,
-symlinked destination components, mode-specific verification, duplicate
-arguments, global link-only behavior, installation locking, and rollback after
-an injected write failure.
+Run `scripts/test-swe-forge`, `scripts/test-swe-forge-gate`, and
+`scripts/test-swe-forge-pi`. The latter exercises Pi state reinjection,
+active-PR `merged` shorthand, safe-boundary proactive compaction, and stale
+snapshot precedence without requiring a model or network. The installer suite
+covers exact target scope, conflicting files, symlinked destination components,
+mode-specific verification, duplicate arguments, global link-only behavior,
+installation locking, and rollback after an injected write failure.

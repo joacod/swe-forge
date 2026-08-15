@@ -227,6 +227,13 @@ require_text 'Context-risk or pressure path' .swe-forge/evals/conformance-scenar
 require_text '`BLOCKED`/`FAILED` recovery path' .swe-forge/evals/conformance-scenarios.md
 require_text 'Final acceptance' .swe-forge/evals/conformance-scenarios.md
 require_text '## Context Continuity' .swe-forge/evals/conformance-scenarios.md
+require_text '## Context-Aware Routing And Continuity' .swe-forge/evals/conformance-scenarios.md
+require_text 'Large but globally coupled task' .swe-forge/evals/conformance-scenarios.md
+require_text 'Context-heavy transition' .swe-forge/evals/conformance-scenarios.md
+require_text 'PR survives compaction' .swe-forge/evals/conformance-scenarios.md
+require_text 'Herdr read-only backend' .swe-forge/evals/conformance-scenarios.md
+require_text 'Bounded worker' .swe-forge/evals/conformance-scenarios.md
+require_text 'Stale state pointer' .swe-forge/evals/conformance-scenarios.md
 require_text 'Reliable near-limit signal' .swe-forge/evals/conformance-scenarios.md
 require_text 'explicit test-first' docs/adding-a-skill.md
 require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
