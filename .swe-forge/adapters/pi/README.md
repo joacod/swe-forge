@@ -1,7 +1,9 @@
 # Pi Adapter
 
-This adapter exposes SWE Forge through Pi's global prompt-template convention.
-It does not add an extension, plugin, package manifest, or Pi settings entry.
+This adapter exposes SWE Forge through Pi's global prompt-template convention
+plus one small optional runtime extension. Canonical workflow behavior remains
+in the support tree; the extension only translates Pi lifecycle capabilities
+into the generic context and continuation contracts.
 
 ## Global Installation
 
@@ -12,7 +14,7 @@ scripts/swe-forge install pi --global
 scripts/swe-forge verify pi --global
 ```
 
-The installer creates:
+The installer creates or links:
 
 ```text
 ~/.pi/agent/prompts/swe-forge.md
@@ -20,14 +22,23 @@ The installer creates:
 ~/.pi/agent/prompts/git-push.md
 ~/.pi/agent/prompts/git-pr.md
 ~/.pi/agent/prompts/git-sync.md
+~/.pi/agent/extensions/swe-forge-runtime.ts
 ~/.pi/agent/swe-forge/
 ```
 
-The prompt loader points to the canonical `AGENTS.md`, `SWE-FORGE.md`, and
-`.swe-forge/` files in the support directory. Link mode is the default, so
-updating the stable SWE Forge checkout updates the installed source after
-review. Global copy mode remains unsupported, matching the other global
-installations.
+The prompt and extension loaders resolve canonical files under
+`~/.pi/agent/swe-forge/`, never against a project-local `.swe-forge/` tree.
+Link mode is the default, so updating the stable SWE Forge checkout updates
+the installed source after review. Global copy mode remains unsupported.
+
+The extension is inert unless it finds an active, checkout-matching
+`run-state.yaml` with `workflow_active: true` (or a compatible active schema-v2
+status). It looks first at `SWE_FORGE_RUN_STATE`/`SWE_FORGE_STATE`, then an
+ignored project `.swe-forge/runs/` pointer or directory, and finally bounded
+external temporary-state locations. It chooses the newest active snapshot by
+`continuation.updated_at` and file mtime; terminal or stale state is ignored.
+An operator can therefore use an explicit state path without allowing an old
+pointer to override a newer run.
 
 ## Invocation
 
@@ -55,45 +66,72 @@ separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync` prompts load the
 canonical delivery policy. See [shared adapter behavior](../README.md) for the
 workflow and delivery rules.
 
+## Runtime integration
+
+The extension keeps Pi-specific API knowledge here and exposes no model,
+provider, price, or reasoning-level routing. It:
+
+- reads only the compact durable continuation state;
+- appends a bounded deterministic `SWE-FORGE ACTIVE RUN` block to the current
+  system prompt from `before_agent_start`, without copying the ticket or
+  persisting a duplicate message;
+- transforms exact user shorthand `merged` into `/git-sync merged` only when
+  the newest active run is PR mode and is awaiting merge;
+- observes `session_before_compact` and `session_compact` without replacing
+  Pi's summarizer;
+- uses `agent_settled`, rather than `agent_end`, as the preferred boundary for
+  context inspection because Pi may retry, compact-and-retry, or process queued
+  follow-ups after `agent_end`; and
+- uses `ctx.getContextUsage()` and `ctx.compact()` only when those capabilities
+  are present, the run state marks a safe boundary, and the remaining headroom
+  is insufficient for the persisted next action. It records compact lifecycle
+  events as non-authoritative session entries and never treats them as Git or
+  task evidence.
+
+The extension uses Pi's documented compaction reserve as a Pi-specific fallback
+and a run-state `expected_context_tokens` estimate when available. It does not
+apply a universal percentage threshold. If telemetry, a compaction API, or an
+active run-state snapshot is unavailable, it does nothing and the canonical
+workflow falls back to durable checkpoints/manual recovery.
+
+Pi's optional subagent extension or an external Herdr integration may provide a
+`SUBAGENTS` delegation backend. That backend is not installed or selected by
+this adapter. Read-only Herdr workers remain `SUBAGENTS` with shared write
+isolation; only proven concurrent writable worktrees can be `ISOLATED`.
+
 ### Context management
 
-The inspected Pi 0.84.1 runtime provides native context telemetry in its
-interactive footer and automatic compaction by default. Its documented
-threshold is `contextTokens > contextWindow - reserveTokens`; the defaults are
-`reserveTokens: 16384` and `keepRecentTokens: 20000`. Pi also recognizes a
-provider-reported overflow or recoverable length response, compacts, and
-retries the interrupted turn once. Threshold compaction happens at a safe
-session boundary and does not mean that a completed response is replayed.
+The inspected Pi 0.84.2 runtime provides `ExtensionContext.getContextUsage()`,
+`ExtensionContext.compact()`, `before_agent_start`,
+`session_before_compact`, `session_compact`, and `agent_settled`. Pi's native
+compaction threshold is based on the provider context window and configured
+reserve, with documented defaults of `reserveTokens: 16384` and
+`keepRecentTokens: 20000`. Pi also recognizes provider-reported overflow or a
+recoverable length response, compacts, and retries the interrupted turn once.
 
-This is host evidence, not a portable SWE Forge guarantee. The prompt-template
-adapter is a thin loader and cannot call Pi's extension APIs directly, so the
-canonical workflow must not pretend that it can inspect `ctx.getContextUsage()`
-or invoke `ctx.compact()` on every host. Keep automatic compaction enabled,
-consider a larger response reserve for unusually long reasoning/tool turns,
-and use `/compact <instructions>` as the manual fallback at a completed
-boundary. After Pi compacts or retries, follow the canonical context policy:
-re-read the external working spec and run state, inspect the current Git
-`HEAD`, and resume only from the recorded next action. A model/provider label,
-including a large advertised context window, is not evidence that its overflow
-errors will be classified by Pi.
+These are host capabilities, not portable SWE Forge guarantees. The extension
+requests proactive compaction only after state persistence at a safe boundary;
+it never fights host threshold compaction or launches a duplicate retry. After
+any observed compaction or overflow recovery, the canonical context policy
+requires re-reading the external working spec and run state, inspecting Git
+`HEAD`/diff, and resuming only from `continuation.next_action`. A model or
+provider label is not evidence of context capacity or recovery behavior.
 
-Pi does not provide native writable isolated workers by default. If
-`SUBAGENTS` is unavailable, the canonical workflow falls back to `SOLO` or
-sequential execution according to its routing and safety rules. `ISOLATED` is
-portable at the workflow level and uses demonstrated native harness worktree
-capabilities or the optional Herdr provider when available; it is not
-universally available in every Pi setup. Herdr remains outside this harness
-adapter and is never installed automatically.
+Pi does not provide native writable isolated workers by default. If a usable
+`SUBAGENTS` backend is unavailable, the canonical workflow records preferred
+`SUBAGENTS` and effective `SOLO`/sequential execution. `ISOLATED` remains
+portable at the workflow level and requires demonstrated native worktree
+capabilities or the optional Herdr provider; it is not universally available in
+every Pi setup. Herdr remains optional and is never installed automatically.
 
 ## References
 
-The adapter was designed against the current Pi documentation for:
+The adapter was verified against the installed Pi documentation and type
+surface on 2026-08-15:
 
-- global prompt templates under `~/.pi/agent/prompts/`
-- prompt-template arguments and `$ARGUMENTS`
-- global settings and resource discovery
-
-References checked on 2026-08-11:
-
+- https://pi.dev/docs/latest/extensions
+- https://pi.dev/docs/latest/compaction
 - https://pi.dev/docs/latest/prompt-templates
 - https://pi.dev/docs/latest/settings
+
+The observed runtime package was `@earendil-works/pi-coding-agent` 0.84.2.

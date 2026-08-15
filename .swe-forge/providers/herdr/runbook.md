@@ -54,8 +54,15 @@ integrate centrally.
 
 ## 3. Choose Isolation
 
+A Herdr-backed read-only investigation is a `SUBAGENTS` backend and may use a
+shared workspace when the worker has no write access. Record
+`delegation_backend: HERDR`, `write_isolation: SHARED`, and
+`execution_provider: NONE`; do not relabel it `ISOLATED`.
+
 Use a shared workspace only for read-only research or when one writer owns the
-checkout. Concurrent writable workers require separate Git worktrees.
+checkout. Concurrent writable workers require separate Git worktrees and the
+semantic `ISOLATED` topology. Selecting Herdr as a backend does not itself
+select or authorize isolation.
 
 Selecting an execution provider does not authorize unplanned worktree creation.
 For an explicit `isolated` invocation, follow the setup checkpoint and

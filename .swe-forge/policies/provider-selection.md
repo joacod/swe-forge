@@ -1,8 +1,10 @@
 # Isolated Execution-Provider Selection Policy
 
 Use this policy only after hard routing eligibility selects
-`execution_mode: ISOLATED`. It defines capability evidence, not workflow
-behavior or delivery authorization.
+`execution_mode: ISOLATED`. It defines writable-provider capability evidence,
+not workflow behavior or delivery authorization. Read-only delegation backend
+selection for `SUBAGENTS` belongs to `policies/execution-routing.md`; a Herdr
+research worker therefore does not load this isolated provider machinery.
 
 ```yaml
 requested_provider: AUTO | NATIVE | HERDR | NONE
@@ -10,6 +12,9 @@ execution_provider: NATIVE | HERDR | NONE
 provider_reason: <evidence-backed reason>
 parallel_strategy: NONE | COMPOSE
 integration_strategy: NONE | CHERRY_PICK
+# For the selected ISOLATED topology, routing also records:
+# delegation_backend: NATIVE | HERDR
+# write_isolation: WORKTREE
 ```
 
 ## Mandatory capability evidence

@@ -116,7 +116,7 @@ The installer also links the requested harness bridge:
 # OpenCode: .opencode/commands/swe-forge.md and atomic delivery commands
 # Claude Code: CLAUDE.md and .claude/skills/swe-forge/
 # Codex and Cursor: .agents/skills/swe-forge/
-# Pi: ~/.pi/agent/prompts/swe-forge.md and atomic delivery prompts
+# Pi: ~/.pi/agent/prompts/swe-forge.md, atomic delivery prompts, and the optional runtime extension
 ```
 
 OpenCode and Pi also receive the explicit atomic delivery helpers
@@ -156,9 +156,10 @@ Add only the bridge needed by the target harness:
   `.agents/skills/swe-forge/`; the global installer uses
   `~/.agents/skills/swe-forge/` and `~/.agents/swe-forge/`. Codex installation
   does not modify `~/.codex/AGENTS.md` or Codex configuration.
-- Pi: the global installer links the explicit prompt template to
-  `~/.pi/agent/prompts/swe-forge.md` and does not modify Pi settings or install
-  an extension.
+- Pi: the global installer links the explicit prompt template, atomic delivery
+  prompts, and `~/.pi/agent/extensions/swe-forge-runtime.ts`; it does not
+  modify Pi settings. The extension is inert without an active matching
+  run-state snapshot.
 - Herdr: the optional execution provider is documented under
   `.swe-forge/providers/herdr/` and is used only when canonical routing selects
   `ISOLATED`; install Herdr's own official skill separately if it is needed and
@@ -179,7 +180,8 @@ creates source-linked harness entries in these locations:
 - Codex and Cursor: `~/.agents/skills/swe-forge/` and
   `~/.agents/swe-forge/`
 - Pi: `~/.pi/agent/prompts/swe-forge.md` plus the atomic delivery prompts,
-  and `~/.pi/agent/swe-forge/`
+  `~/.pi/agent/extensions/swe-forge-runtime.ts`, and
+  `~/.pi/agent/swe-forge/`
 
 The global loaders point back to the support directory, which points back to
 the canonical checkout. This makes the explicit harness entry available across

@@ -7,7 +7,7 @@ promise that future harness releases remain compatible without review.
 
 | Harness or provider | Version observed | Installation scope | Validation posture |
 | --- | --- | --- | --- |
-| Pi | 0.84.1 | Global | Installer and prompt projection validated locally |
+| Pi | 0.84.2 | Global | Installer, prompt projection, and runtime extension syntax/fixture validated locally |
 | OpenCode | 1.18.16 | Project and global | Installer and command projection validated locally |
 | Claude Code | 2.1.37 | Project and global | Installer and skill projection validated locally |
 | Codex | Not installed in the validation environment | Project and global | Shared Agent Skill projection; validate with the target Codex release |
@@ -22,7 +22,7 @@ The canonical policy uses only capabilities demonstrated by the active host:
 
 | Harness | Observed context capability | Adapter consequence |
 | --- | --- | --- |
-| Pi 0.84.1 | Native usage display, threshold compaction, overflow compact-and-retry once, and manual `/compact` | Use host recovery, but re-read durable state and Git before continuing; the prompt loader cannot call extension APIs. |
+| Pi 0.84.2 | `getContextUsage()`, `compact()`, `before_agent_start`, `session_before_compact`, `session_compact`, and settled lifecycle hooks; native threshold compaction and overflow compact-and-retry once | The runtime extension reinjects bounded continuation state, routes active `merged` shorthand, and requests proactive compaction only at a state-marked safe boundary; the generic core still re-reads durable state and Git after recovery. |
 | OpenCode 1.18.16 | Not measured by the SWE Forge adapter snapshot | Do not claim proactive detection; rely on documented host behavior or manual checkpoint/resume until revalidated. |
 | Claude Code 2.1.37 | Not measured by the SWE Forge adapter snapshot | Do not claim proactive detection; rely on documented host behavior or manual checkpoint/resume until revalidated. |
 | Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |

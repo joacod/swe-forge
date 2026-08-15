@@ -9,10 +9,13 @@ inspect, plan, implement, verify, review, and report. It sits above your
 coding harness. It is not a harness, model provider, execution daemon, or
 scheduler, and it never activates from ordinary prompts.
 
-For each explicit ticket, it chooses a proportionate execution topology:
-`SOLO`, `SUBAGENTS`, or `ISOLATED`. Delivery is a separate choice: `GUIDED` is
-the default for reviewable increments, while opt-in `PR` mode can carry a
-well-specified ticket through verification and pull-request creation.
+For each explicit ticket, it chooses the smallest execution topology that
+preserves reliability, context headroom, and isolation: `SOLO`, `SUBAGENTS`,
+or `ISOLATED`. Routing considers context reducibility rather than prompt length
+alone and records preferred versus effective topology when a backend is
+unavailable. Delivery is a separate choice: `GUIDED` is the default for
+reviewable increments, while opt-in `PR` mode can carry a well-specified ticket
+through verification and pull-request creation.
 
 `ISOLATED` is used when concurrent writable work requires separate execution
 environments. SWE Forge may use native harness worktree agents or Herdr as the
@@ -40,7 +43,7 @@ that checkout as development-only.
 
 For development, a personal checkout may follow `main`, but public
 installations should use a release tag. For Pi, install the global prompt
-template:
+template and optional lifecycle extension:
 
 ```bash
 scripts/swe-forge install pi --global
@@ -144,6 +147,9 @@ rather than guessing.
 Every ticket also records a risk-proportional testing decision: focused
 behavioral tests when they add signal, existing coverage or focused manual
 evidence when sufficient, and no blanket coverage target or mandatory TDD.
+Long-running runs persist a compact continuation state separately from
+conversation summaries so Pi and other capable adapters can recover workflow
+phase and user shorthand after compaction.
 
 `GUIDED` mode keeps a human checkpoint between reviewable slices. `PR` mode is
 an explicit low-touch path that can continue through validation, review, push,

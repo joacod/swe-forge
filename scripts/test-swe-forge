@@ -345,6 +345,7 @@ test -L "$global_home/.pi/agent/prompts/swe-forge.md" || fail "global Pi prompt 
 for command in $DELIVERY_COMMANDS; do
   test -L "$global_home/.pi/agent/prompts/$command.md" || fail "global Pi $command prompt is not linked"
 done
+test -L "$global_home/.pi/agent/extensions/swe-forge-runtime.ts" || fail "global Pi runtime extension is not linked"
 test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global OpenCode source is not linked"
 test -L "$global_home/.claude/swe-forge/SWE-FORGE.md" || fail "global Claude source is not linked"
 test -L "$global_home/.agents/swe-forge/AGENTS.md" || fail "global shared source is not linked"
@@ -368,6 +369,8 @@ test "$(readlink "$global_home/.pi/agent/prompts/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md" || fail "global Pi prompt link is incorrect"
 test "$(readlink "$global_home/.pi/agent/prompts/git-pr.md")" = \
   "$ROOT/.swe-forge/adapters/pi/prompts/git-pr.md" || fail "global Pi git-pr prompt link is incorrect"
+test "$(readlink "$global_home/.pi/agent/extensions/swe-forge-runtime.ts")" = \
+  "$ROOT/.swe-forge/adapters/pi/extensions/swe-forge-runtime.ts" || fail "global Pi runtime extension link is incorrect"
 grep -F 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' \
   "$global_home/.config/opencode/swe-forge/.swe-forge/policies/execution-routing.md" \
   >/dev/null || fail "global canonical isolated mode contract is missing"
