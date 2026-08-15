@@ -123,6 +123,7 @@ SWE Forge turns an explicit ticket into a bounded, evidence-backed change:
 
 ```text
 ticket
+  → assess whether discovery has independent, context-reducible questions
   → inspect the repository and clarify important decisions
   → define acceptance criteria and the smallest compatible approach
   → choose SOLO, SUBAGENTS, or ISOLATED

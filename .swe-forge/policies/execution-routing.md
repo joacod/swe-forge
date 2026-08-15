@@ -86,6 +86,46 @@ when all implementation writes remain sequential. Delegation is justified only
 when the returned evidence is concise, independently checkable, and materially
 reduces root growth after coordination overhead is included.
 
+## Early discovery-shape assessment
+
+Before broad discovery, make a lightweight assessment of the *shape* of the
+questions that discovery must answer. This is not the final topology decision
+and it must not be run a second time as a competing router. Record the small
+strategy decision separately:
+
+```yaml
+discovery_strategy:
+  mode: ROOT_ONLY | DELEGATED_RESEARCH
+  rationale: <why these discovery questions can or cannot leave root context>
+  questions:
+    - id: <short identifier>
+      objective: <bounded read-only question>
+      allowed_scope: [<paths or symbols>]
+      evidence_budget: <concise result limit>
+      acceptance: <what makes the evidence useful>
+  backend: NONE | NATIVE | HERDR
+  write_isolation: SHARED
+  final_routing_deferred: true
+```
+
+Use `DELEGATED_RESEARCH` only when at least one question is independently
+answerable, read-only, safely bounded, and likely to return concise evidence
+that materially reduces root-context growth. The assessment must not delegate
+because a ticket is long, decide delivery or final topology, pass the entire
+ticket or repository history to a worker, permit recursive orchestration, or
+allow writes. `ROOT_ONLY` is the correct result when the questions are coupled,
+when the root must retain the exploration together, or when delegation would
+not compress the evidence.
+
+When `DELEGATED_RESEARCH` is selected, realize it through the existing
+read-only `SUBAGENTS` semantics only after a suitable backend is proven. Use
+`write_isolation: SHARED`, bounded researcher tasks, and structured results;
+never create `ISOLATED` work for this phase. If no backend is available, retain
+the rationale and execute the questions in the root context rather than
+simulating workers. After concise evidence is consumed, continue normal
+specification, architecture, decomposition, and the single full topology
+routing phase at its existing boundary.
+
 ## Decision procedure
 
 1. Record the root-context requirement, independent evaluability, projected

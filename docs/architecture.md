@@ -97,12 +97,22 @@ review, delivery, and cleanup.
 
 ## Routing boundary
 
-Automatic routing does not use prompt length alone. It records projected
-pressure, context reducibility, delegatable context, root-context requirement,
-and continuity risk. Independent, separately evaluable investigations may make
-`SUBAGENTS` preferable when concise structured results materially reduce root
-context, even if implementation writes remain sequential. Globally coupled work
-stays `SOLO` when splitting does not reduce the information the root must keep.
+Automatic routing does not use prompt length alone. Before broad discovery,
+the orchestrator makes a lightweight discovery-shape assessment: clearly
+independent, read-only questions may use bounded `DELEGATED_RESEARCH`, while
+coupled questions remain `ROOT_ONLY`. This assessment records bounded
+objectives and concise evidence limits; it does not choose delivery, create
+isolated work, or duplicate the final topology router. Early research uses the
+existing shared-write `SUBAGENTS` semantics only when a backend is proven, and
+the normal specification, architecture, decomposition, and full routing
+phases still follow.
+
+The final routing decision records projected pressure, context reducibility,
+delegatable context, root-context requirement, and continuity risk. Independent,
+separately evaluable investigations may make `SUBAGENTS` preferable when
+concise structured results materially reduce root context, even if
+implementation writes remain sequential. Globally coupled work stays `SOLO`
+when splitting does not reduce the information the root must keep.
 
 The run records both the policy preference and runtime reality. A preferred
 `SUBAGENTS` run with no active backend falls back to effective `SOLO` (or

@@ -108,6 +108,27 @@ model or harness will compact at the desired time.
 
 ### 2. Discover
 
+Before broad discovery, apply the lightweight discovery-shape assessment from
+`policies/execution-routing.md`. Record `discovery_strategy.mode` as
+`ROOT_ONLY` unless there are clearly independent, read-only questions whose
+answers can return concise evidence and materially reduce root-context growth.
+This is an early research strategy, not the final topology decision: do not
+route delivery, create isolated work, or duplicate the full routing phase here.
+
+For `DELEGATED_RESEARCH`, load `policies/delegation.md`, the bounded researcher
+role, the task/result contracts, and model-routing before assigning a worker.
+Give each worker one bounded question, a small allowed read scope, an evidence
+budget, and a structured result contract. Workers do not write, make delivery
+or topology decisions, pass along the full ticket/history, recurse, or
+orchestrate other workers. Use the existing shared-write `SUBAGENTS` semantics
+only when a read-only backend is proven; otherwise record the safe fallback to
+root-only discovery. Consume the concise evidence in the root, then continue
+normal discovery and specification.
+
+The full evidence-backed topology decision remains in step 6 after
+specification, architecture, and useful decomposition. Early research must not
+become a second router.
+
 Inspect the repository before making architectural claims. Locate relevant entry
 points, dependencies, analogous implementations, conventions, documentation,
 tests, and quality gates. If the ticket names an optional specialist skill, or

@@ -61,6 +61,10 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Treat context reducibility as a first-class routing question: delegate only
   independently evaluable work whose concise result materially reduces root
   context growth.
+- During discovery, assess question shape separately from final topology:
+  bounded read-only questions may use `DELEGATED_RESEARCH`, while coupled
+  discovery stays `ROOT_ONLY`; this lightweight assessment never creates
+  isolated work or a competing router.
 - Prefer native subagents over external orchestration when they are sufficient.
 - Use `ISOLATED` only when concurrent writable work needs separate execution
   environments and the automatic gate in the routing policy passes.
@@ -229,8 +233,9 @@ Follow the detailed procedure in `.swe-forge/workflows/ticket.md`. The
 lifecycle is:
 
 1. Ingest the immutable raw invocation and parsed ticket constraints.
-2. Discover repository evidence, quality gates, and any explicitly named
-   optional skill.
+2. Assess discovery shape, then discover repository evidence, quality gates,
+   and any explicitly named optional skill; bounded research does not replace
+   the later full topology decision.
 3. Specify observable acceptance criteria after loading the specification
    policy and, in `PR`, build the transient working spec after loading its
    contract.

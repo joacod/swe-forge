@@ -137,6 +137,11 @@ require_text 'plan-check' .swe-forge/policies/evidence.md
 require_text 'record-check-status' .swe-forge/policies/evidence.md
 require_text 'candidate fingerprint' .swe-forge/policies/evidence.md
 require_text 'context continuity and compaction' SWE-FORGE.md
+require_text 'Early discovery-shape assessment' .swe-forge/policies/execution-routing.md
+require_text 'discovery_strategy:' .swe-forge/contracts/working-spec.md
+require_text 'discovery_strategy:' .swe-forge/contracts/run-state.md
+require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
+require_text 'final_routing_deferred: true' .swe-forge/policies/execution-routing.md
 require_text 'Pre-continuation protocol' .swe-forge/policies/context.md
 require_text 'Overflow protocol' .swe-forge/policies/context.md
 require_text 'Head:' .swe-forge/contracts/receipt.md
@@ -420,6 +425,7 @@ done
 # Runtime orchestration must expose canonical policy owners before their
 # decisions or actions are needed. These assertions protect the load path
 # while allowing the detailed rules to remain in their owning files.
+require_ordered_text 'Before broad discovery' 'full evidence-backed topology decision' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before specification or clarification behavior is needed' 'policies/specification.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'In `PR`, also load' 'contracts/working-spec.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Every normal run loads' 'before specification or clarification' SWE-FORGE.md
