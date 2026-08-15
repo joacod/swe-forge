@@ -9,7 +9,18 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
-TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-pi-fixture.XXXXXX")
+# Pi loads TypeScript extensions through its own runtime. The dependency-free
+# fixture uses Node's native loader when the validation host exposes it; older
+# generic CI images can still run the shell and structural coverage safely.
+NODE_TS_ARGS=
+if node --experimental-strip-types --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
+  NODE_TS_ARGS=--experimental-strip-types
+elif ! node --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
+  printf '%s\n' 'SKIP: Pi runtime fixture (Node.js has no native TypeScript loader)'
+  exit 0
+fi
+
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/pi-runtime-fixture.XXXXXX")
 cleanup() {
   rm -rf "$TMP_ROOT"
 }
@@ -17,7 +28,8 @@ trap cleanup EXIT HUP INT TERM
 
 old_dir=$TMP_ROOT/old
 new_dir=$TMP_ROOT/new
-mkdir -p "$old_dir" "$new_dir"
+fixture_cwd=$TMP_ROOT/checkout
+mkdir -p "$old_dir" "$new_dir" "$fixture_cwd"
 
 cat >"$old_dir/run-state.yaml" <<EOF_STATE
 workflow: swe-forge
@@ -33,9 +45,9 @@ execution_provider: NONE
 delegation_backend: NONE
 write_isolation: SHARED
 invocation_checkout:
-  path: $ROOT
+  path: $fixture_cwd
 delivery_checkout:
-  path: $ROOT
+  path: $fixture_cwd
 routing:
   current: SOLO
   preferred: SUBAGENTS
@@ -75,9 +87,9 @@ execution_provider: NONE
 delegation_backend: NONE
 write_isolation: SHARED
 invocation_checkout:
-  path: $ROOT
+  path: $fixture_cwd
 delivery_checkout:
-  path: $ROOT
+  path: $fixture_cwd
 routing:
   current: SOLO
   preferred: SOLO
@@ -105,11 +117,12 @@ EOF_STATE
 
 cd "$ROOT"
 SWE_FORGE_RUN_STATE="$old_dir/run-state.yaml" \
-  node --input-type=module - "$ROOT" <<'NODE'
+  node $NODE_TS_ARGS --input-type=module - "$ROOT" "$fixture_cwd" <<'NODE'
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = process.argv[2];
+const fixtureCwd = process.argv[3];
 const modulePath = path.join(root, ".swe-forge", "adapters", "pi", "extensions", "swe-forge-runtime.ts");
 const { default: extension } = await import(pathToFileURL(modulePath).href);
 const handlers = new Map();
@@ -125,7 +138,7 @@ const pi = {
 extension(pi);
 
 const ctx = {
-  cwd: root,
+  cwd: fixtureCwd,
   hasPendingMessages: () => false,
   getContextUsage: () => ({ tokens: 90_000, contextWindow: 100_000 }),
   compact(options) {

@@ -6,6 +6,8 @@ const ACTIVE_MARKER = "SWE-FORGE ACTIVE RUN";
 const DEFAULT_RESERVE_TOKENS = 16_384;
 const COMPACTION_COOLDOWN_MS = 30_000;
 const MAX_STATE_FILES = 64;
+const MAX_STATE_BYTES = 256 * 1024;
+const MAX_FIELD_LENGTH = 160;
 const ACTIVE_STATUSES = new Set(["planning", "running", "reviewing", "repairing", "blocked"]);
 const TERMINAL_STATUSES = new Set(["accepted", "failed"]);
 const RUN_STATE_ENV_VARS = ["SWE_FORGE_RUN_STATE", "SWE_FORGE_STATE"];
@@ -153,6 +155,11 @@ function discoverStatePaths(cwd: string): Set<string> {
 	return paths;
 }
 
+function displayValue(values: Map<string, string>, key: string, fallback: string): string {
+	const value = values.get(key)?.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+	return value ? value.slice(0, MAX_FIELD_LENGTH) : fallback;
+}
+
 function numberOrUndefined(value: string | undefined): number | undefined {
 	if (!value || value === "unknown" || value === "none") return undefined;
 	const parsed = Number(value);
@@ -177,6 +184,7 @@ interface ActiveRun {
 	filePath: string;
 	stateId: string;
 	updatedAt: number;
+	modifiedAt: number;
 	status: string;
 	workflowActive: boolean;
 	preferredTopology: string;
@@ -196,6 +204,11 @@ interface ActiveRun {
 }
 
 function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
+	try {
+		if (fs.statSync(filePath).size > MAX_STATE_BYTES) return undefined;
+	} catch {
+		return undefined;
+	}
 	const text = readText(filePath);
 	if (!text) return undefined;
 	const values = parseScalarYaml(text);
@@ -212,33 +225,46 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 		const parsedTime = Date.parse(recordedTime);
 		if (Number.isFinite(parsedTime)) updatedAt = parsedTime;
 	}
+	let modifiedAt: number;
 	try {
-		updatedAt = Math.max(updatedAt, fs.statSync(filePath).mtimeMs);
+		modifiedAt = fs.statSync(filePath).mtimeMs;
+		// A valid durable timestamp is authoritative. File mtime is only the
+		// fallback for legacy snapshots that do not record continuation time.
+		if (updatedAt === 0) updatedAt = modifiedAt;
 	} catch {
 		return undefined;
 	}
 
-	const stateId = values.get("run_id") ?? path.basename(path.dirname(filePath));
+	const stateId = displayValue(values, "run_id", path.basename(path.dirname(filePath)));
 	return {
 		filePath,
 		stateId,
 		updatedAt,
+		modifiedAt,
 		status,
 		workflowActive,
-		preferredTopology: values.get("routing.preferred") ?? values.get("preferred_mode") ?? values.get("execution_mode") ?? "unknown",
-		currentTopology: values.get("routing.current") ?? values.get("routing.selected") ?? values.get("execution_mode") ?? "unknown",
-		deliveryMode: values.get("continuation.delivery.mode") ?? values.get("delivery_mode") ?? "unknown",
-		phase: values.get("continuation.phase") ?? values.get("current_wave") ?? "unknown",
-		step: values.get("continuation.step") ?? "none",
-		awaiting: values.get("continuation.awaiting") ?? "none",
-		nextActionKind: values.get("continuation.next_action.kind") ?? "none",
-		nextActionTarget: values.get("continuation.next_action.target") ?? "none",
+		preferredTopology: displayValue(
+			values,
+			"routing.preferred",
+			displayValue(values, "preferred_mode", displayValue(values, "execution_mode", "unknown")),
+		),
+		currentTopology: displayValue(
+			values,
+			"routing.current",
+			displayValue(values, "routing.selected", displayValue(values, "execution_mode", "unknown")),
+		),
+		deliveryMode: displayValue(values, "continuation.delivery.mode", displayValue(values, "delivery_mode", "unknown")),
+		phase: displayValue(values, "continuation.phase", displayValue(values, "current_wave", "unknown")),
+		step: displayValue(values, "continuation.step", "none"),
+		awaiting: displayValue(values, "continuation.awaiting", "none"),
+		nextActionKind: displayValue(values, "continuation.next_action.kind", "none"),
+		nextActionTarget: displayValue(values, "continuation.next_action.target", "none"),
 		expectedContextTokens: numberOrUndefined(values.get("continuation.next_action.expected_context_tokens")),
 		safeBoundary: boolValue(values.get("continuation.safe_boundary")) ?? false,
-		projectedPressure: values.get("routing.context_value.projected_pressure") ?? "unknown",
-		contextStatus: values.get("context.status") ?? "unknown",
-		prNumber: values.get("continuation.delivery.pr_number") ?? "none",
-		prState: values.get("continuation.delivery.pr_state") ?? "none",
+		projectedPressure: displayValue(values, "routing.context_value.projected_pressure", "unknown"),
+		contextStatus: displayValue(values, "context.status", "unknown"),
+		prNumber: displayValue(values, "continuation.delivery.pr_number", "none"),
+		prState: displayValue(values, "continuation.delivery.pr_state", "none"),
 	};
 }
 
@@ -246,7 +272,10 @@ function resolveActiveRun(cwd: string): ActiveRun | undefined {
 	const candidates = Array.from(discoverStatePaths(cwd))
 		.map((filePath) => parseActiveRun(filePath, cwd))
 		.filter((run): run is ActiveRun => Boolean(run));
-	candidates.sort((left, right) => right.updatedAt - left.updatedAt || left.filePath.localeCompare(right.filePath));
+	candidates.sort(
+		(left, right) =>
+			right.updatedAt - left.updatedAt || right.modifiedAt - left.modifiedAt || left.filePath.localeCompare(right.filePath),
+	);
 	return candidates[0];
 }
 
@@ -368,7 +397,7 @@ export default function sweForgeRuntime(pi: any) {
 		const usage = ctx.getContextUsage();
 		if (!usage) return;
 		const reason = compactionReason(run, usage);
-		const stateVersion = `${run.filePath}:${run.updatedAt}`;
+		const stateVersion = `${run.filePath}:${run.updatedAt}:${run.modifiedAt}`;
 		if (
 			!reason ||
 			stateVersion === lastCompactionState ||
@@ -383,15 +412,19 @@ export default function sweForgeRuntime(pi: any) {
 			tokens: usage.tokens,
 			contextWindow: usage.contextWindow,
 		});
-		ctx.compact({
-			customInstructions:
-				"Preserve the active SWE-Forge continuation as a reminder only. The external run-state is authoritative. Do not invent delivery state or repeat completed actions; after compaction, re-read run state and Git before continuing.",
-			onComplete: () => {
-				compactionInFlight = false;
-			},
-			onError: () => {
-				compactionInFlight = false;
-			},
-		});
+		try {
+			ctx.compact({
+				customInstructions:
+					"Preserve the active SWE-Forge continuation as a reminder only. The external run-state is authoritative. Do not invent delivery state or repeat completed actions; after compaction, re-read run state and Git before continuing.",
+				onComplete: () => {
+					compactionInFlight = false;
+				},
+				onError: () => {
+					compactionInFlight = false;
+				},
+			});
+		} catch {
+			compactionInFlight = false;
+		}
 	});
 }
