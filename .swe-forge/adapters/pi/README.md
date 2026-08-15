@@ -88,11 +88,18 @@ provider, price, or reasoning-level routing. It:
   events as non-authoritative session entries and never treats them as Git or
   task evidence.
 
-The extension uses Pi's documented compaction reserve as a Pi-specific fallback
-and a run-state `expected_context_tokens` estimate when available. It does not
-apply a universal percentage threshold. If telemetry, a compaction API, or an
-active run-state snapshot is unavailable, it does nothing and the canonical
-workflow falls back to durable checkpoints/manual recovery.
+The extension resolves Pi's effective compaction reserve from trusted project
+`.pi/settings.json` over global `~/.pi/agent/settings.json`, matching Pi's
+nested settings precedence, with the documented default as a safe fallback.
+Malformed or unavailable files are ignored and clean file metadata is cached to
+avoid unnecessary repeated reads. A run-state `expected_context_tokens`
+estimate improves the headroom calculation when present; a reliable
+`near-limit` state at a safe boundary is strong enough to request compaction
+without that estimate. `overflow` and `compacting` states remain under Pi's
+native recovery lifecycle, and unchanged state/cooldown protection prevents a
+duplicate request. If telemetry, a compaction API, or an active run-state
+snapshot is unavailable, it does nothing and the canonical workflow falls back
+to durable checkpoints/manual recovery.
 
 Pi's optional subagent extension or an external Herdr integration may provide a
 `SUBAGENTS` delegation backend. That backend is not installed or selected by

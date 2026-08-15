@@ -49,6 +49,11 @@ grading an agent from its explanation alone.
 | Context overflow without demonstrated automatic recovery | Persist state and return `BLOCKED` for a manual compact or fresh session; do not blindly continue or repeat the last mutation. |
 | Harness context capability is unknown | Record `unknown`/`unavailable`; do not infer a token threshold, context window, compaction API, or successful recovery from the model/provider name. |
 | No context limit is reached | Report `healthy` or `not-observed`; do not force an artificial compaction or ceremonial commit. |
+| Pi reliable `near-limit` with unknown next-step tokens | At a safe boundary, persist state and request one proactive compaction; do not require a fabricated estimate. |
+| Pi native `overflow`/`compacting` lifecycle | Do not launch a competing Forge compaction or duplicate native recovery. |
+| Pi project reserve | Use trusted `.pi/settings.json` `compaction.reserveTokens` over global settings, with safe fallback for malformed/missing files. |
+| Simultaneous active run states | Keep explicit/current pointers unchanged and select the newest valid checkout-compatible `updated_at` candidate. |
+| Dedicated Pi CI runtime | Use a supported Node version and treat inability to execute the runtime fixture as a CI failure, while local unsupported runtimes may skip. |
 
 ## Checkout And Ownership
 

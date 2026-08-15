@@ -355,7 +355,14 @@ require_text '### Context management' .swe-forge/adapters/pi/README.md
 require_text 'agent_settled' .swe-forge/adapters/pi/README.md
 require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'test-swe-forge-pi' CONTRIBUTING.md
+require_text 'discoverable-old' scripts/test-swe-forge-pi
+require_text 'project-overrides-global' scripts/test-swe-forge-pi
 require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'runtime_status=near-limit' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'projected_pressure=high' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'settingsSnapshot' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'projectSettingsTrusted' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text '.pi/settings.json' .swe-forge/adapters/pi/README.md
 require_text 'ctx.compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'SWE_FORGE_RUN_STATE' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'Pi 0.84.2' docs/compatibility.md

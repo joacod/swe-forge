@@ -4,20 +4,29 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 
-if ! command -v node >/dev/null 2>&1; then
-  printf '%s\n' 'SKIP: Pi runtime fixture (Node.js is unavailable)'
+skip_or_fail() {
+  message=$1
+  if [ "${SWE_FORGE_PI_CI:-}" = 1 ]; then
+    printf 'FAIL: %s\n' "$message" >&2
+    exit 1
+  fi
+  printf 'SKIP: %s\n' "$message"
   exit 0
+}
+
+if ! command -v node >/dev/null 2>&1; then
+  skip_or_fail 'Pi runtime fixture (Node.js is unavailable)'
 fi
 
 # Pi loads TypeScript extensions through its own runtime. The dependency-free
-# fixture uses Node's native loader when the validation host exposes it; older
-# generic CI images can still run the shell and structural coverage safely.
+# fixture uses Node's native loader when the validation host exposes it; local
+# contributors can still skip on older generic runtimes, while dedicated CI
+# marks that environment mismatch as a failure.
 NODE_TS_ARGS=
 if node --experimental-strip-types --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
   NODE_TS_ARGS=--experimental-strip-types
 elif ! node --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
-  printf '%s\n' 'SKIP: Pi runtime fixture (Node.js has no native TypeScript loader)'
-  exit 0
+  skip_or_fail 'Pi runtime fixture (Node.js has no native TypeScript loader)'
 fi
 
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/pi-runtime-fixture.XXXXXX")
@@ -62,7 +71,7 @@ continuation:
   next_action:
     kind: verify_and_sync_merge
     target: pull request
-    expected_context_tokens: 12000
+    expected_context_tokens: unknown
   safe_boundary: true
   updated_at: 2020-01-01T00:00:00Z
   delivery:
@@ -118,6 +127,7 @@ EOF_STATE
 cd "$ROOT"
 SWE_FORGE_RUN_STATE="$old_dir/run-state.yaml" \
   node $NODE_TS_ARGS --input-type=module - "$ROOT" "$fixture_cwd" <<'NODE'
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -125,6 +135,9 @@ const root = process.argv[2];
 const fixtureCwd = process.argv[3];
 const modulePath = path.join(root, ".swe-forge", "adapters", "pi", "extensions", "swe-forge-runtime.ts");
 const { default: extension } = await import(pathToFileURL(modulePath).href);
+const testHome = path.join(fixtureCwd, "home");
+fs.mkdirSync(path.join(testHome, ".pi", "agent"), { recursive: true });
+process.env.HOME = testHome;
 const handlers = new Map();
 const entries = [];
 const pi = {
@@ -139,6 +152,7 @@ extension(pi);
 
 const ctx = {
   cwd: fixtureCwd,
+  isProjectTrusted: () => true,
   hasPendingMessages: () => false,
   getContextUsage: () => ({ tokens: 90_000, contextWindow: 100_000 }),
   compact(options) {
@@ -155,13 +169,28 @@ if (transformed?.text !== "/git-sync merged") throw new Error("active merged sho
 
 await handlers.get("agent_settled")({}, ctx);
 if (!ctx.compaction) throw new Error("safe-boundary proactive compaction was not requested");
-if (!entries.some((entry) => entry.data.event === "proactive_compaction_requested")) {
-  throw new Error("proactive compaction evidence was not recorded");
+const proactive = entries.find((entry) => entry.data.event === "proactive_compaction_requested");
+if (!proactive) throw new Error("proactive compaction evidence was not recorded");
+if (!proactive.data.reason.includes("runtime_status=near-limit") || !proactive.data.reason.includes("expected_next=unknown")) {
+  throw new Error("near-limit did not override an unknown expected-token estimate");
 }
 ctx.compaction.onComplete?.();
 await handlers.get("agent_settled")({}, ctx);
 if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
   throw new Error("unchanged state triggered repeated proactive compaction");
+}
+
+// A native/overflow compaction lifecycle must suppress a competing Forge request
+// even when the durable state still reports the same near-limit boundary.
+await handlers.get("session_before_compact")({ reason: "overflow", willRetry: true }, ctx);
+await handlers.get("agent_settled")({}, ctx);
+if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
+  throw new Error("native overflow recovery triggered duplicate proactive compaction");
+}
+await handlers.get("session_compact")({ reason: "overflow", willRetry: true }, ctx);
+await handlers.get("agent_settled")({}, ctx);
+if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
+  throw new Error("completed native recovery triggered duplicate proactive compaction");
 }
 
 const newer = path.join(path.dirname(process.env.SWE_FORGE_RUN_STATE), "..", "new", "run-state.yaml");
@@ -170,6 +199,180 @@ const refreshed = await handlers.get("before_agent_start")({ systemPrompt: "base
 if (!refreshed?.systemPrompt.includes("phase: implementation")) throw new Error("newer state did not win");
 const staleTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
 if (staleTransform) throw new Error("stale PR state overrode newer continuation state");
+
+function writeRuntimeState(filePath, options = {}) {
+  const expected = options.expected ?? "unknown";
+  const yaml = `workflow: swe-forge
+workflow_version: 1
+schema_version: 2
+run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
+status: running
+requested_mode: AUTO
+preferred_mode: SOLO
+execution_mode: SOLO
+requested_provider: AUTO
+execution_provider: NONE
+delegation_backend: NONE
+write_isolation: SHARED
+invocation_checkout:
+  path: ${options.cwd ?? fixtureCwd}
+delivery_checkout:
+  path: ${options.cwd ?? fixtureCwd}
+routing:
+  current: SOLO
+  preferred: SOLO
+  context_value:
+    projected_pressure: ${options.projected ?? "low"}
+continuation:
+  workflow_active: true
+  workflow: ticket
+  phase: ${options.phase ?? "implementation"}
+  step: 1
+  awaiting: none
+  next_action:
+    kind: ${options.nextKind ?? "implement"}
+    target: ${options.nextTarget ?? "next step"}
+    expected_context_tokens: ${expected}
+  safe_boundary: true
+  updated_at: ${options.updatedAt ?? "2040-01-01T00:00:00Z"}
+  delivery:
+    mode: PR
+    pr_number: ${options.prNumber ?? "none"}
+    pr_state: ${options.prState ?? "none"}
+context:
+  status: ${options.contextStatus ?? "healthy"}
+`;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, yaml);
+}
+
+function writeSettings(filePath, value) {
+  if (value === undefined) {
+    fs.rmSync(filePath, { force: true });
+    return;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, typeof value === "string" ? value : JSON.stringify(value));
+}
+
+async function runSettingsScenario(name, options, shouldCompact, expectedReason) {
+  const cwd = path.join(fixtureCwd, `settings-${name}`);
+  const statePath = path.join(cwd, "run-state.yaml");
+  const globalSettings = path.join(testHome, ".pi", "agent", "settings.json");
+  const projectSettings = path.join(cwd, ".pi", "settings.json");
+  writeRuntimeState(statePath, {
+    cwd,
+    runId: `settings-${name}`,
+    expected: options.expected ?? 10_000,
+    projected: options.projected ?? "low",
+    contextStatus: options.contextStatus ?? "healthy",
+  });
+  writeSettings(globalSettings, options.global === undefined ? undefined : { compaction: { reserveTokens: options.global } });
+  writeSettings(projectSettings, options.project);
+  process.env.SWE_FORGE_RUN_STATE = statePath;
+  delete process.env.SWE_FORGE_STATE;
+
+  const localHandlers = new Map();
+  const localEntries = [];
+  extension({
+    on(name, handler) {
+      localHandlers.set(name, handler);
+    },
+    appendEntry(type, data) {
+      localEntries.push({ type, data });
+    },
+  });
+  const localContext = {
+    cwd,
+    isProjectTrusted: () => true,
+    hasPendingMessages: () => false,
+    getContextUsage: () => ({ tokens: 75_000, contextWindow: 100_000 }),
+    compact(optionsForCompaction) {
+      this.compaction = optionsForCompaction;
+    },
+  };
+  await localHandlers.get("agent_settled")({}, localContext);
+  const request = localEntries.find((entry) => entry.data.event === "proactive_compaction_requested");
+  if (Boolean(request) !== shouldCompact) {
+    throw new Error(`${name} reserve/pressure scenario had unexpected compaction result`);
+  }
+  if (expectedReason && (!request || !request.data.reason.includes(expectedReason))) {
+    throw new Error(`${name} did not expose expected compaction reason: ${request?.data.reason ?? "none"}`);
+  }
+  return request;
+}
+
+const noSettings = await runSettingsScenario("no-settings", { expected: 10_000 }, true, "reserve=16384");
+if (!noSettings.data.reason.includes("expected_next=10000")) throw new Error("default reserve scenario omitted expected tokens");
+await runSettingsScenario("global-only", { global: 8192, expected: 10_000 }, false);
+await runSettingsScenario("project-only", { project: { compaction: { reserveTokens: 32_768 } }, expected: 10_000 }, true, "reserve=32768");
+await runSettingsScenario(
+  "project-overrides-global",
+  { global: 8192, project: { compaction: { reserveTokens: 32_768 } }, expected: 10_000 },
+  true,
+  "reserve=32768",
+);
+await runSettingsScenario("invalid-project", { global: 8192, project: "{ invalid json", expected: 10_000 }, false);
+await runSettingsScenario("projected-high", { expected: "unknown", projected: "high" }, true, "projected_pressure=high");
+await runSettingsScenario("overflow", { global: 8192, expected: 10_000, projected: "high", contextStatus: "overflow" }, false);
+
+// Both candidates remain discoverable at once. The explicit state path and
+// current pointer still point at the older state; automatic discovery must
+// select the newer valid checkout-compatible snapshot by updated_at.
+const projectRuns = path.join(fixtureCwd, ".swe-forge", "runs");
+const discoverableOld = path.join(projectRuns, "old", "run-state.yaml");
+const discoverableNew = path.join(projectRuns, "new", "run-state.yaml");
+writeRuntimeState(discoverableOld, {
+  runId: "discoverable-old",
+  phase: "old_discovery",
+  nextKind: "old_next",
+  nextTarget: "old evidence",
+  updatedAt: "2041-01-01T00:00:00Z",
+  prNumber: 201,
+  prState: "OPEN",
+});
+writeRuntimeState(discoverableNew, {
+  runId: "discoverable-new",
+  phase: "new_discovery",
+  nextKind: "new_next",
+  nextTarget: "new evidence",
+  updatedAt: "2042-01-01T00:00:00Z",
+  prNumber: 202,
+  prState: "MERGED",
+});
+const currentPointer = path.join(projectRuns, "current");
+fs.writeFileSync(currentPointer, "old/run-state.yaml\n");
+process.env.SWE_FORGE_RUN_STATE = discoverableOld;
+const discoveryHandlers = new Map();
+const discoveryPi = {
+  on(name, handler) {
+    discoveryHandlers.set(name, handler);
+  },
+  appendEntry() {},
+};
+extension(discoveryPi);
+const discoveryContext = {
+  cwd: fixtureCwd,
+  isProjectTrusted: () => true,
+  hasPendingMessages: () => false,
+  getContextUsage: () => ({ tokens: 75_000, contextWindow: 100_000 }),
+  compact() {},
+};
+const discoveryInjection = await discoveryHandlers.get("before_agent_start")({ systemPrompt: "base" }, discoveryContext);
+if (!discoveryInjection?.systemPrompt.includes("phase: new_discovery")) {
+  throw new Error("newer simultaneous run state did not win automatic discovery");
+}
+if (!discoveryInjection.systemPrompt.includes("next_action: new_next -> new evidence")) {
+  throw new Error("newest run state did not supply its next action");
+}
+if (!discoveryInjection.systemPrompt.includes("PR: #202 MERGED")) {
+  throw new Error("newest run state did not supply its PR state");
+}
+if (fs.readFileSync(currentPointer, "utf8").trim() !== "old/run-state.yaml") {
+  throw new Error("state precedence test changed the current pointer");
+}
+const simultaneousTransform = await discoveryHandlers.get("input")({ text: "merged", source: "interactive" }, discoveryContext);
+if (simultaneousTransform) throw new Error("stale simultaneous PR state overrode newer continuation state");
 
 console.log("PASS: Pi runtime extension fixture");
 NODE
