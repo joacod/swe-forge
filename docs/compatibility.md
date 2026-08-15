@@ -35,8 +35,10 @@ adapter contract and the installation smoke test succeeds.
 
 The dependency-free core is checked on Ubuntu and macOS in CI, including
 shell syntax, structural checks, executable evidence, isolated-worktree
-fixtures, release-readiness preparation, and diff formatting. Windows is not a
-claimed compatibility target.
+fixtures, release-readiness preparation, and diff formatting. The dedicated Pi
+runtime job uses Node 22.19.0 and fails when the TypeScript fixture cannot
+execute; local validation may still skip on an older Node runtime. Windows is
+not a claimed compatibility target.
 
 For a new harness release, run the repository checks, install the relevant
 projection in a disposable target, run `status` and `doctor`, and invoke a
