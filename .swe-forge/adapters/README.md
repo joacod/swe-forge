@@ -40,8 +40,12 @@ specific files:
 - activation is explicit; ordinary prompts do not activate SWE Forge
 - `AUTO` routing and `GUIDED` delivery are the defaults; `PR` is opt-in
 - canonical topologies are `SOLO`, `SUBAGENTS`, and `ISOLATED`
-- `SUBAGENTS` uses parallel read-only work or sequential bounded writable work
-  in one checkout; concurrent writable worktrees are `ISOLATED`
+- `SUBAGENTS` uses a proven native or external backend for parallel read-only
+  work or sequential bounded writable work in one checkout; concurrent
+  writable worktrees are `ISOLATED`
+- delegation backend is recorded separately from semantic topology: Herdr can
+  realize read-only `SUBAGENTS` with shared write isolation and does not imply
+  `ISOLATED`
 - a clean normal checkout gets one dedicated task branch using the canonical
   `<type>/<short-kebab-case-description>` convention; an isolated ticket has
   one integration/delivery branch using the same convention; worker branches
@@ -52,10 +56,11 @@ specific files:
 - pushing never creates a PR, and syncing verifies `MERGED` before changing the
   checkout
 - context management is capability-negotiated: adapters document observed
-  usage telemetry, context-window knowledge, proactive compaction, and
-  overflow recovery; they do not assume a universal signal or command. At a
-  reliable near-limit boundary, the canonical context policy persists state,
-  compacts before continuing, and rechecks the actual checkout.
+  usage telemetry, context-window knowledge, proactive compaction, lifecycle
+  hooks, and overflow recovery; they do not assume a universal signal or
+  command. At a reliable near-limit boundary, the canonical context policy
+  persists durable continuation state, compacts before continuing, and
+  rechecks the actual checkout and evidence.
 - when available, `.swe-forge/tools/swe-forge-gate` provides executable
   preflight, checkpoint, validation, delivery, and receipt evidence without
   redefining the canonical workflow

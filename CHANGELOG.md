@@ -7,6 +7,14 @@ change between alpha releases.
 
 ## [Unreleased]
 
+- Context-aware routing now records reducibility, preferred versus effective
+  topology, adaptive `SOLO`/`SUBAGENTS` revisions, delegation backends, and
+  capability-aware fallbacks while preserving the writable `ISOLATED` gate.
+- Run state now carries a compact durable continuation snapshot, and the Pi
+  adapter adds lifecycle-based state reinjection, active-PR shorthand recovery,
+  and safe-boundary proactive compaction.
+- Model/provider/reasoning-mode optimization remains intentionally out of scope
+  for this change.
 - Final alpha hardening adds exact candidate-content evidence binding,
   schema-v2 run state, machine-valid isolated worker results, executable
   isolated Git conformance, head-bound receipts, and release-readiness checks.

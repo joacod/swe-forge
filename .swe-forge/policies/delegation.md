@@ -19,8 +19,17 @@ evaluated independently. Useful delegation includes read-only discovery,
 architecture analysis, test strategy, bounded non-overlapping implementation,
 and fresh-context review.
 
+For context-aware routing, ask whether delegation materially reduces the
+information the root must retain: a worker should return concise evidence,
+while its exploratory transcript stays in the worker context. A large prompt,
+large file count, or difficult ticket is not sufficient by itself. Keep work in
+`SOLO` when requirements interact globally, the root needs the whole
+investigation, or coordination costs exceed the context relief.
+
 Do not delegate a trivial change, a tightly coupled algorithm, or a task whose
-communication cost exceeds its likely benefit.
+communication cost exceeds its likely benefit. The semantic topology is
+separate from the realization mechanism: native workers and Herdr may be
+backends for read-only `SUBAGENTS`; Herdr does not imply `ISOLATED`.
 
 ## Worker Limits
 
@@ -94,6 +103,27 @@ Pass the smallest context needed to perform the task:
 - dependencies already completed
 - validation commands
 - expected result format
+
+For a bounded `delegated_worker` mode, package only:
+
+```yaml
+worker_mode:
+  role: delegated_worker
+  depth: 1
+  recursive_delegation: false
+  objective: <one objective>
+  relevant_context: [<short references>]
+  allowed_reads: [<paths or symbols>]
+  allowed_writes: [<paths or none>]
+  acceptance: [<checkable criteria>]
+  expected_evidence: [<file/symbol/command/behavior evidence>]
+  return_contract: ../contracts/result.md
+```
+
+Workers in this mode do not create PRs, push, merge, publish, deploy, make
+delivery decisions, reroute the root ticket, redo root discovery, or spawn
+more workers by default. Their output is a concise structured result with
+`status`, `findings`, `evidence`, `risks`, and `recommended_action`.
 
 Do not pass the entire orchestrator transcript by default. Workers should
 return evidence, not a replay of their reasoning.

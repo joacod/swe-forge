@@ -68,6 +68,11 @@ state=$(clean_feature_state "$repo")
 (
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
+  grep -F 'preferred_mode: SOLO' "$state/run-state.yaml" >/dev/null
+  grep -F 'delegation_backend: NONE' "$state/run-state.yaml" >/dev/null
+  grep -F 'continuation:' "$state/run-state.yaml" >/dev/null
+  grep -F 'safe_boundary: true' "$state/run-state.yaml" >/dev/null
+  "$ROOT/scripts/swe-forge-state" validate --state "$state/run-state.yaml" >/dev/null
   "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'changed\n' >>README.md
   "$GATE" validate --state "$state" --name smoke -- \

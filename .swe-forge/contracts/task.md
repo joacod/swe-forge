@@ -20,9 +20,12 @@ owner_role: implementer
 dependencies: []
 
 requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
+preferred_mode: SOLO | SUBAGENTS | ISOLATED
 execution_mode: SOLO | SUBAGENTS | ISOLATED
 requested_provider: AUTO | NATIVE | HERDR | NONE
 execution_provider: NATIVE | HERDR | NONE
+delegation_backend: NONE | NATIVE | HERDR | OTHER
+write_isolation: SHARED | WORKTREE
 provider_reason: <why the provider satisfies isolated-execution requirements>
 parallel_strategy: NONE | COMPOSE
 integration_strategy: NONE | CHERRY_PICK
@@ -40,6 +43,23 @@ worktree_role: shared | integration | worker | none
 worktree: shared | dedicated
 delivery_mode: GUIDED | PR
 working_spec_ref: <external temporary spec, active context, or none>
+
+# Bounded workers receive reduced context and cannot recursively run the root
+# workflow unless the contract explicitly authorizes it.
+worker_mode:
+  role: delegated_worker | root_orchestrator
+  depth: <integer from root owner>
+  root_task_id: <root task id or none>
+  max_descendant_workers: 0
+  recursive_delegation: false
+  context_package:
+    objective: <one objective>
+    relevant_context: [<short references>]
+    allowed_reads: [<paths or symbols>]
+    allowed_writes: [<paths or none>]
+    acceptance: [<checkable criteria>]
+    expected_evidence: [<evidence fields>]
+  return_contract: ../contracts/result.md
 
 checkout_baseline:
   path: <absolute checkout path>
@@ -86,6 +106,10 @@ environment_isolation:
 
 delegation:
   allowed: false
+  max_depth: 0
+  max_workers: 0
+  allowed_roles: []
+  child_result_contract: ../contracts/result.md
 
 authorization:
   create_branch: {status: not-authorized, provenance: none, scope: none}
@@ -146,11 +170,16 @@ expected_output:
 - `reason`: why this task is separate and useful
 - `owner_role`: role responsible for the work
 - `dependencies`: task IDs that must finish first
-- `requested_mode` and `execution_mode`: requested and selected topology
+- `requested_mode`, `preferred_mode`, and `execution_mode`: requested,
+  capability-aware preferred, and selected topology
 - `requested_provider`, `execution_provider`, and `provider_reason`: provider
   preference and evidence; provider selection applies only to `ISOLATED`
+- `delegation_backend` and `write_isolation`: the mechanism and write boundary
+  used by the semantic topology; a read-only Herdr worker remains `SUBAGENTS`
 - `parallel_strategy` and `integration_strategy`: `NONE` for non-isolated
   tasks, or `COMPOSE` and `CHERRY_PICK` for isolated v1
+- `worker_mode`: bounded context package, depth, root task, and return contract;
+  delegated workers default to depth 1 with zero descendant workers
 - `allowed_scope`: paths, symbols, or operations the worker may change
 - `forbidden_scope`: paths or changes explicitly outside ownership
 - `acceptance`: conditions that determine task completion
@@ -175,10 +204,13 @@ recorded integration `HEAD`; a worker cannot choose a different base.
 The provider constraint is conditional, not an independent mode: when
 `execution_mode` is not `ISOLATED`, `execution_provider` must be `NONE`,
 `parallel_strategy` must be `NONE`, and `integration_strategy` must be `NONE`.
-When `execution_mode` is `ISOLATED`, `execution_provider` must be `NATIVE` or
-`HERDR`, `parallel_strategy` must be `COMPOSE`, and `integration_strategy` must
-be `CHERRY_PICK`. `requested_provider` records preference and may remain
-`AUTO`, `NATIVE`, `HERDR`, or `NONE` before selection or after a safe fallback.
+A non-isolated `SUBAGENTS` task may still use `delegation_backend: NATIVE` or
+`HERDR` with `write_isolation: SHARED`. When `execution_mode` is `ISOLATED`,
+`execution_provider` must be `NATIVE` or `HERDR`, `delegation_backend` must
+identify the selected backend, `write_isolation` must be `WORKTREE`,
+`parallel_strategy` must be `COMPOSE`, and `integration_strategy` must be
+`CHERRY_PICK`. `requested_provider` records preference and may remain `AUTO`,
+`NATIVE`, `HERDR`, or `NONE` before selection or after a safe fallback.
 
 `authorization` records each delivery or user-directed setup action
 independently. `not-authorized` is the default. Automatic setup of one normal
@@ -191,7 +223,12 @@ actions not authorized.
 
 `delegation.allowed` defaults to `false`. When it is `true`, the contract must
 also define `max_depth`, `max_workers`, allowed roles, writable isolation, and
-how child results return to the accountable owner.
+how child results return to the accountable owner. `worker_mode.role:
+delegated_worker` is a bounded internal mode, not a second root workflow: it
+must receive only the objective, relevant context, scope, acceptance, and
+evidence return contract. It must not create PRs, push, merge, publish,
+deploy, make delivery decisions, reroute the ticket, redo root discovery, or
+spawn descendants unless an explicit revised contract authorizes that action.
 
 Delegation budgets apply to the entire descendant subtree, not separately to
 each child. Depth is measured from the original accountable owner and

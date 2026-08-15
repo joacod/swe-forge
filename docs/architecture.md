@@ -6,8 +6,13 @@ contracts, policies, execution providers, and harness integrations. Execution
 topology, provider, and delivery are orthogonal:
 
 - topology controls coordination: `SOLO`, `SUBAGENTS`, or `ISOLATED`
+- routing records context value and separates preferred from effective topology
+- delegation backend realizes bounded workers: `NONE`, `NATIVE`, `HERDR`, or a
+  future adapter backend; backend identity does not select topology
 - provider supplies isolated lifecycle capabilities only after hard eligibility:
   `NATIVE` or optional `HERDR` (`NONE` for non-isolated runs)
+- write isolation records `SHARED` versus `WORKTREE`; only the latter can
+  support concurrent writable `ISOLATED` work
 - delivery controls human checkpoints and authorized repository delivery:
   `GUIDED` or `PR`
 
@@ -91,6 +96,19 @@ foundation, Git/evidence validation, central integration, final verification,
 review, delivery, and cleanup.
 
 ## Routing boundary
+
+Automatic routing does not use prompt length alone. It records projected
+pressure, context reducibility, delegatable context, root-context requirement,
+and continuity risk. Independent, separately evaluable investigations may make
+`SUBAGENTS` preferable when concise structured results materially reduce root
+context, even if implementation writes remain sequential. Globally coupled work
+stays `SOLO` when splitting does not reduce the information the root must keep.
+
+The run records both the policy preference and runtime reality. A preferred
+`SUBAGENTS` run with no active backend falls back to effective `SOLO` (or
+sequential work) with a visible reason. At safe boundaries, `SOLO` and
+`SUBAGENTS` may be revised deliberately; each revision records its evidence and
+phase. A move toward `ISOLATED` reruns all writable safety checks.
 
 Hard isolated eligibility requires at least two composable writable tasks,
 satisfied dependencies, non-overlapping ownership, one owner for shared and
@@ -182,9 +200,9 @@ tree. The adapter catalog is not installed into target projects.
 ticket/raw invocation
   -> parsed modes and immutable raw ticket
   -> acceptance and transient PR working spec
-  -> context capability and durable-state plan when relevant
+  -> context capability, context-value, and durable continuation plan
   -> architecture, ownership, and validation plan
-  -> hard/economic routing and provider evidence
+  -> preferred/effective routing and backend capability evidence
   -> one task or integration/delivery checkout
   -> bounded implementation or isolated waves
   -> exact-content evidence and central integration
@@ -193,6 +211,18 @@ ticket/raw invocation
   -> one final report and conservative cleanup
 ```
 
-Run state is temporary or ignored and schema-v2 only. A discovered schema-v1
-state is rejected with a compatibility message; it is never guessed into a
-new shape.
+Run state is temporary or ignored and schema-v2 only. Its short `continuation`
+block is authoritative workflow-control state after compaction; conversation
+summaries and adapter reminders are not. Context-capable adapters re-read this
+state at lifecycle boundaries and may inject only a bounded deterministic
+reminder. A discovered schema-v1 state is rejected with a compatibility
+message; it is never guessed into a new shape.
+
+## Runtime capability boundary
+
+The generic core records capability names such as `context_usage`,
+`proactive_compaction`, `state_reinjection`, and `subagents`. Pi-specific
+methods stay inside the Pi adapter. Capability resolution uses observed
+runtime evidence first, then adapter declarations, documented static defaults,
+and finally `unknown`; unknown capabilities degrade to durable checkpoints and
+manual recovery rather than invented thresholds.

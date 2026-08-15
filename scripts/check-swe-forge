@@ -75,8 +75,8 @@ validate_registry() {
 sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
   "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
-  "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
-  "$ROOT/.swe-forge/tools/swe-forge-gate" \
+  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/swe-forge-gate" \
+  "$ROOT/scripts/test-swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
   "$ROOT/scripts/swe-forge-state" \
@@ -88,6 +88,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/swe-forge-state" ] || fail "run-state wrapper is not executable"
 [ -x "$ROOT/scripts/swe-forge-isolated-gate" ] || fail "isolated gate wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
+[ -x "$ROOT/scripts/test-swe-forge-pi" ] || fail "Pi runtime fixture is not executable"
 [ -x "$ROOT/scripts/validate-swe-forge" ] || fail "validation batch is not executable"
 [ -x "$ROOT/scripts/check-release" ] || fail "release checker is not executable"
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
@@ -226,6 +227,13 @@ require_text 'Context-risk or pressure path' .swe-forge/evals/conformance-scenar
 require_text '`BLOCKED`/`FAILED` recovery path' .swe-forge/evals/conformance-scenarios.md
 require_text 'Final acceptance' .swe-forge/evals/conformance-scenarios.md
 require_text '## Context Continuity' .swe-forge/evals/conformance-scenarios.md
+require_text '## Context-Aware Routing And Continuity' .swe-forge/evals/conformance-scenarios.md
+require_text 'Large but globally coupled task' .swe-forge/evals/conformance-scenarios.md
+require_text 'Context-heavy transition' .swe-forge/evals/conformance-scenarios.md
+require_text 'PR survives compaction' .swe-forge/evals/conformance-scenarios.md
+require_text 'Herdr read-only backend' .swe-forge/evals/conformance-scenarios.md
+require_text 'Bounded worker' .swe-forge/evals/conformance-scenarios.md
+require_text 'Stale state pointer' .swe-forge/evals/conformance-scenarios.md
 require_text 'Reliable near-limit signal' .swe-forge/evals/conformance-scenarios.md
 require_text 'explicit test-first' docs/adding-a-skill.md
 require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
@@ -330,6 +338,7 @@ require_text 'ADAPTER_REGISTRY' scripts/swe-forge
 require_text 'opencode|project|file|opencode/commands/git-push.md' .swe-forge/adapters/registry.tsv
 require_text 'opencode|global|file|opencode/commands/git-pr-global.md' .swe-forge/adapters/registry.tsv
 require_text 'pi|global|file|pi/prompts/git-sync.md' .swe-forge/adapters/registry.tsv
+require_text 'pi|global|file|pi/extensions/swe-forge-runtime.ts' .swe-forge/adapters/registry.tsv
 require_text 'codex|project|tree|shared/agent-skill/project' .swe-forge/adapters/registry.tsv
 require_text 'cursor|global|tree|shared/agent-skill/global' .swe-forge/adapters/registry.tsv
 require_text 'https://developers.openai.com/learn/codex' .swe-forge/adapters/shared/agent-skill/README.md
@@ -338,7 +347,13 @@ require_text 'shared adapter behavior' .swe-forge/adapters/claude-code/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/opencode/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/pi/README.md
 require_text '### Context management' .swe-forge/adapters/pi/README.md
-require_text 'Pi 0.84.1' docs/compatibility.md
+require_text 'agent_settled' .swe-forge/adapters/pi/README.md
+require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'test-swe-forge-pi' CONTRIBUTING.md
+require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'ctx.compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'SWE_FORGE_RUN_STATE' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'Pi 0.84.2' docs/compatibility.md
 require_text 'shared adapter behavior' .swe-forge/adapters/shared/agent-skill/README.md
 require_text 'actually `MERGED`' .swe-forge/evals/conformance-scenarios.md
 require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/project/agents/openai.yaml
@@ -361,6 +376,9 @@ require_text 'workers:' .swe-forge/contracts/run-state.md
 require_text 'parallel_strategy:' .swe-forge/contracts/run-state.md
 require_text 'cleanup_status:' .swe-forge/contracts/run-state.md
 require_text 'provider: NATIVE | HERDR | NONE' .swe-forge/contracts/review.md
+require_text 'delegation_backend: NONE | NATIVE | HERDR | OTHER' .swe-forge/contracts/run-state.md
+require_text 'continuation:' .swe-forge/contracts/run-state.md
+require_text 'preferred_mode: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
 require_text 'integrated_validation_checked:' .swe-forge/contracts/review.md
 require_text 'local-only transfer resources' .swe-forge/policies/delivery.md
 require_text 'Completion order' .swe-forge/policies/delivery.md

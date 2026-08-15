@@ -1,7 +1,9 @@
 # Execution Providers
 
 Execution providers supply harness-neutral lifecycle capabilities to an
-already selected `ISOLATED` workflow. They do not define SWE Forge behavior,
+already selected topology. A provider/backend may support read-only
+`SUBAGENTS`, while writable lifecycle/provider selection is still restricted to
+an already selected `ISOLATED` workflow. They do not define SWE Forge behavior,
 replace the coding harness, select the topology, own task acceptance, or own
 final integration and delivery.
 
@@ -20,11 +22,16 @@ authorization, and final acceptance.
 ## Selection
 
 Use `.swe-forge/policies/provider-selection.md` only after routing selects
-`execution_mode: ISOLATED`. Prefer a native harness provider when it can
-reliably provide dedicated writable worktrees, exact bases, structured results,
-lifecycle control, and central integration. Herdr is an optional provider when
-its process, pane, session, harness, or supervision capabilities materially
-help.
+`execution_mode: ISOLATED`; it owns mandatory writable-provider proof. The
+execution-routing policy may record a proven provider as a
+`delegation_backend` for read-only `SUBAGENTS` without loading isolated
+provider machinery. In that case `execution_provider: NONE` and
+`write_isolation: SHARED` remain explicit.
+
+For `ISOLATED`, prefer a native harness provider when it can reliably provide
+dedicated writable worktrees, exact bases, structured results, lifecycle
+control, and central integration. Herdr is an optional provider when its
+process, pane, session, harness, or supervision capabilities materially help.
 
 If no provider can safely supply required isolation, fall back to sequential
 `SUBAGENTS` or `SOLO` when safe, or return `BLOCKED` when required isolation

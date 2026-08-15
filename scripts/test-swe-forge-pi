@@ -1,0 +1,175 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+
+if ! command -v node >/dev/null 2>&1; then
+  printf '%s\n' 'SKIP: Pi runtime fixture (Node.js is unavailable)'
+  exit 0
+fi
+
+# Pi loads TypeScript extensions through its own runtime. The dependency-free
+# fixture uses Node's native loader when the validation host exposes it; older
+# generic CI images can still run the shell and structural coverage safely.
+NODE_TS_ARGS=
+if node --experimental-strip-types --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
+  NODE_TS_ARGS=--experimental-strip-types
+elif ! node --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
+  printf '%s\n' 'SKIP: Pi runtime fixture (Node.js has no native TypeScript loader)'
+  exit 0
+fi
+
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/pi-runtime-fixture.XXXXXX")
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+trap cleanup EXIT HUP INT TERM
+
+old_dir=$TMP_ROOT/old
+new_dir=$TMP_ROOT/new
+fixture_cwd=$TMP_ROOT/checkout
+mkdir -p "$old_dir" "$new_dir" "$fixture_cwd"
+
+cat >"$old_dir/run-state.yaml" <<EOF_STATE
+workflow: swe-forge
+workflow_version: 1
+schema_version: 2
+run_id: old-run
+status: running
+requested_mode: AUTO
+preferred_mode: SUBAGENTS
+execution_mode: SOLO
+requested_provider: AUTO
+execution_provider: NONE
+delegation_backend: NONE
+write_isolation: SHARED
+invocation_checkout:
+  path: $fixture_cwd
+delivery_checkout:
+  path: $fixture_cwd
+routing:
+  current: SOLO
+  preferred: SUBAGENTS
+  context_value:
+    projected_pressure: high
+continuation:
+  workflow_active: true
+  workflow: ticket
+  phase: awaiting_merge
+  step: 4
+  awaiting: user_merge
+  next_action:
+    kind: verify_and_sync_merge
+    target: pull request
+    expected_context_tokens: 12000
+  safe_boundary: true
+  updated_at: 2020-01-01T00:00:00Z
+  delivery:
+    mode: PR
+    pr_number: 184
+    pr_state: OPEN
+context:
+  status: near-limit
+EOF_STATE
+
+cat >"$new_dir/run-state.yaml" <<EOF_STATE
+workflow: swe-forge
+workflow_version: 1
+schema_version: 2
+run_id: newer-run
+status: running
+requested_mode: AUTO
+preferred_mode: SOLO
+execution_mode: SOLO
+requested_provider: AUTO
+execution_provider: NONE
+delegation_backend: NONE
+write_isolation: SHARED
+invocation_checkout:
+  path: $fixture_cwd
+delivery_checkout:
+  path: $fixture_cwd
+routing:
+  current: SOLO
+  preferred: SOLO
+  context_value:
+    projected_pressure: low
+continuation:
+  workflow_active: true
+  workflow: ticket
+  phase: implementation
+  step: 5
+  awaiting: none
+  next_action:
+    kind: implement
+    target: next step
+    expected_context_tokens: unknown
+  safe_boundary: true
+  updated_at: 2030-01-01T00:00:00Z
+  delivery:
+    mode: PR
+    pr_number: 184
+    pr_state: OPEN
+context:
+  status: healthy
+EOF_STATE
+
+cd "$ROOT"
+SWE_FORGE_RUN_STATE="$old_dir/run-state.yaml" \
+  node $NODE_TS_ARGS --input-type=module - "$ROOT" "$fixture_cwd" <<'NODE'
+import * as path from "node:path";
+import { pathToFileURL } from "node:url";
+
+const root = process.argv[2];
+const fixtureCwd = process.argv[3];
+const modulePath = path.join(root, ".swe-forge", "adapters", "pi", "extensions", "swe-forge-runtime.ts");
+const { default: extension } = await import(pathToFileURL(modulePath).href);
+const handlers = new Map();
+const entries = [];
+const pi = {
+  on(name, handler) {
+    handlers.set(name, handler);
+  },
+  appendEntry(type, data) {
+    entries.push({ type, data });
+  },
+};
+extension(pi);
+
+const ctx = {
+  cwd: fixtureCwd,
+  hasPendingMessages: () => false,
+  getContextUsage: () => ({ tokens: 90_000, contextWindow: 100_000 }),
+  compact(options) {
+    this.compaction = options;
+  },
+};
+
+const injected = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (!injected?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("missing continuation injection");
+if (!injected.systemPrompt.includes("PR: #184 OPEN")) throw new Error("missing PR continuation state");
+
+const transformed = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
+if (transformed?.text !== "/git-sync merged") throw new Error("active merged shorthand was not routed");
+
+await handlers.get("agent_settled")({}, ctx);
+if (!ctx.compaction) throw new Error("safe-boundary proactive compaction was not requested");
+if (!entries.some((entry) => entry.data.event === "proactive_compaction_requested")) {
+  throw new Error("proactive compaction evidence was not recorded");
+}
+ctx.compaction.onComplete?.();
+await handlers.get("agent_settled")({}, ctx);
+if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
+  throw new Error("unchanged state triggered repeated proactive compaction");
+}
+
+const newer = path.join(path.dirname(process.env.SWE_FORGE_RUN_STATE), "..", "new", "run-state.yaml");
+process.env.SWE_FORGE_RUN_STATE = path.resolve(newer);
+const refreshed = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (!refreshed?.systemPrompt.includes("phase: implementation")) throw new Error("newer state did not win");
+const staleTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
+if (staleTransform) throw new Error("stale PR state overrode newer continuation state");
+
+console.log("PASS: Pi runtime extension fixture");
+NODE

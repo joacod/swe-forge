@@ -107,6 +107,25 @@ validate_state() {
   [ "$(value_for schema_version "$file")" = 2 ] || \
     fail "schema-v2 state is required (schema_version must be 2)"
 
+  if grep -Eq '^preferred_mode:' "$file"; then
+    case "$(value_for preferred_mode "$file")" in
+      SOLO|SUBAGENTS|ISOLATED) ;;
+      *) fail "invalid preferred topology" ;;
+    esac
+  fi
+  if grep -Eq '^delegation_backend:' "$file"; then
+    case "$(value_for delegation_backend "$file")" in
+      NONE|NATIVE|HERDR|OTHER) ;;
+      *) fail "invalid delegation backend" ;;
+    esac
+  fi
+  if grep -Eq '^write_isolation:' "$file"; then
+    case "$(value_for write_isolation "$file")" in
+      SHARED|WORKTREE) ;;
+      *) fail "invalid write isolation" ;;
+    esac
+  fi
+
   for key in path branch head_sha classification mutation_allowed baseline_ref; do
     nested_key invocation_checkout "$key" "$file" || \
       fail "invocation_checkout is missing $key"
@@ -133,6 +152,20 @@ validate_state() {
     lifecycle_key "$key" "$file" || \
       fail "provider_capabilities.lifecycle is missing $key"
   done
+
+  # Routing and continuation are additive schema-v2 fields. Older v2 state
+  # remains valid, but a producer that includes a continuation must provide a
+  # complete durable control snapshot rather than a summary-shaped fragment.
+  if top_level continuation "$file" 2>/dev/null; then
+    for key in workflow_active workflow phase step awaiting safe_boundary updated_at; do
+      nested_key continuation "$key" "$file" || \
+        fail "continuation is missing $key"
+    done
+    continuation_active=$(awk '$1 == "workflow_active:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
+    case "$continuation_active" in true|false) ;; *) fail "continuation.workflow_active must be true or false" ;; esac
+    continuation_safe=$(awk '$1 == "safe_boundary:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
+    case "$continuation_safe" in true|false) ;; *) fail "continuation.safe_boundary must be true or false" ;; esac
+  fi
 
   for field in invocation_checkout_head_sha delivery_checkout_base_sha \
     delivery_checkout_head_sha delivery_checkout_checkpoint_sha; do
