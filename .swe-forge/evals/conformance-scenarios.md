@@ -49,6 +49,11 @@ grading an agent from its explanation alone.
 | Context overflow without demonstrated automatic recovery | Persist state and return `BLOCKED` for a manual compact or fresh session; do not blindly continue or repeat the last mutation. |
 | Harness context capability is unknown | Record `unknown`/`unavailable`; do not infer a token threshold, context window, compaction API, or successful recovery from the model/provider name. |
 | No context limit is reached | Report `healthy` or `not-observed`; do not force an artificial compaction or ceremonial commit. |
+| Pi reliable `near-limit` with unknown next-step tokens | At a safe boundary, persist state and request one proactive compaction; do not require a fabricated estimate. |
+| Pi native `overflow`/`compacting` lifecycle | Do not launch a competing Forge compaction or duplicate native recovery. |
+| Pi project reserve | Use trusted `.pi/settings.json` `compaction.reserveTokens` over global settings, with safe fallback for malformed/missing files. |
+| Simultaneous active run states | Keep explicit/current pointers unchanged and select the newest valid checkout-compatible `updated_at` candidate. |
+| Dedicated Pi CI runtime | Use a supported Node version and treat inability to execute the runtime fixture as a CI failure, while local unsupported runtimes may skip. |
 
 ## Checkout And Ownership
 
@@ -116,6 +121,8 @@ and resulting topology/action.
 | A. Small tightly coupled task | Prefer and select `SOLO`; no unnecessary delegation. |
 | B. Large but globally coupled task | Keep `SOLO`; large prompt/file count is not delegation evidence. Use proactive context management only when host telemetry and a safe boundary justify it. |
 | C. Independent investigations | Prefer/select `SUBAGENTS` when independently evaluable work materially reduces root-context growth and a backend exists; implementation may remain sequential. |
+| C1. Early reducible discovery | Before final routing, record `discovery_strategy: DELEGATED_RESEARCH` for independent, read-only questions with bounded objectives and concise evidence; workers use shared-write semantics, do not decide delivery, and the root continues normal discovery/specification/routing afterward. |
+| C2. Coupled discovery | Record `discovery_strategy: ROOT_ONLY` for tightly coupled investigation even when the ticket is large; do not delegate from size alone. |
 | D. Long sequential PR implementation | Keep one root integrator responsible for ordered writes; use `SUBAGENTS` for bounded research when useful and compact at validated PR boundaries. |
 | E. Independent writable components | Select `ISOLATED` only when the existing writable-isolation hard gate and provider capability proof pass; high context pressure alone is insufficient. |
 | F. Context-heavy transition | Start `SOLO`, then record `SOLO -> SUBAGENTS` at a safe boundary when new independent work and context pressure make delegation materially useful. Also accept the justified reverse `SUBAGENTS -> SOLO`. |

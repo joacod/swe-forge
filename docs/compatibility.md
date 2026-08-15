@@ -22,7 +22,7 @@ The canonical policy uses only capabilities demonstrated by the active host:
 
 | Harness | Observed context capability | Adapter consequence |
 | --- | --- | --- |
-| Pi 0.84.2 | `getContextUsage()`, `compact()`, `before_agent_start`, `session_before_compact`, `session_compact`, and settled lifecycle hooks; native threshold compaction and overflow compact-and-retry once | The runtime extension reinjects bounded continuation state, routes active `merged` shorthand, and requests proactive compaction only at a state-marked safe boundary; the generic core still re-reads durable state and Git after recovery. |
+| Pi 0.84.2 | `getContextUsage()`, `compact()`, `before_agent_start`, `session_before_compact`, `session_compact`, and settled lifecycle hooks; native threshold compaction and overflow compact-and-retry once; project settings override global settings | The runtime extension reinjects bounded continuation state, routes active `merged` shorthand, treats reliable `near-limit` as a proactive safe-boundary signal, defers `overflow`/`compacting` to native recovery, and uses effective project/global `reserveTokens`; the generic core still re-reads durable state and Git after recovery. |
 | OpenCode 1.18.16 | Not measured by the SWE Forge adapter snapshot | Do not claim proactive detection; rely on documented host behavior or manual checkpoint/resume until revalidated. |
 | Claude Code 2.1.37 | Not measured by the SWE Forge adapter snapshot | Do not claim proactive detection; rely on documented host behavior or manual checkpoint/resume until revalidated. |
 | Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
@@ -35,8 +35,10 @@ adapter contract and the installation smoke test succeeds.
 
 The dependency-free core is checked on Ubuntu and macOS in CI, including
 shell syntax, structural checks, executable evidence, isolated-worktree
-fixtures, release-readiness preparation, and diff formatting. Windows is not a
-claimed compatibility target.
+fixtures, release-readiness preparation, and diff formatting. The dedicated Pi
+runtime job uses Node 22.19.0 and fails when the TypeScript fixture cannot
+execute; local validation may still skip on an older Node runtime. Windows is
+not a claimed compatibility target.
 
 For a new harness release, run the repository checks, install the relevant
 projection in a disposable target, run `status` and `doctor`, and invoke a

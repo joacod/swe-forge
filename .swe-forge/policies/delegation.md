@@ -31,6 +31,22 @@ communication cost exceeds its likely benefit. The semantic topology is
 separate from the realization mechanism: native workers and Herdr may be
 backends for read-only `SUBAGENTS`; Herdr does not imply `ISOLATED`.
 
+### Early discovery research
+
+`DELEGATED_RESEARCH` is a narrow read-only use of the same policy. It is
+appropriate only for independently evaluable questions such as inspecting an
+isolated subsystem, call-site family, persistence flow, migration behavior, or
+test convention. The task package must contain one question, bounded allowed
+reads, a concise evidence budget, and an observable acceptance condition. The
+worker returns evidence and risks, not a topology, delivery, or implementation
+decision.
+
+Early research keeps `write_isolation: SHARED`, never creates an `ISOLATED`
+writer, passes only the relevant objective and repository references, and
+cannot recurse. If no proven read-only backend exists, the orchestrator uses
+`ROOT_ONLY` discovery; it does not emulate delegation with an untracked process
+or claim that the strategy ran.
+
 ## Worker Limits
 
 - default to two to four active workers

@@ -12,6 +12,19 @@ const ACTIVE_STATUSES = new Set(["planning", "running", "reviewing", "repairing"
 const TERMINAL_STATUSES = new Set(["accepted", "failed"]);
 const RUN_STATE_ENV_VARS = ["SWE_FORGE_RUN_STATE", "SWE_FORGE_STATE"];
 
+interface SettingsFileSnapshot {
+	signature: string;
+	settings?: Record<string, any>;
+}
+
+interface ReserveCacheEntry {
+	global: SettingsFileSnapshot;
+	project: SettingsFileSnapshot;
+	reserve: number;
+}
+
+const reserveCache = new Map<string, ReserveCacheEntry>();
+
 /**
  * Pi-specific runtime bridge for SWE Forge.
  *
@@ -163,7 +176,7 @@ function displayValue(values: Map<string, string>, key: string, fallback: string
 function numberOrUndefined(value: string | undefined): number | undefined {
 	if (!value || value === "unknown" || value === "none") return undefined;
 	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : undefined;
+	return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 function boolValue(value: string | undefined): boolean | undefined {
@@ -309,27 +322,94 @@ function appendRuntimeEntry(pi: any, event: string, run: ActiveRun | undefined, 
 	}
 }
 
-function configuredReserveTokens(): number {
-	const settingsPath = path.join(os.homedir(), ".pi", "agent", "settings.json");
-	const settings = readJson(settingsPath);
-	const configured = settings?.compaction?.reserveTokens;
-	return typeof configured === "number" && Number.isFinite(configured) && configured > 0
-		? configured
-		: DEFAULT_RESERVE_TOKENS;
+function settingsSnapshot(filePath: string): SettingsFileSnapshot {
+	try {
+		const stat = fs.statSync(filePath);
+		if (!stat.isFile()) return { signature: "missing" };
+		return {
+			signature: `${stat.mtimeMs}:${stat.size}`,
+			settings: readJson(filePath),
+		};
+	} catch {
+		return { signature: "missing" };
+	}
 }
 
-function compactionReason(run: ActiveRun, usage: { tokens: number | null; contextWindow: number }): string | undefined {
-	if (!run.safeBoundary || usage.tokens === null || !Number.isFinite(usage.contextWindow) || usage.contextWindow <= 0) return undefined;
-	const remaining = usage.contextWindow - usage.tokens;
-	const reserve = configuredReserveTokens();
-	const hostPressure = run.contextStatus === "near-limit" || run.contextStatus === "overflow" || run.projectedPressure === "high";
+function validReserve(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function configuredReserveTokens(cwd: string, projectTrusted: boolean): number {
+	const home = os.homedir();
+	const globalPath = path.join(home, ".pi", "agent", "settings.json");
+	const projectPath = path.join(cwd, ".pi", "settings.json");
+	const global = settingsSnapshot(globalPath);
+	const project: SettingsFileSnapshot = projectTrusted ? settingsSnapshot(projectPath) : { signature: "untrusted" };
+	const cacheKey = `${canonicalPath(cwd)}|${canonicalPath(home)}|${projectTrusted ? "trusted" : "untrusted"}`;
+	const cached = reserveCache.get(cacheKey);
+	if (cached && cached.global.signature === global.signature && cached.project.signature === project.signature) {
+		return cached.reserve;
+	}
+
+	// ExtensionContext does not expose Pi's SettingsManager. Keep this adapter
+	// dependency-free and mirror its documented deep-merge precedence locally.
+	// Ignore malformed or unusable values at each level so a settings problem
+	// cannot stop the Forge workflow or replace a safe lower-precedence value.
+	const projectReserve = validReserve(project.settings?.compaction?.reserveTokens);
+	const globalReserve = validReserve(global.settings?.compaction?.reserveTokens);
+	const reserve = projectReserve ?? globalReserve ?? DEFAULT_RESERVE_TOKENS;
+	reserveCache.set(cacheKey, { global, project, reserve });
+	return reserve;
+}
+
+function projectSettingsTrusted(ctx: any): boolean {
+	if (typeof ctx.isProjectTrusted !== "function") return true;
+	try {
+		return ctx.isProjectTrusted() !== false;
+	} catch {
+		return false;
+	}
+}
+
+function compactionReason(
+	run: ActiveRun,
+	usage: { tokens: number | null; contextWindow: number },
+	cwd: string,
+	projectTrusted: boolean,
+): string | undefined {
+	if (!run.safeBoundary || !Number.isFinite(usage.contextWindow) || usage.contextWindow <= 0) return undefined;
+
+	const runtimeStatus = run.contextStatus.trim().toLowerCase();
+	// Overflow and an explicit compacting state belong to Pi's native recovery
+	// lifecycle. Forge must not compete with either one.
+	if (runtimeStatus === "overflow" || runtimeStatus === "compacting") return undefined;
+
+	const reserve = configuredReserveTokens(cwd, projectTrusted);
 	const expected = run.expectedContextTokens;
-	// The Pi reserve is a host-specific documented default. The next-action
-	// estimate comes from durable Forge state; without either signal, do not guess.
-	if (expected === undefined && !hostPressure) return undefined;
-	const projectedNeed = expected ?? 0;
-	if (remaining > reserve + projectedNeed) return undefined;
-	return `remaining=${Math.max(0, remaining)} reserve=${reserve} expected_next=${expected ?? "unknown"}`;
+	// A reliable near-limit state is stronger than an absent estimate. It is
+	// intentionally not reduced to a reserve comparison.
+	if (runtimeStatus === "near-limit") {
+		const remaining = usage.tokens === null ? "unknown" : Math.max(0, usage.contextWindow - usage.tokens);
+		return `runtime_status=near-limit remaining=${remaining} reserve=${reserve} expected_next=${expected ?? "unknown"}`;
+	}
+
+	if (usage.tokens !== null && Number.isFinite(usage.tokens)) {
+		const remaining = usage.contextWindow - usage.tokens;
+		if (expected !== undefined) {
+			// A known next-step requirement improves headroom without overriding a
+			// reliable host pressure signal handled above.
+			if (remaining > reserve + expected) return undefined;
+			return `remaining=${Math.max(0, remaining)} reserve=${reserve} expected_next=${expected}`;
+		}
+	}
+
+	// Projected pressure is a planning estimate, not host telemetry. With no
+	// useful numeric estimate, use a categorical safe-boundary policy rather
+	// than pretending to know an exact token threshold.
+	if (run.projectedPressure.trim().toLowerCase() === "high") {
+		return `projected_pressure=high reserve=${reserve} expected_next=unknown`;
+	}
+	return undefined;
 }
 
 export default function sweForgeRuntime(pi: any) {
@@ -375,6 +455,11 @@ export default function sweForgeRuntime(pi: any) {
 
 	on("session_before_compact", (event, ctx) => {
 		activeRun = refresh(ctx.cwd);
+		compactionInFlight = true;
+		if (activeRun) {
+			lastCompactionAt = Date.now();
+			lastCompactionState = `${activeRun.filePath}:${activeRun.updatedAt}:${activeRun.modifiedAt}`;
+		}
 		appendRuntimeEntry(pi, "compaction_started", activeRun, {
 			reason: event?.reason ?? "unknown",
 			willRetry: event?.willRetry ?? false,
@@ -396,7 +481,7 @@ export default function sweForgeRuntime(pi: any) {
 		if (typeof ctx.getContextUsage !== "function" || typeof ctx.compact !== "function") return;
 		const usage = ctx.getContextUsage();
 		if (!usage) return;
-		const reason = compactionReason(run, usage);
+		const reason = compactionReason(run, usage, ctx.cwd, projectSettingsTrusted(ctx));
 		const stateVersion = `${run.filePath}:${run.updatedAt}:${run.modifiedAt}`;
 		if (
 			!reason ||

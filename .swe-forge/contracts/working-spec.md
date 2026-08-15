@@ -54,6 +54,19 @@ requirements:
 acceptance:
   - <checkable condition>
 
+discovery_strategy:
+  mode: ROOT_ONLY | DELEGATED_RESEARCH
+  rationale: <why discovery questions can or cannot leave root context>
+  questions:
+    - id: <short identifier>
+      objective: <bounded read-only question>
+      allowed_scope: [<paths or symbols>]
+      evidence_budget: <concise result limit>
+      acceptance: <what makes the evidence useful>
+  backend: NONE | NATIVE | HERDR
+  write_isolation: SHARED
+  final_routing_deferred: true
+
 review_focus:
   goal: <one-sentence review objective>
   acceptance_criteria:
@@ -190,11 +203,14 @@ open_questions: []
 
 A `ready` working spec has a concrete intent, bounded scope and non-goals,
 observable requirements, acceptance checks, a testing decision, a validation
-plan, and explicit assumptions. In `PR`, it also has a `review_focus` with a
-clear goal, the acceptance criteria to check, relevant in-scope quality
-concerns, non-goals, and a finding rule that keeps unrelated work out of the
-current review. It records preferred versus selected topology, the delegation backend, and
-provider separately. For a long-running or context-risk ticket, it also
+plan, and explicit assumptions. It records a lightweight `discovery_strategy`
+assessment; `DELEGATED_RESEARCH` requires bounded read-only questions and
+structured evidence, while coupled or unclear work remains `ROOT_ONLY`. In
+`PR`, it also has a `review_focus` with a clear goal, the acceptance criteria to
+check, relevant in-scope quality concerns, non-goals, and a finding rule that
+keeps unrelated work out of the current review. It records preferred versus
+selected topology, the delegation backend, and provider separately. For a
+long-running or context-risk ticket, it also
 records a context strategy, latest status, capability source,
 state-reinjection status, safe compaction boundary/action, expected next-action
 headroom, overflow action, and durable-state reference. The provider state is

@@ -51,6 +51,19 @@ routing:
     rationale: <why generated information can or cannot leave the root>
   runtime_profile_ref: <capability profile or none>
 
+discovery_strategy:
+  mode: ROOT_ONLY | DELEGATED_RESEARCH
+  rationale: <why discovery questions can or cannot leave root context>
+  questions:
+    - id: <short identifier>
+      objective: <bounded read-only question>
+      allowed_scope: [<paths or symbols>]
+      evidence_budget: <concise result limit>
+      acceptance: <what makes the evidence useful>
+  backend: NONE | NATIVE | HERDR
+  write_isolation: SHARED
+  final_routing_deferred: true | false
+
 runtime_profile:
   harness: <harness id>
   context_usage: available | estimated | unavailable | unknown

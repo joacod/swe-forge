@@ -44,6 +44,22 @@ jobs:
             git diff --check "$BEFORE_SHA..$CURRENT_SHA"
           fi
 
+  pi-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+
+      - name: Run Pi runtime fixture
+        env:
+          SWE_FORGE_PI_CI: "1"
+        run: ./scripts/test-swe-forge-pi
+
   macos-core:
     runs-on: macos-latest
     steps:
