@@ -190,13 +190,16 @@ the selected provider runbook under `.swe-forge/providers/`, and
 machinery for a non-isolated run.
 
 Record the routing fields and reasons defined by the loaded execution-routing
-policy. Choose the smallest safe topology; explicit requests do not bypass hard
-eligibility, provider capability, validation, scope, or delivery authorization.
-For non-isolated execution, record
-`execution_provider: NONE`, `parallel_strategy: NONE`, and
-`integration_strategy: NONE`. When `ISOLATED` is selected, follow the loaded
-provider-selection policy and isolated workflow before creating workers or
-resources.
+policy, including `preferred_mode`, effective `execution_mode`,
+`delegation_backend`, `write_isolation`, `context_value`, runtime capability
+profile, and any revision history. Choose the smallest safe topology; explicit
+requests do not bypass hard eligibility, provider capability, validation, scope,
+or delivery authorization. A large prompt is not delegation evidence. For
+non-isolated execution, record `execution_provider: NONE`,
+`parallel_strategy: NONE`, and `integration_strategy: NONE`; a read-only
+`SUBAGENTS` run may still use `delegation_backend: NATIVE` or `HERDR`. When
+`ISOLATED` is selected, follow the loaded provider-selection policy and
+isolated workflow before creating workers or resources.
 
 ### 7. Test Strategy
 
@@ -224,8 +227,13 @@ routing selects `ISOLATED`.
 For a long-running or context-risk ticket, or when the host reports a
 near-limit or overflow condition, load and follow
 `.swe-forge/policies/context.md` before continuing. Record the host capability
-signal, durable-state reference, recovery status, and Git/evidence recheck in
-the transient state. Ordinary tickets do not load this lazy policy and report
+signal, durable-state reference, recovery status, safe boundary, expected next
+action headroom, and Git/evidence recheck in the transient state. The
+run-state `continuation` block is authoritative after compaction; do not rely
+on a generated conversation summary to recover PR phase or user shorthand.
+At `agent_settled` or an equivalent host boundary, persist state before
+requesting proactive compaction and re-read it after `session_compact` or host
+recovery. Ordinary tickets do not load this lazy policy and report
 `not-observed` when no context limit is reached.
 
 ### 8. Implement
@@ -238,8 +246,10 @@ requests, synchronization, integration, and cleanup.
 
 Implement only the bounded dependency waves selected by the architecture and
 working spec. In `PR`, validate and commit each planned step before beginning
-the next; in `GUIDED`, stop at the declared checkpoint. Keep task ownership,
-scope, and delivery authorization explicit and stop on a blocking gate.
+the next; at each step boundary persist continuation state and deliberately
+reconsider context value/topology without constant churn. In `GUIDED`, stop at
+the declared checkpoint. Keep task ownership, scope, and delivery
+authorization explicit and stop on a blocking gate.
 
 Keep concurrent writable work out of one checkout. If routing selects
 `ISOLATED`, follow the loaded isolated workflow and provider contracts; otherwise

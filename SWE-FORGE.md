@@ -54,8 +54,13 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 
 ## Operating Principles
 
-- Choose the smallest execution topology that can solve the ticket reliably.
-- Prefer a strong single agent over pointless delegation.
+- Choose the smallest execution topology that provides sufficient execution
+  reliability, context headroom, and isolation for the expected work.
+- Prefer a strong single agent over pointless delegation; prompt length alone
+  never selects a topology.
+- Treat context reducibility as a first-class routing question: delegate only
+  independently evaluable work whose concise result materially reduces root
+  context growth.
 - Prefer native subagents over external orchestration when they are sufficient.
 - Use `ISOLATED` only when concurrent writable work needs separate execution
   environments and the automatic gate in the routing policy passes.
@@ -93,8 +98,10 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
   session.
 - Treat context pressure as a harness lifecycle event: at a reliable near-limit
   signal, persist the short working state, compact at a safe boundary before
-  continuing, then re-read state and inspect Git. Never assume a universal
-  context signal or launch a duplicate retry for host-managed overflow recovery.
+  continuing, then re-read state and inspect Git. Keep durable workflow-control
+  state separate from lossy conversation summaries, and never assume a
+  universal context signal or launch a duplicate retry for host-managed
+  overflow recovery.
 - Preserve a human checkpoint in `GUIDED` mode and keep delivery actions
   separately authorized.
 - Keep commits, pushes, publication, and global configuration changes
@@ -135,13 +142,16 @@ examples above describe the supported public grammar without duplicating its
 parser rules here.
 
 The ticket workflow loads `.swe-forge/policies/execution-routing.md` before the
-final topology decision. That policy owns the routing fields, hard eligibility,
-economic parallel-value decision, and safe fallback. Topology and provider
-remain separate dimensions: non-isolated runs record
-`execution_provider: NONE`, `parallel_strategy: NONE`, and
-`integration_strategy: NONE`, while an isolated run uses only the provider and
-strategies proven by the loaded provider-selection policy. Explicit selections never
-bypass safety, validation, scope, or delivery authorization.
+final topology decision. That policy owns context value, preferred versus
+effective routing, adaptive revisions, hard eligibility, economic
+parallel-value decisions, runtime capability profiles, backend selection, and
+safe fallback. Topology and provider remain separate dimensions:
+non-isolated runs record `execution_provider: NONE`, `parallel_strategy: NONE`,
+and `integration_strategy: NONE`; a non-isolated `SUBAGENTS` run may still
+record `delegation_backend: NATIVE` or `HERDR` for read-only workers. An
+isolated run uses only the provider and strategies proven by the loaded
+provider-selection policy. Explicit selections never bypass safety, validation,
+scope, or delivery authorization.
 
 ### SOLO
 
@@ -152,13 +162,15 @@ reporting without artificial workers.
 
 ### SUBAGENTS
 
-`SUBAGENTS` uses native workers when independent research, bounded delegation,
-or fresh review materially improves the result without concurrent writable
-worktrees. Read-only work may be parallel; writable work is sequential in one
-checkout unless dedicated worktrees make the topology `ISOLATED`. The
-orchestrator retains task ownership, integration, and acceptance. If workers
-are unavailable, fall back to sequential execution or `SOLO` rather than
-simulating them with unrelated processes. Detailed delegation and worker
+`SUBAGENTS` uses a proven native or external backend when independent research,
+bounded delegation, or fresh review materially improves the result without
+concurrent writable worktrees. Read-only work may be parallel; writable work
+is sequential in one checkout unless dedicated worktrees make the topology
+`ISOLATED`. The orchestrator retains task ownership, integration, and
+acceptance. A Herdr read-only backend remains `SUBAGENTS` with shared write
+isolation; Herdr does not imply `ISOLATED`. If workers are unavailable, record
+the preferred topology and fall back to sequential execution or `SOLO` rather
+than simulating them with unrelated processes. Detailed delegation and worker
 boundaries are owned by the loaded delegation policy and contracts.
 
 ### ISOLATED
@@ -273,24 +285,35 @@ verification, and evidence load before their first operation. Context and
 failure-recovery remain lazy.
 `ISOLATED` additionally loads provider-selection, delivery, result-bundle,
 run-state, isolated-execution, the selected provider runbook, and the isolated
-Git/evidence guard only after the isolated decision.
+Git/evidence guard only after the isolated decision. Context-risk runs load the
+context policy and run-state contract when the trigger occurs; a harness
+adapter may add a runtime capability profile without changing the generic
+workflow.
 
 ## State and Contracts
 
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
 state must survive context changes. In `PR` mode, the working-spec contract
 provides a short behavior-first brief; it is temporary and is not a repository
-artifact. For context-risk work, it also records the capability source,
-pre-continuation compaction action, overflow recovery, and durable-state
-reference. When a specialist skill is considered, the working spec records its
-source, selection status, and reason for not or using it. An optional executable
-evidence ledger may support preflight, checkpoints, validation, and receipt
-generation; it is not a second source of truth. A run state is temporary by
-default and should live outside the repository, for example:
+artifact. For context-risk work, it records capability source, expected next
+context need, safe-boundary compaction action, overflow recovery,
+state-reinjection status, preferred/effective topology, and durable-state
+reference. The run-state `continuation` section is the authoritative workflow
+control snapshot after compaction; adapter reminders and conversation
+summaries are not authoritative. When a specialist skill is considered, the
+working spec records its source, selection status, and reason for not or using
+it. An optional executable evidence ledger may support preflight, checkpoints,
+validation, and receipt generation; it is not a second source of truth. A run
+state is temporary by default and should live outside the repository, for
+example:
 
 ```text
 $TMPDIR/swe-forge/<run-id>/run-state.yaml
 ```
+
+The `continuation` block must remain short and deterministic: active workflow,
+phase/step, pending user action, next action, delivery/PR state, safe boundary,
+and update marker. It must not copy the original ticket or a transcript.
 
 If repository-local state is necessary, use an ignored path such as
 `.swe-forge/runs/`. Never commit ticket-specific state, worker transcripts,

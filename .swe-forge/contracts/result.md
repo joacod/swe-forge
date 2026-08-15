@@ -14,6 +14,9 @@ TASK_ID: <task identifier>
 BASE_SHA: <exact task base>
 HEAD_SHA: <worker head or none>
 PROVIDER_ID: <provider identity or none>
+DELEGATION_BACKEND: NONE | NATIVE | HERDR | OTHER
+WRITE_ISOLATION: SHARED | WORKTREE
+WORKER_MODE: delegated_worker | root_orchestrator
 BRANCH: <local branch or none>
 WORKTREE: <absolute worktree or none>
 
@@ -64,6 +67,10 @@ TEST_RESULTS:
 <important output, unavailable checks, or failures>
 EVIDENCE:
 - <file, symbol, diff, command, Git, or behavior evidence>
+FINDINGS:
+- <concise independently checkable finding, or none>
+RECOMMENDED_ACTION:
+- <action for the accountable orchestrator, or none>
 ASSUMPTIONS:
 - <assumption or none>
 RISKS:
@@ -134,6 +141,15 @@ declared commit range, changed paths, scopes, worker cleanliness,
 worker candidate fingerprint, validation plan, and absence of unauthorized
 worker remote refs where observable. A worker is not integration-eligible merely
 because an agent or provider reports completion.
+
+## Bounded worker output
+
+A `delegated_worker` should return only concise structured evidence rather than
+its exploratory transcript. At minimum it reports `status`, `findings`,
+`evidence`, `risks`, and `recommended_action` (represented by
+`RECOMMENDED_ACTION` above), plus the task and validation fields. It does not
+create PRs, push, merge, publish, deploy, make delivery decisions, reroute the
+root ticket, or recursively delegate by default.
 
 ## Status rules
 

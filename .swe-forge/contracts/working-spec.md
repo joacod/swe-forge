@@ -77,9 +77,13 @@ commit_plan:
 
 routing:
   requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
+  preferred_mode: SOLO | SUBAGENTS | ISOLATED
+  selected_mode: SOLO | SUBAGENTS | ISOLATED
   execution_mode: SOLO | SUBAGENTS | ISOLATED
   requested_provider: AUTO | NATIVE | HERDR | NONE
   execution_provider: NATIVE | HERDR | NONE
+  delegation_backend: NONE | NATIVE | HERDR | OTHER
+  write_isolation: SHARED | WORKTREE
   provider_reason: <why the provider satisfies isolated-execution requirements>
   parallel_strategy: NONE | COMPOSE
   integration_strategy: NONE | CHERRY_PICK
@@ -87,7 +91,21 @@ routing:
     non_isolated: execution_provider=NONE, parallel_strategy=NONE, integration_strategy=NONE
     isolated: execution_provider=NATIVE|HERDR, parallel_strategy=COMPOSE, integration_strategy=CHERRY_PICK
   reason: <why this topology and provider are the smallest safe choice>
-  fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
+  fallback_used: no | <requested/preferred mode/provider -> selected mode/provider and reason>
+  context_value:
+    projected_pressure: low | medium | high | unknown
+    context_reducibility: low | medium | high | unknown
+    delegatable_context: low | medium | high | unknown
+    root_context_requirement: low | medium | high | unknown
+    continuity_risk: low | medium | high | unknown
+    rationale: <why generated information can or cannot leave the root>
+  revisions:
+    - from: SOLO | SUBAGENTS | ISOLATED
+      to: SOLO | SUBAGENTS | ISOLATED
+      reason: <evidence>
+      phase: <workflow phase>
+      boundary: <safe boundary>
+  runtime_profile_ref: <capability profile or none>
 
 context_strategy:
   status: healthy | near-limit | overflow | compacting | recovered | unknown | blocked
@@ -95,6 +113,9 @@ context_strategy:
   signal_source: <adapter, host event, telemetry, or none>
   usage_tokens: <number or unknown>
   context_window: <number or unknown>
+  state_reinjection: available | unavailable | unknown
+  safe_boundary: true | false
+  expected_next_context_tokens: <number or unknown>
   last_compaction: <event, session entry, timestamp, or none>
   near_limit_action: <checkpoint and native/adapter compaction, or manual fallback>
   overflow_action: <host recovery and recheck, or blocked/manual resume>
@@ -172,16 +193,17 @@ observable requirements, acceptance checks, a testing decision, a validation
 plan, and explicit assumptions. In `PR`, it also has a `review_focus` with a
 clear goal, the acceptance criteria to check, relevant in-scope quality
 concerns, non-goals, and a finding rule that keeps unrelated work out of the
-current review. It records topology and provider separately.
-For a long-running or context-risk ticket, it also records a context strategy,
-latest status, capability source, safe compaction action, overflow action, and
-durable-state reference. The provider state is
+current review. It records preferred versus selected topology, the delegation backend, and
+provider separately. For a long-running or context-risk ticket, it also
+records a context strategy, latest status, capability source,
+state-reinjection status, safe compaction boundary/action, expected next-action
+headroom, overflow action, and durable-state reference. The provider state is
 conditional: non-isolated execution uses `NONE` for provider and strategies,
-while `ISOLATED` uses `NATIVE` or `HERDR`, `COMPOSE`, and `CHERRY_PICK`.
-An isolated plan
-must identify its one integration/delivery branch, foundation, task DAG, wave,
-shared-artifact owners, environment resources, and planned integration order.
-When a specialist skill is considered, its source, status, and selection reason
-are also recorded. Open questions may remain only when they do not block safe
-implementation and are recorded as risks. Ask the user about a blocking
-decision rather than guessing.
+while `ISOLATED` uses `NATIVE` or `HERDR`, `COMPOSE`, and `CHERRY_PICK`. A
+read-only `SUBAGENTS` run may use `delegation_backend: HERDR` without selecting
+`ISOLATED`. An isolated plan must identify its one integration/delivery branch,
+foundation, task DAG, wave, shared-artifact owners, environment resources, and
+planned integration order. When a specialist skill is considered, its source,
+status, and selection reason are also recorded. Open questions may remain only
+when they do not block safe implementation and are recorded as risks. Ask the
+user about a blocking decision rather than guessing.

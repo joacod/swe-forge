@@ -17,16 +17,51 @@ run_id: <unique-run-id>
 status: planning | running | blocked | reviewing | repairing | accepted | failed
 prior_status: <state before blocked or none>
 requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
+preferred_mode: SOLO | SUBAGENTS | ISOLATED
 execution_mode: SOLO | SUBAGENTS | ISOLATED
 requested_provider: AUTO | NATIVE | HERDR | NONE
 execution_provider: NATIVE | HERDR | NONE
+delegation_backend: NONE | NATIVE | HERDR | OTHER
+write_isolation: SHARED | WORKTREE
 provider_reason: <evidence-backed reason; NONE for non-isolated runs>
 parallel_strategy: NONE | COMPOSE
 integration_strategy: NONE | CHERRY_PICK
 requested_delivery: DEFAULT | GUIDED | PR
 delivery_mode: GUIDED | PR
 reason: <why this is the smallest safe topology>
-fallback_used: no | <requested mode/provider -> selected mode/provider and reason>
+fallback_used: no | <requested/preferred mode/provider -> selected mode/provider and reason>
+
+routing:
+  initial: SOLO | SUBAGENTS | ISOLATED
+  preferred: SOLO | SUBAGENTS | ISOLATED
+  selected: SOLO | SUBAGENTS | ISOLATED
+  current: SOLO | SUBAGENTS | ISOLATED
+  revisions:
+    - from: SOLO | SUBAGENTS | ISOLATED
+      to: SOLO | SUBAGENTS | ISOLATED
+      reason: <evidence>
+      phase: <workflow phase>
+      boundary: <safe boundary>
+  context_value:
+    projected_pressure: low | medium | high | unknown
+    context_reducibility: low | medium | high | unknown
+    delegatable_context: low | medium | high | unknown
+    root_context_requirement: low | medium | high | unknown
+    continuity_risk: low | medium | high | unknown
+    rationale: <why generated information can or cannot leave the root>
+  runtime_profile_ref: <capability profile or none>
+
+runtime_profile:
+  harness: <harness id>
+  context_usage: available | estimated | unavailable | unknown
+  context_window: reported | configured | unknown
+  proactive_compaction: available | unavailable | unknown
+  compaction_hooks: available | unavailable | unknown
+  state_reinjection: available | unavailable | unknown
+  subagents:
+    native: available | unavailable | unknown
+    external: []
+  capability_precedence: observed > adapter_declared > static_default > unknown
 
 invocation_checkout:
   path: <absolute checkout from which Forge was invoked>
@@ -140,6 +175,29 @@ context:
   last_compaction: <event, session entry, timestamp, or none>
   recovery_action: none | checkpoint | compact | wait | blocked
 
+# Conversation summaries are not workflow-control state. This section is the
+# small authoritative continuation snapshot consumed after compaction.
+continuation:
+  workflow_active: true | false
+  workflow: ticket | isolated | delivery | other
+  phase: planning | discovery | implementation | review | delivery | awaiting_merge | recovery | complete
+  step: <number or none>
+  awaiting: none | user_merge | user_decision | recovery
+  next_action:
+    kind: specify | discover | implement | validate | review | verify_and_sync_merge | recover | none
+    target: <short target>
+    acceptance: [<short checks>]
+    expected_context_tokens: <number or unknown>
+  safe_boundary: true | false
+  updated_at: <UTC timestamp>
+  delivery:
+    mode: GUIDED | PR
+    pr_number: <number or none>
+    pr_state: OPEN | MERGED | CLOSED | none
+  recovery:
+    host_signal: none | near-limit | overflow | compaction
+    status: none | pending | recovered | blocked
+
 # Authorization and action status only; no duplicate integration identity.
 delivery:
   authorization:
@@ -227,7 +285,10 @@ retries:
 A schema-v1 state containing `version: 1` or the old top-level `checkout`
 object must be rejected with an explicit compatibility message. A helper must
 never guess a migration. A future migration must be explicit, dependency-free,
-and tested before it can normalize state.
+and tested before it can normalize state. New routing, runtime-profile, and
+continuation sections are additive within schema v2; consumers must continue
+to validate older schema-v2 snapshots that do not contain those optional
+sections and report missing context capability as `unknown`.
 
 ## Rules and transitions
 
@@ -235,11 +296,19 @@ and tested before it can normalize state.
   orchestrator decision.
 - A resumed run inspects real checkout, branch, worktree, provider, and process
   state before trusting this snapshot.
+- `continuation` is the authoritative workflow-control snapshot; conversation
+  summaries and adapter reminders are recovery aids only.
+- Update `continuation.updated_at`, `safe_boundary`, and `next_action` together
+  before a planned compaction or topology revision. Do not copy the original
+  ticket into the continuation block.
 - Context state is updated before a planned compaction and after recovery; the
   snapshot never replaces actual Git or host evidence.
 - After compaction or overflow recovery, re-read the working spec and run state,
   inspect the current `HEAD` and diff, and resume only from the recorded next
   action. Do not launch a duplicate Forge retry for a host-managed retry.
+- A state consumer must prefer the newest active snapshot that matches the
+  checkout and must reject terminal or explicitly inactive state, so stale
+  pointers cannot override newer workflow state.
 - only a dependency in `done` satisfies a downstream task.
 - Completion order never changes planned `integration_order`.
 - Worker lifecycle state is scheduling evidence, not task acceptance.
