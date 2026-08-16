@@ -403,12 +403,9 @@ function compactionReason(
 		}
 	}
 
-	// Projected pressure is a planning estimate, not host telemetry. With no
-	// useful numeric estimate, use a categorical safe-boundary policy rather
-	// than pretending to know an exact token threshold.
-	if (run.projectedPressure.trim().toLowerCase() === "high") {
-		return `projected_pressure=high reserve=${reserve} expected_next=unknown`;
-	}
+	// Projected pressure is planning evidence, not host telemetry. Without a
+	// reliable near-limit signal or a known headroom shortfall, it cannot by
+	// itself justify discarding conversation context.
 	return undefined;
 }
 

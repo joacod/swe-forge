@@ -22,6 +22,8 @@ grading an agent from its explanation alone.
 | Ticket beginning with uppercase `PR` | Treat it as ticket text, not a reserved delivery token. |
 | Explicit isolated forms | Accept `isolated <ticket>`, `isolated pr <ticket>`, and `pr isolated <ticket>` while preserving the raw invocation. |
 | Provider preference | Record `requested_provider` independently from `requested_mode`; use `NATIVE` or `HERDR` only for `ISOLATED`. |
+| Default worker runtime | After the root provider, model, and reasoning configuration is selected, early research, standard `SUBAGENTS`, review, implementation, native-subagent, and Herdr-backed workers inherit it unless explicitly overridden. |
+| Explicit worker runtime override | An explicit user/project worker routing configuration wins over inheritance for the configured worker; unset routing does not trigger role-based optimization. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
 ## Canonical Load Ordering And Behavior Preservation

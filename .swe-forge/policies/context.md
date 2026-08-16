@@ -111,7 +111,9 @@ at the host's fully settled lifecycle event—use this sequence:
    host-specific fallback, never as a cross-harness rule.
 4. If the state is at a safe boundary and the next bounded action would not
    have sufficient headroom, request harness-native or adapter-provided
-   compaction. Do not compact merely because the ticket or prompt is large.
+   compaction. Do not compact merely because the ticket or prompt is large;
+   projected context pressure is planning evidence and does not by itself
+   establish insufficient headroom.
 5. Wait for the host compaction lifecycle to settle. Do not launch a duplicate
    retry or continue while `compacting`.
 6. Re-read the working spec and run state, inspect the actual checkout and

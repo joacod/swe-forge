@@ -221,11 +221,13 @@ as a side effect, and post-merge sync verifies the provider state first.
 
 ## Model Routing
 
-Delegated model assignment uses capability classes and fallback semantics from
-`.swe-forge/policies/model-routing.md`; load that policy before assigning a
-worker capability. Harness adapters may map those classes to user-selected
-models or harnesses. Model diversity is optional and canonical files do not
-name providers or model identifiers.
+Delegated workers inherit the active root harness/runtime, provider, model, and
+reasoning configuration by default. Explicit user or project worker-routing
+configuration may override that inheritance. The canonical model-routing
+policy documents this contract and keeps capability classes available for
+future or explicitly selected optimization; automatic role-based provider,
+model, or reasoning changes are not enabled by default. Harness adapters must
+not introduce provider-specific routing logic.
 
 ## Ticket Lifecycle
 
