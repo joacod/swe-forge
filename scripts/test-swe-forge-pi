@@ -313,8 +313,11 @@ await runSettingsScenario(
   "reserve=32768",
 );
 await runSettingsScenario("invalid-project", { global: 8192, project: "{ invalid json", expected: 10_000 }, false);
-await runSettingsScenario("projected-high", { expected: "unknown", projected: "high" }, true, "projected_pressure=high");
+// Planning pressure alone must not compact healthy context when the next-step
+// estimate is unknown and runtime headroom is available.
+await runSettingsScenario("projected-high", { expected: "unknown", projected: "high" }, false);
 await runSettingsScenario("overflow", { global: 8192, expected: 10_000, projected: "high", contextStatus: "overflow" }, false);
+await runSettingsScenario("compacting", { global: 8192, expected: 10_000, projected: "high", contextStatus: "compacting" }, false);
 
 // Both candidates remain discoverable at once. The explicit state path and
 // current pointer still point at the older state; automatic discovery must

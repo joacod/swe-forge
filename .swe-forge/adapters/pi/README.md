@@ -95,9 +95,10 @@ Malformed or unavailable files are ignored and clean file metadata is cached to
 avoid unnecessary repeated reads. A run-state `expected_context_tokens`
 estimate improves the headroom calculation when present; a reliable
 `near-limit` state at a safe boundary is strong enough to request compaction
-without that estimate. `overflow` and `compacting` states remain under Pi's
-native recovery lifecycle, and unchanged state/cooldown protection prevents a
-duplicate request. If telemetry, a compaction API, or an active run-state
+without that estimate. `projected_pressure: high` is planning evidence only
+and cannot trigger compaction by itself. `overflow` and `compacting` states
+remain under Pi's native recovery lifecycle, and unchanged state/cooldown
+protection prevents a duplicate request. If telemetry, a compaction API, or an active run-state
 snapshot is unavailable, it does nothing and the canonical workflow falls back
 to durable checkpoints/manual recovery.
 
