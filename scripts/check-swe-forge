@@ -152,6 +152,8 @@ require_text 'projected context pressure is planning evidence' .swe-forge/polici
 require_text 'projected_pressure: high` is planning evidence only' .swe-forge/adapters/pi/README.md
 require_text 'worker_runtime:' .swe-forge/policies/model-routing.md
 require_text 'strategy: inherit' .swe-forge/policies/model-routing.md
+require_text 'For an explicitly selected capability override' .swe-forge/policies/model-routing.md
+require_text 'Worker Runtime' .swe-forge/policies/delegation.md
 require_text 'Default worker runtime' .swe-forge/evals/conformance-scenarios.md
 require_text 'Head:' .swe-forge/contracts/receipt.md
 require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md

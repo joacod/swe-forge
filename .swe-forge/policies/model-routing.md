@@ -83,14 +83,17 @@ or reasoning optimization is not enabled by the current default.
 
 ## Fallbacks
 
-If a preferred capability is unavailable:
+For an explicitly selected capability override, if a preferred capability is
+unavailable:
 
 1. use the strongest available capability within the same role class
 2. reduce worker count and preserve bounded scope
 3. serialize work when context or model quality makes parallel execution risky
 4. record the substitution and any effect on confidence or verification
 
-Never claim model diversity or stronger reasoning that was not actually used.
+Inherited workers do not enter role-capability fallback merely because they
+have a different role. Never claim model diversity or stronger reasoning that
+was not actually used.
 
 ## Evaluation
 

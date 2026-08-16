@@ -109,6 +109,15 @@ to make the workflow look more complex.
 - the orchestrator must preserve unrelated user changes
 - no worker may rewrite another worker's checkout without authorization
 
+## Worker Runtime
+
+Worker creation follows the default and explicit-override semantics in
+`../policies/model-routing.md`. Unless the user or project intentionally
+routes a worker differently, early research, standard subagents, review,
+implementation, native, and Herdr-backed delegation keep the root provider,
+model, and reasoning configuration. The delegation backend does not make an
+automatic role-based optimization decision.
+
 ## Worker Briefing
 
 Pass the smallest context needed to perform the task:
