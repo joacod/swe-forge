@@ -148,6 +148,11 @@ require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
 require_text 'final_routing_deferred: true' .swe-forge/policies/execution-routing.md
 require_text 'Pre-continuation protocol' .swe-forge/policies/context.md
 require_text 'Overflow protocol' .swe-forge/policies/context.md
+require_text 'projected context pressure is planning evidence' .swe-forge/policies/context.md
+require_text 'projected_pressure: high` is planning evidence only' .swe-forge/adapters/pi/README.md
+require_text 'worker_runtime:' .swe-forge/policies/model-routing.md
+require_text 'strategy: inherit' .swe-forge/policies/model-routing.md
+require_text 'Default worker runtime' .swe-forge/evals/conformance-scenarios.md
 require_text 'Head:' .swe-forge/contracts/receipt.md
 require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
 require_text 'Generated at:' .swe-forge/contracts/receipt.md
@@ -363,7 +368,7 @@ require_text 'discoverable-old' scripts/test-swe-forge-pi
 require_text 'project-overrides-global' scripts/test-swe-forge-pi
 require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'runtime_status=near-limit' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'projected_pressure=high' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+reject_text 'projected_pressure=high' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'settingsSnapshot' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'projectSettingsTrusted' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text '.pi/settings.json' .swe-forge/adapters/pi/README.md
