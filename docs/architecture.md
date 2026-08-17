@@ -171,7 +171,10 @@ authorizes the accepted local setup, worker transfer commits, validated central
 commits, one final push, and one final PR, never publication, deployment, or
 merge. A PR working spec also owns an ordered commit plan; each meaningful
 validated step receives its own local or central commit before the next step.
-Other files reference this rule rather than redefining it.
+The same policy resolves repository branch, commit, title, template, and draft
+conventions at each delivery boundary, without adding SWE Forge configuration
+to the target repository. Other files reference this rule rather than
+redefining it.
 
 `policies/evidence.md` owns evidence semantics. The executable gate registers
 planned checks, binds validation/checkpoints/commits to exact candidate

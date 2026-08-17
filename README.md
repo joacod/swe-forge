@@ -232,6 +232,19 @@ and any material notes, separate from the private receipt. See the harness adapt
 documentation for the available
 `git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
 
+### Repository-aware delivery
+
+Delivery artifacts automatically follow repository conventions when they can be
+discovered confidently. User instructions take precedence, followed by
+repository documentation, native templates/configuration, strong recurring Git
+history, and finally SWE Forge's defaults. Discovery is runtime-only: no
+project-specific SWE Forge configuration is required or written.
+
+Immediately before creating a pull request, Forge retrieves the latest template
+from the remote default branch when provider access is available, preserves its
+structure and checklists, and fills only relevant sections. `/git-pr draft`
+creates a draft PR; `/git-pr` keeps the normal/open behavior.
+
 ## Feedback
 
 Please report friction through the [issue templates](https://github.com/joacod/swe-forge/issues/new/choose):

@@ -205,6 +205,8 @@ require_text 'Final status: ACCEPTED | BLOCKED | FAILED' .swe-forge/contracts/re
 reject_text 'Merge performed: no' .swe-forge/contracts/receipt.md
 require_text 'pre-edit baseline' SWE-FORGE.md
 require_text 'Execution topology and delivery mode are orthogonal' SWE-FORGE.md
+require_text '`/git-pr draft` requests a draft PR' SWE-FORGE.md
+require_text 'The same policy resolves repository branch, commit, title, template, and draft' docs/architecture.md
 require_text '/swe-forge isolated <ticket>' SWE-FORGE.md
 require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
 require_text 'execution_mode: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
@@ -242,6 +244,9 @@ require_text 'Isolated routing candidate' .swe-forge/evals/conformance-scenarios
 require_text 'Context-risk or pressure path' .swe-forge/evals/conformance-scenarios.md
 require_text '`BLOCKED`/`FAILED` recovery path' .swe-forge/evals/conformance-scenarios.md
 require_text 'Final acceptance' .swe-forge/evals/conformance-scenarios.md
+require_text '## Repository-aware delivery conventions' .swe-forge/evals/conformance-scenarios.md
+require_text 'Remote PR template' .swe-forge/evals/conformance-scenarios.md
+require_text 'Explicit draft PR' .swe-forge/evals/conformance-scenarios.md
 require_text '## Context Continuity' .swe-forge/evals/conformance-scenarios.md
 require_text '## Context-Aware Routing And Continuity' .swe-forge/evals/conformance-scenarios.md
 require_text 'Large but globally coupled task' .swe-forge/evals/conformance-scenarios.md
@@ -262,10 +267,24 @@ reject_text 'swe-forge/<run-id>/integration' .swe-forge/examples/isolated-ticket
 require_text 'per-slice commits' .swe-forge/policies/delivery.md
 require_text 'provider state is `MERGED`' .swe-forge/policies/delivery.md
 require_text 'Project-facing delivery artifacts' .swe-forge/policies/delivery.md
+require_text 'Repository-aware delivery conventions' .swe-forge/policies/delivery.md
+require_text 'explicit instruction from the user or ticket' .swe-forge/policies/delivery.md
+require_text 'strong, recurring evidence from recent Git history' .swe-forge/policies/delivery.md
+require_text 'Do not create, require, or update a' .swe-forge/policies/delivery.md
+require_text 'immediately before SWE Forge must create a task or' .swe-forge/policies/delivery.md
+require_text 'immediately before each delivery commit' .swe-forge/policies/delivery.md
+require_text "remote repository's default branch" .swe-forge/policies/delivery.md
+require_text 'GitHub' .swe-forge/policies/delivery.md
+require_text 'optional standalone' .swe-forge/policies/delivery.md
+require_text 'DRAFT | OPEN | MERGED | CLOSED | none' .swe-forge/contracts/run-state.md
 require_text 'The same rule applies to SWE Forge' .swe-forge/policies/delivery.md
 require_text 'Receipts remain private run-evidence artifacts' .swe-forge/policies/delivery.md
 require_text 'private run-evidence artifacts' .swe-forge/policies/delivery.md
 require_text 'never copied into the PR description' README.md
+require_text '### Repository-aware delivery' README.md
+require_text 'project-specific SWE Forge configuration is required or written' README.md
+require_text 'latest template' README.md
+require_text '`/git-pr draft`' README.md
 require_text 'Project-facing PR content' .swe-forge/evals/conformance-scenarios.md
 reject_text 'add it to the PR description' SWE-FORGE.md
 reject_text 'add it to the PR description' README.md
@@ -288,6 +307,17 @@ require_text 'one dedicated task branch using the canonical' .swe-forge/adapters
 require_text 'one integration/delivery branch' .swe-forge/adapters/README.md
 require_text 'pushing never creates a PR' .swe-forge/adapters/README.md
 require_text 'syncing verifies `MERGED`' .swe-forge/adapters/README.md
+require_text 'delivery artifacts resolve repository conventions' .swe-forge/adapters/README.md
+require_text '`/git-pr draft` is forwarded' .swe-forge/adapters/README.md
+require_text 'remote default branch' .swe-forge/adapters/README.md
+require_text 'gh repo view' .swe-forge/adapters/README.md
+require_text 'gh pr create --draft' .swe-forge/adapters/README.md
+require_text 'argument-hint: "[draft|title/body options]"' .swe-forge/adapters/pi/prompts/git-pr.md
+require_text 'raw arguments through unchanged' .swe-forge/adapters/pi/prompts/git-pr.md
+require_text 'raw arguments through unchanged' .swe-forge/adapters/opencode/commands/git-pr.md
+require_text 'raw arguments through unchanged' .swe-forge/adapters/opencode/commands/git-pr-global.md
+require_text '`/git-pr draft` forwards an explicit draft request' .swe-forge/adapters/pi/README.md
+require_text '/git-pr [draft]' .swe-forge/adapters/opencode/README.md
 require_text 'ISOLATED' .swe-forge/workflows/ticket.md
 require_text '/swe-forge isolated <ticket>' .swe-forge/workflows/ticket.md
 require_text 'The `herdr` topology token was removed' .swe-forge/workflows/ticket.md

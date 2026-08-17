@@ -265,7 +265,9 @@ Before the first writable checkout/setup operation, first edit, or any
 commit/push/PR-related decision, load and follow
 `.swe-forge/policies/delivery.md`. It is the sole detailed owner of local
 resource authorization, checkout and branch ownership, commits, pushes, pull
-requests, synchronization, integration, and cleanup.
+requests, synchronization, integration, and cleanup. Its repository-aware
+convention resolution runs only at the branch, commit, or PR artifact boundary
+that needs it; PR template retrieval occurs immediately before composition.
 
 Implement only the bounded dependency waves selected by the architecture and
 working spec. In `PR`, validate and commit each planned step before beginning

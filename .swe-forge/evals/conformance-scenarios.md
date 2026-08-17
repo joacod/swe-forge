@@ -135,6 +135,23 @@ and resulting topology/action.
 | K. Stale state pointer | When multiple active snapshots match the checkout, choose the newest `continuation.updated_at`/mtime and ignore terminal or inactive state; stale state cannot rewrite shorthand or topology. |
 | L. Bounded worker | Worker receives only objective, relevant context, scope, acceptance, and evidence return fields; it does not create PRs, push, merge, reroute, or recursively delegate by default. |
 
+## Repository-aware delivery conventions
+
+| Scenario | Required behavior |
+| --- | --- |
+| Default repository with no recognizable convention | Preserve the existing SWE Forge branch, commit, and PR-body defaults; `/git-pr` remains a normal/open PR action. |
+| Explicit user delivery instruction | Use the user's branch, commit, title, template, or draft instruction for the applicable artifact before repository evidence. |
+| Documented repository convention | Prefer clear rules in `AGENTS.md`, `CONTRIBUTING.md`, README/development docs, or documented Git instructions over inferred history. |
+| Strong Git-history convention | Follow a clear recurring branch or commit pattern only when it is consistent; treat isolated or conflicting examples as insufficient evidence and use the Forge default. |
+| Branch creation | Resolve branch naming immediately before creating a task/integration branch; do not resolve or change a safely reused branch. |
+| Commit generation | Resolve the commit format immediately before each commit, preserve atomic PR slices, and never rewrite existing history just to match an inferred convention. |
+| Remote PR template | Immediately before PR composition, prefer the latest template from the remote/default branch; for GitHub inspect its normal template locations, including `.github/PULL_REQUEST_TEMPLATE/*`. |
+| Template preservation | Preserve repository headings, ordering, structure, placeholders, and checklists; map generated context into natural sections and do not invent compliance or manual-review answers. |
+| No PR template | Keep the existing SWE Forge default PR body. |
+| Explicit draft PR | `/git-pr draft` creates a draft PR and still performs template/convention resolution; `/git-pr` retains normal/open behavior. |
+| Provider separation | Keep remote-template retrieval and draft flags in the provider adapter while the canonical delivery policy owns the semantics. |
+| Repository cleanliness | Never create or require `.swe-forge` configuration or persist discovered company/repository conventions in the target repository. |
+
 ## Installation
 
 Run `scripts/test-swe-forge`, `scripts/test-swe-forge-gate`, and

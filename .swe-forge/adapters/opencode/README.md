@@ -24,7 +24,7 @@ The delivery helpers are separate explicit commands:
 ```text
 /git-commit [paths|message]
 /git-push [force|-f]
-/git-pr
+/git-pr [draft]
 /git-sync
 ```
 
@@ -35,7 +35,9 @@ alias; users who want Herdr request it as the provider for `ISOLATED`, for
 example in ticket text: "Use `isolated` with Herdr as the execution provider."
 
 They load `.swe-forge/policies/delivery.md` rather than copying its procedure.
-See [shared adapter behavior](../README.md) for the workflow and delivery rules.
+`/git-pr draft` is an explicit draft request; plain `/git-pr` retains
+normal/open behavior. See [shared adapter behavior](../README.md) for the
+workflow and delivery rules.
 
 Do not install a command that auto-runs the workflow for ordinary prompts.
 

@@ -55,6 +55,120 @@ ceremonial phases: a one-step ticket correctly produces one commit. When the
 plan has multiple meaningful steps, the PR history must contain one commit per
 step; review repairs are additional atomic commits rather than a squash.
 
+## Repository-aware delivery conventions
+
+SWE Forge owns the workflow; the repository owns its delivery conventions.
+Before creating a project-facing artifact, resolve the convention for that
+artifact at the boundary where it will be created. Resolution is per artifact:
+a branch rule does not automatically decide a commit or pull-request rule.
+Discovered conventions are ephemeral. Do not create, require, or update a
+`.swe-forge` configuration file, company profile, or other SWE Forge metadata in
+the target repository.
+
+Use this precedence and stop at the first confident result:
+
+1. explicit instruction from the user or ticket
+2. explicit repository documentation or instructions, including `AGENTS.md`,
+   `CONTRIBUTING.md`, README/development documentation, and documented Git rules
+3. repository-native configuration or templates, including Git configuration
+   and pull-request templates
+4. strong, recurring evidence from recent Git history
+5. the existing SWE Forge default convention
+
+Documented rules take precedence over inferred history. History is evidence, not
+absolute authority: require a clear, repeated pattern before following it, and
+use the existing Forge default when examples conflict, are sparse, or are too
+weak to identify a format confidently. Keep any provenance in transient working
+state or private evidence only; never persist discovered conventions as project
+files or delivery metadata.
+
+### Branch naming
+
+Resolve branch naming only immediately before SWE Forge must create a task or
+integration/delivery branch. Do not spend convention-resolution work on a run
+that can safely reuse its existing branch. Prefer an explicitly documented
+pattern, then a strong recurring branch-history pattern. Preserve a supplied
+issue or ticket identifier when the repository convention calls for one.
+
+When no repository convention can be identified confidently, retain the current
+SWE Forge default:
+
+```text
+<type>/<short-kebab-case-description>
+```
+
+The resolved pattern may produce forms such as `feature/foo`, `feat/foo`,
+`PROJ-123-short-description`, or `feature/PROJ-123-short-description`, but a
+single example or an ambiguous prefix is not enough to replace the default.
+Branch setup remains one atomic workflow setup action and still uses one
+non-protected delivery branch.
+
+### Commit messages
+
+Resolve the commit convention immediately before each delivery commit,
+including a review-repair commit. Prefer explicit repository instructions and
+then a clear recurring history pattern. Use the result to adapt the existing
+commit-generation behavior; do not rewrite existing history or split commits
+just to match an inferred format. The message must still describe the actual
+change and preserve the planned PR slice boundary.
+
+When no convention is confidently identified, retain the existing SWE Forge
+fallback: use a concise imperative subject, target 50 characters or fewer,
+treat 72 characters as the hard maximum, omit terminal punctuation, and add a
+short body only when motivation, compatibility, side effects, or a relevant
+reference would otherwise be lost. Do not invent issue references or trailers.
+
+### Pull-request composition and templates
+
+Resolve the pull-request title/body convention immediately before composing a
+pull request. When provider access is available, resolve the effective
+repository template from the remote repository's default branch rather than
+trusting the copy on the current feature branch. A read-only provider/API
+lookup or a fetch of the default ref is preferred. If remote access is
+unavailable, use a clearly sourced local/provider template only when its
+provenance is known; otherwise retain the existing SWE Forge default body.
+
+For GitHub repositories, normal template locations include:
+
+```text
+.github/pull_request_template.md
+.github/PULL_REQUEST_TEMPLATE.md
+PULL_REQUEST_TEMPLATE.md
+docs/pull_request_template.md
+.github/PULL_REQUEST_TEMPLATE/*
+```
+
+Provider adapters should resolve the default branch and read the selected
+template at that ref, then map the resulting content into the provider's PR
+creation API. They must not silently concatenate unrelated files from a
+`PULL_REQUEST_TEMPLATE` directory or claim a feature-branch copy is current
+when it was not retrieved from the remote/default branch.
+
+When a repository template exists, preserve its headings, ordering, structure,
+and checklists. Put generated summary, validation, implementation, and ticket
+information into sections where it naturally belongs. Leave placeholders and
+manual-confirmation questions intact, and do not invent answers to compliance,
+security, release, or company-review questions. Do not replace the repository
+template with SWE Forge's own structure. If no template exists, retain the
+current default body from this policy.
+
+### Draft pull requests
+
+The atomic `create_pull_request` action accepts an optional standalone
+lowercase `draft` argument. `/git-pr draft` requests a draft pull request and
+uses the same convention and template resolution as a normal pull request. No
+`draft` argument preserves the existing open/normal PR behavior. The argument
+is an explicit per-action state, not a new workflow mode or a global default;
+other future user-level preferences can be applied before this action without
+changing the workflow. Draft creation still requires the current branch to be
+pushed and does not implicitly commit, push, merge, or perform unrelated Git
+operations.
+
+Provider adapters own the provider-specific mapping: for example, a GitHub
+adapter may use its remote API for default-branch template retrieval and map
+`draft` to the provider's native draft flag. The canonical action remains
+provider-neutral and exposes the semantic draft state only.
+
 ## Project-facing delivery artifacts
 
 Branches, commits, pull-request titles, and pull-request bodies (PR
