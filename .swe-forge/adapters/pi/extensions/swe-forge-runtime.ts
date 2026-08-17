@@ -356,6 +356,24 @@ function topology(value: string): string {
 	return value.trim().toUpperCase();
 }
 
+function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: string): string {
+	if (!run) {
+		return [
+			"Canonical routing is UNKNOWN because no active, checkout-matching SWE-Forge run-state is discoverable.",
+			"Use the existing SOLO/sequential fallback.",
+			"Capability discovery may proceed, but before action=run persist a complete active schema-v2 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
+			"The task contract's execution_mode does not establish canonical routing.",
+		].join(" ");
+	}
+	if (current === "UNKNOWN") {
+		return [
+			"Canonical routing is UNKNOWN because the active SWE-Forge run-state does not expose a usable current topology.",
+			"Use the existing SOLO/sequential fallback until routing.current is persisted as SUBAGENTS.",
+		].join(" ");
+	}
+	return `Canonical routing selected ${current}; use the existing SOLO/sequential fallback rather than delegation.`;
+}
+
 function isSWEForgeInvocation(prompt: unknown): boolean {
 	return (
 		typeof prompt === "string" &&
@@ -374,7 +392,8 @@ function subagentCapabilityPrompt(observation: SubagentToolObservation, run: Act
 		"SWE-Forge remains the orchestrator and must choose topology, task ownership, sequencing, review, integration, delivery, and fallback.",
 		"Only when canonical routing selects SUBAGENTS may the orchestrator call this exact tool.",
 		"Call action=capabilities first; require protocolVersion=1, no compatibilityErrors, the requested role, and the requested READ_ONLY/WRITABLE profile before one bounded action=run.",
-		"Never use this shared-checkout primitive for ISOLATED work. A missing, inactive, incompatible, or failed capability uses the existing SOLO/sequential fallback.",
+		"When current topology is UNKNOWN, capabilities is discovery only: persist a complete active schema-v2 run-state with matching checkout paths and routing.current: SUBAGENTS before action=run, then request capabilities again.",
+		"The task contract's execution_mode and prompt text do not establish canonical routing. Never use this shared-checkout primitive for ISOLATED work. A missing, inactive, incompatible, or failed capability uses the existing SOLO/sequential fallback.",
 	].join("\n");
 }
 
@@ -640,7 +659,7 @@ export default function sweForgeRuntime(pi: any) {
 			if (run && current !== "SUBAGENTS" && preferred !== "SUBAGENTS") {
 				return {
 					block: true,
-					reason: `Canonical routing selected ${current}; do not delegate through the optional shared-checkout capability.`,
+					reason: subagentRoutingFallbackReason(run, current),
 				};
 			}
 			return undefined;
@@ -648,7 +667,7 @@ export default function sweForgeRuntime(pi: any) {
 		if (current !== "SUBAGENTS") {
 			return {
 				block: true,
-				reason: `Canonical routing selected ${current}; use the existing SOLO/sequential fallback rather than delegation.`,
+				reason: subagentRoutingFallbackReason(run, current),
 			};
 		}
 		const capabilityError = validateCapabilities(negotiatedSubagentCapabilities, input.role, input.profile);

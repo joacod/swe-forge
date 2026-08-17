@@ -449,7 +449,7 @@ await subagentHandlers.get("tool_result")({
 const runInput = {
   action: "run",
   role: "reader",
-  taskContract: "TASK_ID: reader-check\nOBJECTIVE: inspect only\nwrite_access: read-only\n",
+  taskContract: "TASK_ID: reader-check\nOBJECTIVE: inspect only\nexecution_mode: SUBAGENTS\nwrite_access: read-only\n",
   expectedOutputContract: "result",
   profile: "READ_ONLY",
 };
@@ -458,6 +458,84 @@ const allowedRun = await subagentHandlers.get("tool_call")({
   input: runInput,
 }, subagentContext);
 if (allowedRun) throw new Error(`negotiated SUBAGENTS run was blocked: ${allowedRun.reason}`);
+
+// An explicit invocation may discover the optional tool before the canonical
+// run state exists, but task-contract text must not authorize a run. Once the
+// state appears, the same extension must require a fresh capabilities probe.
+const noStateCwd = path.join(fixtureCwd, "no-state");
+fs.mkdirSync(noStateCwd, { recursive: true });
+delete process.env.SWE_FORGE_RUN_STATE;
+delete process.env.SWE_FORGE_STATE;
+const noStateHandlers = new Map();
+const noStatePi = {
+  on(name, handler) {
+    noStateHandlers.set(name, handler);
+  },
+  getAllTools() {
+    return [{ name: "swe_forge_subagent" }];
+  },
+  getActiveTools() {
+    return ["swe_forge_subagent"];
+  },
+};
+extension(noStatePi);
+const noStateContext = {
+  cwd: noStateCwd,
+  hasPendingMessages: () => false,
+  isProjectTrusted: () => true,
+};
+const noStatePrompt = await noStateHandlers.get("before_agent_start")({
+  prompt: "The user explicitly invoked SWE Forge through Pi.",
+  systemPrompt: "base",
+}, noStateContext);
+if (!noStatePrompt?.systemPrompt.includes("current topology: UNKNOWN")) {
+  throw new Error("missing run state did not remain visible as UNKNOWN");
+}
+const noStateCapabilities = await noStateHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: capabilitiesInput,
+}, noStateContext);
+if (noStateCapabilities) throw new Error("pre-state capability discovery was unexpectedly blocked");
+await noStateHandlers.get("tool_result")({
+  toolName: "swe_forge_subagent",
+  input: capabilitiesInput,
+  details: capabilityDetails,
+  isError: false,
+}, noStateContext);
+const blockedNoStateRun = await noStateHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: runInput,
+}, noStateContext);
+if (!blockedNoStateRun?.block || !blockedNoStateRun.reason.includes("run-state")) {
+  throw new Error("missing run state did not block delegation with actionable evidence");
+}
+const noStatePath = path.join(noStateCwd, "state", "run-state.yaml");
+writeRuntimeState(noStatePath, {
+  cwd: noStateCwd,
+  runId: "rediscovered-subagent-run",
+  current: "SUBAGENTS",
+  preferred: "SUBAGENTS",
+  updatedAt: "2060-01-01T00:00:00Z",
+});
+process.env.SWE_FORGE_RUN_STATE = noStatePath;
+const rediscoveredCapabilities = await noStateHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: capabilitiesInput,
+}, noStateContext);
+if (rediscoveredCapabilities) throw new Error("capability renegotiation after state creation was blocked");
+await noStateHandlers.get("tool_result")({
+  toolName: "swe_forge_subagent",
+  input: capabilitiesInput,
+  details: capabilityDetails,
+  isError: false,
+}, noStateContext);
+const allowedAfterState = await noStateHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: runInput,
+}, noStateContext);
+if (allowedAfterState) throw new Error(`state-backed SUBAGENTS run was blocked: ${allowedAfterState.reason}`);
+process.env.SWE_FORGE_RUN_STATE = subagentState;
+
 const writableInput = {
   action: "run",
   role: "writer",

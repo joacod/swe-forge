@@ -26,7 +26,12 @@ as a separate execution-provider preference.
 
 SWE-Forge remains the canonical orchestrator. The Pi adapter may expose the
 optional `swe_forge_subagent` tool, but its absence must never prevent normal
-SWE-Forge execution.
+SWE-Forge execution. A first `action: "capabilities"` probe may be allowed
+before a run-state snapshot exists, but it only discovers the backend. Before
+`action: "run"`, persist a complete active schema-v2 run-state with matching
+checkout paths and `routing.current: SUBAGENTS`, then request capabilities
+again. Task-contract `execution_mode` or prompt text does not establish
+canonical routing; missing state keeps the normal SOLO/sequential fallback.
 
 Only after canonical routing selects `SUBAGENTS` for one bounded task:
 
