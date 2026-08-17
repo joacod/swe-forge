@@ -215,25 +215,27 @@ second delivery boundary, and cannot create PRs.
 
 ## Delivery branch naming
 
-Name normal task/delivery branches and isolated integration/delivery branches
-with the conventional form:
+Use the branch convention resolved under Repository-aware delivery conventions.
+When no repository-specific branch convention can be identified confidently,
+use the SWE Forge fallback:
 
 ```text
 <type>/<short-kebab-case-description>
 ```
 
-Choose `<type>` from the primary ticket outcome, for example `feat`, `fix`,
-`docs`, `refactor`, `test`, `chore`, `perf`, `build`, or `ci`. Keep the
-description lowercase, concise, and separated with hyphens; include an issue
-number only when the repository or ticket supplies one. Do not use the
-repository/project name (for example `swe-forge/`) as a generic branch prefix.
+For the SWE Forge fallback, choose `<type>` from the primary ticket outcome,
+for example `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `build`,
+or `ci`. Keep the description lowercase, concise, and separated with hyphens;
+include an issue number only when the repository or ticket supplies one. Do not
+use the repository/project name (for example `swe-forge/`) as a generic branch
+prefix.
 
-If the preferred name is already occupied, retain the type and description and
-add a short unique suffix (or use a supplied issue identifier); do not silently
-reuse another task's branch. Namespaced `worker/` or run/task names are allowed
-only for ephemeral local-only worker branches in `ISOLATED`, where uniqueness
-and resource ownership matter. They are never delivery branches, pushed
-branches, or PR branches.
+When applying the SWE Forge fallback, if the preferred name is already
+occupied, retain the type and description and add a short unique suffix (or use
+a supplied issue identifier); do not silently reuse another task's branch.
+Namespaced `worker/` or run/task names are allowed only for ephemeral local-only
+worker branches in `ISOLATED`, where uniqueness and resource ownership matter.
+They are never delivery branches, pushed branches, or PR branches.
 
 ## Atomic actions
 
