@@ -32,6 +32,13 @@ The prompt and extension loaders resolve canonical files under
 Link mode is the default, so updating the stable SWE Forge checkout updates
 the installed source after review. Global copy mode remains unsupported.
 
+The optional `swe_forge_subagent` package is not installed by the commands
+above. Until that package is published to npm, use the
+[pre-publication source installation](../../../docs/installation.md#optional-pi-subagents-backend)
+from the main repository; it clones both repositories, installs the package's
+local dependencies, and registers its local path with Pi. The package is
+optional: without it, `SUBAGENTS` falls back to SOLO/sequential execution.
+
 Continuation and compaction behavior is inert unless the extension finds an
 active, checkout-matching `run-state.yaml` with `workflow_active: true` (or a
 compatible active schema-v2 status). The optional capability observation also
