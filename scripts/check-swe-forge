@@ -311,6 +311,7 @@ require_text 'delivery artifacts resolve repository conventions' .swe-forge/adap
 require_text '`/git-pr draft` is forwarded' .swe-forge/adapters/README.md
 require_text 'remote default branch' .swe-forge/adapters/README.md
 require_text 'gh repo view' .swe-forge/adapters/README.md
+require_text 'gh pr create --draft' .swe-forge/adapters/README.md
 require_text 'argument-hint: "[draft|title/body options]"' .swe-forge/adapters/pi/prompts/git-pr.md
 require_text 'raw arguments through unchanged' .swe-forge/adapters/pi/prompts/git-pr.md
 require_text 'raw arguments through unchanged' .swe-forge/adapters/opencode/commands/git-pr.md

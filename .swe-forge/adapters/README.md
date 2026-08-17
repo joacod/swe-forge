@@ -74,7 +74,8 @@ specific files:
 For GitHub-backed delivery adapters, the cleanest implementation is a
 read-only default-branch lookup (for example, `gh repo view` plus `gh api` or a
 remote default ref) immediately before PR composition, followed by the native
-draft flag when requested. Keep this provider-specific mechanism in the
+draft flag when requested (for example, `gh pr create --draft`). Keep this
+provider-specific mechanism in the
 adapter/delivery layer; the canonical policy owns the precedence, template
 preservation, and draft semantics.
 
