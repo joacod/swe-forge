@@ -213,7 +213,11 @@ independent review before one authorized push and one final PR on the single
 delivery branch. Worker branches are never pushed and worker PRs are never
 created. PR mode never merges; project-facing PR content follows the delivery
 policy, while evidence and receipts remain private under their canonical policy
-and contract.
+and contract. The delivery policy resolves repository conventions for branches,
+commits, titles, and PR structure at the point each artifact is created, with
+SWE Forge defaults as the fallback. `/git-pr draft` requests a draft PR without
+changing normal `/git-pr` behavior, and an available provider retrieves the
+latest PR template from the remote default branch.
 
 The atomic `git-commit`, `git-push`, `git-pr`, and `git-sync` actions load and
 follow `.swe-forge/policies/delivery.md` separately. Pushing never creates a PR

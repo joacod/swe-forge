@@ -206,7 +206,7 @@ continuation:
   delivery:
     mode: GUIDED | PR
     pr_number: <number or none>
-    pr_state: OPEN | MERGED | CLOSED | none
+    pr_state: DRAFT | OPEN | MERGED | CLOSED | none
   recovery:
     host_signal: none | near-limit | overflow | compaction
     status: none | pending | recovered | blocked
