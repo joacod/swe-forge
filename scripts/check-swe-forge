@@ -281,6 +281,10 @@ require_text 'The same rule applies to SWE Forge' .swe-forge/policies/delivery.m
 require_text 'Receipts remain private run-evidence artifacts' .swe-forge/policies/delivery.md
 require_text 'private run-evidence artifacts' .swe-forge/policies/delivery.md
 require_text 'never copied into the PR description' README.md
+require_text '### Repository-aware delivery' README.md
+require_text 'project-specific SWE Forge configuration is required or written' README.md
+require_text 'latest template' README.md
+require_text '`/git-pr draft`' README.md
 require_text 'Project-facing PR content' .swe-forge/evals/conformance-scenarios.md
 reject_text 'add it to the PR description' SWE-FORGE.md
 reject_text 'add it to the PR description' README.md
@@ -303,6 +307,16 @@ require_text 'one dedicated task branch using the canonical' .swe-forge/adapters
 require_text 'one integration/delivery branch' .swe-forge/adapters/README.md
 require_text 'pushing never creates a PR' .swe-forge/adapters/README.md
 require_text 'syncing verifies `MERGED`' .swe-forge/adapters/README.md
+require_text 'delivery artifacts resolve repository conventions' .swe-forge/adapters/README.md
+require_text '`/git-pr draft` is forwarded' .swe-forge/adapters/README.md
+require_text 'remote default branch' .swe-forge/adapters/README.md
+require_text 'gh repo view' .swe-forge/adapters/README.md
+require_text 'argument-hint: "[draft|title/body options]"' .swe-forge/adapters/pi/prompts/git-pr.md
+require_text 'raw arguments through unchanged' .swe-forge/adapters/pi/prompts/git-pr.md
+require_text 'raw arguments through unchanged' .swe-forge/adapters/opencode/commands/git-pr.md
+require_text 'raw arguments through unchanged' .swe-forge/adapters/opencode/commands/git-pr-global.md
+require_text '`/git-pr draft` forwards an explicit draft request' .swe-forge/adapters/pi/README.md
+require_text '/git-pr [draft]' .swe-forge/adapters/opencode/README.md
 require_text 'ISOLATED' .swe-forge/workflows/ticket.md
 require_text '/swe-forge isolated <ticket>' .swe-forge/workflows/ticket.md
 require_text 'The `herdr` topology token was removed' .swe-forge/workflows/ticket.md

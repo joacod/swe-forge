@@ -74,8 +74,9 @@ records that preference separately.
 The template uses Pi's `$ARGUMENTS` expansion and is only processed when the
 user explicitly types `/swe-forge`. Ordinary prompts remain unchanged. The
 separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync` prompts load the
-canonical delivery policy. See [shared adapter behavior](../README.md) for the
-workflow and delivery rules.
+canonical delivery policy. `/git-pr draft` forwards an explicit draft request;
+plain `/git-pr` retains normal/open behavior. See [shared adapter behavior](../README.md)
+for the workflow and delivery rules.
 
 ## Runtime integration
 

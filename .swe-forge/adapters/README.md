@@ -55,6 +55,12 @@ specific files:
   slice separately before final review, push, and one pull-request creation
 - pushing never creates a PR, and syncing verifies `MERGED` before changing the
   checkout
+- delivery artifacts resolve repository conventions at their creation boundary;
+  no project-specific SWE Forge configuration is required or written
+- `/git-pr draft` is forwarded as an explicit draft request while `/git-pr`
+  retains normal/open behavior; provider adapters own the native state mapping
+- when provider access is available, PR adapters retrieve the latest template
+  from the remote default branch and preserve its structure before composition
 - context management is capability-negotiated: adapters document observed
   usage telemetry, context-window knowledge, proactive compaction, lifecycle
   hooks, and overflow recovery; they do not assume a universal signal or
@@ -64,6 +70,13 @@ specific files:
 - when available, `.swe-forge/tools/swe-forge-gate` provides executable
   preflight, checkpoint, validation, delivery, and receipt evidence without
   redefining the canonical workflow
+
+For GitHub-backed delivery adapters, the cleanest implementation is a
+read-only default-branch lookup (for example, `gh repo view` plus `gh api` or a
+remote default ref) immediately before PR composition, followed by the native
+draft flag when requested. Keep this provider-specific mechanism in the
+adapter/delivery layer; the canonical policy owns the precedence, template
+preservation, and draft semantics.
 
 Adapter-specific files should document only host syntax, discovery paths,
 permissions, native capabilities, and other behavior that cannot be
