@@ -72,6 +72,59 @@ scripts/swe-forge install pi --global
 scripts/swe-forge verify pi --global
 ```
 
+### Optional Pi SUBAGENTS backend
+
+The standard Pi bridge is sufficient for normal SWE Forge usage. The optional
+`swe_forge_subagent` package only adds the bounded child-agent capability used
+when canonical routing selects `SUBAGENTS`; without it, SWE Forge keeps its
+existing SOLO/sequential fallback. The main installer deliberately does not
+install this executable extension or make it a hidden dependency.
+
+The package is not published to npm yet. Until then, use a local source-path
+installation. A fresh setup needs both repositories:
+
+```bash
+SWE_FORGE_DIR="$HOME/tools/swe-forge"
+SUBAGENTS_DIR="$HOME/tools/swe-forge-pi-subagents"
+
+mkdir -p "$HOME/tools"
+git clone https://github.com/joacod/swe-forge.git "$SWE_FORGE_DIR"
+git clone https://github.com/joacod/swe-forge-pi-subagents.git "$SUBAGENTS_DIR"
+
+"$SWE_FORGE_DIR/scripts/swe-forge" install pi --global
+(
+  cd "$SUBAGENTS_DIR"
+  npm ci
+)
+pi install "$SUBAGENTS_DIR"
+```
+
+If SWE Forge is already cloned and installed, skip its `git clone` and the
+first installer command. If only the optional package is missing, clone that repository, run `npm ci`
+inside it, and run
+`pi install /absolute/path/to/swe-forge-pi-subagents`.
+The package requires Node.js `>=22.19.0`. These source checkouts follow their
+`main` branches and are development-only until release artifacts are
+published; review the extension before trusting it because Pi packages run
+with the user's full permissions.
+
+Restart Pi or run `/reload` after installation. Confirm the optional package
+is present with:
+
+```bash
+pi list
+```
+
+When an npm release becomes available, replace the package clone, `npm ci`,
+and local-path install with:
+
+```bash
+pi install npm:swe-forge-pi-subagents@<version>
+```
+
+The main SWE Forge installation remains required because the optional package
+reads the canonical support root from `~/.pi/agent/swe-forge/`.
+
 There is no multi-harness install command. The installer deliberately handles
 one harness per invocation, and never guesses a global installation. `global`
 must be explicitly requested.

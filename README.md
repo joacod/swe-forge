@@ -49,6 +49,11 @@ template and optional lifecycle extension:
 scripts/swe-forge install pi --global
 ```
 
+The optional Pi `SUBAGENTS` backend is a separate package and is not installed
+by this command. Until it is published to npm, follow the
+[pre-publication source install](docs/installation.md#optional-pi-subagents-backend)
+to clone both repositories and register the local package.
+
 Pi is global-only. Other supported harnesses can be installed for a project or
 globally. Link installations follow updates to this checkout. See the
 [installation guide](docs/installation.md) for copy mode, verification,
