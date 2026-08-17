@@ -125,6 +125,16 @@ protocol, role, profile, and isolation checks pass. The returned canonical
 result remains untrusted worker data and continues through SWE-Forge's normal
 review, evidence, integration, and delivery handling.
 
+A first capabilities probe is allowed during an explicit `/swe-forge` turn
+before durable routing state exists, but that probe is discovery only. If a run
+attempt reports `Canonical routing is UNKNOWN`, no active checkout-matching
+run-state was discoverable (or it did not expose a usable current topology).
+Persist a complete active schema-v2 run-state with `routing.current: SUBAGENTS`
+and matching invocation/delivery checkout paths, then request capabilities
+again. Do not use `execution_mode` in the task contract or prompt as a routing
+workaround; the safe result of missing state is the normal SOLO/sequential
+fallback.
+
 If the tool is absent, inactive, incompatible, or fails before a usable result,
 the canonical workflow uses its existing SOLO/sequential fallback. The bridge
 never changes topology and never turns `ISOLATED` work into a shared-checkout

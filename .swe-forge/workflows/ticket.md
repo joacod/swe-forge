@@ -224,6 +224,19 @@ non-isolated execution, record `execution_provider: NONE`,
 `ISOLATED` is selected, follow the loaded provider-selection policy and
 isolated workflow before creating workers or resources.
 
+When the Pi optional `swe_forge_subagent` capability is being used, a first
+`action: capabilities` call may occur before a run-state snapshot exists; that
+call only discovers the backend and does not select a topology. Before any
+`action: run`, load `.swe-forge/contracts/run-state.md` and persist a complete
+active schema-v2 snapshot in a discoverable location, with
+`workflow: swe-forge`, a non-terminal status, matching
+`invocation_checkout.path`/`delivery_checkout.path`,
+`continuation.workflow_active: true`, and `routing.current: SUBAGENTS`.
+Then request `action: capabilities` again so negotiation is bound to the new
+run. `execution_mode` in a task contract, prompt text, or conversation is not
+a substitute for canonical persisted routing state; if the state is missing or
+unmatchable, preserve the SOLO/sequential fallback rather than delegating.
+
 ### 7. Test Strategy
 
 Before selecting or executing the validation strategy, load and follow
