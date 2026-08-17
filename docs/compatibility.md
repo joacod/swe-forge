@@ -14,6 +14,14 @@ promise that future harness releases remain compatible without review.
 | Cursor | Not installed in the validation environment | Project and global | Shared Agent Skill projection; validate with the target Cursor release |
 | Herdr (optional provider) | 0.8.0 | Not an installer target | Provider runbook only; never installed by SWE Forge |
 
+The Pi runtime extension optionally feature-detects the separately installed
+`swe_forge_subagent` tool. It does not import that package or verify it by
+package version; the tool's `protocolVersion: 1`, capabilities, and the
+package's pre-execution Pi compatibility check are the relevant boundaries.
+Missing or incompatible capability negotiation falls back to canonical
+SOLO/sequential behavior, and `ISOLATED` work is never routed through the
+shared-checkout primitive.
+
 ## Context-management snapshot
 
 Context behavior is reported separately because there is no common harness API

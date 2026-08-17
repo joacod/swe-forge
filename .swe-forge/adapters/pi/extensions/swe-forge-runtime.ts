@@ -11,6 +11,11 @@ const MAX_FIELD_LENGTH = 160;
 const ACTIVE_STATUSES = new Set(["planning", "running", "reviewing", "repairing", "blocked"]);
 const TERMINAL_STATUSES = new Set(["accepted", "failed"]);
 const RUN_STATE_ENV_VARS = ["SWE_FORGE_RUN_STATE", "SWE_FORGE_STATE"];
+const SUBAGENT_TOOL_NAME = "swe_forge_subagent";
+const SUBAGENT_PROTOCOL_VERSION = 1;
+const SUBAGENT_READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
+const SUBAGENT_WRITABLE_TOOLS = ["read", "grep", "find", "ls", "edit", "write", "bash"] as const;
+const SUBAGENT_CAPABILITY_MARKER = "[SWE-FORGE OPTIONAL SUBAGENT CAPABILITY]";
 
 interface SettingsFileSnapshot {
 	signature: string;
@@ -292,6 +297,149 @@ function resolveActiveRun(cwd: string): ActiveRun | undefined {
 	return candidates[0];
 }
 
+interface SubagentToolObservation {
+	available: boolean;
+	status: "available" | "configured-but-inactive" | "unavailable";
+}
+
+interface SubagentCapabilitiesRecord {
+	readonly protocolVersion?: unknown;
+	readonly packageVersion?: unknown;
+	readonly pi?: unknown;
+	readonly isolation?: unknown;
+	readonly trust?: unknown;
+	readonly sweForge?: unknown;
+	readonly roles?: unknown;
+	readonly availableProfiles?: unknown;
+	readonly profileTools?: unknown;
+	readonly compatibilityErrors?: unknown;
+	readonly readOnlyParallelSupport?: unknown;
+	readonly writableConcurrencySupport?: unknown;
+	readonly nestedDelegationSupport?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringArray(value: unknown): readonly string[] | undefined {
+	if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) return undefined;
+	return value as readonly string[];
+}
+
+function sameToolSet(left: readonly string[], right: readonly string[]): boolean {
+	return left.length === right.length && left.every((tool) => right.includes(tool));
+}
+
+function observeSubagentTool(pi: any): SubagentToolObservation {
+	try {
+		if (typeof pi.getAllTools !== "function") {
+			return { available: false, status: "unavailable" };
+		}
+		const allTools = pi.getAllTools();
+		const configured = Array.isArray(allTools) && allTools.some((tool) => tool?.name === SUBAGENT_TOOL_NAME);
+		if (!configured) return { available: false, status: "unavailable" };
+		if (typeof pi.getActiveTools !== "function") {
+			return { available: true, status: "available" };
+		}
+		const activeTools = pi.getActiveTools();
+		const active = Array.isArray(activeTools) && activeTools.includes(SUBAGENT_TOOL_NAME);
+		return active
+			? { available: true, status: "available" }
+			: { available: false, status: "configured-but-inactive" };
+	} catch {
+		return { available: false, status: "unavailable" };
+	}
+}
+
+function topology(value: string): string {
+	return value.trim().toUpperCase();
+}
+
+function isSWEForgeInvocation(prompt: unknown): boolean {
+	return (
+		typeof prompt === "string" &&
+		(prompt.includes("The user explicitly invoked SWE Forge through Pi.") ||
+			prompt.includes("Raw invocation arguments"))
+	);
+}
+
+function subagentCapabilityPrompt(observation: SubagentToolObservation, run: ActiveRun | undefined): string {
+	const current = run ? topology(run.currentTopology) : "UNKNOWN";
+	const preferred = run ? topology(run.preferredTopology) : "UNKNOWN";
+	return [
+		SUBAGENT_CAPABILITY_MARKER,
+		`swe_forge_subagent tool observed by the Pi adapter: ${observation.status}.`,
+		`current topology: ${current} (preferred: ${preferred})`,
+		"SWE-Forge remains the orchestrator and must choose topology, task ownership, sequencing, review, integration, delivery, and fallback.",
+		"Only when canonical routing selects SUBAGENTS may the orchestrator call this exact tool.",
+		"Call action=capabilities first; require protocolVersion=1, no compatibilityErrors, the requested role, and the requested READ_ONLY/WRITABLE profile before one bounded action=run.",
+		"Never use this shared-checkout primitive for ISOLATED work. A missing, inactive, incompatible, or failed capability uses the existing SOLO/sequential fallback.",
+	].join("\n");
+}
+
+function capabilityRecord(value: unknown): SubagentCapabilitiesRecord | undefined {
+	return isRecord(value) ? (value as SubagentCapabilitiesRecord) : undefined;
+}
+
+function validateCapabilities(value: unknown, role?: unknown, profile?: unknown): string | undefined {
+	const capabilities = capabilityRecord(value);
+	if (!capabilities) return "capabilities response was not an object";
+	if (capabilities.protocolVersion !== SUBAGENT_PROTOCOL_VERSION) return "unsupported subagent protocol version";
+	if (
+		!isRecord(capabilities.pi) ||
+		typeof capabilities.pi.compatibilityRange !== "string" ||
+		capabilities.pi.versionVerification !== "before_execution"
+	) {
+		return "capabilities response did not advertise Pi compatibility verification";
+	}
+	if (
+		!isRecord(capabilities.isolation) ||
+		capabilities.isolation.contextIsolation !== true ||
+		capabilities.isolation.processIsolation !== true ||
+		capabilities.isolation.filesystemIsolation !== false ||
+		capabilities.isolation.osSandbox !== false
+	) {
+		return "subagent isolation semantics are incompatible";
+	}
+	if (
+		!isRecord(capabilities.trust) ||
+		capabilities.trust.workerPermissions !== "user_os_permissions" ||
+		capabilities.trust.sandbox !== false
+	) {
+		return "subagent trust semantics are incompatible";
+	}
+	if (
+		capabilities.readOnlyParallelSupport !== true ||
+		capabilities.writableConcurrencySupport !== false ||
+		capabilities.nestedDelegationSupport !== false
+	) {
+		return "subagent concurrency or recursion semantics are incompatible";
+	}
+	const errors = Array.isArray(capabilities.compatibilityErrors) ? capabilities.compatibilityErrors : undefined;
+	if (errors === undefined) return "capabilities response omitted compatibilityErrors";
+	if (errors.length > 0) return "subagent compatibility negotiation reported errors";
+	if (!isRecord(capabilities.sweForge) || capabilities.sweForge.installed !== true) {
+		return "canonical SWE-Forge installation is unavailable";
+	}
+	if (role !== undefined) {
+		const roles = stringArray(capabilities.roles);
+		if (!roles?.includes(String(role))) return `canonical role is not advertised: ${String(role)}`;
+	}
+	if (profile !== undefined) {
+		if (profile !== "READ_ONLY" && profile !== "WRITABLE") return "requested profile is not supported";
+		const profiles = stringArray(capabilities.availableProfiles);
+		if (!profiles?.includes(profile)) return `requested profile is not advertised: ${String(profile)}`;
+		if (!isRecord(capabilities.profileTools)) return "capabilities response omitted profile tools";
+		const advertised = stringArray(capabilities.profileTools[profile]);
+		const expected = profile === "READ_ONLY" ? SUBAGENT_READ_ONLY_TOOLS : SUBAGENT_WRITABLE_TOOLS;
+		if (!advertised || !sameToolSet(advertised, expected)) {
+			return `requested ${String(profile)} tool profile is incompatible`;
+		}
+	}
+	return undefined;
+}
+
 function continuityPrompt(run: ActiveRun): string {
 	const pr = run.prNumber !== "none" ? `\nPR: #${run.prNumber} ${run.prState}` : "";
 	const mergeHint =
@@ -411,12 +559,22 @@ function compactionReason(
 
 export default function sweForgeRuntime(pi: any) {
 	let activeRun: ActiveRun | undefined;
+	let activeRunVersion = "none";
+	let negotiatedSubagentCapabilities: unknown;
+	let invocationActive = false;
 	let compactionInFlight = false;
 	let lastCompactionAt = 0;
 	let lastCompactionState = "";
 
 	const refresh = (cwd: string): ActiveRun | undefined => {
 		activeRun = resolveActiveRun(cwd);
+		const nextVersion = activeRun
+			? `${activeRun.filePath}:${activeRun.stateId}:${topology(activeRun.currentTopology)}:${topology(activeRun.preferredTopology)}`
+			: "none";
+		if (nextVersion !== activeRunVersion) {
+			activeRunVersion = nextVersion;
+			negotiatedSubagentCapabilities = undefined;
+		}
 		return activeRun;
 	};
 
@@ -435,10 +593,103 @@ export default function sweForgeRuntime(pi: any) {
 
 	on("before_agent_start", (event, ctx) => {
 		const run = refresh(ctx.cwd);
-		if (!run) return undefined;
-		const prompt = continuityPrompt(run);
-		if (event.systemPrompt?.includes(`[${ACTIVE_MARKER}]`)) return undefined;
-		return { systemPrompt: `${event.systemPrompt}\n\n${prompt}` };
+		invocationActive = Boolean(run) || isSWEForgeInvocation(event.prompt);
+		const blocks: string[] = [];
+		if (run && !event.systemPrompt?.includes(`[${ACTIVE_MARKER}]`)) blocks.push(continuityPrompt(run));
+		if (
+			invocationActive &&
+			!event.systemPrompt?.includes(SUBAGENT_CAPABILITY_MARKER)
+		) {
+			blocks.push(subagentCapabilityPrompt(observeSubagentTool(pi), run));
+		}
+		if (blocks.length === 0) return undefined;
+		return { systemPrompt: `${event.systemPrompt}\n\n${blocks.join("\n\n")}` };
+	});
+
+	on("tool_call", (event, ctx) => {
+		if (event.toolName !== SUBAGENT_TOOL_NAME) return undefined;
+		const run = refresh(ctx.cwd);
+		const input = isRecord(event.input) ? event.input : {};
+		const action = input.action;
+		const observation = observeSubagentTool(pi);
+		const current = run ? topology(run.currentTopology) : "UNKNOWN";
+		const preferred = run ? topology(run.preferredTopology) : "UNKNOWN";
+
+		if (!invocationActive) {
+			return {
+				block: true,
+				reason: "swe_forge_subagent is only available during an explicitly invoked SWE-Forge run; use the normal workflow instead.",
+			};
+		}
+		if (current === "ISOLATED") {
+			return {
+				block: true,
+				reason: "SWE-Forge ISOLATED work cannot use the shared-checkout swe_forge_subagent primitive.",
+			};
+		}
+		if (action !== "capabilities" && action !== "run") {
+			return { block: true, reason: "The SWE-Forge subagent action must be capabilities or run." };
+		}
+		if (!observation.available) {
+			return {
+				block: true,
+				reason: `The optional swe_forge_subagent capability is ${observation.status}; use the existing SOLO/sequential fallback.`,
+			};
+		}
+		if (action === "capabilities") {
+			if (run && current !== "SUBAGENTS" && preferred !== "SUBAGENTS") {
+				return {
+					block: true,
+					reason: `Canonical routing selected ${current}; do not delegate through the optional shared-checkout capability.`,
+				};
+			}
+			return undefined;
+		}
+		if (current !== "SUBAGENTS") {
+			return {
+				block: true,
+				reason: `Canonical routing selected ${current}; use the existing SOLO/sequential fallback rather than delegation.`,
+			};
+		}
+		const capabilityError = validateCapabilities(negotiatedSubagentCapabilities, input.role, input.profile);
+		if (capabilityError) {
+			return {
+				block: true,
+				reason: `Subagent capability negotiation is incomplete or incompatible: ${capabilityError}. Call action=capabilities first or use the canonical fallback.`,
+			};
+		}
+		if (typeof input.taskContract !== "string" || input.taskContract.trim().length === 0) {
+			return { block: true, reason: "A bounded canonical taskContract is required for subagent execution." };
+		}
+		if (input.expectedOutputContract !== "result" && input.expectedOutputContract !== "review") {
+			return { block: true, reason: "The expected canonical output contract must be result or review." };
+		}
+		return undefined;
+	});
+
+	on("tool_result", (event, ctx) => {
+		if (event.toolName !== SUBAGENT_TOOL_NAME || !isRecord(event.input)) return undefined;
+		const run = refresh(ctx.cwd);
+		if (event.input.action === "capabilities") {
+			const error = event.isError ? "capability tool returned an error" : validateCapabilities(event.details);
+			negotiatedSubagentCapabilities = error ? undefined : event.details;
+			appendRuntimeEntry(pi, "subagent_capabilities_observed", run, {
+				available: !error,
+				protocol_version: capabilityRecord(event.details)?.protocolVersion ?? "unknown",
+				reason: error ?? "negotiated",
+			});
+			return undefined;
+		}
+		if (event.input.action === "run") {
+			const details = isRecord(event.details) ? event.details : undefined;
+			const validation = details && isRecord(details.validation) ? details.validation : undefined;
+			appendRuntimeEntry(pi, "subagent_run_observed", run, {
+				status: event.isError ? "failed" : validation?.status ?? "completed",
+				role: event.input.role ?? "unknown",
+				profile: event.input.profile ?? "unknown",
+			});
+		}
+		return undefined;
 	});
 
 	on("input", async (event, ctx) => {

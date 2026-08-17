@@ -48,6 +48,7 @@ done
 
 test -L "$project/AGENTS.md" || fail "project AGENTS.md is not linked"
 test -L "$project/SWE-FORGE.md" || fail "project SWE-FORGE.md is not linked"
+test -L "$project/VERSION" || fail "project VERSION is not linked"
 test -L "$project/.swe-forge/agents" || fail "canonical agent directory is not linked"
 test -L "$project/.swe-forge/providers" || fail "execution providers directory is not linked"
 test -L "$project/.swe-forge/tools" || fail "evidence tools directory is not linked"
@@ -136,6 +137,8 @@ for harness in $PROJECT_HARNESSES; do
 done
 expect_failure "is not a source link" "$INSTALL" verify opencode --target "$copy_project"
 test ! -L "$copy_project/AGENTS.md" || fail "copy mode linked AGENTS.md"
+test ! -L "$copy_project/VERSION" || fail "copy mode linked VERSION"
+test -f "$copy_project/VERSION" || fail "copy mode omitted VERSION"
 test ! -L "$copy_project/.swe-forge/agents" || fail "copy mode linked canonical files"
 test ! -L "$copy_project/.swe-forge/tools" || fail "copy mode linked evidence tools"
 test -x "$copy_project/.swe-forge/tools/swe-forge-gate" || fail "copy mode evidence gate is not executable"
@@ -350,6 +353,7 @@ test -L "$global_home/.config/opencode/swe-forge/AGENTS.md" || fail "global Open
 test -L "$global_home/.claude/swe-forge/SWE-FORGE.md" || fail "global Claude source is not linked"
 test -L "$global_home/.agents/swe-forge/AGENTS.md" || fail "global shared source is not linked"
 test -L "$global_home/.pi/agent/swe-forge/AGENTS.md" || fail "global Pi source is not linked"
+test -L "$global_home/.pi/agent/swe-forge/VERSION" || fail "global Pi VERSION is not linked"
 for support in \
   "$global_home/.config/opencode/swe-forge" \
   "$global_home/.claude/swe-forge" \

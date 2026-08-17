@@ -236,4 +236,7 @@ The generic core records capability names such as `context_usage`,
 methods stay inside the Pi adapter. Capability resolution uses observed
 runtime evidence first, then adapter declarations, documented static defaults,
 and finally `unknown`; unknown capabilities degrade to durable checkpoints and
-manual recovery rather than invented thresholds.
+manual recovery rather than invented thresholds. The optional Pi
+`swe_forge_subagent` bridge is only a capability handoff: canonical routing
+still owns whether to delegate, and the adapter gates one negotiated bounded
+run while preserving SOLO/sequential fallback and rejecting `ISOLATED` use.

@@ -85,9 +85,9 @@ git clone <swe-forge-repository-url>
 cd swe-forge
 ```
 
-The repository's canonical source is `SWE-FORGE.md` plus the `.swe-forge/`
-directory. Harness adapters are templates until the installer links the
-requested bridge.
+The repository's canonical source is `SWE-FORGE.md`, `AGENTS.md`, `VERSION`,
+and the `.swe-forge/` directory. Harness adapters are templates until the
+installer links the requested bridge.
 
 ## Mode B: Project-Local Installation
 
@@ -96,11 +96,12 @@ The installer links these portable files into the target software repository:
 ```text
 AGENTS.md
 SWE-FORGE.md
+VERSION
 .swe-forge/                 canonical core only; adapter catalog stays in source checkout
 ```
 
 Review collisions before installing over an existing `AGENTS.md`,
-`SWE-FORGE.md`, or `.swe-forge/` directory. The installer stops on a conflict so
+`SWE-FORGE.md`, `VERSION`, or `.swe-forge/` directory. The installer stops on a conflict so
 repository-specific instructions can be merged manually without risking an
 overwrite.
 
@@ -158,8 +159,10 @@ Add only the bridge needed by the target harness:
   does not modify `~/.codex/AGENTS.md` or Codex configuration.
 - Pi: the global installer links the explicit prompt template, atomic delivery
   prompts, and `~/.pi/agent/extensions/swe-forge-runtime.ts`; it does not
-  modify Pi settings. The extension is inert without an active matching
-  run-state snapshot.
+  modify Pi settings. The extension observes active run state and optionally
+  negotiates a separately installed `swe_forge_subagent` tool. Without that
+  package, or when its capability is unavailable, canonical SOLO/sequential
+  fallback remains unchanged.
 - Herdr: the optional execution provider is documented under
   `.swe-forge/providers/herdr/` and is used only when canonical routing selects
   `ISOLATED`; install Herdr's own official skill separately if it is needed and

@@ -249,6 +249,7 @@ build_manifest_inventory() {
 
   manifest_add_file "$SOURCE_ROOT/AGENTS.md" "$canonical_destination_root/AGENTS.md"
   manifest_add_file "$SOURCE_ROOT/SWE-FORGE.md" "$canonical_destination_root/SWE-FORGE.md"
+  manifest_add_file "$SOURCE_ROOT/VERSION" "$canonical_destination_root/VERSION"
   if [ "$MODE" = link ]; then
     while IFS= read -r manifest_source_dir; do
       manifest_entry_name=${manifest_source_dir##*/}
@@ -768,6 +769,7 @@ preflight_canonical() {
   if [ "$MODE" = copy ] && {
     path_exists "$destination_root/AGENTS.md" ||
     path_exists "$destination_root/SWE-FORGE.md" ||
+    path_exists "$destination_root/VERSION" ||
     path_exists "$destination_root/.swe-forge"
   }; then
     existing_copy=1
@@ -775,12 +777,15 @@ preflight_canonical() {
 
   preflight_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
   preflight_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
+  preflight_file "$SOURCE_ROOT/VERSION" "$destination_root/VERSION"
   preflight_container "$destination_root/.swe-forge"
   if [ "$existing_copy" -eq 1 ]; then
     path_exists "$destination_root/AGENTS.md" || \
       conflict "$destination_root is an existing copied snapshot missing AGENTS.md; replace it after review"
     path_exists "$destination_root/SWE-FORGE.md" || \
       conflict "$destination_root is an existing copied snapshot missing SWE-FORGE.md; replace it after review"
+    path_exists "$destination_root/VERSION" || \
+      conflict "$destination_root is an existing copied snapshot missing VERSION; replace it after review"
   fi
 
   if [ "$MODE" = link ]; then
@@ -1068,6 +1073,7 @@ install_canonical() {
 
   install_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
   install_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
+  install_file "$SOURCE_ROOT/VERSION" "$destination_root/VERSION"
   install_dir_container "$destination_root/.swe-forge"
 
   if [ "$MODE" = link ]; then
@@ -1220,6 +1226,7 @@ verify_canonical() {
 
   verify_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
   verify_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
+  verify_file "$SOURCE_ROOT/VERSION" "$destination_root/VERSION"
 
   if ! path_exists "$destination_root/.swe-forge" || [ ! -d "$destination_root/.swe-forge" ]; then
     verify_failure "$destination_root/.swe-forge is missing"
