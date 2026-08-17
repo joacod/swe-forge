@@ -208,8 +208,8 @@ schema_version: 2
 run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
 status: running
 requested_mode: AUTO
-preferred_mode: SOLO
-execution_mode: SOLO
+preferred_mode: ${options.preferred ?? "SOLO"}
+execution_mode: ${options.current ?? "SOLO"}
 requested_provider: AUTO
 execution_provider: NONE
 delegation_backend: NONE
@@ -219,8 +219,8 @@ invocation_checkout:
 delivery_checkout:
   path: ${options.cwd ?? fixtureCwd}
 routing:
-  current: SOLO
-  preferred: SOLO
+  current: ${options.current ?? "SOLO"}
+  preferred: ${options.preferred ?? "SOLO"}
   context_value:
     projected_pressure: ${options.projected ?? "low"}
 continuation:
@@ -376,6 +376,156 @@ if (fs.readFileSync(currentPointer, "utf8").trim() !== "old/run-state.yaml") {
 }
 const simultaneousTransform = await discoveryHandlers.get("input")({ text: "merged", source: "interactive" }, discoveryContext);
 if (simultaneousTransform) throw new Error("stale simultaneous PR state overrode newer continuation state");
+
+// The optional package is negotiated through Pi's public tool lifecycle. The
+// fixture models the package's v1 capability response without importing it.
+const subagentState = path.join(fixtureCwd, "subagent", "run-state.yaml");
+writeRuntimeState(subagentState, {
+  runId: "subagent-run",
+  current: "SUBAGENTS",
+  preferred: "SUBAGENTS",
+  updatedAt: "2050-01-01T00:00:00Z",
+});
+process.env.SWE_FORGE_RUN_STATE = subagentState;
+const subagentHandlers = new Map();
+const subagentEntries = [];
+const subagentPi = {
+  on(name, handler) {
+    subagentHandlers.set(name, handler);
+  },
+  getAllTools() {
+    return [{ name: "swe_forge_subagent" }];
+  },
+  getActiveTools() {
+    return ["swe_forge_subagent"];
+  },
+  appendEntry(type, data) {
+    subagentEntries.push({ type, data });
+  },
+};
+extension(subagentPi);
+const subagentContext = {
+  cwd: fixtureCwd,
+  isProjectTrusted: () => true,
+  hasPendingMessages: () => false,
+};
+const subagentPrompt = await subagentHandlers.get("before_agent_start")({
+  prompt: "The user explicitly invoked SWE Forge through Pi.",
+  systemPrompt: "base",
+}, subagentContext);
+if (!subagentPrompt?.systemPrompt.includes("swe_forge_subagent tool observed by the Pi adapter: available")) {
+  throw new Error("available subagent capability was not advertised");
+}
+const capabilitiesInput = { action: "capabilities" };
+const allowedCapabilities = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: capabilitiesInput,
+}, subagentContext);
+if (allowedCapabilities) throw new Error("capability discovery was unexpectedly blocked");
+const capabilityDetails = {
+  protocolVersion: 1,
+  packageVersion: "0.1.0",
+  pi: { compatibilityRange: ">=0.84.1 <0.85.0", versionVerification: "before_execution" },
+  isolation: { contextIsolation: true, processIsolation: true, filesystemIsolation: false, osSandbox: false },
+  trust: { workerPermissions: "user_os_permissions", sandbox: false },
+  sweForge: { installed: true, version: "0.1.0-alpha.1" },
+  roles: ["reader", "writer"],
+  readOnlyParallelSupport: true,
+  writableConcurrencySupport: false,
+  nestedDelegationSupport: false,
+  availableProfiles: ["READ_ONLY", "WRITABLE"],
+  profileTools: {
+    READ_ONLY: ["read", "grep", "find", "ls"],
+    WRITABLE: ["read", "grep", "find", "ls", "edit", "write", "bash"],
+  },
+  compatibilityErrors: [],
+};
+await subagentHandlers.get("tool_result")({
+  toolName: "swe_forge_subagent",
+  input: capabilitiesInput,
+  details: capabilityDetails,
+  isError: false,
+}, subagentContext);
+const runInput = {
+  action: "run",
+  role: "reader",
+  taskContract: "TASK_ID: reader-check\nOBJECTIVE: inspect only\nwrite_access: read-only\n",
+  expectedOutputContract: "result",
+  profile: "READ_ONLY",
+};
+const allowedRun = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: runInput,
+}, subagentContext);
+if (allowedRun) throw new Error(`negotiated SUBAGENTS run was blocked: ${allowedRun.reason}`);
+const writableInput = {
+  action: "run",
+  role: "writer",
+  taskContract: "TASK_ID: writer-check\nOBJECTIVE: bounded write\nwrite_access: read-write\n",
+  expectedOutputContract: "result",
+  profile: "WRITABLE",
+};
+const allowedWritableRun = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: writableInput,
+}, subagentContext);
+if (allowedWritableRun) throw new Error(`negotiated WRITABLE run was blocked: ${allowedWritableRun.reason}`);
+if (!subagentEntries.some((entry) => entry.data.event === "subagent_capabilities_observed")) {
+  throw new Error("capability negotiation evidence was not recorded");
+}
+
+// A changed topology invalidates the negotiation and protects the shared
+// primitive from an ISOLATED task.
+writeRuntimeState(subagentState, {
+  runId: "isolated-run",
+  current: "ISOLATED",
+  preferred: "ISOLATED",
+  updatedAt: "2051-01-01T00:00:00Z",
+});
+const isolatedAttempt = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: runInput,
+}, subagentContext);
+if (!isolatedAttempt?.block || !isolatedAttempt.reason.includes("ISOLATED")) {
+  throw new Error("ISOLATED work was not protected from the shared subagent tool");
+}
+
+// Missing package/tool capability keeps the canonical fallback available.
+writeRuntimeState(subagentState, {
+  runId: "fallback-run",
+  current: "SUBAGENTS",
+  preferred: "SUBAGENTS",
+  updatedAt: "2052-01-01T00:00:00Z",
+});
+const fallbackHandlers = new Map();
+const fallbackPi = {
+  on(name, handler) {
+    fallbackHandlers.set(name, handler);
+  },
+  getAllTools() {
+    return [];
+  },
+  getActiveTools() {
+    return [];
+  },
+  appendEntry() {},
+};
+extension(fallbackPi);
+const fallbackContext = { cwd: fixtureCwd, hasPendingMessages: () => false, isProjectTrusted: () => true };
+const fallbackPrompt = await fallbackHandlers.get("before_agent_start")({
+  prompt: "The user explicitly invoked SWE Forge through Pi.",
+  systemPrompt: "base",
+}, fallbackContext);
+if (!fallbackPrompt?.systemPrompt.includes("swe_forge_subagent tool observed by the Pi adapter: unavailable")) {
+  throw new Error("missing subagent capability did not advertise fallback");
+}
+const fallbackAttempt = await fallbackHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: capabilitiesInput,
+}, fallbackContext);
+if (!fallbackAttempt?.block || !fallbackAttempt.reason.includes("fallback")) {
+  throw new Error("missing subagent capability did not preserve fallback");
+}
 
 console.log("PASS: Pi runtime extension fixture");
 NODE

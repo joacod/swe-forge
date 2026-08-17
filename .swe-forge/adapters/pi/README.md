@@ -2,8 +2,9 @@
 
 This adapter exposes SWE Forge through Pi's global prompt-template convention
 plus one small optional runtime extension. Canonical workflow behavior remains
-in the support tree; the extension only translates Pi lifecycle capabilities
-into the generic context and continuation contracts.
+in the support tree; the extension translates Pi lifecycle capabilities into
+the generic context and continuation contracts and feature-detects the optional
+`swe_forge_subagent` capability.
 
 ## Global Installation
 
@@ -31,11 +32,14 @@ The prompt and extension loaders resolve canonical files under
 Link mode is the default, so updating the stable SWE Forge checkout updates
 the installed source after review. Global copy mode remains unsupported.
 
-The extension is inert unless it finds an active, checkout-matching
-`run-state.yaml` with `workflow_active: true` (or a compatible active schema-v2
-status). It looks first at `SWE_FORGE_RUN_STATE`/`SWE_FORGE_STATE`, then an
-ignored project `.swe-forge/runs/` pointer or directory, and finally bounded
-external temporary-state locations. It chooses the newest active snapshot by
+Continuation and compaction behavior is inert unless the extension finds an
+active, checkout-matching `run-state.yaml` with `workflow_active: true` (or a
+compatible active schema-v2 status). The optional capability observation also
+activates for an explicit `/swe-forge` prompt so the first routing turn can
+feature-detect the tool before a run-state snapshot exists. It looks first at
+`SWE_FORGE_RUN_STATE`/`SWE_FORGE_STATE`, then an ignored project
+`.swe-forge/runs/` pointer or directory, and finally bounded external
+temporary-state locations. It chooses the newest active snapshot by
 `continuation.updated_at` and file mtime; terminal or stale state is ignored.
 An operator can therefore use an explicit state path without allowing an old
 pointer to override a newer run.
@@ -79,6 +83,9 @@ provider, price, or reasoning-level routing. It:
   the newest active run is PR mode and is awaiting merge;
 - observes `session_before_compact` and `session_compact` without replacing
   Pi's summarizer;
+- observes `swe_forge_subagent` through Pi's public tool metadata and tool
+  lifecycle events, gates it to canonical `SUBAGENTS` runs, negotiates its
+  protocol/profile/isolation metadata, and blocks it for `SOLO` or `ISOLATED`;
 - uses `agent_settled`, rather than `agent_end`, as the preferred boundary for
   context inspection because Pi may retry, compact-and-retry, or process queued
   follow-ups after `agent_end`; and
@@ -102,10 +109,19 @@ protection prevents a duplicate request. If telemetry, a compaction API, or an a
 snapshot is unavailable, it does nothing and the canonical workflow falls back
 to durable checkpoints/manual recovery.
 
-Pi's optional subagent extension or an external Herdr integration may provide a
-`SUBAGENTS` delegation backend. That backend is not installed or selected by
-this adapter. Read-only Herdr workers remain `SUBAGENTS` with shared write
-isolation; only proven concurrent writable worktrees can be `ISOLATED`.
+The optional `swe_forge_subagent` package may provide the native `SUBAGENTS`
+delegation backend. This adapter never imports that package or installs it. It
+checks for the exact active Pi tool, tells the canonical orchestrator to request
+`action: "capabilities"` first, and accepts one `action: "run"` only after
+protocol, role, profile, and isolation checks pass. The returned canonical
+result remains untrusted worker data and continues through SWE-Forge's normal
+review, evidence, integration, and delivery handling.
+
+If the tool is absent, inactive, incompatible, or fails before a usable result,
+the canonical workflow uses its existing SOLO/sequential fallback. The bridge
+never changes topology and never turns `ISOLATED` work into a shared-checkout
+child. Read-only Herdr workers remain `SUBAGENTS` with shared write isolation;
+only proven concurrent writable worktrees can be `ISOLATED`.
 
 ### Context management
 
