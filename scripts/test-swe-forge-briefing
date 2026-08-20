@@ -90,6 +90,103 @@ for forbidden in ticket_ref continuation routing provider_capabilities 'delivery
     fail "common worker briefing unexpectedly requires root field: $forbidden"
 done
 
+# Rendered read-only and shared-checkout briefs must stay reduced projections,
+# not serialized task/run state. These fixtures exercise the inclusion matrix
+# without requiring a second briefing renderer or a worker process.
+read_only_brief=$TMP_ROOT/read-only.brief
+cat >"$read_only_brief" <<'EOF_READ_ONLY_BRIEF'
+worker_briefing:
+  schema: worker-brief/v1
+  objective: Inspect the parser boundary.
+  repository:
+    allowed_reads: [src/parser.ts#parseRecord]
+    allowed_writes: [none]
+  validation:
+    - command: scripts/test-parser
+  permissions:
+    write_access: read-only
+    execution_mode: SUBAGENTS
+    write_isolation: SHARED
+    forbidden_actions: [peer communication, expand scope]
+  return:
+    profile: READ_ONLY
+    contract: .swe-forge/contracts/result.md
+EOF_READ_ONLY_BRIEF
+for required in 'worker_briefing:' 'schema: worker-brief/v1' \
+  'allowed_reads:' 'validation:' 'write_access: read-only' \
+  'profile: READ_ONLY'; do
+  require_temp_text "$required" "$read_only_brief"
+done
+for forbidden in 'root transcript' 'ticket history' 'full specification' \
+  'policies/' 'provider:' 'worktree:' 'base_sha:' 'continuation' \
+  'routing:' 'isolated_execution:' 'peer message'; do
+  reject_temp_text "$forbidden" "$read_only_brief"
+done
+
+shared_brief=$TMP_ROOT/shared-writable.brief
+cat >"$shared_brief" <<'EOF_SHARED_BRIEF'
+worker_briefing:
+  schema: worker-brief/v1
+  repository:
+    allowed_reads: [src/parser.ts]
+    allowed_writes: [src/parser.ts]
+  permissions:
+    write_access: read-write
+    execution_mode: SUBAGENTS
+    write_isolation: SHARED
+  return:
+    profile: WRITABLE
+    contract: .swe-forge/contracts/result.md
+EOF_SHARED_BRIEF
+for required in 'allowed_writes:' 'write_access: read-write' \
+  'write_isolation: SHARED' 'profile: WRITABLE'; do
+  require_temp_text "$required" "$shared_brief"
+done
+for forbidden in 'isolated_execution:' 'base_sha:' 'integration_order:' \
+  'environment_isolation:' 'source_commits:' 'create_worktree:' \
+  'provider:' 'worktree:'; do
+  reject_temp_text "$forbidden" "$shared_brief"
+done
+
+# An isolated writable launch is the exception: its conditional safety section
+# is all-or-nothing and must carry every field needed for Git, authorization,
+# validation, resource isolation, and central transfer.
+isolated_projection=$(awk '
+  /^  isolated_execution:/ { in_section = 1 }
+  in_section { print }
+' "$BRIEF")
+for required in \
+  'provider: NATIVE | HERDR' 'delegation_backend: NATIVE | HERDR' \
+  'path: <absolute worker worktree>' 'branch: <local-only worker branch>' \
+  'integration_path:' 'integration_branch:' 'base_sha:' \
+  'integration_checkpoint_sha:' 'wave:' 'integration_order:' \
+  'allowed_scope:' 'forbidden_scope:' 'shared_artifacts:' \
+  'environment_isolation:' 'setup_commands:' 'copied_ignored_files:' \
+  'ports:' 'databases:' 'docker_projects:' 'temporary_directories:' \
+  'external_resources:' 'cleanup_commands:' 'authorization:' \
+  'create_branch: not-authorized' 'create_worktree: not-authorized' \
+  'worker_setup: not-authorized | PR | continue' \
+  'worker_transfer_commit: not-authorized | PR | continue' \
+  'commit: not-authorized' 'push: not-authorized' \
+  'create_pull_request: not-authorized' 'publish: not-authorized' \
+  'deploy: not-authorized' 'merge: not-authorized' 'transfer:' \
+  'local_only: true' 'integration_strategy: CHERRY_PICK' \
+  'result_bundle:' 'required_deliverable_commits: true' 'source_commits:' \
+  'source_to_integration_mapping: required'; do
+  printf '%s\n' "$isolated_projection" | grep -F -- "$required" >/dev/null 2>&1 ||
+    fail "isolated worker briefing safety field is missing: $required"
+done
+
+# Workers stay hub-and-spoke and cannot silently turn a digest into scope,
+# permissions, peer communication, or a new workflow.
+require_text 'recursive_delegation: false' .swe-forge/contracts/worker-brief.md
+require_text 'request a contract revision before' .swe-forge/contracts/worker-brief.md
+require_text 'contact A' .swe-forge/contracts/worker-brief.md
+require_text 'unrelated policies' .swe-forge/policies/delegation.md
+require_text 'unrelated run continuation' .swe-forge/contracts/worker-brief.md
+require_text 'create_pull_request: not-authorized' .swe-forge/contracts/worker-brief.md
+require_text 'source_to_integration_mapping: required' .swe-forge/contracts/worker-brief.md
+
 # Irrelevant root context is explicitly outside each reduced projection. The
 # inclusion matrix is the focused regression oracle for read-only and shared
 # writable launches; isolated writable launches are checked for the complete
