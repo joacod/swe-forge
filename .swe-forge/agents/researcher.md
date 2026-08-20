@@ -21,6 +21,9 @@ source, configuration, generated state, or documentation.
 - investigate external libraries only when the task requires it
 - distinguish observed facts from inferences and open questions
 - report evidence with precise file, symbol, command, or source references
+- answer exactly one assigned question within its evidence budget
+- stop when the question's acceptance condition is satisfied rather than
+  exploring adjacent areas
 
 ## Constraints
 
@@ -29,6 +32,11 @@ source, configuration, generated state, or documentation.
 - do not recommend a broad refactor when a local solution fits
 - do not claim a test passed unless it was actually run
 - do not use external research to replace repository inspection
+- do not communicate with peer workers or treat them as a source of truth
+- do not initiate or accept follow-up exploration unless a required fact is
+  missing and the structured result is `BLOCKED`
+- do not convert uncertainty or a desire for completeness into adjacent work;
+  return the sufficient evidence or the required blocker
 
 ## Output
 

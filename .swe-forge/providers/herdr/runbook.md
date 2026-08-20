@@ -57,7 +57,11 @@ integrate centrally.
 A Herdr-backed read-only investigation is a `SUBAGENTS` backend and may use a
 shared workspace when the worker has no write access. Record
 `delegation_backend: HERDR`, `write_isolation: SHARED`, and
-`execution_provider: NONE`; do not relabel it `ISOLATED`.
+`execution_provider: NONE`; do not relabel it `ISOLATED`. When two or more
+questions are genuinely independent, launch their bounded read-only workers
+as one batch before consuming results, then wait at one root fan-in barrier.
+The workers do not communicate; coupled questions remain root-only or
+sequential, and a follow-up is reserved for a `BLOCKED` missing fact.
 
 Use a shared workspace only for read-only research or when one writer owns the
 checkout. Concurrent writable workers require separate Git worktrees and the

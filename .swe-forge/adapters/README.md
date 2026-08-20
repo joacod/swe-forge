@@ -40,17 +40,21 @@ specific files:
 - activation is explicit; ordinary prompts do not activate SWE Forge
 - `AUTO` routing and `GUIDED` delivery are the defaults; `PR` is opt-in
 - canonical topologies are `SOLO`, `SUBAGENTS`, and `ISOLATED`
-- `SUBAGENTS` uses a proven native or external backend for parallel read-only
-  work or sequential bounded writable work in one checkout; concurrent
-  writable worktrees are `ISOLATED`
+- `SUBAGENTS` uses a proven native or external backend for one bounded
+  fan-out/fan-in batch of independent read-only questions, or sequential
+  bounded writable work in one checkout; concurrent writable worktrees are
+  `ISOLATED`
 - every native or provider-backed launch renders the compact worker briefing
   projection from `../contracts/worker-brief.md`; workers receive only the
   relevant role, scoped repository references, task-relevant decisions,
   validation, permissions, and return shape. For completed dependencies, the
   root adds only the B-relevant accepted `dependency_digest`, never a full
-  prior result or peer message. Read-only and non-isolated workers omit
-  unusable delivery/provider/worktree state; isolated writable workers retain
-  the complete conditional safety section
+  prior result or peer message. For independent discovery, the root launches
+  the useful read-only briefs together, waits at one fan-in barrier, and
+  consumes the structured results itself; adapters do not create peer
+  conversations or follow-up exploration. Read-only and non-isolated workers
+  omit unusable delivery/provider/worktree state; isolated writable workers
+  retain the complete conditional safety section
 - delegation backend is recorded separately from semantic topology: Herdr can
   realize read-only `SUBAGENTS` with shared write isolation and does not imply
   `ISOLATED`

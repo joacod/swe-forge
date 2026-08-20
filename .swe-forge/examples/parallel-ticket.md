@@ -20,7 +20,14 @@ Requirements:
 
 ## 2. Discovery
 
-Two read-only workers inspect independent areas in the first wave.
+The orchestrator identifies two genuinely independent read-only questions and
+launches both bounded researcher briefs in one small first-wave batch, before
+consuming either result. Each brief names one question, allowed reads, and a
+concise evidence budget. The root waits at one fan-in barrier, accepts both
+structured results, resolves any contradiction from repository evidence, and
+then continues to specification. The workers do not communicate or write; once
+each acceptance condition is met, they stop. A follow-up would be allowed only
+for a `BLOCKED` result caused by a missing required fact.
 
 Research result from the API worker:
 
@@ -114,8 +121,9 @@ parallel_strategy: NONE
 integration_strategy: NONE
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
-reason: API research, UI research, and test strategy are independent read-only tasks; implementation is kept sequential because the API contract and UI behavior are coupled.
+reason: API research, UI research, and test strategy are independent read-only tasks; launch useful discovery questions in one bounded fan-out/fan-in batch, then keep implementation sequential because the API contract and UI behavior are coupled.
 worker_limit: 3
+fan_in: one root barrier after the batch
 fallback: serialize research or use SOLO if native workers are unavailable
 ```
 

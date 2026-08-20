@@ -60,6 +60,10 @@ discovery_strategy:
       allowed_scope: [<paths or symbols>]
       evidence_budget: <concise result limit>
       acceptance: <what makes the evidence useful>
+  batch:
+    strategy: FAN_OUT_FAN_IN | ROOT_ONLY | SEQUENTIAL
+    max_workers: <existing conservative worker limit>
+    fan_in: ONE_BARRIER | NONE
   backend: NONE | NATIVE | HERDR
   write_isolation: SHARED
   final_routing_deferred: true | false

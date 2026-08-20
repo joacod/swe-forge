@@ -112,7 +112,10 @@ The final routing decision records projected pressure, context reducibility,
 delegatable context, root-context requirement, and continuity risk. Independent,
 separately evaluable investigations may make `SUBAGENTS` preferable when
 concise structured results materially reduce root context, even if
-implementation writes remain sequential. Globally coupled work stays `SOLO`
+implementation writes remain sequential. Multiple independent discovery
+questions use one small read-only fan-out/fan-in batch: launch the useful
+questions together, wait at one root barrier, and resolve results centrally.
+Globally coupled work stays `SOLO`, or uses an explicit sequential dependency,
 when splitting does not reduce the information the root must keep.
 
 The run records both the policy preference and runtime reality. A preferred

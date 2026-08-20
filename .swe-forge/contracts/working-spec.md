@@ -67,6 +67,10 @@ discovery_strategy:
       allowed_scope: [<paths or symbols>]
       evidence_budget: <concise result limit>
       acceptance: <what makes the evidence useful>
+  batch:
+    strategy: FAN_OUT_FAN_IN | ROOT_ONLY | SEQUENTIAL
+    max_workers: <existing conservative worker limit>
+    fan_in: ONE_BARRIER | NONE
   backend: NONE | NATIVE | HERDR
   write_isolation: SHARED
   final_routing_deferred: true
@@ -211,9 +215,12 @@ A `ready` working spec has a concrete intent, bounded scope and non-goals,
 observable requirements, acceptance checks, a testing decision, a validation
 plan, and explicit assumptions. It records a lightweight `discovery_strategy`
 assessment; `DELEGATED_RESEARCH` requires bounded read-only questions and
-structured evidence, while coupled or unclear work remains `ROOT_ONLY`. In
-`PR`, it also has a `review_focus` with a clear goal, the acceptance criteria to
-check, relevant in-scope quality concerns, non-goals, and a finding rule that
+structured evidence, while coupled or unclear work remains `ROOT_ONLY`. When
+multiple independent questions are delegated, the assessment records one
+bounded `FAN_OUT_FAN_IN` batch and one root fan-in barrier; a dependent sequence
+is `SEQUENTIAL` and never parallelized. In `PR`, it also has a `review_focus`
+with a clear goal, the acceptance criteria to check, relevant in-scope quality
+concerns, non-goals, and a finding rule that
 keeps unrelated work out of the current review. It records preferred versus
 selected topology, the delegation backend, and provider separately. For a
 long-running or context-risk ticket, it also

@@ -23,7 +23,10 @@ Do not retain a provider name as a topology alias.
 - Herdr control commands require the existing `HERDR_ENV=1` ownership guard.
 - A read-only Herdr worker is recorded as `topology: SUBAGENTS`,
   `delegation_backend: HERDR`, `write_isolation: SHARED`, and
-  `execution_provider: NONE`; it is not `ISOLATED`.
+  `execution_provider: NONE`; it is not `ISOLATED`. Independent read-only
+  questions may be launched as one bounded batch, but the root owns the one
+  fan-in barrier and consumes structured results; coupled questions remain
+  root-only or sequential.
 - Writable concurrent Herdr workers are recorded as `ISOLATED` only after the
   existing worktree/write-safety gate and provider capability proof.
 - Herdr lifecycle state is scheduling evidence, not task-acceptance evidence.
