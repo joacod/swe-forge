@@ -31,8 +31,9 @@ runs every suite and returns failure if any required suite fails; it does not
 weaken the final quality gate. During an implementation loop, use only the
 focused suite affected by the current slice and run the batch once on the final
 candidate. Focused changes may run the directly affected suite, such as
-`scripts/test-swe-forge-gate`, `scripts/test-swe-forge-isolated`, or
-`scripts/test-swe-forge-pi`, before the final batch. The local Pi fixture may
+`scripts/test-swe-forge-gate`, `scripts/test-swe-forge-isolated`,
+`scripts/test-swe-forge-pi`, or `scripts/test-swe-forge-briefing`, before the
+final batch. The local Pi fixture may
 report `SKIP` when the installed Node runtime cannot execute TypeScript; the
 dedicated `pi-runtime` CI job pins a supported Node version and treats that
 condition as a failure.

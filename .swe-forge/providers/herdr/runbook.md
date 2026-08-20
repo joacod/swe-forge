@@ -105,20 +105,30 @@ live name:
 herdr agent start <worker-name> --kind <harness-kind> --pane <pane-id>
 ```
 
-Start a concurrent writer in its dedicated worker worktree. Send only the
-assigned canonical role path, bounded task contract, relevant architecture
-evidence, and validation commands. Require the worker to load the role and
-result contract before acting:
+Start a concurrent writer in its dedicated worker worktree. Immediately
+before launch, derive the compact `worker_briefing` projection from the
+canonical task and run state using the resolved
+`<canonical-root>/.swe-forge/contracts/worker-brief.md` schema. Send only that
+projection, the assigned canonical role path, relevant repository-instruction
+references, and the applicable result contract. For an isolated writable
+worker, the projection must retain the complete provider/backend, worker and
+integration Git identity, exact base/checkpoint SHA, ownership,
+environment-isolation, authorization, local-transfer, integration-order, and
+result-bundle fields; do not shorten that safety section.
+
+Require the worker to load the role and result contract before acting:
 
 ```bash
-herdr agent prompt <worker-name> "Read <resolved-canonical-role-path> and <resolved-canonical-result-contract-path>, then execute <bounded-task-contract>." --wait --timeout 120000
+herdr agent prompt <worker-name> "Read <resolved-canonical-role-path> and <resolved-canonical-result-contract-path>, then execute the bounded worker briefing projection." --wait --timeout 120000
 ```
 
-Resolve both canonical paths from the active installation root; a global run
+Resolve all canonical paths from the active installation root; a global run
 must not resolve them against the project checkout. The prompt must require a
-result matching that resolved result contract. Do not pass the entire
-orchestrator transcript. Workers cannot create additional workers or worktrees
-and cannot delegate recursively unless their contract explicitly authorizes it.
+result matching that resolved result contract. Do not pass the entire task/run
+state, root transcript, unrelated ticket history, full SWE Forge
+specification, or pasted repository contents. Workers discover details inside
+their allowed scope. Workers cannot create additional workers or worktrees and
+cannot delegate recursively unless their contract explicitly authorizes it.
 
 ## 5. Inspect and Wait
 

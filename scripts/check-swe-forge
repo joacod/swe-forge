@@ -75,7 +75,8 @@ validate_registry() {
 sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
   "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
-  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/swe-forge-gate" \
+  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-briefing" \
+  "$ROOT/scripts/swe-forge-gate" \
   "$ROOT/scripts/test-swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
@@ -89,6 +90,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/swe-forge-isolated-gate" ] || fail "isolated gate wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-pi" ] || fail "Pi runtime fixture is not executable"
+[ -x "$ROOT/scripts/test-swe-forge-briefing" ] || fail "worker briefing fixture is not executable"
 [ -x "$ROOT/scripts/validate-swe-forge" ] || fail "validation batch is not executable"
 [ -x "$ROOT/scripts/check-release" ] || fail "release checker is not executable"
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
@@ -145,6 +147,12 @@ require_text 'Early discovery-shape assessment' .swe-forge/policies/execution-ro
 require_text 'discovery_strategy:' .swe-forge/contracts/working-spec.md
 require_text 'discovery_strategy:' .swe-forge/contracts/run-state.md
 require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
+require_text 'Worker Briefing Projection' .swe-forge/policies/delegation.md
+require_text 'worker_briefing' .swe-forge/contracts/task.md
+require_text 'worker-brief.md' .swe-forge/contracts/task.md
+require_text 'worker_briefing:' .swe-forge/contracts/worker-brief.md
+require_text 'worker-brief/v1' .swe-forge/contracts/worker-brief.md
+require_text 'Worker Briefing Projection' .swe-forge/contracts/worker-brief.md
 require_text 'final_routing_deferred: true' .swe-forge/policies/execution-routing.md
 require_text 'Pre-continuation protocol' .swe-forge/policies/context.md
 require_text 'Overflow protocol' .swe-forge/policies/context.md
@@ -254,6 +262,8 @@ require_text 'Context-heavy transition' .swe-forge/conformance/scenarios.md
 require_text 'PR survives compaction' .swe-forge/conformance/scenarios.md
 require_text 'Herdr read-only backend' .swe-forge/conformance/scenarios.md
 require_text 'Bounded worker' .swe-forge/conformance/scenarios.md
+require_text 'worker briefing projection' .swe-forge/workflows/ticket.md
+require_text 'isolated_execution' .swe-forge/workflows/isolated-execution.md
 require_text 'Stale state pointer' .swe-forge/conformance/scenarios.md
 require_text 'Reliable near-limit signal' .swe-forge/conformance/scenarios.md
 require_text 'explicit test-first' docs/adding-a-skill.md
@@ -396,6 +406,8 @@ require_text '### Context management' .swe-forge/adapters/pi/README.md
 require_text 'agent_settled' .swe-forge/adapters/pi/README.md
 require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'test-swe-forge-pi' CONTRIBUTING.md
+require_text 'test-swe-forge-briefing' CONTRIBUTING.md
+require_text 'worker briefing fixture' scripts/validate-swe-forge
 require_text 'discoverable-old' scripts/test-swe-forge-pi
 require_text 'project-overrides-global' scripts/test-swe-forge-pi
 require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts

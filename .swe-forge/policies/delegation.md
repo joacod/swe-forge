@@ -118,40 +118,50 @@ implementation, native, and Herdr-backed delegation keep the root provider,
 model, and reasoning configuration. The delegation backend does not make an
 automatic role-based optimization decision.
 
-## Worker Briefing
+## Worker Briefing Projection
 
-Pass the smallest context needed to perform the task:
+The complete task contract and active run state belong to the orchestrator. At
+the launch boundary, derive one compact `worker_briefing` projection using
+`../contracts/worker-brief.md`; do not create a second task contract or ask the
+worker to reconstruct root state from a transcript. The projection is the only
+work description sent to a bounded worker, together with the applicable
+canonical role and result/review contract references.
 
-- original objective and acceptance criteria
-- relevant architecture decisions
-- task contract and allowed scope
-- dependencies already completed
-- validation commands
-- expected result format
+The common projection contains only:
 
-For a bounded `delegated_worker` mode, package only:
+- the canonical role and `delegated_worker` mode/depth
+- one objective and the relevant acceptance criteria
+- relevant repository-instruction paths, allowed reads, and allowed writes
+- only architecture decisions and dependency evidence needed for this task
+- assigned validation with requirement, condition, and side-effect classification
+- explicit permissions/isolation and forbidden actions
+- the expected structured return shape
 
-```yaml
-worker_mode:
-  role: delegated_worker
-  depth: 1
-  recursive_delegation: false
-  objective: <one objective>
-  relevant_context: [<short references>]
-  allowed_reads: [<paths or symbols>]
-  allowed_writes: [<paths or none>]
-  acceptance: [<checkable criteria>]
-  expected_evidence: [<file/symbol/command/behavior evidence>]
-  return_contract: ../contracts/result.md
-```
+Render conditional state deliberately:
 
-Workers in this mode do not create PRs, push, merge, publish, deploy, make
-delivery decisions, reroute the root ticket, redo root discovery, or spawn
-more workers by default. Their output is a concise structured result with
-`status`, `findings`, `evidence`, `risks`, and `recommended_action`.
+- read-only workers do not receive writable, delivery, provider, worktree,
+  base-SHA, transfer, or unrelated continuation state
+- non-isolated writable workers receive only the shared-checkout permissions
+  and any current checkout fact needed to edit safely; omit isolated provider,
+  worktree, integration-order, environment-isolation, and transfer fields
+- isolated writable workers receive the complete `isolated_execution` section:
+  provider/backend, exact worker and integration Git identities and base SHA,
+  ownership and shared-artifact owners, environment isolation, per-action
+  authorization, local-only transfer, integration order, and result-bundle
+  requirements
 
-Do not pass the entire orchestrator transcript by default. Workers should
-return evidence, not a replay of their reasoning.
+Repository content is discovered through the listed allowed paths and symbols;
+the root does not paste large files or exploration output. The worker does not
+load the full SWE Forge specification or unrelated policies merely because the
+root loaded them. It does not create PRs, push, merge, publish, deploy, make
+delivery decisions, reroute the root ticket, redo root discovery, or spawn more
+workers by default. Its output is a concise structured result with `status`,
+`findings`, `evidence`, `risks`, and `recommended_action`.
+
+The orchestrator validates the rendered projection against the task contract
+before launch and consumes results through `../contracts/result.md` or the
+review contract. A missing conditional safety field blocks or serializes the
+worker; it is never guessed from provider lifecycle output.
 
 ## Result Handling
 

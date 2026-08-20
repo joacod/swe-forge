@@ -93,6 +93,7 @@ run_check 'shell syntax' syntax sh -n \
   "$ROOT/scripts/test-swe-forge-gate" \
   "$ROOT/scripts/test-swe-forge-isolated" \
   "$ROOT/scripts/test-swe-forge-pi" \
+  "$ROOT/scripts/test-swe-forge-briefing" \
   "$ROOT/scripts/check-release" \
   "$ROOT/scripts/swe-forge-state" \
   "$ROOT/scripts/swe-forge-isolated-gate" \
@@ -117,6 +118,8 @@ if [ "$parallel" = yes ]; then
   isolated_pid=$!
   run_check 'Pi runtime fixture' pi "$ROOT/scripts/test-swe-forge-pi" &
   pi_pid=$!
+  run_check 'worker briefing fixture' briefing "$ROOT/scripts/test-swe-forge-briefing" &
+  briefing_pid=$!
 
   # Each run_check records its command status and exits successfully, so
   # waiting never hides a fixture failure or terminates the batch under set -e.
@@ -124,11 +127,13 @@ if [ "$parallel" = yes ]; then
   wait "$gate_pid"
   wait "$isolated_pid"
   wait "$pi_pid"
+  wait "$briefing_pid"
 else
   run_check 'installer fixture tests' installer "$ROOT/scripts/test-swe-forge"
   run_check 'evidence-gate fixtures' gate "$ROOT/scripts/test-swe-forge-gate"
   run_check 'isolated-worktree fixtures' isolated "$ROOT/scripts/test-swe-forge-isolated"
   run_check 'Pi runtime fixture' pi "$ROOT/scripts/test-swe-forge-pi"
+  run_check 'worker briefing fixture' briefing "$ROOT/scripts/test-swe-forge-briefing"
 fi
 
 failures=0
@@ -136,6 +141,7 @@ if ! report_check 'installer fixture tests' installer; then failures=$((failures
 if ! report_check 'evidence-gate fixtures' gate; then failures=$((failures + 1)); fi
 if ! report_check 'isolated-worktree fixtures' isolated; then failures=$((failures + 1)); fi
 if ! report_check 'Pi runtime fixture' pi; then failures=$((failures + 1)); fi
+if ! report_check 'worker briefing fixture' briefing; then failures=$((failures + 1)); fi
 
 if [ "$failures" -gt 0 ]; then
   printf 'FAIL: %s validation suite(s) failed\n' "$failures" >&2

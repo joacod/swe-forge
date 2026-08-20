@@ -19,7 +19,10 @@ selection.
 ## Boundary
 
 The harness owns only its documented worker lifecycle and command translation.
-The root orchestrator owns routing, task contracts, local-resource
+At launch, it receives the compact `worker_briefing` projection from
+`../../contracts/worker-brief.md`, the applicable canonical role, and the result
+or review contract; it does not receive the root transcript or complete run
+state. The root orchestrator owns routing, task contracts, local-resource
 authorization, Git/evidence validation, worker acceptance, central transfer
 and integration commits, final validation, review, delivery, and cleanup.
 There is no provider-independent launcher and no claim that all harnesses

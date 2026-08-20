@@ -1,0 +1,136 @@
+# Worker Briefing Projection
+
+This is a small worker-facing **projection schema**, not a second task
+contract. The canonical task contract and active run state remain the sole
+source of truth. The orchestrator renders one briefing from those sources for
+each bounded launch; a worker never edits the projection to change scope,
+authorization, topology, or acceptance.
+
+## Rendering boundary
+
+- Render the briefing immediately before launch from the assigned task and the
+  current run-state facts.
+- Include only the fields below that the worker's role, write access, and
+  execution mode require.
+- Preserve references to repository files and symbols so the worker can inspect
+  its allowed scope. Do not paste large file contents into the briefing.
+- Pass the briefing with the canonical role and the applicable result or review
+  contract. Do not pass the root transcript, unrelated ticket history, or the
+  complete SWE Forge specification merely because the orchestrator loaded it.
+- The briefing cannot add acceptance criteria, widen scope, grant an action,
+  or replace the task contract; omitted fields remain root-owned state.
+
+## Projection schema
+
+```yaml
+worker_briefing:
+  schema: worker-brief/v1
+  task_id: <assigned task identifier>
+  worker:
+    role: <canonical role name>
+    mode: delegated_worker | root_orchestrator
+    depth: <depth from root owner>
+    recursive_delegation: false
+  objective: <one bounded objective>
+  acceptance:
+    - <relevant checkable criterion copied from the task contract>
+  repository:
+    instructions:
+      - <relevant AGENTS.md, CONTRIBUTING.md, or local instruction path>
+    allowed_reads:
+      - <repository-relative path, symbol, or command scope>
+    allowed_writes:
+      - <repository-relative path or none>
+  architecture_decisions:
+    - <only a decision that affects this task>
+  dependencies:
+    completed:
+      - <compact evidence or task ID>
+    pending:
+      - <dependency or none>
+  validation:
+    - command: <assigned check>
+      requirement: required | conditional | informational
+      condition: <observable condition>
+      side_effects: local-only | external-read | external-write | destructive
+  permissions:
+    write_access: read-only | read-write
+    execution_mode: SOLO | SUBAGENTS | ISOLATED
+    write_isolation: SHARED | WORKTREE
+    allowed_actions:
+      - <read, edit, validation, or other explicitly assigned action>
+    forbidden_actions:
+      - <delivery, recursion, or other prohibited action>
+  return:
+    contract: <canonical result.md or review.md path>
+    expected_output:
+      - <structured fields the orchestrator will consume>
+
+  # Include this section only for an ISOLATED read-write worker. It is not
+  # present for read-only or non-isolated workers.
+  isolated_execution:
+    provider: NATIVE | HERDR
+    delegation_backend: NATIVE | HERDR
+    checkout:
+      path: <absolute worker worktree>
+      branch: <local-only worker branch>
+      worktree_role: worker
+      worktree_kind: worker
+      integration_path: <absolute central integration worktree>
+      integration_branch: <central integration/delivery branch>
+    git:
+      base_sha: <exact integration SHA used to create this worker>
+      integration_checkpoint_sha: <central checkpoint SHA>
+      wave: <planned dependency wave>
+      integration_order: <planned integer>
+    ownership:
+      allowed_scope: [<paths or symbols>]
+      forbidden_scope: [<paths or symbols>]
+      shared_artifacts:
+        - artifact: <path or generated resource>
+          owner: <one task or orchestrator>
+    environment_isolation:
+      setup_commands: []
+      copied_ignored_files: []
+      ports: []
+      databases: []
+      docker_projects: []
+      temporary_directories: []
+      external_resources: []
+      cleanup_commands: []
+    authorization:
+      create_branch: not-authorized
+      create_worktree: not-authorized
+      worker_setup: not-authorized | PR | continue
+      worker_transfer_commit: not-authorized | PR | continue
+      commit: not-authorized
+      push: not-authorized
+      create_pull_request: not-authorized
+      publish: not-authorized
+      deploy: not-authorized
+      merge: not-authorized
+    transfer:
+      local_only: true
+      integration_strategy: CHERRY_PICK
+      result_bundle: <canonical result-bundle.md path>
+      required_deliverable_commits: true
+      source_commits: <local worker transfer commits>
+      source_to_integration_mapping: required
+```
+
+## Inclusion rules
+
+| Worker | Include | Omit |
+| --- | --- | --- |
+| Read-only | role, objective, relevant acceptance, repository instructions, allowed reads, relevant architecture/dependencies, assigned validation, read-only permissions, return shape | writable scope/actions, delivery authorization, provider state, worktree/base/transfer state, unrelated run continuation |
+| Non-isolated read-write | the common fields plus allowed writes, assigned write/validation permissions, and any current checkout fact needed to edit safely | isolated provider, worktree, integration-order, environment-isolation, and transfer fields |
+| Isolated read-write | the common fields plus the complete `isolated_execution` section | unrelated root state and transcript |
+
+`isolated_execution` is an all-or-nothing safety section. Do not shorten it
+when the worker is writable: exact Git identity and base, ownership, runtime
+resource isolation, per-action authorization, local-only transfer, and result
+requirements must travel together. If a required value is unavailable, do not
+invent it; block or serialize the task through the normal workflow.
+
+A worker may discover implementation details with its allowed repository tools.
+The root supplies pointers and decisions, not an exploration transcript.

@@ -198,6 +198,13 @@ non-overlapping. Otherwise use sequential waves or `SOLO`; unsettled shared
 architecture, contracts, schemas, lockfiles, or generated artifacts require
 foundation work first.
 
+Before launching any worker, render the compact `worker_briefing` projection
+from the canonical task contract and current run-state facts using
+`.swe-forge/contracts/worker-brief.md`. Pass only that projection, the
+applicable canonical role, relevant repository-instruction references, and the
+result/review contract. Do not forward the root transcript, unrelated ticket
+history, the full SWE Forge specification, or pasted repository contents.
+
 ### 6. Route
 
 Before making the final automatic or explicit topology decision, load and
@@ -224,11 +231,12 @@ non-isolated execution, record `execution_provider: NONE`,
 `ISOLATED` is selected, follow the loaded provider-selection policy and
 isolated workflow before creating workers or resources.
 
-When the Pi optional `swe_forge_subagent` capability is being used, a first
-`action: capabilities` call may occur before a run-state snapshot exists; that
-call only discovers the backend and does not select a topology. Before any
-`action: run`, load `.swe-forge/contracts/run-state.md` and persist a complete
-active schema-v2 snapshot in a discoverable location, with
+When the Pi optional `swe_forge_subagent` capability is being used, the
+`taskContract` argument carries the rendered worker briefing projection, not
+the complete root task/run state. A first `action: capabilities` call may
+occur before a run-state snapshot exists; that call only discovers the backend
+and does not select a topology. Before any `action: run`, load
+`.swe-forge/contracts/run-state.md` and persist a complete active schema-v2 snapshot in a discoverable location, with
 `workflow: swe-forge`, a non-terminal status, matching
 `invocation_checkout.path`/`delivery_checkout.path`,
 `continuation.workflow_active: true`, and `routing.current: SUBAGENTS`.
@@ -298,9 +306,10 @@ record the pre-edit baseline, and use the one permitted task or integration
 branch. Preserve dirty, detached, protected, or ambiguous state instead of
 resetting, stashing, cleaning, or overwriting it.
 
-Delegated workers return the loaded structured result contract and cannot claim
-success from code inspection alone. The isolated guard remains the executable
-eligibility check for isolated results.
+Delegated workers receive only the rendered worker briefing and the
+applicable canonical role/result contract. They return the loaded structured
+result contract and cannot claim success from code inspection alone. The
+isolated guard remains the executable eligibility check for isolated results.
 
 ### 9. Integrate
 
