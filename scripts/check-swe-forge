@@ -76,7 +76,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
   "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
   "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-briefing" \
-  "$ROOT/scripts/swe-forge-gate" \
+  "$ROOT/scripts/test-swe-forge-results" "$ROOT/scripts/swe-forge-gate" \
   "$ROOT/scripts/test-swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
@@ -91,6 +91,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-pi" ] || fail "Pi runtime fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-briefing" ] || fail "worker briefing fixture is not executable"
+[ -x "$ROOT/scripts/test-swe-forge-results" ] || fail "worker result profile fixture is not executable"
 [ -x "$ROOT/scripts/validate-swe-forge" ] || fail "validation batch is not executable"
 [ -x "$ROOT/scripts/check-release" ] || fail "release checker is not executable"
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
@@ -234,12 +235,16 @@ require_text 'No blanket coverage percentage' .swe-forge/policies/verification.m
 require_text 'specialist_skills:' .swe-forge/contracts/working-spec.md
 require_text 'testing:' .swe-forge/contracts/working-spec.md
 require_text 'testing:' .swe-forge/contracts/task.md
-require_text 'TESTING_DECISION:' .swe-forge/contracts/result.md
+require_text 'RESULT_PROFILE: READ_ONLY' .swe-forge/contracts/result.md
+require_text 'VALIDATION:' .swe-forge/contracts/result.md
 require_text 'specialist_skills:' .swe-forge/contracts/run-state.md
 require_text 'Do not add external skill URLs to the adapter registry' .swe-forge/policies/specialist-skills.md
 require_text 'refactor-design-patterns' docs/adding-a-skill.md
 require_text 'ui-design-token-refactor' docs/adding-a-skill.md
 require_text 'Ticket names an optional specialist skill' .swe-forge/conformance/scenarios.md
+require_text 'Read-only researcher result' .swe-forge/conformance/scenarios.md
+require_text 'Normal writable result' .swe-forge/conformance/scenarios.md
+require_text 'Isolated writable result' .swe-forge/conformance/scenarios.md
 require_text 'Behavior-changing ticket with a test seam' .swe-forge/conformance/scenarios.md
 require_text '## Canonical Load Ordering And Behavior Preservation' .swe-forge/conformance/scenarios.md
 require_text 'Normal `SOLO` ticket' .swe-forge/conformance/scenarios.md
@@ -408,6 +413,7 @@ require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runti
 require_text 'test-swe-forge-pi' CONTRIBUTING.md
 require_text 'test-swe-forge-briefing' CONTRIBUTING.md
 require_text 'worker briefing fixture' scripts/validate-swe-forge
+require_text 'worker result profile fixture' scripts/validate-swe-forge
 require_text 'discoverable-old' scripts/test-swe-forge-pi
 require_text 'project-overrides-global' scripts/test-swe-forge-pi
 require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
@@ -436,6 +442,10 @@ require_text 'staged_changes:' .swe-forge/contracts/result.md
 require_text 'unstaged_changes:' .swe-forge/contracts/result.md
 require_text 'untracked_changes:' .swe-forge/contracts/result.md
 require_text 'environment_resources:' .swe-forge/contracts/result.md
+require_text 'RESULT_PROFILE: READ_ONLY' .swe-forge/contracts/result.md
+require_text 'RESULT_PROFILE: WRITABLE' .swe-forge/contracts/result.md
+require_text 'ISOLATED_WRITABLE' .swe-forge/contracts/result.md
+require_text 'not asked to reshape review findings' .swe-forge/contracts/result.md
 require_text 'source_to_integration:' .swe-forge/contracts/run-state.md
 require_text 'workers:' .swe-forge/contracts/run-state.md
 require_text 'parallel_strategy:' .swe-forge/contracts/run-state.md

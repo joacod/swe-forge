@@ -203,40 +203,42 @@ This block is hypothetical expected output after replacing and running the
 repository-specific command placeholders:
 
 ```text
+RESULT_PROFILE: WRITABLE
 STATUS: DONE
 TASK_ID: orders-pagination
-SUMMARY: Added status and cursor handling at the API boundary and persisted the filter state in the admin URL.
-FILES_TOUCHED:
+BASE_SHA: <task base>
+HEAD_SHA: <worker head or none>
+BRANCH: <task branch>
+WORKTREE: <task worktree>
+FILES_CHANGED:
 - services/orders/src/http/admin-orders.ts
 - services/orders/src/repositories/order-repository.ts
 - services/orders/tests/admin-orders.test.ts
 - apps/admin/src/orders/OrdersTable.tsx
 - apps/admin/src/orders/use-orders.ts
 - apps/admin/src/orders/OrdersTable.test.tsx
-TESTING_DECISION:
-- behavior: API filtering/cursor compatibility and admin URL-backed pagination behavior.
-- seam: HTTP API response boundary and admin table URL/query boundary.
-- approach: acceptance
-- development_mode: test-after
-- rationale: Focused API and UI cases cover the observable behavior.
-TESTS_RUN:
+GIT_STATE:
+- clean
+VALIDATION:
 - command: <orders API focused tests>
   requirement: required
   condition: always
+  applies: true
   result: passed
+  evidence: invalid limits, filtering, cursor continuation, and compatibility pass
 - command: <admin orders focused tests>
   requirement: required
   condition: always
+  applies: true
   result: passed
-TEST_RESULTS: Invalid limits, filtering, cursor continuation, compatibility, URL state, and reset behavior pass.
+  evidence: URL state and reset behavior pass
+FINDINGS:
+- API filtering and cursor handling remain compatible while admin pagination state is persisted in the URL.
 EVIDENCE:
-- API response omits next_cursor at the end of the result set.
-- Status changes clear the prior cursor before fetching.
-ASSUMPTIONS:
-- Existing cursor encoding remains stable.
+- services/orders/src/http/admin-orders.ts#pagination
+- apps/admin/src/orders/OrdersTable.tsx#url-state
 RISKS:
 - A full browser integration run was not needed for the covered URL-state behavior.
-FOLLOWUPS: none.
 ```
 
 ## 9. Integration and Verification

@@ -163,17 +163,30 @@ before launch and consumes results through `../contracts/result.md` or the
 review contract. A missing conditional safety field blocks or serializes the
 worker; it is never guessed from provider lifecycle output.
 
-## Result Handling
+## Result profiles and handling
 
-Consume every worker result using `../contracts/result.md` or the equivalent
-structured fields. Check:
+`../contracts/result.md` owns ordinary result-profile selection and field
+shapes. Select the profile from the worker's responsibility rather than asking
+every worker to fill an implementation-shaped template:
 
-- status is valid
-- task ID matches
-- touched files stay within scope
-- acceptance criteria are addressed
-- assigned validation actually ran
-- failures, assumptions, and risks are visible
+- read-only research or analysis uses `READ_ONLY`;
+- normal shared-checkout writing uses `WRITABLE`;
+- isolated writing uses `ISOLATED_WRITABLE`, the complete fixed bundle from
+  `../contracts/result-bundle.md`; and
+- independent review uses `../contracts/review.md`, not an implementation
+  result profile.
 
-Incomplete or ambiguous results are `BLOCKED` until clarified, not silently
-treated as successful.
+The worker briefing may carry the selected profile reference, but it must not
+redefine the profile or turn omitted fields into required empty sections.
+
+Consume every worker result using the selected canonical contract. For
+`READ_ONLY`, check status/task identity, concise findings, precise evidence,
+and only relevant risks or recommended action. For `WRITABLE`, additionally
+check the exact Git/change state, scope, and assigned validation needed to
+consume the implementation. For `ISOLATED_WRITABLE`, run the fixed bundle
+through the isolated gate before integration. For `REVIEW`, apply the review
+contract's acceptance check and blocking matrix.
+
+Incomplete, ambiguous, or profile-mismatched results are `BLOCKED` until
+clarified, not silently normalized with empty Git, environment, or delivery
+sections.

@@ -78,6 +78,10 @@ result/meta.tsv commits.txt files.txt validations.tsv scope-exceptions.txt
 result/staged.txt result/unstaged.txt result/untracked.txt resources.tsv
 ```
 
+This is the `ISOLATED_WRITABLE` profile from `../contracts/result.md`, but the
+bundle in `../contracts/result-bundle.md` remains the sole machine-valid shape.
+Do not accept a reduced ordinary `WRITABLE` result for an isolated worker.
+
 `meta.tsv` has schema version 1 and fixed fields. No missing, repeated,
 unknown, malformed, control-character, short-SHA, `eval`, or unrestricted path
 content is accepted. Required worker checks pass; conditional checks pass or

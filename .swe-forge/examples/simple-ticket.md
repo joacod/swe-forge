@@ -72,31 +72,30 @@ The following is hypothetical expected output. Replace the command placeholder
 with the repository command and run it before returning `DONE`:
 
 ```text
+RESULT_PROFILE: WRITABLE
 STATUS: DONE
 TASK_ID: receipt-discount-placeholder
-SUMMARY: Added an explicit missing-value branch without changing numeric formatting.
-FILES_TOUCHED:
+BASE_SHA: <task base>
+HEAD_SHA: <worker head or none>
+BRANCH: <task branch>
+WORKTREE: <task worktree>
+FILES_CHANGED:
 - src/receipts/format-total.ts
 - src/receipts/format-total.test.ts
-TESTING_DECISION:
-- behavior: Missing, zero, and non-zero discount formatting.
-- seam: Public receipt formatter boundary.
-- approach: acceptance
-- development_mode: test-first
-- rationale: Focused cases protect the observable formatting contract.
-TESTS_RUN:
+GIT_STATE:
+- clean
+VALIDATION:
 - command: <receipt test command>
   requirement: required
   condition: always
+  applies: true
   result: passed
-TEST_RESULTS: Missing, zero, and non-zero discount cases pass.
-EVIDENCE:
+  evidence: missing, zero, and non-zero discount cases pass
+FINDINGS:
 - The formatter now distinguishes absent discount from numeric zero.
+EVIDENCE:
+- src/receipts/format-total.ts#formatter
 - The diff contains no unrelated changes.
-ASSUMPTIONS:
-- The existing repository test command is the authoritative focused check.
-RISKS: none identified.
-FOLLOWUPS: none.
 ```
 
 ## Final Acceptance

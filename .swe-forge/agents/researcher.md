@@ -32,7 +32,12 @@ source, configuration, generated state, or documentation.
 
 ## Output
 
-Return a concise research result containing the relevant paths and symbols,
-existing patterns, test and validation locations, constraints, risks, unknowns,
-and a recommendation about whether further architecture or decomposition work
-is useful.
+When the task uses the worker result contract, return its `READ_ONLY` profile:
+`STATUS`, `TASK_ID`, concise `FINDINGS`, precise `EVIDENCE` references, and
+only relevant `RISKS` or `RECOMMENDED_ACTION`. Omit Git, worktree,
+environment, validation, and delivery sections that have no meaning for a
+read-only question. Do not replay the exploration transcript or paste large
+source excerpts. A bounded research result should identify the relevant paths
+and symbols, existing patterns, test and validation locations, constraints,
+risks, unknowns, and whether further architecture or decomposition work is
+useful.

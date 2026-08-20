@@ -314,14 +314,19 @@ isolated guard remains the executable eligibility check for isolated results.
 ### 9. Integrate
 
 For delegated work, load and follow the relevant task/result contracts before
-accepting or transferring a worker result. For `ISOLATED`, also load and follow
-the isolated workflow. Integrate only after scope, base, cleanliness,
-validation, and evidence requirements pass.
+accepting or transferring a worker result. Consume the profile selected by
+`contracts/result.md`: read-only research uses `READ_ONLY` evidence without
+invented Git or delivery sections, normal shared-checkout writing uses
+`WRITABLE` Git/change/validation evidence, isolated writing uses the complete
+`result-bundle.md` and isolated gate, and review uses `contracts/review.md`.
+For `ISOLATED`, also load and follow the isolated workflow. Integrate only after
+scope, base, cleanliness, validation, and evidence requirements pass.
 
 The orchestrator owns integration and accepts only results that satisfy the
-loaded contracts and evidence policy. Preserve the `GUIDED` checkpoint boundary
-and use the isolated workflow for central transfer, validation, ordering, and
-conflict handling when that topology is selected.
+loaded contracts and evidence policy. Do not treat empty irrelevant sections as
+missing evidence or fill them from memory. Preserve the `GUIDED` checkpoint
+boundary and use the isolated workflow for central transfer, validation,
+ordering, and conflict handling when that topology is selected.
 
 ### 10. Verify
 

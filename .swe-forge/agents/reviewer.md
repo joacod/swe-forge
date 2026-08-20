@@ -60,10 +60,11 @@ Read-only. Do not modify the checkout, tests, configuration, or run state.
 
 ## Output
 
-Return `../contracts/review.md`, including the acceptance-criteria check and
-review focus used. Use `PASS` only when no critical or blocking in-scope
-finding under that contract's severity and confidence matrix remains. Use
-`CHANGES_REQUIRED` for findings that must be repaired before acceptance, with
-severity, confidence, location, review basis, evidence, and recommended action
-for each finding. Put useful but out-of-scope work in `deferred_followups`; it
-may accompany `PASS` and must not silently expand the ticket.
+Return `../contracts/review.md`, not an implementation result profile,
+including the acceptance-criteria check and review focus used. Use `PASS` only
+when no critical or blocking in-scope finding under that contract's severity
+and confidence matrix remains. Use `CHANGES_REQUIRED` for findings that must
+be repaired before acceptance, with severity, confidence, location, review
+basis, evidence, and recommended action for each finding. Put useful but
+out-of-scope work in `deferred_followups`; it may accompany `PASS` and must
+not silently expand the ticket.
