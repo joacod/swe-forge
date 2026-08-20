@@ -466,12 +466,6 @@ require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/contr
 require_text 'base_sha:' .swe-forge/contracts/task.md
 require_text 'integration_order:' .swe-forge/contracts/task.md
 require_text 'environment_isolation:' .swe-forge/contracts/task.md
-require_text 'deliverable_commits:' .swe-forge/contracts/result.md
-require_text 'scope_exceptions:' .swe-forge/contracts/result.md
-require_text 'staged_changes:' .swe-forge/contracts/result.md
-require_text 'unstaged_changes:' .swe-forge/contracts/result.md
-require_text 'untracked_changes:' .swe-forge/contracts/result.md
-require_text 'environment_resources:' .swe-forge/contracts/result.md
 require_text 'RESULT_PROFILE: READ_ONLY' .swe-forge/contracts/result.md
 require_text 'RESULT_PROFILE: WRITABLE' .swe-forge/contracts/result.md
 require_text 'ISOLATED_WRITABLE' .swe-forge/contracts/result.md

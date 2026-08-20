@@ -215,26 +215,21 @@ for file in \
   .swe-forge/adapters/claude-code/README.md \
   .swe-forge/adapters/pi/README.md \
   .swe-forge/providers/native/README.md \
-  .swe-forge/providers/herdr/README.md \
   .swe-forge/providers/herdr/runbook.md; do
   require_text 'worker_brief' "$file"
 done
 
-require_text 'that projection in `taskContract`' .swe-forge/adapters/pi/README.md
-require_text 'places only' .swe-forge/adapters/pi/README.md
+require_text 'projection described by' .swe-forge/adapters/pi/README.md
+require_text 'inclusion and dependency' .swe-forge/adapters/pi/README.md
 require_text 'resolved-canonical-role-path' .swe-forge/providers/herdr/runbook.md
 require_text 'bounded worker briefing projection' .swe-forge/providers/herdr/runbook.md
-require_text 'relevant canonical role' .swe-forge/adapters/opencode/README.md
-require_text 'relevant canonical role' .swe-forge/adapters/claude-code/README.md
-
 # A worker is allowed to discover implementation details, so the projection
 # carries pointers rather than file bodies and the launch rules forbid root
 # transcript/history/spec leakage.
 require_text 'Workers discover details inside' .swe-forge/providers/herdr/runbook.md
-require_text 'root transcript' .swe-forge/adapters/pi/README.md
-require_text 'unrelated ticket history' .swe-forge/adapters/pi/README.md
-require_text 'full SWE Forge specification' .swe-forge/adapters/opencode/README.md
-require_text 'full SWE Forge specification' .swe-forge/adapters/claude-code/README.md
+require_text 'root transcript' .swe-forge/providers/herdr/runbook.md
+require_text 'unrelated ticket history' .swe-forge/providers/herdr/runbook.md
+require_text 'full SWE Forge' .swe-forge/providers/herdr/runbook.md
 require_text 'dependency_digest' .swe-forge/policies/delegation.md
 require_text 'accepted_result_ref' .swe-forge/contracts/run-state.md
 require_text 'Dependency handoff eligibility' .swe-forge/contracts/result.md

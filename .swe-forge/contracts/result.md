@@ -188,16 +188,7 @@ Review workers use [review.md](review.md) and its `PASS`/
 `READ_ONLY` or `WRITABLE`, and a review result never replaces implementation
 or isolated evidence.
 
-## Compatibility and consumption
-
-Older ordinary results may contain legacy fields such as
-`deliverable_commits:`, `scope_exceptions:`, `staged_changes:`,
-`unstaged_changes:`, `untracked_changes:`, `environment_resources:`,
-`testing_decision:`, or `test_results:`. The orchestrator may consume those
-fields when a task contract makes them relevant, but new workers should use the
-profile above and must not emit empty legacy sections. Provider metadata and
-isolated transfer fields belong to run state or the fixed bundle, not to a
-read-only result.
+## Consumption
 
 Consume every result through the selected profile:
 

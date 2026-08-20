@@ -40,22 +40,12 @@ See [shared adapter behavior](../README.md) for the workflow and delivery rules.
 
 Claude Code supports project subagents under `.claude/agents/`. Add a thin
 role bridge only when native registration provides a real benefit. Before
-launch, render the compact `worker_briefing` projection from the canonical task
-and current run state using `../../contracts/worker-brief.md`. The bridge
-should instruct the subagent to read the relevant canonical role file and
-repository-instruction references, plus the appropriate result/review contract.
-For a completed dependency, the projection carries only the root-derived,
-B-relevant accepted `dependency_digest`, never the full dependency result or a
-peer message. It must not forward the root transcript, unrelated ticket history,
-the full SWE Forge specification, or pasted repository contents. For
-independent discovery, launch the useful read-only workers as one bounded batch
-before consuming any result, then let the root wait at one fan-in barrier and
-resolve the structured results. Do not create a worker for a coupled question
-or use a follow-up for adjacent completeness. Native workers with
-dedicated worktrees, exact integration bases, structured results, and lifecycle
-control may satisfy the `NATIVE` provider contract for `ISOLATED`; otherwise
-writable delegation remains sequential in `SUBAGENTS` and omits isolated
-provider/worktree fields.
+launch, pass the compact `worker_briefing` projection from
+`../../contracts/worker-brief.md` with the relevant canonical role and
+result/review contract; its inclusion and dependency rules remain canonical.
+Native workers with dedicated worktrees, exact integration bases, structured
+results, and lifecycle control may satisfy the `NATIVE` provider contract for
+`ISOLATED`; otherwise writable delegation remains sequential in `SUBAGENTS`.
 
 Use read-only tool lists for researchers, architects, reviewers, security
 reviewers, and performance reviewers. Give write tools only to a bounded task
