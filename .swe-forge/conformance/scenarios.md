@@ -72,6 +72,19 @@ grading an agent from its explanation alone.
 | Automatic isolated gate missing a condition | Reject or serialize isolated execution and record the failed gate condition. |
 | Isolated worker completion order | Integrate by dependencies and recorded plan order, never completion order. |
 
+## Proportional Worker Results
+
+| Scenario | Required behavior |
+| --- | --- |
+| Read-only researcher result | Use `READ_ONLY` with status/task identity, concise findings, precise evidence references, and only relevant risks or next action; omit empty Git, environment, and delivery sections. |
+| Normal writable result | Use `WRITABLE` with the Git/change/validation evidence needed to consume the implementation; do not require isolated bundle fields or empty legacy sections. |
+| Isolated writable result | Use `ISOLATED_WRITABLE` and retain every fixed `result/` bundle file, exact Git evidence, fingerprints, scope, validation, and resource records required by the isolated gate. |
+| Review result | Use the dedicated `review.md` contract rather than an implementation-oriented result profile. |
+| Profile mismatch | Reject incomplete or profile-mismatched results instead of filling irrelevant fields from the task briefing or memory. |
+
+The focused `scripts/test-swe-forge-results` fixture exercises the first three
+profiles; the isolated worktree fixture also executes the machine-valid gate.
+
 ## Validation And Review
 
 | Scenario | Required behavior |

@@ -1,8 +1,14 @@
 # Isolated Worker Result Bundle
 
-This is the canonical machine-readable result for a writable isolated worker.
-It is intentionally fixed, dependency-free, and validated by
-`.swe-forge/tools/swe-forge-isolated-gate`.
+This is the canonical `ISOLATED_WRITABLE` result for a writable isolated
+worker. It is intentionally fixed, dependency-free, and validated by
+`.swe-forge/tools/swe-forge-isolated-gate`. It is not a reduced form of the
+ordinary `WRITABLE` result: every file below remains required, including empty
+cleanliness and resource evidence files.
+
+`result.md` owns ordinary result-profile selection. This bundle owns the
+isolated machine-valid shape; do not add an ordinary `RESULT_PROFILE` field or
+move isolated requirements into the human-readable profiles.
 
 ```text
 result/meta.tsv

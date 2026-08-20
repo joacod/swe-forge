@@ -62,6 +62,7 @@ worker_briefing:
     forbidden_actions:
       - <delivery, recursion, or other prohibited action>
   return:
+    profile: <READ_ONLY | WRITABLE | ISOLATED_WRITABLE | REVIEW, derived from result.md>
     contract: <canonical result.md or review.md path>
     expected_output:
       - <structured fields the orchestrator will consume>
@@ -132,5 +133,9 @@ resource isolation, per-action authorization, local-only transfer, and result
 requirements must travel together. If a required value is unavailable, do not
 invent it; block or serialize the task through the normal workflow.
 
-A worker may discover implementation details with its allowed repository tools.
-The root supplies pointers and decisions, not an exploration transcript.
+The `return.profile` value is a pointer to the selected canonical contract,
+not a new result schema. `READ_ONLY` and `WRITABLE` use `result.md`,
+`ISOLATED_WRITABLE` uses the complete `result-bundle.md`, and `REVIEW` uses
+`review.md`. A worker may discover implementation details with its allowed
+repository tools. The root supplies pointers and decisions, not an exploration
+transcript.

@@ -35,6 +35,7 @@ require_text 'dependencies:' .swe-forge/contracts/worker-brief.md
 require_text 'validation:' .swe-forge/contracts/worker-brief.md
 require_text 'permissions:' .swe-forge/contracts/worker-brief.md
 require_text 'return:' .swe-forge/contracts/worker-brief.md
+require_text 'profile:' .swe-forge/contracts/worker-brief.md
 require_text 'isolated_execution:' .swe-forge/contracts/worker-brief.md
 require_text 'base_sha:' .swe-forge/contracts/worker-brief.md
 require_text 'wave:' .swe-forge/contracts/worker-brief.md

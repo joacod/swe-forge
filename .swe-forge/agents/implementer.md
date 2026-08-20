@@ -45,7 +45,13 @@ its acceptance criteria are met.
 
 ## Output
 
-Return a result using `../contracts/result.md` with status, task ID, summary,
-files touched, tests and results, evidence, assumptions, risks, and follow-ups.
-If the task cannot be completed safely, return `BLOCKED` or `FAILED` with the
-evidence and the smallest useful next action.
+For a normal shared-checkout task, return the `WRITABLE` profile from
+`../contracts/result.md`: status and task ID, the exact Git/change evidence
+needed to consume the implementation, assigned validation results, concise
+findings/evidence, and only relevant risks or next action. Do not repeat the
+full task briefing or emit empty environment and delivery sections.
+
+For an `ISOLATED` writable task, return the complete fixed bundle from
+`../contracts/result-bundle.md`; the ordinary `WRITABLE` profile cannot replace
+that machine-valid evidence path. If the task cannot be completed safely,
+return `BLOCKED` or `FAILED` with the evidence and smallest useful next action.
