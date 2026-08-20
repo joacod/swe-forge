@@ -16,10 +16,6 @@ relative reference under `~/.agents/swe-forge/`, never against a project-local
 `.swe-forge/` tree. Keep repository discovery rooted in the active project and
 preserve the raw invocation arguments as the original ticket.
 
-Treat the user's request after the explicit skill entry as the raw invocation
-arguments (`<ticket>`, `<pr> <ticket>`, or `<solo|subagents|isolated> [pr] <ticket>`). The original ticket
-remains authoritative. Supported isolated forms include `/swe-forge isolated
-<ticket>`, `/swe-forge isolated pr <ticket>`, and `/swe-forge pr isolated
-<ticket>`. A leading `herdr` is not a topology alias; request Herdr as a
-separate provider preference.
-
+The explicit skill entry passes the request as raw invocation arguments. Keep
+those arguments unchanged; the ticket procedure owns reserved-token parsing,
+provider migration guidance, and delivery-mode handling.

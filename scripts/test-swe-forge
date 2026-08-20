@@ -71,10 +71,10 @@ test "$(readlink "$project/.opencode/commands/swe-forge.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md" || fail "OpenCode source link is incorrect"
 test "$(readlink "$project/.opencode/commands/git-push.md")" = \
   "$ROOT/.swe-forge/adapters/opencode/commands/git-push.md" || fail "OpenCode git-push source link is incorrect"
-grep -F '<pr> <ticket>' \
-  "$project/.opencode/commands/swe-forge.md" >/dev/null || fail "OpenCode delivery hint is missing"
-grep -F '/swe-forge isolated <ticket>' \
-  "$project/.opencode/commands/swe-forge.md" >/dev/null || fail "OpenCode isolated invocation is missing"
+grep -F 'raw invocation arguments' \
+  "$project/.opencode/commands/swe-forge.md" >/dev/null || fail "OpenCode raw-argument handoff is missing"
+grep -F 'ticket procedure' \
+  "$project/.opencode/commands/swe-forge.md" >/dev/null || fail "OpenCode ticket-procedure handoff is missing"
 grep -F 'thin loader' \
   "$project/.opencode/commands/git-push.md" >/dev/null || fail "OpenCode delivery loader is not thin"
 
@@ -378,8 +378,11 @@ test "$(readlink "$global_home/.pi/agent/extensions/swe-forge-runtime.ts")" = \
 grep -F 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' \
   "$global_home/.config/opencode/swe-forge/.swe-forge/policies/execution-routing.md" \
   >/dev/null || fail "global canonical isolated mode contract is missing"
-grep -F '/swe-forge isolated <ticket>' "$global_home/.pi/agent/prompts/swe-forge.md" \
-  >/dev/null || fail "global Pi isolated invocation is missing"
+grep -F 'ticket procedure' "$global_home/.pi/agent/prompts/swe-forge.md" \
+  >/dev/null || fail "global Pi ticket-procedure handoff is missing"
+grep -F '/swe-forge isolated <ticket>' \
+  "$global_home/.pi/agent/swe-forge/SWE-FORGE.md" >/dev/null || \
+  fail "global canonical isolated invocation is missing"
 grep -F 'delivery_mode: GUIDED | PR' \
   "$global_home/.pi/agent/swe-forge/.swe-forge/contracts/run-state.md" \
   >/dev/null || fail "global delivery mode contract is missing"

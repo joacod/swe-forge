@@ -488,8 +488,8 @@ const noStatePrompt = await noStateHandlers.get("before_agent_start")({
   prompt: "The user explicitly invoked SWE Forge through Pi.",
   systemPrompt: "base",
 }, noStateContext);
-if (!noStatePrompt?.systemPrompt.includes("current topology: UNKNOWN")) {
-  throw new Error("missing run state did not remain visible as UNKNOWN");
+if (noStatePrompt?.systemPrompt.includes("swe_forge_subagent")) {
+  throw new Error("pre-state capability guidance was injected before routing");
 }
 const noStateCapabilities = await noStateHandlers.get("tool_call")({
   toolName: "swe_forge_subagent",
@@ -552,6 +552,22 @@ if (!subagentEntries.some((entry) => entry.data.event === "subagent_capabilities
   throw new Error("capability negotiation evidence was not recorded");
 }
 
+// Optional capability guidance is not injected when the selected topology does
+// not need the shared-checkout backend.
+writeRuntimeState(subagentState, {
+  runId: "solo-run",
+  current: "SOLO",
+  preferred: "SOLO",
+  updatedAt: "2050-01-01T00:00:00Z",
+});
+const soloPrompt = await subagentHandlers.get("before_agent_start")({
+  prompt: "The user explicitly invoked SWE Forge through Pi.",
+  systemPrompt: "base",
+}, subagentContext);
+if (soloPrompt?.systemPrompt.includes("swe_forge_subagent")) {
+  throw new Error("unselected subagent capability was injected into a SOLO run");
+}
+
 // A changed topology invalidates the negotiation and protects the shared
 // primitive from an ISOLATED task.
 writeRuntimeState(subagentState, {
@@ -594,8 +610,8 @@ const fallbackPrompt = await fallbackHandlers.get("before_agent_start")({
   prompt: "The user explicitly invoked SWE Forge through Pi.",
   systemPrompt: "base",
 }, fallbackContext);
-if (!fallbackPrompt?.systemPrompt.includes("swe_forge_subagent tool observed by the Pi adapter: unavailable")) {
-  throw new Error("missing subagent capability did not advertise fallback");
+if (fallbackPrompt?.systemPrompt.includes("swe_forge_subagent")) {
+  throw new Error("unavailable subagent capability was injected into the prompt");
 }
 const fallbackAttempt = await fallbackHandlers.get("tool_call")({
   toolName: "swe_forge_subagent",

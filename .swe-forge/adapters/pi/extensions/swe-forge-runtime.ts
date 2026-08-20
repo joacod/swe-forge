@@ -389,11 +389,10 @@ function subagentCapabilityPrompt(observation: SubagentToolObservation, run: Act
 		SUBAGENT_CAPABILITY_MARKER,
 		`swe_forge_subagent tool observed by the Pi adapter: ${observation.status}.`,
 		`current topology: ${current} (preferred: ${preferred})`,
-		"SWE-Forge remains the orchestrator and must choose topology, task ownership, sequencing, review, integration, delivery, and fallback.",
-		"Only when canonical routing selects SUBAGENTS may the orchestrator call this exact tool.",
-		"Call action=capabilities first; require protocolVersion=1, no compatibilityErrors, the requested role, and the requested READ_ONLY/WRITABLE profile before one bounded action=run.",
-		"When current topology is UNKNOWN, capabilities is discovery only: persist a complete active schema-v2 run-state with matching checkout paths and routing.current: SUBAGENTS before action=run, then request capabilities again.",
-		"The task contract's execution_mode and prompt text do not establish canonical routing. Never use this shared-checkout primitive for ISOLATED work. A missing, inactive, incompatible, or failed capability uses the existing SOLO/sequential fallback.",
+		"Canonical routing owns whether to use this shared-checkout capability; use it only for one bounded SUBAGENTS task.",
+		"Call action=capabilities first and require the requested role and READ_ONLY/WRITABLE profile before action=run.",
+		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v2 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
+		"Pass only the canonical worker_briefing projection to action=run. Missing or incompatible capability falls back to SOLO/sequential; never use it for ISOLATED work.",
 	].join("\n");
 }
 
@@ -615,11 +614,15 @@ export default function sweForgeRuntime(pi: any) {
 		invocationActive = Boolean(run) || isSWEForgeInvocation(event.prompt);
 		const blocks: string[] = [];
 		if (run && !event.systemPrompt?.includes(`[${ACTIVE_MARKER}]`)) blocks.push(continuityPrompt(run));
+		const subagent = observeSubagentTool(pi);
 		if (
+			run &&
 			invocationActive &&
+			subagent.available &&
+			(topology(run.currentTopology) === "SUBAGENTS" || topology(run.preferredTopology) === "SUBAGENTS") &&
 			!event.systemPrompt?.includes(SUBAGENT_CAPABILITY_MARKER)
 		) {
-			blocks.push(subagentCapabilityPrompt(observeSubagentTool(pi), run));
+			blocks.push(subagentCapabilityPrompt(subagent, run));
 		}
 		if (blocks.length === 0) return undefined;
 		return { systemPrompt: `${event.systemPrompt}\n\n${blocks.join("\n\n")}` };

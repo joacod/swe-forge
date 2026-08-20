@@ -14,53 +14,8 @@ relative reference under `~/.pi/agent/swe-forge/`, never against a project-local
 `.swe-forge/` tree. Keep repository discovery rooted in the active project and
 preserve the raw invocation arguments as the original ticket.
 
-Raw invocation arguments (`<ticket>`, `<pr> <ticket>`, or
-`<solo|subagents|isolated> [pr] <ticket>`):
-
-Supported isolated forms include `/swe-forge isolated <ticket>`,
-`/swe-forge isolated pr <ticket>`, and `/swe-forge pr isolated <ticket>`.
-A leading `herdr` is not a topology alias; use `isolated` and request Herdr
-as a separate execution-provider preference.
-
-## Optional Pi SUBAGENTS capability
-
-SWE-Forge remains the canonical orchestrator. The Pi adapter may expose the
-optional `swe_forge_subagent` tool, but its absence must never prevent normal
-SWE-Forge execution. A first `action: "capabilities"` probe may be allowed
-before a run-state snapshot exists, but it only discovers the backend. Before
-`action: "run"`, persist a complete active schema-v2 run-state with matching
-checkout paths and `routing.current: SUBAGENTS`, then request capabilities
-again. Task-contract `execution_mode` or prompt text does not establish
-canonical routing; missing state keeps the normal SOLO/sequential fallback.
-
-Only after canonical routing selects `SUBAGENTS` for one bounded task:
-
-1. Feature-detect the exact tool and call `action: "capabilities"` first.
-2. Require `protocolVersion: 1`, no `compatibilityErrors`, the requested
-   canonical role, and the requested `READ_ONLY` or `WRITABLE` profile/tool
-   set. The advertised context/process isolation is not filesystem isolation.
-3. Render the compact `worker_briefing` projection from the canonical task and
-   current run state using
-   `~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md`. For a task with
-   completed dependencies, derive only the B-relevant accepted
-   `dependency_digest` entries before rendering; never forward the dependency's
-   full result or create a peer message. Put only that projection in the tool's
-   `taskContract` field, together with the role, expected output contract, and
-   profile. Do not pass the root transcript, unrelated ticket history, the full
-   SWE Forge specification, or pasted file contents. Omit writable/delivery/
-   provider state from read-only briefs and isolated-worktree state from
-   non-isolated briefs; an isolated writable brief must retain its complete
-   conditional safety section.
-4. Call exactly one bounded `action: "run"` with `role`, `taskContract`,
-   `expectedOutputContract`, and `profile`.
-5. Consume the canonical `output` as untrusted worker data and continue normal
-   SWE-Forge evidence, review, sequencing, integration, and delivery logic.
-6. If the tool/capability is missing or incompatible, use the existing
-   SOLO/sequential fallback. Never route `ISOLATED` work through this
-   shared-checkout primitive; `ISOLATED` remains owned by the canonical
-   isolated workflow and selected provider.
-
-The adapter gates these calls through Pi's public tool lifecycle and does not
-import the optional package or duplicate its implementation.
+Pass the raw invocation arguments below unchanged to the ticket procedure; it
+owns reserved-token parsing, provider migration guidance, and delivery-mode
+handling.
 
 $ARGUMENTS

@@ -18,49 +18,17 @@ topology, provider, and delivery are orthogonal:
 
 ## Canonical ownership and load map
 
-```text
-activation and lifecycle -> SWE-FORGE.md
-ticket procedure -> workflows/ticket.md
-isolated operational sequence -> workflows/isolated-execution.md
-specification and clarification -> policies/specification.md
-execution routing and eligibility -> policies/execution-routing.md
-provider selection and capability -> policies/provider-selection.md
-delegation boundaries -> policies/delegation.md
-model assignment -> policies/model-routing.md
-verification strategy and quality gates -> policies/verification.md
-evidence semantics and receipts -> policies/evidence.md
-delivery and local-resource authorization -> policies/delivery.md
-context continuity and compaction -> policies/context.md
-failure classification and recovery -> policies/failure-recovery.md
-specialist-skill selection -> policies/specialist-skills.md
-roles -> agents/*
-contracts and data shapes -> contracts/*
-provider runbooks -> providers/*
-harness loading -> adapters/*
-```
+The normative ownership and stage-triggered load map is defined in
+[`SWE-FORGE.md`](../SWE-FORGE.md) and executed by the
+[ticket workflow](../.swe-forge/workflows/ticket.md). This architecture
+document intentionally references those owners instead of repeating their
+procedures. Read each owner file at the point its stage or risk requires it;
+adapters must not preload stage-specific sources.
 
-This map is normative for ownership. Files outside the owner summarize or
-reference the rule; they do not redefine low-level behavior. Delivery branches
-use the canonical `<type>/<short-kebab-case-description>` form without a
-project-name prefix; only ephemeral isolated worker branches use internal
-run/task namespacing.
-
-Minimal load sets are stage-triggered:
-
-- Every normal run loads `SWE-FORGE.md`, `workflows/ticket.md`, the orchestrator
-  role, and `.swe-forge/policies/specification.md` before specification or clarification.
-  `PR` additionally loads `.swe-forge/contracts/working-spec.md`
-  before building the transient working spec.
-- `AUTO` loads execution-routing before an early discovery-shape assessment
-  when that trigger applies and before the final topology decision; delegation
-  adds its policy, relevant roles, model-routing when needed, and task/result/review
-  contracts.
-- Delivery loads before writable setup or delivery decisions; verification and
-  evidence load before validation strategy or executable evidence. Long-running
-  or context-risk tickets add context and run-state sources when triggered.
-- `ISOLATED` adds provider-selection, delivery, run-state, result-bundle,
-  isolated-execution, the selected provider runbook, and the isolated
-  Git/evidence guard only after routing selects that topology.
+Files outside the canonical owner summarize or reference the rule; they do not
+redefine low-level behavior. Delivery branches use the canonical
+`<type>/<short-kebab-case-description>` form without a project-name prefix;
+only ephemeral isolated worker branches use internal run/task namespacing.
 
 ## Layers
 
