@@ -35,7 +35,7 @@ grading an agent from its explanation alone.
 | Delivery before first write | The workflow exposes a stage-triggered delivery-policy load before checkout setup, branch creation, editing, or any commit/push/PR decision. |
 | Bug ticket with a usable test seam | Load verification before strategy selection and choose a regression test where practical rather than weakening the bug evidence expectation. |
 | Executable evidence and candidate binding | Load evidence policy before fingerprints, freshness, checkpoints, or receipts; evidence remains bound to the exact candidate and stale evidence is rejected. |
-| Delegated implementer with reduced context | Load the task contract and implementer role before work; local scope, write ownership, no opportunistic expansion, no unauthorized delivery, required result/evidence fields, and blocking escalation remain available. |
+| Delegated implementer with reduced context | Load the task contract and implementer role before work; render only the derived `worker_briefing` projection with local scope, write ownership, relevant instructions, validation, permissions, no opportunistic expansion, no unauthorized delivery, required result/evidence fields, and blocking escalation. |
 | Independent review | Load the reviewer role and review contract before a fresh, read-only review; review remains independent and checks the review focus before general quality concerns. |
 | Isolated routing candidate | Load execution-routing before the final topology decision; load provider selection and isolated execution only after `ISOLATED` is selected, keeping topology separate from provider. |
 | Context-risk or pressure path | Load context policy when its trigger occurs and follow its durable-state, compaction/overflow, Git, and evidence recovery sequence. |
@@ -133,7 +133,7 @@ and resulting topology/action.
 | I. No context telemetry | Record context `unknown`/`unavailable`; use durable checkpoints/manual recovery and do not invent a threshold or claim compaction. |
 | J. Herdr read-only backend | Record `SUBAGENTS` + `delegation_backend: HERDR` + `write_isolation: SHARED` + `execution_provider: NONE`; never infer `ISOLATED` from Herdr. |
 | K. Stale state pointer | When multiple active snapshots match the checkout, choose the newest `continuation.updated_at`/mtime and ignore terminal or inactive state; stale state cannot rewrite shorthand or topology. |
-| L. Bounded worker | Worker receives only objective, relevant context, scope, acceptance, and evidence return fields; it does not create PRs, push, merge, reroute, or recursively delegate by default. |
+| L. Bounded worker | Worker receives only the derived `worker_briefing` projection: objective, relevant context, scope, acceptance, repository pointers, validation, permissions, and return fields. Read-only/non-isolated briefs omit unusable state; isolated writable briefs retain complete Git/base, ownership, environment, authorization, and transfer fields. It does not create PRs, push, merge, reroute, or recursively delegate by default. |
 
 ## Repository-aware delivery conventions
 
@@ -154,8 +154,9 @@ and resulting topology/action.
 
 ## Installation
 
-Run `scripts/test-swe-forge`, `scripts/test-swe-forge-gate`, and
-`scripts/test-swe-forge-pi`. The latter exercises Pi state reinjection,
+Run `scripts/test-swe-forge`, `scripts/test-swe-forge-gate`,
+`scripts/test-swe-forge-pi`, and `scripts/test-swe-forge-briefing`. The Pi
+fixture exercises Pi state reinjection,
 active-PR `merged` shorthand, safe-boundary proactive compaction, and stale
 snapshot precedence without requiring a model or network. The installer suite
 covers exact target scope, conflicting files, symlinked destination components,

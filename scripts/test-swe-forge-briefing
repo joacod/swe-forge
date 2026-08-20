@@ -1,0 +1,112 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+BRIEF=$ROOT/.swe-forge/contracts/worker-brief.md
+
+fail() {
+  printf 'briefing test failure: %s\n' "$*" >&2
+  exit 1
+}
+
+require_text() {
+  needle=$1
+  file=$2
+  grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1 ||
+    fail "$file does not contain required briefing rule: $needle"
+}
+
+[ -f "$BRIEF" ] || fail 'missing worker briefing projection schema'
+
+# The projection is explicit, derived, and bounded rather than another task
+# contract. These assertions protect the fields that a launch renderer must
+# carry or omit.
+require_text 'not a second task' .swe-forge/contracts/worker-brief.md
+require_text 'canonical task contract and active run state remain' .swe-forge/contracts/worker-brief.md
+require_text 'worker_briefing:' .swe-forge/contracts/worker-brief.md
+require_text 'schema: worker-brief/v1' .swe-forge/contracts/worker-brief.md
+require_text 'repository:' .swe-forge/contracts/worker-brief.md
+require_text 'instructions:' .swe-forge/contracts/worker-brief.md
+require_text 'allowed_reads:' .swe-forge/contracts/worker-brief.md
+require_text 'allowed_writes:' .swe-forge/contracts/worker-brief.md
+require_text 'architecture_decisions:' .swe-forge/contracts/worker-brief.md
+require_text 'dependencies:' .swe-forge/contracts/worker-brief.md
+require_text 'validation:' .swe-forge/contracts/worker-brief.md
+require_text 'permissions:' .swe-forge/contracts/worker-brief.md
+require_text 'return:' .swe-forge/contracts/worker-brief.md
+require_text 'isolated_execution:' .swe-forge/contracts/worker-brief.md
+require_text 'base_sha:' .swe-forge/contracts/worker-brief.md
+require_text 'wave:' .swe-forge/contracts/worker-brief.md
+require_text 'environment_isolation:' .swe-forge/contracts/worker-brief.md
+require_text 'create_branch:' .swe-forge/contracts/worker-brief.md
+require_text 'authorization:' .swe-forge/contracts/worker-brief.md
+require_text 'local_only: true' .swe-forge/contracts/worker-brief.md
+require_text 'source_commits:' .swe-forge/contracts/worker-brief.md
+require_text 'source_to_integration_mapping: required' .swe-forge/contracts/worker-brief.md
+
+# The common projection is intentionally not a serialized run state. Keep the
+# check narrow: isolated-only safety data is allowed below the conditional
+# section, while root ticket/continuation/provider fields must not become
+# required common worker context.
+common_projection=$(awk '
+  /^worker_briefing:/ { in_projection = 1 }
+  /^  # Include this section only/ { in_projection = 0 }
+  in_projection { print }
+' "$BRIEF")
+for forbidden in ticket_ref continuation routing provider_capabilities 'delivery:'; do
+  printf '%s\n' "$common_projection" | grep -F -- "$forbidden" >/dev/null 2>&1 &&
+    fail "common worker briefing unexpectedly requires root field: $forbidden"
+done
+
+# Irrelevant root context is explicitly outside each reduced projection. The
+# inclusion matrix is the focused regression oracle for read-only and shared
+# writable launches; isolated writable launches are checked for the complete
+# safety section instead of being allowed to drop fields.
+require_text 'Read-only |' .swe-forge/contracts/worker-brief.md
+require_text 'writable scope/actions' .swe-forge/contracts/worker-brief.md
+require_text 'delivery authorization' .swe-forge/contracts/worker-brief.md
+require_text 'provider state' .swe-forge/contracts/worker-brief.md
+require_text 'worktree/base/transfer state' .swe-forge/contracts/worker-brief.md
+require_text 'Non-isolated read-write |' .swe-forge/contracts/worker-brief.md
+require_text 'isolated provider, worktree, integration-order, environment-isolation, and transfer fields' .swe-forge/contracts/worker-brief.md
+require_text 'Isolated read-write |' .swe-forge/contracts/worker-brief.md
+require_text 'complete `isolated_execution` section' .swe-forge/contracts/worker-brief.md
+require_text 'root transcript' .swe-forge/contracts/worker-brief.md
+require_text 'large file contents' .swe-forge/contracts/worker-brief.md
+
+# The canonical model and every known launch boundary must name the
+# projection. This catches regressions where a launcher silently falls back to
+# forwarding the full task/run state.
+for file in \
+  .swe-forge/policies/delegation.md \
+  .swe-forge/contracts/task.md \
+  .swe-forge/workflows/ticket.md \
+  .swe-forge/workflows/isolated-execution.md \
+  .swe-forge/adapters/opencode/README.md \
+  .swe-forge/adapters/claude-code/README.md \
+  .swe-forge/adapters/pi/README.md \
+  .swe-forge/adapters/pi/prompts/swe-forge-global.md \
+  .swe-forge/providers/native/README.md \
+  .swe-forge/providers/herdr/README.md \
+  .swe-forge/providers/herdr/runbook.md; do
+  require_text 'worker_brief' "$file"
+done
+
+require_text 'taskContract` field' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text 'Put only that' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text 'resolved-canonical-role-path' .swe-forge/providers/herdr/runbook.md
+require_text 'bounded worker briefing projection' .swe-forge/providers/herdr/runbook.md
+require_text 'relevant canonical role' .swe-forge/adapters/opencode/README.md
+require_text 'relevant canonical role' .swe-forge/adapters/claude-code/README.md
+
+# A worker is allowed to discover implementation details, so the projection
+# carries pointers rather than file bodies and the launch rules forbid root
+# transcript/history/spec leakage.
+require_text 'Workers discover details inside' .swe-forge/providers/herdr/runbook.md
+require_text 'Do not pass the root transcript' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text 'unrelated ticket history' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text 'full SWE Forge specification' .swe-forge/adapters/opencode/README.md
+require_text 'full SWE Forge specification' .swe-forge/adapters/claude-code/README.md
+
+printf '%s\n' 'PASS: worker briefing projection fixture'

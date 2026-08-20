@@ -75,6 +75,9 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
   reason to select isolated execution by itself.
 - Use hub-and-spoke coordination through one orchestrator.
 - Give workers bounded tasks with explicit ownership and acceptance criteria.
+- Keep the complete task/run state root-owned and derive a compact
+  worker-facing briefing projection for each launch; never forward the root
+  transcript or unrelated state merely because the orchestrator loaded it.
 - Consume structured worker results rather than relying on conversational
   memory.
 - Keep read-only research separate from writable implementation.

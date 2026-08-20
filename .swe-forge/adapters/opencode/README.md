@@ -50,12 +50,17 @@ for `/swe-forge` or the delivery actions.
 ## Native Subagents
 
 OpenCode provides native primary and subagent modes. Use them when the routing
-policy selects `SUBAGENTS`. Built-in read-only exploration or general-purpose
-workers can receive a bounded task and the relevant canonical role file. If
-OpenCode can demonstrably create concurrent writable workers in dedicated
-worktrees from one exact integration SHA, those workers satisfy the `NATIVE`
-provider contract and the topology is `ISOLATED`; otherwise keep writable
-subagents sequential in one checkout.
+policy selects `SUBAGENTS`. Before launch, render the compact
+`worker_briefing` projection from the canonical task and current run state
+using `../../contracts/worker-brief.md`. Built-in read-only exploration or
+general-purpose workers receive only that projection, the relevant canonical role,
+repository-instruction references, and the result/review contract. Do
+not pass the root transcript, unrelated ticket history, or the full SWE Forge specification
+or pasted repository contents. If OpenCode can demonstrably
+create concurrent writable workers in dedicated worktrees from one exact
+integration SHA, those workers satisfy the `NATIVE` provider contract and the
+topology is `ISOLATED`; otherwise keep writable subagents sequential in one
+checkout and omit isolated provider/worktree fields from their brief.
 
 For a custom native role, create a thin project agent in `.opencode/agents/`
 that contains only:

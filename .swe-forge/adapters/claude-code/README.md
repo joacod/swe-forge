@@ -39,13 +39,17 @@ See [shared adapter behavior](../README.md) for the workflow and delivery rules.
 ## Native Subagents
 
 Claude Code supports project subagents under `.claude/agents/`. Add a thin
-role bridge only when native registration provides a real benefit. Its body
-should instruct the subagent to read one canonical file under
-`.swe-forge/agents/`, observe the task contract, and return the appropriate
-structured result. Native workers with dedicated worktrees, exact integration
-bases, structured results, and lifecycle control may satisfy the `NATIVE`
-provider contract for `ISOLATED`; otherwise writable delegation remains
-sequential in `SUBAGENTS`.
+role bridge only when native registration provides a real benefit. Before
+launch, render the compact `worker_briefing` projection from the canonical task
+and current run state using `../../contracts/worker-brief.md`. The bridge
+should instruct the subagent to read the relevant canonical role file and
+repository-instruction references, plus the appropriate result/review contract;
+it must not forward the root transcript, unrelated ticket history, the full SWE Forge specification,
+or pasted repository contents. Native workers with
+dedicated worktrees, exact integration bases, structured results, and lifecycle
+control may satisfy the `NATIVE` provider contract for `ISOLATED`; otherwise
+writable delegation remains sequential in `SUBAGENTS` and omits isolated
+provider/worktree fields.
 
 Use read-only tool lists for researchers, architects, reviewers, security
 reviewers, and performance reviewers. Give write tools only to a bounded task

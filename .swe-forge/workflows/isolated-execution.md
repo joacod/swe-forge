@@ -43,6 +43,15 @@ worktree identity, and environment isolation. All tasks in one wave start from
 the same exact integration SHA. Integration follows dependencies and the
 recorded plan; completion order never determines integration order.
 
+Immediately before launch, render the `worker_briefing` projection from the
+canonical task and run state. An isolated writable briefing must include the
+complete `isolated_execution` safety section from
+`../contracts/worker-brief.md`: provider/backend, worker and integration Git
+identity, exact base and checkpoint SHAs, ownership, environment isolation,
+per-action authorization, local-only transfer, integration order, and result
+bundle. It must still omit unrelated root state, transcripts, ticket history,
+and pasted repository contents.
+
 ## Worker lifecycle
 
 For each ready wave:
@@ -51,14 +60,16 @@ For each ready wave:
    exact recorded base
 2. keep workers out of the integration checkout and prohibit worker delivery
    actions
-3. collect one fixed `result/` bundle per writable worker
-4. run `swe-forge-isolated-gate validate-result`, which checks actual worktree
+3. send each worker only its rendered briefing, canonical role, relevant
+   repository-instruction references, and fixed result-bundle contract
+4. collect one fixed `result/` bundle per writable worker
+5. run `swe-forge-isolated-gate validate-result`, which checks actual worktree
    and branch identity, exact base/head, declared commits and changed paths,
    allowed scopes, cleanliness, fingerprint, planned worker checks, and
    unauthorized remote refs
-5. wait for every worker in the wave; lifecycle completion alone is never
+6. wait for every worker in the wave; lifecycle completion alone is never
    acceptance evidence
-6. preserve blocked, failed, dirty, stale, or ambiguous worker resources
+7. preserve blocked, failed, dirty, stale, or ambiguous worker resources
 
 The fixed bundle is:
 

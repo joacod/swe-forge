@@ -121,7 +121,14 @@ The optional `swe_forge_subagent` package may provide the native `SUBAGENTS`
 delegation backend. This adapter never imports that package or installs it. It
 checks for the exact active Pi tool, tells the canonical orchestrator to request
 `action: "capabilities"` first, and accepts one `action: "run"` only after
-protocol, role, profile, and isolation checks pass. The returned canonical
+protocol, role, profile, and isolation checks pass. Before the run, the
+orchestrator renders the compact `worker_briefing` projection described by
+`~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` and places only
+that projection in `taskContract`; the root transcript, unrelated ticket
+history, full specification, and pasted repository contents are not launch
+context. Read-only and non-isolated briefs omit state they cannot use, while
+isolated writable briefs retain the complete Git, base-SHA, ownership,
+environment, authorization, and transfer section. The returned canonical
 result remains untrusted worker data and continues through SWE-Forge's normal
 review, evidence, integration, and delivery handling.
 

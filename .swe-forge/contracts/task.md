@@ -44,21 +44,32 @@ worktree: shared | dedicated
 delivery_mode: GUIDED | PR
 working_spec_ref: <external temporary spec, active context, or none>
 
-# Bounded workers receive reduced context and cannot recursively run the root
-# workflow unless the contract explicitly authorizes it.
+# Bounded workers receive a derived projection rather than the complete task
+# or run state. They cannot recursively run the root workflow unless the
+# contract explicitly authorizes it.
 worker_mode:
   role: delegated_worker | root_orchestrator
   depth: <integer from root owner>
   root_task_id: <root task id or none>
   max_descendant_workers: 0
   recursive_delegation: false
-  context_package:
+  worker_briefing:
+    schema: ../contracts/worker-brief.md
+    source: >
+      Render from this canonical task contract and the current run-state facts;
+      this projection is not independently authored and cannot widen scope.
     objective: <one objective>
     relevant_context: [<short references>]
+    repository_instructions: [<relevant instruction paths>]
     allowed_reads: [<paths or symbols>]
     allowed_writes: [<paths or none>]
+    architecture_decisions: [<task-relevant decisions or none>]
+    dependency_context: [<compact completed/pending evidence>]
     acceptance: [<checkable criteria>]
-    expected_evidence: [<evidence fields>]
+    validation: [<assigned checks>]
+    permissions: <read-only, shared read-write, or isolated read-write projection>
+    expected_return: [<result or review fields>]
+    isolated_execution: <include the complete conditional safety section only for isolated read-write work>
   return_contract: ../contracts/result.md
 
 checkout_baseline:
@@ -178,8 +189,9 @@ expected_output:
   used by the semantic topology; a read-only Herdr worker remains `SUBAGENTS`
 - `parallel_strategy` and `integration_strategy`: `NONE` for non-isolated
   tasks, or `COMPOSE` and `CHERRY_PICK` for isolated v1
-- `worker_mode`: bounded context package, depth, root task, and return contract;
-  delegated workers default to depth 1 with zero descendant workers
+- `worker_mode`: bounded worker mode, depth, root task, and the derived
+  `worker_briefing` projection reference; delegated workers default to depth 1
+  with zero descendant workers
 - `allowed_scope`: paths, symbols, or operations the worker may change
 - `forbidden_scope`: paths or changes explicitly outside ownership
 - `acceptance`: conditions that determine task completion
@@ -224,11 +236,16 @@ actions not authorized.
 `delegation.allowed` defaults to `false`. When it is `true`, the contract must
 also define `max_depth`, `max_workers`, allowed roles, writable isolation, and
 how child results return to the accountable owner. `worker_mode.role:
-delegated_worker` is a bounded internal mode, not a second root workflow: it
-must receive only the objective, relevant context, scope, acceptance, and
-evidence return contract. It must not create PRs, push, merge, publish,
-deploy, make delivery decisions, reroute the ticket, redo root discovery, or
-spawn descendants unless an explicit revised contract authorizes that action.
+delegated_worker` is a bounded internal mode, not a second root workflow. The
+orchestrator renders only `worker_mode.worker_briefing` for the launch, using
+`../contracts/worker-brief.md`; it does not send the complete task/run state,
+root transcript, unrelated ticket history, or large pasted repository files.
+The projection carries the relevant objective, context, scope, acceptance,
+repository-instruction references, architecture/dependency context,
+validation, permissions, and return shape. It must not create PRs, push,
+merge, publish, deploy, make delivery decisions, reroute the ticket, redo root
+discovery, or spawn descendants unless an explicit revised contract
+authorizes that action.
 
 Delegation budgets apply to the entire descendant subtree, not separately to
 each child. Depth is measured from the original accountable owner and
@@ -244,6 +261,13 @@ cannot reset or increase them.
 - one explicit owner must be recorded for every shared artifact
 - isolated tasks in one wave start from the same integration `base_sha`
 - a worker must ask for a revised contract before expanding scope
+- every launch derives a worker briefing from the canonical task and current
+  run state; the briefing is a projection, not a competing task contract
+- read-only and non-isolated workers omit delivery, provider, and isolated
+  worktree state they cannot use; isolated read-write workers receive the
+  complete conditional safety section from `worker-brief.md`
+- workers discover repository details through their allowed reads rather than
+  receiving a pasted exploration transcript or large file contents
 - validation must be realistic for the worker's checkout and environment
 - behavior-affecting tasks must record a testing decision; existing coverage
   may be sufficient, while manual or not-applicable approaches require a
