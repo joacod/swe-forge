@@ -154,7 +154,7 @@ require_text 'worker_runtime:' .swe-forge/policies/model-routing.md
 require_text 'strategy: inherit' .swe-forge/policies/model-routing.md
 require_text 'For an explicitly selected capability override' .swe-forge/policies/model-routing.md
 require_text 'Worker Runtime' .swe-forge/policies/delegation.md
-require_text 'Default worker runtime' .swe-forge/evals/conformance-scenarios.md
+require_text 'Default worker runtime' .swe-forge/conformance/scenarios.md
 require_text 'Head:' .swe-forge/contracts/receipt.md
 require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
 require_text 'Generated at:' .swe-forge/contracts/receipt.md
@@ -189,7 +189,7 @@ require_text 'Work summary' SWE-FORGE.md
 require_text 'plain human' SWE-FORGE.md
 require_text 'canonical final-report' .swe-forge/workflows/ticket.md
 require_text 'Work summary' .swe-forge/examples/pr-ticket.md
-require_text 'Final run report' .swe-forge/evals/conformance-scenarios.md
+require_text 'Final run report' .swe-forge/conformance/scenarios.md
 require_text 'actions/workflows/ci.yml' README.md
 require_text 'Run the repository checks' CONTRIBUTING.md
 require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md
@@ -231,31 +231,31 @@ require_text 'specialist_skills:' .swe-forge/contracts/run-state.md
 require_text 'Do not add external skill URLs to the adapter registry' .swe-forge/policies/specialist-skills.md
 require_text 'refactor-design-patterns' docs/adding-a-skill.md
 require_text 'ui-design-token-refactor' docs/adding-a-skill.md
-require_text 'Ticket names an optional specialist skill' .swe-forge/evals/conformance-scenarios.md
-require_text 'Behavior-changing ticket with a test seam' .swe-forge/evals/conformance-scenarios.md
-require_text '## Canonical Load Ordering And Behavior Preservation' .swe-forge/evals/conformance-scenarios.md
-require_text 'Normal `SOLO` ticket' .swe-forge/evals/conformance-scenarios.md
-require_text '`PR` specification and delivery' .swe-forge/evals/conformance-scenarios.md
-require_text 'Delivery before first write' .swe-forge/evals/conformance-scenarios.md
-require_text 'Executable evidence and candidate binding' .swe-forge/evals/conformance-scenarios.md
-require_text 'Delegated implementer with reduced context' .swe-forge/evals/conformance-scenarios.md
-require_text 'Independent review' .swe-forge/evals/conformance-scenarios.md
-require_text 'Isolated routing candidate' .swe-forge/evals/conformance-scenarios.md
-require_text 'Context-risk or pressure path' .swe-forge/evals/conformance-scenarios.md
-require_text '`BLOCKED`/`FAILED` recovery path' .swe-forge/evals/conformance-scenarios.md
-require_text 'Final acceptance' .swe-forge/evals/conformance-scenarios.md
-require_text '## Repository-aware delivery conventions' .swe-forge/evals/conformance-scenarios.md
-require_text 'Remote PR template' .swe-forge/evals/conformance-scenarios.md
-require_text 'Explicit draft PR' .swe-forge/evals/conformance-scenarios.md
-require_text '## Context Continuity' .swe-forge/evals/conformance-scenarios.md
-require_text '## Context-Aware Routing And Continuity' .swe-forge/evals/conformance-scenarios.md
-require_text 'Large but globally coupled task' .swe-forge/evals/conformance-scenarios.md
-require_text 'Context-heavy transition' .swe-forge/evals/conformance-scenarios.md
-require_text 'PR survives compaction' .swe-forge/evals/conformance-scenarios.md
-require_text 'Herdr read-only backend' .swe-forge/evals/conformance-scenarios.md
-require_text 'Bounded worker' .swe-forge/evals/conformance-scenarios.md
-require_text 'Stale state pointer' .swe-forge/evals/conformance-scenarios.md
-require_text 'Reliable near-limit signal' .swe-forge/evals/conformance-scenarios.md
+require_text 'Ticket names an optional specialist skill' .swe-forge/conformance/scenarios.md
+require_text 'Behavior-changing ticket with a test seam' .swe-forge/conformance/scenarios.md
+require_text '## Canonical Load Ordering And Behavior Preservation' .swe-forge/conformance/scenarios.md
+require_text 'Normal `SOLO` ticket' .swe-forge/conformance/scenarios.md
+require_text '`PR` specification and delivery' .swe-forge/conformance/scenarios.md
+require_text 'Delivery before first write' .swe-forge/conformance/scenarios.md
+require_text 'Executable evidence and candidate binding' .swe-forge/conformance/scenarios.md
+require_text 'Delegated implementer with reduced context' .swe-forge/conformance/scenarios.md
+require_text 'Independent review' .swe-forge/conformance/scenarios.md
+require_text 'Isolated routing candidate' .swe-forge/conformance/scenarios.md
+require_text 'Context-risk or pressure path' .swe-forge/conformance/scenarios.md
+require_text '`BLOCKED`/`FAILED` recovery path' .swe-forge/conformance/scenarios.md
+require_text 'Final acceptance' .swe-forge/conformance/scenarios.md
+require_text '## Repository-aware delivery conventions' .swe-forge/conformance/scenarios.md
+require_text 'Remote PR template' .swe-forge/conformance/scenarios.md
+require_text 'Explicit draft PR' .swe-forge/conformance/scenarios.md
+require_text '## Context Continuity' .swe-forge/conformance/scenarios.md
+require_text '## Context-Aware Routing And Continuity' .swe-forge/conformance/scenarios.md
+require_text 'Large but globally coupled task' .swe-forge/conformance/scenarios.md
+require_text 'Context-heavy transition' .swe-forge/conformance/scenarios.md
+require_text 'PR survives compaction' .swe-forge/conformance/scenarios.md
+require_text 'Herdr read-only backend' .swe-forge/conformance/scenarios.md
+require_text 'Bounded worker' .swe-forge/conformance/scenarios.md
+require_text 'Stale state pointer' .swe-forge/conformance/scenarios.md
+require_text 'Reliable near-limit signal' .swe-forge/conformance/scenarios.md
 require_text 'explicit test-first' docs/adding-a-skill.md
 require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
 require_text 'git-sync' .swe-forge/policies/delivery.md
@@ -285,7 +285,7 @@ require_text '### Repository-aware delivery' README.md
 require_text 'project-specific SWE Forge configuration is required or written' README.md
 require_text 'latest template' README.md
 require_text '`/git-pr draft`' README.md
-require_text 'Project-facing PR content' .swe-forge/evals/conformance-scenarios.md
+require_text 'Project-facing PR content' .swe-forge/conformance/scenarios.md
 reject_text 'add it to the PR description' SWE-FORGE.md
 reject_text 'add it to the PR description' README.md
 require_text '`go` authorizes one reviewed' .swe-forge/policies/delivery.md
@@ -408,7 +408,7 @@ require_text 'ctx.compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.t
 require_text 'SWE_FORGE_RUN_STATE' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'Pi 0.84.2' docs/compatibility.md
 require_text 'shared adapter behavior' .swe-forge/adapters/shared/agent-skill/README.md
-require_text 'actually `MERGED`' .swe-forge/evals/conformance-scenarios.md
+require_text 'actually `MERGED`' .swe-forge/conformance/scenarios.md
 require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/project/agents/openai.yaml
 require_text '~/.agents/swe-forge' .swe-forge/adapters/shared/agent-skill/global/SKILL.md
 require_text 'disable-model-invocation: true' .swe-forge/adapters/shared/agent-skill/project/SKILL.md

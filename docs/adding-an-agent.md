@@ -62,9 +62,3 @@ must report all touched files and validation.
 Add native bridges only under the appropriate adapter. A bridge should load the
 portable role file and select harness-specific permissions. It must not copy the
 role body or make a vendor model mandatory.
-
-## Evaluation
-
-Record why the role was invoked in examples or evaluation data. Compare tickets
-with and without the role. Retire or simplify roles that add calls and context
-without improving measured outcomes.
