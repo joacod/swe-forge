@@ -615,11 +615,13 @@ export default function sweForgeRuntime(pi: any) {
 		const blocks: string[] = [];
 		if (run && !event.systemPrompt?.includes(`[${ACTIVE_MARKER}]`)) blocks.push(continuityPrompt(run));
 		const subagent = observeSubagentTool(pi);
-		const subagentMayBeUseful =
+		if (
+			run &&
 			invocationActive &&
 			subagent.available &&
-			(!run || topology(run.currentTopology) === "SUBAGENTS" || topology(run.preferredTopology) === "SUBAGENTS");
-		if (subagentMayBeUseful && !event.systemPrompt?.includes(SUBAGENT_CAPABILITY_MARKER)) {
+			(topology(run.currentTopology) === "SUBAGENTS" || topology(run.preferredTopology) === "SUBAGENTS") &&
+			!event.systemPrompt?.includes(SUBAGENT_CAPABILITY_MARKER)
+		) {
 			blocks.push(subagentCapabilityPrompt(subagent, run));
 		}
 		if (blocks.length === 0) return undefined;

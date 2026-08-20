@@ -488,8 +488,8 @@ const noStatePrompt = await noStateHandlers.get("before_agent_start")({
   prompt: "The user explicitly invoked SWE Forge through Pi.",
   systemPrompt: "base",
 }, noStateContext);
-if (!noStatePrompt?.systemPrompt.includes("current topology: UNKNOWN")) {
-  throw new Error("missing run state did not remain visible as UNKNOWN");
+if (noStatePrompt?.systemPrompt.includes("swe_forge_subagent")) {
+  throw new Error("pre-state capability guidance was injected before routing");
 }
 const noStateCapabilities = await noStateHandlers.get("tool_call")({
   toolName: "swe_forge_subagent",
