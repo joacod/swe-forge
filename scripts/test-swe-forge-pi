@@ -164,6 +164,56 @@ const injected = await handlers.get("before_agent_start")({ systemPrompt: "base"
 if (!injected?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("missing continuation injection");
 if (!injected.systemPrompt.includes("PR: #184 OPEN")) throw new Error("missing PR continuation state");
 
+// Continuation reinjection is a bounded projection, not a transcript or a
+// serialized run state. Long scalar values must be truncated before entering
+// the next model turn.
+const originalState = process.env.SWE_FORGE_RUN_STATE;
+if (!originalState) throw new Error("fixture did not set an original run-state path");
+const boundedState = path.join(fixtureCwd, "bounded", "run-state.yaml");
+const boundedMarker = "bounded-tail-marker";
+const oversized = `prefix-${"x".repeat(5000)}-${boundedMarker}`;
+fs.mkdirSync(path.dirname(boundedState), { recursive: true });
+fs.writeFileSync(
+  boundedState,
+  `workflow: swe-forge
+workflow_version: 1
+schema_version: 2
+run_id: ${oversized}
+status: running
+invocation_checkout:
+  path: ${fixtureCwd}
+delivery_checkout:
+  path: ${fixtureCwd}
+continuation:
+  workflow_active: true
+  workflow: ticket
+  phase: ${oversized}
+  step: 1
+  awaiting: none
+  next_action:
+    kind: continue
+    target: ${oversized}
+    expected_context_tokens: unknown
+  safe_boundary: true
+  updated_at: 2060-01-01T00:00:00Z
+  delivery:
+    mode: PR
+    pr_number: none
+    pr_state: none
+context:
+  status: healthy
+`,
+);
+process.env.SWE_FORGE_RUN_STATE = boundedState;
+const boundedInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (!boundedInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
+  throw new Error("bounded state did not produce a continuation projection");
+}
+if (boundedInjection.systemPrompt.includes(boundedMarker)) {
+  throw new Error("continuation reinjection forwarded an oversized scalar");
+}
+process.env.SWE_FORGE_RUN_STATE = originalState;
+
 const transformed = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
 if (transformed?.text !== "/git-sync merged") throw new Error("active merged shorthand was not routed");
 

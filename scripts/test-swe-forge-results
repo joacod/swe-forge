@@ -66,7 +66,10 @@ for field in 'RESULT_PROFILE: READ_ONLY' 'STATUS: DONE' \
 done
 for field in 'BASE_SHA:' 'HEAD_SHA:' 'BRANCH:' 'WORKTREE:' \
   'FILES_CHANGED:' 'GIT_STATE:' 'DELIVERABLE_COMMITS:' 'VALIDATION:' \
-  'ENVIRONMENT_RESOURCES:' 'create_pull_request:'; do
+  'ENVIRONMENT_RESOURCES:' 'PROVIDER:' 'DELEGATION_BACKEND:' \
+  'WRITE_ISOLATION:' 'AUTHORIZATION:' 'SCOPE_EXCEPTIONS:' \
+  'STAGED_CHANGES:' 'UNTRACKED_CHANGES:' 'RESULT_BUNDLE:' \
+  'create_pull_request:'; do
   reject_text "$field" "$read_only"
 done
 
@@ -108,6 +111,7 @@ for field in 'RESULT_PROFILE: WRITABLE' 'STATUS: DONE' 'TASK_ID:' \
   require_text "$field" "$writable"
 done
 for field in 'ENVIRONMENT_RESOURCES:' 'result/meta.tsv' 'PROVIDER_ID:' \
+  'CANDIDATE_FINGERPRINT:' 'WORKER_TRANSFER:' 'AUTHORIZATION:' \
   'TESTING_DECISION:' 'TEST_RESULTS:'; do
   reject_text "$field" "$writable"
 done

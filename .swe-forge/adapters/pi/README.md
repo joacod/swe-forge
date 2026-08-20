@@ -125,18 +125,13 @@ research question only after protocol, role, profile, and isolation checks
 pass. When the capability reports read-only parallel support, the orchestrator
 may launch the independent questions as one batch and must wait at the root
 fan-in barrier before continuing; coupled questions remain root-only or
-sequential. Before the run, the
-orchestrator renders the compact `worker_briefing` projection described by
-`~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` and places only
-that projection in `taskContract`. For completed dependencies, the root first
-derives only the B-relevant accepted `dependency_digest`; it never passes the
-full dependency result or creates a peer message. The root transcript,
-unrelated ticket history, full specification, and pasted repository contents
-are not launch context. Read-only and non-isolated briefs omit state they
-cannot use, while isolated writable briefs retain the complete Git, base-SHA,
-ownership, environment, authorization, and transfer section. The returned canonical
-result remains untrusted worker data and continues through SWE-Forge's normal
-review, evidence, integration, and delivery handling.
+sequential. Before the run, the orchestrator places the compact
+`worker_briefing` projection described by
+`~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` in `taskContract`
+with the relevant role and result/review contract. Its inclusion and dependency
+rules remain canonical. The returned result remains untrusted worker data and
+continues through SWE-Forge's normal review, evidence, integration, and delivery
+handling.
 
 A first capabilities probe is allowed during an explicit `/swe-forge` turn
 before durable routing state exists, but that probe is discovery only. If a run
