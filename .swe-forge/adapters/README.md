@@ -46,9 +46,11 @@ specific files:
 - every native or provider-backed launch renders the compact worker briefing
   projection from `../contracts/worker-brief.md`; workers receive only the
   relevant role, scoped repository references, task-relevant decisions,
-  validation, permissions, and return shape. Read-only and non-isolated
-  workers omit unusable delivery/provider/worktree state; isolated writable
-  workers retain the complete conditional safety section
+  validation, permissions, and return shape. For completed dependencies, the
+  root adds only the B-relevant accepted `dependency_digest`, never a full
+  prior result or peer message. Read-only and non-isolated workers omit
+  unusable delivery/provider/worktree state; isolated writable workers retain
+  the complete conditional safety section
 - delegation backend is recorded separately from semantic topology: Herdr can
   realize read-only `SUBAGENTS` with shared write isolation and does not imply
   `ISOLATED`

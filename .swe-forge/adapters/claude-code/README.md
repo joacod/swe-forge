@@ -43,9 +43,11 @@ role bridge only when native registration provides a real benefit. Before
 launch, render the compact `worker_briefing` projection from the canonical task
 and current run state using `../../contracts/worker-brief.md`. The bridge
 should instruct the subagent to read the relevant canonical role file and
-repository-instruction references, plus the appropriate result/review contract;
-it must not forward the root transcript, unrelated ticket history, the full SWE Forge specification,
-or pasted repository contents. Native workers with
+repository-instruction references, plus the appropriate result/review contract.
+For a completed dependency, the projection carries only the root-derived,
+B-relevant accepted `dependency_digest`, never the full dependency result or a
+peer message. It must not forward the root transcript, unrelated ticket history,
+the full SWE Forge specification, or pasted repository contents. Native workers with
 dedicated worktrees, exact integration bases, structured results, and lifecycle
 control may satisfy the `NATIVE` provider contract for `ISOLATED`; otherwise
 writable delegation remains sequential in `SUBAGENTS` and omits isolated

@@ -137,6 +137,37 @@ The common projection contains only:
 - explicit permissions/isolation and forbidden actions
 - the expected structured return shape
 
+### Dependency handoff projection
+
+The task DAG and accepted results remain root-owned. When task B depends on
+completed task A, the orchestrator waits for A to be `done`, validates A's
+structured result against its task and result contracts, and then derives a
+small `dependency_digest` for B from B's objective and acceptance criteria.
+The digest is a per-launch projection, not a worker-to-worker message or a
+second source of truth.
+
+A digest may contain only the concise, B-relevant entries that the accepted
+result supports:
+
+- `accepted_decisions`
+- `relevant_facts`
+- `changed_interfaces` (including public interfaces B must use)
+- `paths_symbols` B must inspect
+- `authoritative_assumptions`
+- `validation_facts` relevant to B
+- `unresolved_risks` or blockers that affect B
+- `source_refs` to the accepted result or evidence when deeper inspection is
+  necessary; references do not copy the referenced content
+
+Omit empty categories. Do not include reasoning transcripts, exploration
+history, unrelated findings, full test logs, full diffs when paths or commits
+suffice, or delivery metadata unrelated to B. The digest must not be derived
+from an unaccepted, blocked, or failed result. It is transient and is rendered
+only in B's existing briefing; it is never committed as per-ticket
+coordination state. Receiving it does not change B's allowed scope,
+permissions, dependencies, or acceptance criteria, and workers never use it to
+contact or direct another worker.
+
 Render conditional state deliberately:
 
 - read-only workers do not receive writable, delivery, provider, worktree,

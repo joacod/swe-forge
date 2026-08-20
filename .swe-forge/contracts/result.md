@@ -57,6 +57,24 @@ Rules for both ordinary profiles:
 - `BLOCKED` and `FAILED` include the evidence and smallest useful next action;
   they do not need irrelevant checkout or environment headings.
 
+### Dependency handoff eligibility
+
+A `DONE` result is eligible to inform a dependent worker only after the root
+orchestrator verifies its task identity, profile, scope, required evidence, and
+assigned validation. The root may then derive a compact `dependency_digest`
+from the accepted result and the dependent task's objective and acceptance
+criteria. The digest belongs in the dependent worker's existing briefing
+projection; it is not a new result field, peer message, or persistent
+coordination record.
+
+The full result remains root-owned. A digest may carry only B-relevant accepted
+decisions, facts, interfaces, paths or symbols, authoritative assumptions,
+validation facts, unresolved risks, and references for deeper inspection. It
+must not copy reasoning, exploration, unrelated findings, full logs, full
+diffs, or unrelated delivery metadata. A dependent worker remains bounded by
+its own task contract and must request a contract revision before expanding
+scope.
+
 ### Read-only result
 
 A researcher or other read-only analysis worker normally returns only the

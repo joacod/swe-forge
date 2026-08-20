@@ -4,6 +4,12 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 BRIEF=$ROOT/.swe-forge/contracts/worker-brief.md
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-briefing.XXXXXX")
+
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+trap cleanup EXIT HUP INT TERM
 
 fail() {
   printf 'briefing test failure: %s\n' "$*" >&2
@@ -15,6 +21,21 @@ require_text() {
   file=$2
   grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1 ||
     fail "$file does not contain required briefing rule: $needle"
+}
+
+require_temp_text() {
+  needle=$1
+  file=$2
+  grep -F -- "$needle" "$file" >/dev/null 2>&1 ||
+    fail "$file is missing focused handoff evidence: $needle"
+}
+
+reject_temp_text() {
+  needle=$1
+  file=$2
+  if grep -F -- "$needle" "$file" >/dev/null 2>&1; then
+    fail "$file forwarded forbidden dependency material: $needle"
+  fi
 }
 
 [ -f "$BRIEF" ] || fail 'missing worker briefing projection schema'
@@ -32,6 +53,15 @@ require_text 'allowed_reads:' .swe-forge/contracts/worker-brief.md
 require_text 'allowed_writes:' .swe-forge/contracts/worker-brief.md
 require_text 'architecture_decisions:' .swe-forge/contracts/worker-brief.md
 require_text 'dependencies:' .swe-forge/contracts/worker-brief.md
+require_text 'dependency_digest:' .swe-forge/contracts/worker-brief.md
+require_text 'accepted_decisions:' .swe-forge/contracts/worker-brief.md
+require_text 'relevant_facts:' .swe-forge/contracts/worker-brief.md
+require_text 'changed_interfaces:' .swe-forge/contracts/worker-brief.md
+require_text 'paths_symbols:' .swe-forge/contracts/worker-brief.md
+require_text 'authoritative_assumptions:' .swe-forge/contracts/worker-brief.md
+require_text 'validation_facts:' .swe-forge/contracts/worker-brief.md
+require_text 'unresolved_risks:' .swe-forge/contracts/worker-brief.md
+require_text 'source_refs:' .swe-forge/contracts/worker-brief.md
 require_text 'validation:' .swe-forge/contracts/worker-brief.md
 require_text 'permissions:' .swe-forge/contracts/worker-brief.md
 require_text 'return:' .swe-forge/contracts/worker-brief.md
@@ -109,5 +139,121 @@ require_text 'Do not pass the root transcript' .swe-forge/adapters/pi/prompts/sw
 require_text 'unrelated ticket history' .swe-forge/adapters/pi/prompts/swe-forge-global.md
 require_text 'full SWE Forge specification' .swe-forge/adapters/opencode/README.md
 require_text 'full SWE Forge specification' .swe-forge/adapters/claude-code/README.md
+require_text 'dependency_digest' .swe-forge/policies/delegation.md
+require_text 'accepted_result_ref' .swe-forge/contracts/run-state.md
+require_text 'Dependency handoff eligibility' .swe-forge/contracts/result.md
+require_text 'worker-to-worker messages' .swe-forge/contracts/working-spec.md
+
+# A small accepted A -> B fixture exercises the allowlisted projection. The
+# tagged lines stand in for structured result fields; only entries explicitly
+# relevant to B are rendered, while the complete A result stays root-owned.
+a_result=$TMP_ROOT/task-a.result
+b_brief=$TMP_ROOT/task-b.brief
+cat >"$a_result" <<'EOF_DEPENDENCY_RESULT'
+RESULT_PROFILE: READ_ONLY
+STATUS: DONE
+TASK_ID: task-a
+
+FINDINGS:
+- [decision-for-b] Use the stable parser interface.
+- [fact-for-b] Parser returns normalized records.
+- [interface-for-b] parseRecord(input)
+- [path-for-b] src/parser.ts#parseRecord
+- [assumption-for-b] Upstream validation remains authoritative.
+- [unrelated] A different subsystem also needs cleanup.
+
+EVIDENCE:
+- [validation-for-b] scripts/test-parser passed.
+- [source-for-b] task-a.result#EVIDENCE
+- [full-log] full test log is intentionally not a handoff
+- [full-diff] full diff is intentionally not a handoff
+
+RISKS:
+- [risk-for-b] Parser fixture coverage is narrow.
+- [unrelated-risk] Delivery branch naming is unrelated to B.
+
+RECOMMENDED_ACTION:
+- [reasoning-transcript] The exploration considered several alternatives.
+- [exploration-history] Search history is intentionally not a handoff.
+- [delivery-metadata] Push status is unrelated to B.
+EOF_DEPENDENCY_RESULT
+
+render_dependency_digest() {
+  source=$1
+  destination=$2
+  {
+    cat <<'EOF_DEPENDENCY_BRIEF'
+worker_briefing:
+  task_id: task-b
+  dependencies:
+    completed:
+      - task_id: task-a
+        dependency_digest:
+          accepted_decisions:
+EOF_DEPENDENCY_BRIEF
+    awk '
+      /^- \[decision-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+    printf '%s\n' '          relevant_facts:'
+    awk '
+      /^- \[fact-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+    printf '%s\n' '          changed_interfaces:'
+    awk '
+      /^- \[interface-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+    printf '%s\n' '          paths_symbols:'
+    awk '
+      /^- \[path-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+    printf '%s\n' '          authoritative_assumptions:'
+    awk '
+      /^- \[assumption-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+    printf '%s\n' '          validation_facts:'
+    awk '
+      /^- \[validation-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+    printf '%s\n' '          unresolved_risks:'
+    awk '
+      /^- \[risk-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+    printf '%s\n' '          source_refs:'
+    awk '
+      /^- \[source-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
+    ' "$source"
+  } >"$destination"
+}
+
+render_dependency_digest "$a_result" "$b_brief"
+for required in \
+  'Use the stable parser interface.' \
+  'Parser returns normalized records.' \
+  'parseRecord(input)' \
+  'src/parser.ts#parseRecord' \
+  'Upstream validation remains authoritative.' \
+  'scripts/test-parser passed.' \
+  'Parser fixture coverage is narrow.' \
+  'task-a.result#EVIDENCE'; do
+  require_temp_text "$required" "$b_brief"
+done
+for forbidden in \
+  'RESULT_PROFILE: READ_ONLY' \
+  'STATUS: DONE' \
+  'FINDINGS:' \
+  'EVIDENCE:' \
+  'RECOMMENDED_ACTION:' \
+  'A different subsystem also needs cleanup.' \
+  'full test log is intentionally not a handoff' \
+  'full diff is intentionally not a handoff' \
+  'Delivery branch naming is unrelated to B.' \
+  'The exploration considered several alternatives.' \
+  'Search history is intentionally not a handoff.' \
+  'Push status is unrelated to B.'; do
+  reject_temp_text "$forbidden" "$b_brief"
+done
+if cmp -s "$a_result" "$b_brief"; then
+  fail 'dependent briefing unexpectedly contains the complete A result'
+fi
 
 printf '%s\n' 'PASS: worker briefing projection fixture'

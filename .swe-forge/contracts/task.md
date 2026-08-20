@@ -64,7 +64,11 @@ worker_mode:
     allowed_reads: [<paths or symbols>]
     allowed_writes: [<paths or none>]
     architecture_decisions: [<task-relevant decisions or none>]
-    dependency_context: [<compact completed/pending evidence>]
+    dependency_context:
+      completed:
+        - task_id: <accepted completed dependency>
+          dependency_digest: <compact B-relevant projection from the accepted result>
+      pending: [<dependency or none>]
     acceptance: [<checkable criteria>]
     validation: [<assigned checks>]
     permissions: <read-only, shared read-write, or isolated read-write projection>
@@ -192,6 +196,9 @@ expected_output:
 - `worker_mode`: bounded worker mode, depth, root task, and the derived
   `worker_briefing` projection reference; delegated workers default to depth 1
   with zero descendant workers
+- `dependency_context`: completed dependencies carry only the root-derived,
+  B-relevant `dependency_digest` from an accepted structured result; pending
+  dependencies carry no result content and the digest never changes scope
 - `allowed_scope`: paths, symbols, or operations the worker may change
 - `forbidden_scope`: paths or changes explicitly outside ownership
 - `acceptance`: conditions that determine task completion
@@ -241,8 +248,14 @@ orchestrator renders only `worker_mode.worker_briefing` for the launch, using
 `../contracts/worker-brief.md`; it does not send the complete task/run state,
 root transcript, unrelated ticket history, or large pasted repository files.
 The projection carries the relevant objective, context, scope, acceptance,
-repository-instruction references, architecture/dependency context,
-validation, permissions, and return shape. It must not create PRs, push,
+repository-instruction references, architecture context, and any compact
+root-derived dependency digest for completed dependencies. The digest is
+selected from an accepted structured result for this task only; the complete
+result, transcript, exploration history, unrelated findings, full logs/diffs,
+and unrelated delivery metadata stay root-owned and are never forwarded.
+Receiving a digest does not grant scope or permission expansion. The projection
+also carries assigned validation, permissions, and return shape. It must not
+create PRs, push,
 merge, publish, deploy, make delivery decisions, reroute the ticket, redo root
 discovery, or spawn descendants unless an explicit revised contract
 authorizes that action.

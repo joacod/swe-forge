@@ -161,6 +161,14 @@ restoration, mappings, remote refs, and cleanup eligibility. It never launches
 agents, controls Herdr, pushes, creates PRs, publishes, deploys, merges, or
 force-cleans.
 
+Dependent workers use the same hub-and-spoke boundary. After the root accepts a
+completed structured result, it derives a transient `dependency_digest` for a
+downstream briefing by filtering only the facts that downstream objective and
+acceptance need. The digest can reference the original result/evidence without
+copying it; transcripts, exploration, unrelated findings, full logs/diffs, and
+unrelated delivery metadata stay root-owned. The projection cannot expand task
+scope and is not a committed coordination artifact.
+
 ## Delivery and evidence
 
 `policies/delivery.md` is the sole owner of local-resource and delivery

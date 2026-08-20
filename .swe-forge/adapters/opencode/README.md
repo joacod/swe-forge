@@ -54,9 +54,11 @@ policy selects `SUBAGENTS`. Before launch, render the compact
 `worker_briefing` projection from the canonical task and current run state
 using `../../contracts/worker-brief.md`. Built-in read-only exploration or
 general-purpose workers receive only that projection, the relevant canonical role,
-repository-instruction references, and the result/review contract. Do
-not pass the root transcript, unrelated ticket history, or the full SWE Forge specification
-or pasted repository contents. If OpenCode can demonstrably
+repository-instruction references, and the result/review contract. When a task
+depends on completed work, the projection includes only the root-derived,
+B-relevant accepted `dependency_digest`, not the full dependency result or a
+peer message. Do not pass the root transcript, unrelated ticket history, or
+the full SWE Forge specification or pasted repository contents. If OpenCode can demonstrably
 create concurrent writable workers in dedicated worktrees from one exact
 integration SHA, those workers satisfy the `NATIVE` provider contract and the
 topology is `ISOLATED`; otherwise keep writable subagents sequential in one

@@ -124,11 +124,13 @@ checks for the exact active Pi tool, tells the canonical orchestrator to request
 protocol, role, profile, and isolation checks pass. Before the run, the
 orchestrator renders the compact `worker_briefing` projection described by
 `~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` and places only
-that projection in `taskContract`; the root transcript, unrelated ticket
-history, full specification, and pasted repository contents are not launch
-context. Read-only and non-isolated briefs omit state they cannot use, while
-isolated writable briefs retain the complete Git, base-SHA, ownership,
-environment, authorization, and transfer section. The returned canonical
+that projection in `taskContract`. For completed dependencies, the root first
+derives only the B-relevant accepted `dependency_digest`; it never passes the
+full dependency result or creates a peer message. The root transcript,
+unrelated ticket history, full specification, and pasted repository contents
+are not launch context. Read-only and non-isolated briefs omit state they
+cannot use, while isolated writable briefs retain the complete Git, base-SHA,
+ownership, environment, authorization, and transfer section. The returned canonical
 result remains untrusted worker data and continues through SWE-Forge's normal
 review, evidence, integration, and delivery handling.
 
