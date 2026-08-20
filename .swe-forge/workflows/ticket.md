@@ -124,8 +124,15 @@ budget, and a structured result contract. Workers do not write, make delivery
 or topology decisions, pass along the full ticket/history, recurse, or
 orchestrate other workers. Use the existing shared-write `SUBAGENTS` semantics
 only when a read-only backend is proven; otherwise record the safe fallback to
-root-only discovery. Consume the concise evidence in the root, then continue
-normal discovery and specification.
+root-only discovery. When multiple genuinely independent questions survive the
+assessment, launch the useful ready questions together as one small bounded
+fan-out/fan-in batch, before consuming any result. Wait at one root fan-in
+barrier, consume the structured results together, and resolve contradictions in
+the root before continuing. Do not ask for follow-up research unless a result
+is `BLOCKED` because a required fact is missing; workers stop once their
+acceptance evidence is sufficient. Coupled questions stay root-only or
+sequential when a real dependency requires it, and no writable work is created
+for this phase.
 
 The full evidence-backed topology decision remains in step 6 after
 specification, architecture, and useful decomposition. Early research must not

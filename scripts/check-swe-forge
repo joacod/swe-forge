@@ -147,6 +147,9 @@ require_text 'context continuity and compaction' SWE-FORGE.md
 require_text 'Early discovery-shape assessment' .swe-forge/policies/execution-routing.md
 require_text 'discovery_strategy:' .swe-forge/contracts/working-spec.md
 require_text 'discovery_strategy:' .swe-forge/contracts/run-state.md
+require_text 'FAN_OUT_FAN_IN' .swe-forge/policies/execution-routing.md
+require_text 'max_workers: <existing conservative worker limit>' .swe-forge/contracts/working-spec.md
+require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
 require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
 require_text 'Worker Briefing Projection' .swe-forge/policies/delegation.md
 require_text 'Dependency handoff projection' .swe-forge/policies/delegation.md
@@ -270,6 +273,8 @@ require_text 'Explicit draft PR' .swe-forge/conformance/scenarios.md
 require_text '## Context Continuity' .swe-forge/conformance/scenarios.md
 require_text '## Context-Aware Routing And Continuity' .swe-forge/conformance/scenarios.md
 require_text 'Large but globally coupled task' .swe-forge/conformance/scenarios.md
+require_text 'C1. Two independent discovery questions' .swe-forge/conformance/scenarios.md
+require_text 'C2. Two coupled discovery questions' .swe-forge/conformance/scenarios.md
 require_text 'Context-heavy transition' .swe-forge/conformance/scenarios.md
 require_text 'PR survives compaction' .swe-forge/conformance/scenarios.md
 require_text 'Herdr read-only backend' .swe-forge/conformance/scenarios.md

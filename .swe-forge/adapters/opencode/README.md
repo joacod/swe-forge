@@ -58,10 +58,14 @@ repository-instruction references, and the result/review contract. When a task
 depends on completed work, the projection includes only the root-derived,
 B-relevant accepted `dependency_digest`, not the full dependency result or a
 peer message. Do not pass the root transcript, unrelated ticket history, or
-the full SWE Forge specification or pasted repository contents. If OpenCode can demonstrably
-create concurrent writable workers in dedicated worktrees from one exact
-integration SHA, those workers satisfy the `NATIVE` provider contract and the
-topology is `ISOLATED`; otherwise keep writable subagents sequential in one
+the full SWE Forge specification or pasted repository contents. For
+independent discovery, launch the useful read-only workers as one bounded batch
+before consuming any result, then let the root wait at one fan-in barrier and
+resolve the structured results. Do not create a worker for a coupled question
+or use a follow-up for adjacent completeness. If OpenCode can
+demonstrably create concurrent writable workers in dedicated worktrees from one
+exact integration SHA, those workers satisfy the `NATIVE` provider contract and
+the topology is `ISOLATED`; otherwise keep writable subagents sequential in one
 checkout and omit isolated provider/worktree fields from their brief.
 
 For a custom native role, create a thin project agent in `.opencode/agents/`

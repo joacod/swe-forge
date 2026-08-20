@@ -103,6 +103,10 @@ discovery_strategy:
       allowed_scope: [<paths or symbols>]
       evidence_budget: <concise result limit>
       acceptance: <what makes the evidence useful>
+  batch:
+    strategy: FAN_OUT_FAN_IN | ROOT_ONLY | SEQUENTIAL
+    max_workers: <existing conservative worker limit>
+    fan_in: ONE_BARRIER | NONE
   backend: NONE | NATIVE | HERDR
   write_isolation: SHARED
   final_routing_deferred: true
@@ -125,6 +129,27 @@ the rationale and execute the questions in the root context rather than
 simulating workers. After concise evidence is consumed, continue normal
 specification, architecture, decomposition, and the single full topology
 routing phase at its existing boundary.
+
+### Discovery batch rule
+
+When discovery contains two or more genuinely independent, context-reducible
+questions, launch the useful ready questions as one small bounded
+fan-out/fan-in batch. The batch must not exceed the existing worker limit and
+must contain no more workers than there are useful independent questions. Render
+one bounded read-only task per question, with its own allowed reads, acceptance
+condition, and concise evidence budget; do not combine questions into one broad
+worker or create workers merely to exercise concurrency.
+
+Launch the batch before consuming any result, keep workers read-only and
+peer-isolated, then wait at one root-owned fan-in barrier. The root accepts the
+structured results, resolves any contradiction from evidence, and only then
+continues discovery or specification. Do not start an adjacent question or
+hold a researcher conversation after a sufficient result; a follow-up is
+allowed only when the result is `BLOCKED` because a required fact is missing.
+When questions are coupled, keep them `ROOT_ONLY`; if a genuinely dependent
+sequence must remain delegated, run it sequentially rather than parallelizing
+it. A backend that cannot realize the batch uses the normal sequential or
+root-only fallback and must not claim fan-out/fan-in execution.
 
 ## Decision procedure
 

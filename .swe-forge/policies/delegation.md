@@ -47,6 +47,28 @@ cannot recurse. If no proven read-only backend exists, the orchestrator uses
 `ROOT_ONLY` discovery; it does not emulate delegation with an untracked process
 or claim that the strategy ran.
 
+### Discovery fan-out/fan-in
+
+When at least two discovery questions are independently answerable and
+context-reducible, form one bounded batch from the ready questions. Do not
+exceed the existing conservative worker limit or fill unused capacity with
+questions that are not useful to the ticket. Launch each worker in the same
+read-only wave before consuming any result. Each worker receives exactly one
+question, its own allowed read scope, a concise evidence budget, and the
+structured `READ_ONLY` result contract; workers do not communicate with peers,
+write, recurse, or make routing or delivery decisions.
+
+The orchestrator waits at one fan-in barrier, validates and consumes all
+structured results together, resolves contradictions from repository evidence,
+and then continues the root workflow. A researcher that has enough evidence
+stops. Do not ask for adjacent exploration or a follow-up conversation unless
+the result is `BLOCKED` because a required fact was missing; a non-blocked
+result is consumed as returned. Coupled questions remain root-only, or follow a
+real dependency sequentially when separate delegation is still useful. If the
+backend cannot launch the batch safely, fall back to root-only or sequential
+research without claiming parallel execution. This optimization introduces no
+writable work and does not change isolated writer concurrency.
+
 ## Worker Limits
 
 - default to two to four active workers

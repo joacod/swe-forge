@@ -74,6 +74,9 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Keep Herdr optional. It is an execution provider, not a harness, workflow, or
   reason to select isolated execution by itself.
 - Use hub-and-spoke coordination through one orchestrator.
+- During delegated discovery, fan out only a small batch of genuinely
+  independent read-only questions, then fan in once at the root before
+  continuing; coupled questions remain root-only or sequential.
 - Give workers bounded tasks with explicit ownership and acceptance criteria.
 - Keep the complete task/run state root-owned and derive a compact
   worker-facing briefing projection for each launch; never forward the root
@@ -176,9 +179,9 @@ reporting without artificial workers.
 
 `SUBAGENTS` uses a proven native or external backend when independent research,
 bounded delegation, or fresh review materially improves the result without
-concurrent writable worktrees. Read-only work may be parallel; writable work
-is sequential in one checkout unless dedicated worktrees make the topology
-`ISOLATED`. The orchestrator retains task ownership, integration, and
+concurrent writable worktrees. Independent read-only discovery may use one
+bounded fan-out/fan-in batch; writable work is sequential in one checkout
+unless dedicated worktrees make the topology `ISOLATED`. The orchestrator retains task ownership, integration, and
 acceptance. A Herdr read-only backend remains `SUBAGENTS` with shared write
 isolation; Herdr does not imply `ISOLATED`. If workers are unavailable, record
 the preferred topology and fall back to sequential execution or `SOLO` rather

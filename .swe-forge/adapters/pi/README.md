@@ -120,8 +120,12 @@ to durable checkpoints/manual recovery.
 The optional `swe_forge_subagent` package may provide the native `SUBAGENTS`
 delegation backend. This adapter never imports that package or installs it. It
 checks for the exact active Pi tool, tells the canonical orchestrator to request
-`action: "capabilities"` first, and accepts one `action: "run"` only after
-protocol, role, profile, and isolation checks pass. Before the run, the
+`action: "capabilities"` first, and accepts one bounded `action: "run"` per
+research question only after protocol, role, profile, and isolation checks
+pass. When the capability reports read-only parallel support, the orchestrator
+may launch the independent questions as one batch and must wait at the root
+fan-in barrier before continuing; coupled questions remain root-only or
+sequential. Before the run, the
 orchestrator renders the compact `worker_briefing` projection described by
 `~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` and places only
 that projection in `taskContract`. For completed dependencies, the root first
