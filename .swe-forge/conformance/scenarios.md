@@ -113,7 +113,7 @@ grading an agent from its explanation alone.
 
 ## Context-Aware Routing And Continuity
 
-These scenarios evaluate context reducibility and durable lifecycle behavior;
+These scenarios exercise context reducibility and durable lifecycle behavior;
 they must not be graded from prompt length or an agent's explanation alone.
 Record the routing fields, capability profile, state snapshot, lifecycle event,
 and resulting topology/action.

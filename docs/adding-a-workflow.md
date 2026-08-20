@@ -45,13 +45,11 @@ override one of them.
 If a policy must change for one workflow, document the narrower scope and keep
 the general ticket behavior unchanged.
 
-## Add Evidence Before Ceremony
+## Validate Before Ceremony
 
-Prototype the workflow against representative tickets before adding roles,
-commands, or persistent state. Measure correctness, regressions, verification
-quality, cost, and execution time. A new workflow is successful only when its
-specialization produces better evidence than the general workflow or a normal
-strong coding agent for its target ticket class.
+Before adding roles, commands, or persistent state, validate the workflow with
+focused conformance scenarios and repository checks. Add durable ceremony only
+when it protects a required behavior or safety boundary.
 
 ## Review Checklist
 
@@ -64,4 +62,4 @@ strong coding agent for its target ticket class.
   environment-resource evidence when isolated
 - verification and fresh review are proportional and real
 - adapters remain thin loaders
-- examples and evaluation coverage explain when the workflow should not be used
+- examples and conformance coverage explain when the workflow should not be used

@@ -94,10 +94,3 @@ unavailable:
 Inherited workers do not enter role-capability fallback merely because they
 have a different role. Never claim model diversity or stronger reasoning that
 was not actually used.
-
-## Evaluation
-
-Model routing choices should be measured with the evaluation schema under
-`../evals/`. Track correctness, acceptance-test results, defects, cost,
-latency, retries, and review catches. Optimize reliability per unit of cost,
-not the number of distinct models used.
