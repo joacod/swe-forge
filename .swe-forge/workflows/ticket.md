@@ -200,10 +200,15 @@ foundation work first.
 
 Before launching any worker, render the compact `worker_briefing` projection
 from the canonical task contract and current run-state facts using
-`.swe-forge/contracts/worker-brief.md`. Pass only that projection, the
+`.swe-forge/contracts/worker-brief.md`. If a task has completed dependencies,
+first accept each dependency's structured result and derive only the
+B-relevant `dependency_digest` entries for `dependencies.completed`; do not
+forward the dependency's complete result. Pass only that projection, the
 applicable canonical role, relevant repository-instruction references, and the
 result/review contract. Do not forward the root transcript, unrelated ticket
-history, the full SWE Forge specification, or pasted repository contents.
+history, the full SWE Forge specification, or pasted repository contents. A
+digest is transient launch context and does not expand the worker contract or
+create a peer communication channel.
 
 ### 6. Route
 
@@ -307,9 +312,13 @@ branch. Preserve dirty, detached, protected, or ambiguous state instead of
 resetting, stashing, cleaning, or overwriting it.
 
 Delegated workers receive only the rendered worker briefing and the
-applicable canonical role/result contract. They return the loaded structured
-result contract and cannot claim success from code inspection alone. The
-isolated guard remains the executable eligibility check for isolated results.
+applicable canonical role/result contract. When a dependency completes, record
+its accepted result reference in the root-owned run-state task graph and derive
+future digests at the next launch; do not persist a per-ticket handoff file.
+Workers return the loaded structured result contract and cannot claim success
+from code inspection alone. A digest never changes their allowed scope or
+permissions. The isolated guard remains the executable eligibility check for
+isolated results.
 
 ### 9. Integrate
 

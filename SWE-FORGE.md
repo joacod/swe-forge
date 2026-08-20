@@ -78,6 +78,11 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Keep the complete task/run state root-owned and derive a compact
   worker-facing briefing projection for each launch; never forward the root
   transcript or unrelated state merely because the orchestrator loaded it.
+- When a task depends on completed work, derive a small accepted
+  `dependency_digest` for that task from the relevant structured result and
+  acceptance needs; never open a peer channel or forward the complete result.
+  The transient digest does not expand the worker's contract or become a
+  committed per-ticket coordination artifact.
 - Consume structured worker results rather than relying on conversational
   memory.
 - Keep read-only research separate from writable implementation.

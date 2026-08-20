@@ -247,6 +247,7 @@ tasks:
     base_sha: <exact base or none>
     wave: <integer or none>
     integration_order: <planned integer or none>
+    accepted_result_ref: <accepted structured result/evidence reference or none>
     validation_ref: <result or evidence reference>
 
 workers:
@@ -322,7 +323,10 @@ sections and report missing context capability as `unknown`.
 - A state consumer must prefer the newest active snapshot that matches the
   checkout and must reject terminal or explicitly inactive state, so stale
   pointers cannot override newer workflow state.
-- only a dependency in `done` satisfies a downstream task.
+- Only a dependency in `done` with an `accepted_result_ref` satisfying its task
+  and result contract can supply a downstream dependency digest. The digest is
+  derived transiently for the dependent briefing; it is not stored as a
+  persistent task-to-task message.
 - Completion order never changes planned `integration_order`.
 - Worker lifecycle state is scheduling evidence, not task acceptance.
 - Every accepted isolated source commit needs one source-to-integration mapping.

@@ -30,10 +30,12 @@ Do not retain a provider name as a topology alias.
 - Structured worker results, Git evidence, validation, and central integration
   remain authoritative.
 - The runbook launches workers with a compact `worker_briefing` projection,
-  the relevant canonical role, and the result/review contract. It never needs
-  the root transcript, unrelated ticket history, or the complete run state;
-  isolated writable workers retain the projection's full conditional Git,
-  environment, ownership, authorization, and transfer section.
+  including only any root-derived, B-relevant accepted `dependency_digest` for
+  completed dependencies, plus the relevant canonical role and result/review
+  contract. It never forwards a full preceding result or peer message, root
+  transcript, unrelated ticket history, or the complete run state; isolated
+  writable workers retain the projection's full conditional Git, environment,
+  ownership, authorization, and transfer section.
 
 Before any Herdr control command, verify ownership:
 

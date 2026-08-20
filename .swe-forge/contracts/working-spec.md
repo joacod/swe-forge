@@ -25,6 +25,10 @@ ticket's intent or scope.
   add an ignore rule just to hide it.
 - Delete external working-spec files during cleanup and report a cleanup
   failure.
+- A working spec may record the task DAG and commit dependencies, but it does
+  not store worker-to-worker messages or dependency digests. The root derives
+  each transient digest from an accepted structured result when rendering the
+  dependent worker's briefing.
 
 ## Template
 
@@ -85,6 +89,8 @@ commit_plan:
     objective: <one cohesive observable step>
     scope: [<owned path or symbol>]
     depends_on: []
+    # Completed dependency facts are rendered transiently in the worker
+    # briefing; do not persist a dependency digest in the working spec.
     validation: [<targeted check>]
     commit_subject: <imperative subject>
 

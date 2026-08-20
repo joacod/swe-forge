@@ -81,9 +81,12 @@ grading an agent from its explanation alone.
 | Isolated writable result | Use `ISOLATED_WRITABLE` and retain every fixed `result/` bundle file, exact Git evidence, fingerprints, scope, validation, and resource records required by the isolated gate. |
 | Review result | Use the dedicated `review.md` contract rather than an implementation-oriented result profile. |
 | Profile mismatch | Reject incomplete or profile-mismatched results instead of filling irrelevant fields from the task briefing or memory. |
+| Dependent worker handoff | After A is accepted and B depends on A, derive a compact B-specific `dependency_digest` in B's existing briefing; keep the root as coordinator, omit A's full result and unrelated material, and do not expand B's scope. |
 
 The focused `scripts/test-swe-forge-results` fixture exercises the first three
 profiles; the isolated worktree fixture also executes the machine-valid gate.
+The `scripts/test-swe-forge-briefing` fixture includes a simple A -> B handoff
+and verifies that B receives selected facts without A's full result.
 
 ## Validation And Review
 

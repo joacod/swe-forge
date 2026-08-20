@@ -17,6 +17,9 @@ authorization, topology, or acceptance.
 - Pass the briefing with the canonical role and the applicable result or review
   contract. Do not pass the root transcript, unrelated ticket history, or the
   complete SWE Forge specification merely because the orchestrator loaded it.
+- If a dependency is complete, derive its compact `dependency_digest` from the
+  accepted structured result and the assigned task's needs before rendering the
+  briefing; never forward the complete result.
 - The briefing cannot add acceptance criteria, widen scope, grant an action,
   or replace the task contract; omitted fields remain root-owned state.
 
@@ -45,7 +48,25 @@ worker_briefing:
     - <only a decision that affects this task>
   dependencies:
     completed:
-      - <compact evidence or task ID>
+      - task_id: <accepted dependency task in status done>
+        dependency_digest:
+          accepted_decisions:
+            - <accepted decision B needs>
+          relevant_facts:
+            - <discovered fact B needs>
+          changed_interfaces:
+            - <changed or public interface B must use>
+          paths_symbols:
+            - <path or symbol B must inspect>
+          authoritative_assumptions:
+            - <assumption that became authoritative for this run>
+          validation_facts:
+            - <validation fact relevant to B>
+          unresolved_risks:
+            - <unresolved blocker or risk that affects B>
+          source_refs:
+            - <accepted result or evidence reference for deeper inspection>
+        # Omit empty digest categories; source_refs are references, not copied content.
     pending:
       - <dependency or none>
   validation:
@@ -118,6 +139,21 @@ worker_briefing:
       source_commits: <local worker transfer commits>
       source_to_integration_mapping: required
 ```
+
+## Dependency digest rules
+
+`dependencies.completed` contains one digest per completed dependency that is
+relevant to the assigned task. The root orchestrator renders it only after the
+dependency's structured result is accepted and only selects entries that B
+needs for its objective or acceptance criteria. A digest is transient launch
+context; it is not persisted as a task-to-task message, and its source result
+remains root-owned.
+
+The digest must omit reasoning transcripts, exploration history, unrelated
+findings, full test logs, full diffs when paths or commits are enough, and
+delivery metadata unrelated to B. It must not grant B new scope, permissions,
+authority, or a way to contact A. B must request a contract revision before
+expanding scope even when the digest points to additional material.
 
 ## Inclusion rules
 
