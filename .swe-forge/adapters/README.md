@@ -33,68 +33,36 @@ has no adapter registry entry.
 
 ## Shared Workflow Behavior
 
-All adapters load the same canonical workflow, provider-selection, and delivery
-policies. Keep these rules centralized instead of restating them in host-
-specific files:
+All adapters expose the same canonical workflow and stage-triggered load sets.
+Keep the detailed rules in their owners and use these references when building
+or reviewing a host projection:
 
-- activation is explicit; ordinary prompts do not activate SWE Forge
-- `AUTO` routing and `GUIDED` delivery are the defaults; `PR` is opt-in
-- canonical topologies are `SOLO`, `SUBAGENTS`, and `ISOLATED`
-- `SUBAGENTS` uses a proven native or external backend for one bounded
-  fan-out/fan-in batch of independent read-only questions, or sequential
-  bounded writable work in one checkout; concurrent writable worktrees are
-  `ISOLATED`
-- every native or provider-backed launch renders the compact worker briefing
-  projection from `../contracts/worker-brief.md`; workers receive only the
-  relevant role, scoped repository references, task-relevant decisions,
-  validation, permissions, and return shape. For completed dependencies, the
-  root adds only the B-relevant accepted `dependency_digest`, never a full
-  prior result or peer message. For independent discovery, the root launches
-  the useful read-only briefs together, waits at one fan-in barrier, and
-  consumes the structured results itself; adapters do not create peer
-  conversations or follow-up exploration. Read-only and non-isolated workers
-  omit unusable delivery/provider/worktree state; isolated writable workers
-  retain the complete conditional safety section
-- delegation backend is recorded separately from semantic topology: Herdr can
-  realize read-only `SUBAGENTS` with shared write isolation and does not imply
-  `ISOLATED`
-- a clean normal checkout gets one dedicated task branch using the canonical
-  `<type>/<short-kebab-case-description>` convention; an isolated ticket has
-  one integration/delivery branch using the same convention; worker branches
-  are local-only and cannot create PRs
-- `go` commits only the reviewed guided slice or accepted central integration
-  unit; PR mode plans meaningful slices before editing and commits each validated
-  slice separately before final review, push, and one pull-request creation
-- pushing never creates a PR, and syncing verifies `MERGED` before changing the
-  checkout
-- delivery artifacts resolve repository conventions at their creation boundary;
-  no project-specific SWE Forge configuration is required or written
-- `/git-pr draft` is forwarded as an explicit draft request while `/git-pr`
-  retains normal/open behavior; provider adapters own the native state mapping
-- when provider access is available, PR adapters retrieve the latest template
-  from the remote default branch and preserve its structure before composition
-- context management is capability-negotiated: adapters document observed
-  usage telemetry, context-window knowledge, proactive compaction, lifecycle
-  hooks, and overflow recovery; they do not assume a universal signal or
-  command. At a reliable near-limit boundary, the canonical context policy
-  persists durable continuation state, compacts before continuing, and
-  rechecks the actual checkout and evidence.
-- when available, `.swe-forge/tools/swe-forge-gate` provides executable
-  preflight, checkpoint, validation, delivery, and receipt evidence without
-  redefining the canonical workflow
+- [`SWE-FORGE.md`](../../SWE-FORGE.md) — activation, lifecycle, topology,
+  delivery-mode, acceptance, and ownership/load rules
+- [`workflows/ticket.md`](../workflows/ticket.md) — ticket parsing, sequencing,
+  and conditional source loads
+- [`policies/delegation.md`](../policies/delegation.md) and
+  [`contracts/worker-brief.md`](../contracts/worker-brief.md) — bounded worker
+  context and dependency handoffs
+- [`policies/delivery.md`](../policies/delivery.md) — delivery and local-resource
+  authorization
+- [`policies/context.md`](../policies/context.md) — continuation and compaction
+- [`providers/`](../providers/README.md) — isolated provider boundaries and
+  runbooks
+
+Adapter-specific files should document only host syntax, discovery paths,
+permissions, native capabilities, and other behavior that cannot be
+represented by the canonical files. They must not preload stage-specific
+sources or copy canonical procedure into a host prompt. The canonical workflow,
+policies, contracts, and provider boundary remain authoritative.
 
 For GitHub-backed delivery adapters, the cleanest implementation is a
-read-only default-branch lookup (for example, `gh repo view` plus `gh api` or a
+read-only remote default branch lookup (for example, `gh repo view` plus `gh api` or a
 remote default ref) immediately before PR composition, followed by the native
 draft flag when requested (for example, `gh pr create --draft`). Keep this
 provider-specific mechanism in the
 adapter/delivery layer; the canonical policy owns the precedence, template
 preservation, and draft semantics.
-
-Adapter-specific files should document only host syntax, discovery paths,
-permissions, native capabilities, and other behavior that cannot be
-represented by the canonical files. The canonical workflow, policies,
-contracts, and provider boundary remain authoritative.
 
 ## Installation Boundary
 

@@ -330,12 +330,13 @@ require_text 'branch_setup:' .swe-forge/contracts/task.md
 require_text 'branch_setup:' .swe-forge/examples/parallel-ticket.md
 require_text 'branch_setup:' .swe-forge/examples/isolated-ticket.md
 require_text '## Shared Workflow Behavior' .swe-forge/adapters/README.md
-require_text 'one dedicated task branch using the canonical' .swe-forge/adapters/README.md
-require_text 'one integration/delivery branch' .swe-forge/adapters/README.md
-require_text 'pushing never creates a PR' .swe-forge/adapters/README.md
-require_text 'syncing verifies `MERGED`' .swe-forge/adapters/README.md
-require_text 'delivery artifacts resolve repository conventions' .swe-forge/adapters/README.md
-require_text '`/git-pr draft` is forwarded' .swe-forge/adapters/README.md
+require_text 'SWE-FORGE.md' .swe-forge/adapters/README.md
+require_text 'workflows/ticket.md' .swe-forge/adapters/README.md
+require_text 'policies/delegation.md' .swe-forge/adapters/README.md
+require_text 'contracts/worker-brief.md' .swe-forge/adapters/README.md
+require_text 'policies/delivery.md' .swe-forge/adapters/README.md
+require_text 'policies/context.md' .swe-forge/adapters/README.md
+require_text 'must not preload stage-specific' .swe-forge/adapters/README.md
 require_text 'remote default branch' .swe-forge/adapters/README.md
 require_text 'gh repo view' .swe-forge/adapters/README.md
 require_text 'gh pr create --draft' .swe-forge/adapters/README.md
@@ -366,6 +367,22 @@ require_text 'Structured worker results, Git evidence, validation, and central i
 [ -f "$ROOT/.swe-forge/providers/README.md" ] || fail "missing provider catalog"
 
 for file in \
+  .swe-forge/adapters/opencode/commands/swe-forge.md \
+  .swe-forge/adapters/opencode/commands/swe-forge-global.md \
+  .swe-forge/adapters/claude-code/skills/swe-forge/SKILL.md \
+  .swe-forge/adapters/claude-code/skills/swe-forge-global/SKILL.md \
+  .swe-forge/adapters/pi/prompts/swe-forge-global.md \
+  .swe-forge/adapters/shared/agent-skill/project/SKILL.md \
+  .swe-forge/adapters/shared/agent-skill/global/SKILL.md; do
+  require_text 'ticket procedure' "$file"
+  require_text 'invocation arguments' "$file"
+  reject_text 'Supported isolated forms include' "$file"
+  reject_text 'A leading `herdr`' "$file"
+  reject_text 'Only after canonical routing selects' "$file"
+  reject_text 'policies/context.md' "$file"
+  reject_text 'policies/delivery.md' "$file"
+done
+for file in \
   .swe-forge/adapters/opencode/commands/swe-forge-global.md \
   .swe-forge/adapters/claude-code/skills/swe-forge-global/SKILL.md \
   .swe-forge/adapters/pi/prompts/swe-forge-global.md \
@@ -374,6 +391,7 @@ for file in \
   require_text 'relative reference under' "$file"
 done
 for file in \
+  .swe-forge/adapters/opencode/commands/swe-forge.md \
   .swe-forge/adapters/opencode/commands/swe-forge-global.md \
   .swe-forge/adapters/pi/prompts/swe-forge-global.md; do
   require_text '$ARGUMENTS' "$file"
@@ -482,27 +500,11 @@ reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
 reject_text 'commit_policy:' .swe-forge/examples/isolated-ticket.md
 reject_text 'pushing no longer asks whether' README.md
 
-for owner in \
-  'activation and lifecycle -> SWE-FORGE.md' \
-  'ticket procedure -> workflows/ticket.md' \
-  'isolated operational sequence -> workflows/isolated-execution.md' \
-  'specification and clarification -> policies/specification.md' \
-  'execution routing and eligibility -> policies/execution-routing.md' \
-  'provider selection and capability -> policies/provider-selection.md' \
-  'delegation boundaries -> policies/delegation.md' \
-  'model assignment -> policies/model-routing.md' \
-  'verification strategy and quality gates -> policies/verification.md' \
-  'evidence semantics and receipts -> policies/evidence.md' \
-  'delivery and local-resource authorization -> policies/delivery.md' \
-  'context continuity and compaction -> policies/context.md' \
-  'failure classification and recovery -> policies/failure-recovery.md' \
-  'specialist-skill selection -> policies/specialist-skills.md' \
-  'roles -> agents/*' \
-  'contracts and data shapes -> contracts/*' \
-  'provider runbooks -> providers/*' \
-  'harness loading -> adapters/*'; do
-  require_text "$owner" docs/architecture.md
-done
+require_text 'normative ownership and stage-triggered load map is defined in' docs/architecture.md
+require_text '../SWE-FORGE.md' docs/architecture.md
+require_text '../.swe-forge/workflows/ticket.md' docs/architecture.md
+reject_text 'activation and lifecycle -> SWE-FORGE.md' docs/architecture.md
+reject_text 'Minimal load sets are stage-triggered' docs/architecture.md
 
 # Runtime orchestration must expose canonical policy owners before their
 # decisions or actions are needed. These assertions protect the load path
@@ -512,8 +514,6 @@ require_ordered_text 'Before specification or clarification behavior is needed' 
 require_ordered_text 'In `PR`, also load' 'contracts/working-spec.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Every normal run loads' 'before specification or clarification' SWE-FORGE.md
 require_ordered_text '`PR` additionally loads' 'building the transient working spec' SWE-FORGE.md
-require_ordered_text 'Every normal run loads' 'before specification or clarification' docs/architecture.md
-require_ordered_text '`PR` additionally loads' 'before building the transient working spec' docs/architecture.md
 require_ordered_text 'When delegation or an independent review is useful' 'policies/delegation.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'When delegation or an independent review is useful' 'policies/model-routing.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before making the final automatic or explicit topology decision' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md

@@ -117,15 +117,14 @@ for file in \
   .swe-forge/adapters/opencode/README.md \
   .swe-forge/adapters/claude-code/README.md \
   .swe-forge/adapters/pi/README.md \
-  .swe-forge/adapters/pi/prompts/swe-forge-global.md \
   .swe-forge/providers/native/README.md \
   .swe-forge/providers/herdr/README.md \
   .swe-forge/providers/herdr/runbook.md; do
   require_text 'worker_brief' "$file"
 done
 
-require_text 'taskContract` field' .swe-forge/adapters/pi/prompts/swe-forge-global.md
-require_text 'Put only that' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text 'that projection in `taskContract`' .swe-forge/adapters/pi/README.md
+require_text 'places only' .swe-forge/adapters/pi/README.md
 require_text 'resolved-canonical-role-path' .swe-forge/providers/herdr/runbook.md
 require_text 'bounded worker briefing projection' .swe-forge/providers/herdr/runbook.md
 require_text 'relevant canonical role' .swe-forge/adapters/opencode/README.md
@@ -135,8 +134,8 @@ require_text 'relevant canonical role' .swe-forge/adapters/claude-code/README.md
 # carries pointers rather than file bodies and the launch rules forbid root
 # transcript/history/spec leakage.
 require_text 'Workers discover details inside' .swe-forge/providers/herdr/runbook.md
-require_text 'Do not pass the root transcript' .swe-forge/adapters/pi/prompts/swe-forge-global.md
-require_text 'unrelated ticket history' .swe-forge/adapters/pi/prompts/swe-forge-global.md
+require_text 'root transcript' .swe-forge/adapters/pi/README.md
+require_text 'unrelated ticket history' .swe-forge/adapters/pi/README.md
 require_text 'full SWE Forge specification' .swe-forge/adapters/opencode/README.md
 require_text 'full SWE Forge specification' .swe-forge/adapters/claude-code/README.md
 require_text 'dependency_digest' .swe-forge/policies/delegation.md
