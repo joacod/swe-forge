@@ -25,24 +25,16 @@ swe_forge_registry_path_is_safe() {
 
 swe_forge_registry_row_is_valid() {
   swe_forge_registry_harness=$1
-  swe_forge_registry_scope=$2
-  swe_forge_registry_kind=$3
-  swe_forge_registry_source=$4
-  swe_forge_registry_destination=$5
-  swe_forge_registry_support=$6
+  swe_forge_registry_kind=$2
+  swe_forge_registry_source=$3
+  swe_forge_registry_destination=$4
+  swe_forge_registry_support=$5
 
   [ -n "$swe_forge_registry_harness" ] || return 1
-  case "$swe_forge_registry_scope" in
-    project|global) ;;
-    *) return 1 ;;
-  esac
 
   case "$swe_forge_registry_kind" in
     file|tree)
       [ "$swe_forge_registry_source" != - ] || return 1
-      ;;
-    bridge)
-      [ "$swe_forge_registry_source" = - ] || return 1
       ;;
     *)
       return 1

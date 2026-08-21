@@ -10,8 +10,7 @@ fallback.
 Before writing adapter files, verify the harness's current official guidance
 for:
 
-- instruction-file discovery and precedence
-- project and global locations
+- user-level instruction-file discovery and precedence
 - custom commands or slash commands
 - skills or reusable instruction support
 - native subagents, background workers, or teams
@@ -19,6 +18,9 @@ for:
 - model selection and capability mapping
 - worktree or session isolation
 - how external orchestration can launch the harness
+
+A harness may also support project-specific configuration; document that as a
+harness concern, not as another SWE Forge installation location.
 
 Record the documentation links and date in the adapter README. Do not rely on
 old examples or infer undocumented paths.
@@ -28,15 +30,15 @@ old examples or infer undocumented paths.
 Use `.swe-forge/adapters/<harness>/` for harness-specific documentation and
 payloads. Register installable artifacts in
 `.swe-forge/adapters/registry.tsv` instead of adding harness branches to the
-installer. Each registry row declares:
+installer. Each registry row declares the one user-level projection:
 
 ```text
-harness | scope | kind | source | destination | support
+harness | kind | source | destination | support
 ```
 
-Use `file`, `tree`, or `bridge` for `kind`. `support` is the optional global
-canonical support directory. Keep project and global payloads separate only
-when their canonical paths or host syntax differ.
+Use `file` or `tree` for `kind`. `support` is the canonical support directory
+under the user's home. Do not add a second installation projection; harness
+project-specific configuration belongs outside this registry.
 
 Prefer an existing shared projection when the harness supports the same
 standard. For example, Codex and Cursor use the shared Agent Skill payload in
@@ -79,12 +81,12 @@ Do not copy portable role instructions into native definitions.
 
 ## Validation
 
-The installer handles preflight, link/copy, verification, and `install`/`verify`
-for one explicitly selected harness at a time. There is intentionally no
-multi-harness install shortcut; callers can invoke the command once per desired
-harness.
+The installer handles preflight, source-link verification, and
+`install`/`verify` for one explicitly selected harness at a time. There is
+intentionally no multi-harness install shortcut; callers can invoke the command
+once per desired harness.
 
-Test an adapter in a disposable project or controlled fixture:
+Test an adapter in an isolated fake home or controlled fixture:
 
 1. ordinary prompt does not activate Forge
 2. explicit natural-language invocation loads the canonical workflow
@@ -94,7 +96,7 @@ Test an adapter in a disposable project or controlled fixture:
 6. model mappings contain no hardcoded private configuration
 7. unavailable optional tooling falls back cleanly
 8. the repository installer can install and verify the adapter in a temporary
-   project without overwriting collisions
+   home without overwriting collisions
 
 Update the adapter when official harness behavior changes, but do not change
 the canonical architecture to match one vendor's terminology.

@@ -68,26 +68,24 @@ preservation, and draft semantics.
 
 The files in this directory are portable templates and documentation. They are
 not discovered automatically by a harness while they remain here. Installation
-means copying or linking only the selected adapter projection to a target
-repository or user configuration. The adapter catalog itself is never copied
-into the target's canonical `.swe-forge/` tree.
+links only the selected adapter projection and canonical support tree into the
+user-level harness locations. The adapter catalog itself is never installed.
 
-For supported harnesses, prefer `scripts/swe-forge install <harness>`
-and `scripts/swe-forge verify <harness>`. The installer links selected
-artifacts to the canonical checkout by default and accepts `--global` only
-when the user explicitly asks for user-level harness access. Each invocation
-handles one harness. Providers are not installed as a side effect.
+For supported harnesses, use `scripts/swe-forge install <harness>` and
+`scripts/swe-forge verify <harness>`. The installer always links artifacts to
+the stable checkout, and each invocation handles one harness. Providers are not
+installed as a side effect.
 
-Do not modify global harness configuration as part of installing SWE Forge
-unless the user explicitly requests it. Prefer project-local files or links
-that can be reviewed and versioned.
+A harness may have its own project-specific configuration, but that is separate
+from SWE Forge installation. Do not overwrite conflicting harness
+configuration; review it manually first.
 
 ## Adapters
 
-- [OpenCode](opencode/README.md): project command and optional native-agent
+- [OpenCode](opencode/README.md): user-level command and optional native-agent
   bridge pattern
-- [Claude Code](claude-code/README.md): project skill and `CLAUDE.md` bridge
-- [Pi](pi/README.md): global prompt-template bridge
+- [Claude Code](claude-code/README.md): user-level skill projection
+- [Pi](pi/README.md): user-level prompt-template bridge
 - [Shared Agent Skill](shared/agent-skill/README.md): Codex and Cursor projection
 - [Codex](codex/README.md): shared Agent Skill integration notes
 - [Cursor](cursor/README.md): shared Agent Skill integration notes

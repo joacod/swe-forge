@@ -12,19 +12,16 @@ Do not add the Forge workflow to `CLAUDE.md`.
 
 ## Explicit Skill
 
-Copy or link `skills/swe-forge/SKILL.md` to:
+The installer links `skills/swe-forge-global/SKILL.md` to:
 
 ```text
-.claude/skills/swe-forge/SKILL.md
+~/.claude/skills/swe-forge/SKILL.md
 ```
 
 The skill creates `/swe-forge` and uses `disable-model-invocation: true`, so
 Claude can run it only when the user explicitly invokes it. The skill body is a
-loader that reads `AGENTS.md`, `SWE-FORGE.md`, and the ticket workflow; it does not
-duplicate them.
-
-In the default link mode, the project `CLAUDE.md` is a relative symlink to the
-project `AGENTS.md`. Copy mode writes the equivalent `@AGENTS.md` bridge.
+loader that reads the user-level canonical support tree and the ticket
+workflow; it does not duplicate them.
 
 Natural-language activation remains available without installing the skill:
 
@@ -34,7 +31,9 @@ Use SWE Forge.
 <ticket>
 ```
 
-See [shared adapter behavior](../README.md) for the workflow and delivery rules.
+Project-specific `CLAUDE.md` configuration remains the harness's concern and
+is not changed by the SWE Forge installer. See [shared adapter behavior](../README.md)
+for the workflow and delivery rules.
 
 ## Native Subagents
 
@@ -59,9 +58,9 @@ integration/delivery branch. To request Herdr without making it a topology
 alias, state "Use `isolated` with Herdr as the execution provider" in the
 natural-language ticket.
 
-## Global Installation
+## Installed projection
 
-When the user explicitly requests a global installation, the installer links:
+The installer links:
 
 ```text
 ~/.claude/skills/swe-forge/SKILL.md
@@ -70,9 +69,9 @@ When the user explicitly requests a global installation, the installer links:
 ~/.claude/swe-forge/.swe-forge/
 ```
 
-The global skill reads the canonical files through that stable support path, so
-`git pull` in the source checkout updates future sessions. Existing global
-files are never overwritten.
+The skill reads the canonical files through that stable support path, so a
+reviewed update to the source checkout updates future sessions. Existing files
+are never overwritten.
 
 ## References
 

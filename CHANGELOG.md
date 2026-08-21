@@ -39,7 +39,7 @@ compatibility, and known limitations.
 - Portable `SOLO`, `SUBAGENTS`, and `ISOLATED` workflow guidance.
 - Separate `GUIDED` and `PR` delivery modes with explicit delivery boundaries.
 - Registry-driven adapters for Pi, OpenCode, Claude Code, Codex, and Cursor.
-- Transactional link/copy installation and verification with collision and
+- Transactional source-link installation and verification with collision and
   rollback checks.
 - Executable evidence gates and compact run receipts.
 - Installer lifecycle inspection and safe update/uninstall support.
@@ -47,10 +47,9 @@ compatibility, and known limitations.
 ### Known limitations
 
 - The planned release is experimental and does not promise stable compatibility.
-- Pi installation is global-only; global installations are source-linked.
-- Copy installations require an available managed manifest for safe update or
-  uninstall. Legacy installations are inspectable but destructive operations
-  refuse to guess ownership.
+- All harness installations are user-level source links and require a current
+  managed manifest for safe update or uninstall. Obsolete installations are
+  inspectable, but destructive operations refuse to guess ownership.
 - Isolated execution depends on demonstrated native worktree capabilities or
   the optional Herdr provider; Herdr is never installed automatically.
 - SWE Forge creates pull requests in PR mode but never merges them or publishes

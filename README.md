@@ -42,22 +42,21 @@ For development before publication, clone the repository normally and treat
 that checkout as development-only.
 
 For development, a personal checkout may follow `main`, but public
-installations should use a release tag. For Pi, install the global prompt
-template and optional lifecycle extension:
+installations should use a release tag. Install the requested harness from the
+stable checkout:
 
 ```bash
-scripts/swe-forge install pi --global
+scripts/swe-forge install pi
 ```
 
-The optional Pi `SUBAGENTS` backend is a separate package and is not installed
-by this command. Until it is published to npm, follow the
-[pre-publication source install](docs/installation.md#optional-pi-subagents-backend)
+The installer creates links back to this checkout, so reviewed source updates
+are available to future harness sessions. The optional Pi `SUBAGENTS` backend
+is a separate package and is not installed by this command. Until it is
+published to npm, follow the [pre-publication source install](docs/installation.md#optional-pi-subagents-backend)
 to clone both repositories and register the local package.
 
-Pi is global-only. Other supported harnesses can be installed for a project or
-globally. Link installations follow updates to this checkout. See the
-[installation guide](docs/installation.md) for copy mode, verification,
-updates, and conflicts.
+See the [installation guide](docs/installation.md) for harness locations,
+verification, lifecycle commands, and conflicts.
 
 Installation does not install Herdr. Herdr is an optional execution provider
 and may be used only when already available and selected safely by the canonical
@@ -76,12 +75,12 @@ lifecycle operations in addition to `install` and `verify`:
 
 ```bash
 scripts/swe-forge version
-scripts/swe-forge status pi --global
-scripts/swe-forge doctor pi --global
-scripts/swe-forge install pi --global --dry-run
-scripts/swe-forge update opencode --target /path/to/project --dry-run
-scripts/swe-forge update opencode --target /path/to/project
-scripts/swe-forge uninstall opencode --target /path/to/project
+scripts/swe-forge status pi
+scripts/swe-forge doctor pi
+scripts/swe-forge install pi --dry-run
+scripts/swe-forge update opencode --dry-run
+scripts/swe-forge update opencode
+scripts/swe-forge uninstall opencode
 ```
 
 Installations record an exact managed manifest. `update` and `uninstall` refuse
@@ -104,11 +103,11 @@ Commits, pushes, pull requests, and merges remain separately controlled.
 
 | Harness | Installation | Invocation |
 | --- | --- | --- |
-| [Pi](.swe-forge/adapters/pi/README.md) | Global only | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [OpenCode](.swe-forge/adapters/opencode/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [Claude Code](.swe-forge/adapters/claude-code/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [Codex](.swe-forge/adapters/codex/README.md) | Project or global | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
-| [Cursor](.swe-forge/adapters/cursor/README.md) | Project or global | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [Pi](.swe-forge/adapters/pi/README.md) | `scripts/swe-forge install pi` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [OpenCode](.swe-forge/adapters/opencode/README.md) | `scripts/swe-forge install opencode` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [Claude Code](.swe-forge/adapters/claude-code/README.md) | `scripts/swe-forge install claude` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [Codex](.swe-forge/adapters/codex/README.md) | `scripts/swe-forge install codex` | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
+| [Cursor](.swe-forge/adapters/cursor/README.md) | `scripts/swe-forge install cursor` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
 
 Explicit topology and delivery can be combined:
 

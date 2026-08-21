@@ -8,16 +8,14 @@ the shared projection.
 Install explicitly:
 
 ```bash
-scripts/swe-forge install cursor --target /path/to/project
-scripts/swe-forge verify cursor --target /path/to/project
-scripts/swe-forge install cursor --global
-scripts/swe-forge verify cursor --global
+scripts/swe-forge install cursor
+scripts/swe-forge verify cursor
 ```
 
-The project skill is installed at `.agents/skills/swe-forge/`. The global skill
-is installed at `~/.agents/skills/swe-forge/` and reads canonical support files
-from `~/.agents/swe-forge/`. The installer does not modify Cursor settings,
-CLI configuration, permissions, models, credentials, or team configuration.
+The skill is installed at `~/.agents/skills/swe-forge/` and reads canonical
+support files from `~/.agents/swe-forge/`. The installer does not modify Cursor
+settings, CLI configuration, permissions, models, credentials, or team
+configuration.
 
 Invoke it explicitly with `/swe-forge <ticket>`. For isolated execution,
 state "Use `isolated` with Herdr as the execution provider" in the ticket when

@@ -1,8 +1,9 @@
 # OpenCode Adapter
 
-This adapter exposes SWE Forge through current OpenCode project conventions.
-OpenCode discovers project agents under `.opencode/agents/` and project
-commands under `.opencode/commands/`. Skills can also be discovered under
+This adapter exposes SWE Forge through current OpenCode user-level
+conventions. OpenCode discovers user commands under
+`~/.config/opencode/commands/`; project agents and commands may still be used
+for unrelated harness configuration. Skills can also be discovered under
 `.opencode/skills/`, `.agents/skills/`, or compatible project locations.
 
 The adapter does not redefine the workflow. The canonical files remain
@@ -10,10 +11,10 @@ The adapter does not redefine the workflow. The canonical files remain
 
 ## Explicit Command
 
-Copy or link `commands/swe-forge.md` to:
+The installer links `commands/swe-forge-global.md` to:
 
 ```text
-.opencode/commands/swe-forge.md
+~/.config/opencode/commands/swe-forge.md
 ```
 
 The command uses OpenCode's file references and `$ARGUMENTS` substitution to
@@ -41,10 +42,10 @@ workflow and delivery rules.
 
 Do not install a command that auto-runs the workflow for ordinary prompts.
 
-The global installer links the global loader and the four atomic delivery
-commands to `~/.config/opencode/commands/` and exposes the canonical source
-through `~/.config/opencode/swe-forge/`. The loaders use OpenCode's supported
-home-relative file references, so projects do not need local canonical copies
+The installer links the loader and four atomic delivery commands to
+`~/.config/opencode/commands/` and exposes the canonical source through
+`~/.config/opencode/swe-forge/`. The loaders use OpenCode's supported
+home-relative file references, so projects do not need local SWE Forge files
 for `/swe-forge` or the delivery actions.
 
 ## Native Subagents

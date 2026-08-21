@@ -8,17 +8,14 @@ projection.
 Install explicitly:
 
 ```bash
-scripts/swe-forge install codex --target /path/to/project
-scripts/swe-forge verify codex --target /path/to/project
-scripts/swe-forge install codex --global
-scripts/swe-forge verify codex --global
+scripts/swe-forge install codex
+scripts/swe-forge verify codex
 ```
 
-The project skill is installed at `.agents/skills/swe-forge/`. The global skill
-is installed at `~/.agents/skills/swe-forge/` and reads canonical support files
-from `~/.agents/swe-forge/`. The installer does not modify `~/.codex/AGENTS.md`,
-`config.toml`, permissions, models, credentials, or other personal Codex
-configuration.
+The skill is installed at `~/.agents/skills/swe-forge/` and reads canonical
+support files from `~/.agents/swe-forge/`. The installer does not modify
+`~/.codex/AGENTS.md`, `config.toml`, permissions, models, credentials, or other
+personal Codex configuration.
 
 Invoke it explicitly with `$swe-forge <ticket>`. For isolated execution,
 state "Use `isolated` with Herdr as the execution provider" in the ticket when

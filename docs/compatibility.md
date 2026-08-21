@@ -5,13 +5,13 @@ pre-release validation snapshot for the planned `v0.1.0-alpha.1`; its tag and
 release are not yet published. This is evidence of the adapter shape, not a
 promise that future harness releases remain compatible without review.
 
-| Harness or provider | Version observed | Installation scope | Validation posture |
+| Harness or provider | Version observed | Installation | Validation posture |
 | --- | --- | --- | --- |
-| Pi | 0.84.2 | Global | Installer, prompt projection, and runtime extension syntax/fixture validated locally |
-| OpenCode | 1.18.16 | Project and global | Installer and command projection validated locally |
-| Claude Code | 2.1.37 | Project and global | Installer and skill projection validated locally |
-| Codex | Not installed in the validation environment | Project and global | Shared Agent Skill projection; validate with the target Codex release |
-| Cursor | Not installed in the validation environment | Project and global | Shared Agent Skill projection; validate with the target Cursor release |
+| Pi | 0.84.2 | User-level source links | Installer, prompt projection, and runtime extension syntax/fixture validated locally |
+| OpenCode | 1.18.16 | User-level source links | Installer and command projection validated locally |
+| Claude Code | 2.1.37 | User-level source links | Installer and skill projection validated locally |
+| Codex | Not installed in the validation environment | User-level source links | Shared Agent Skill projection; validate with the target Codex release |
+| Cursor | Not installed in the validation environment | User-level source links | Shared Agent Skill projection; validate with the target Cursor release |
 | Herdr (optional provider) | 0.8.0 | Not an installer target | Provider runbook only; never installed by SWE Forge |
 
 The Pi runtime extension optionally feature-detects the separately installed
@@ -49,6 +49,6 @@ execute; local validation may still skip on an older Node runtime. Windows is
 not a claimed compatibility target.
 
 For a new harness release, run the repository checks, install the relevant
-projection in a disposable target, run `status` and `doctor`, and invoke a
+projection into an isolated fake home, run `status` and `doctor`, and invoke a
 small explicit `/swe-forge <ticket>` (or the harness equivalent) before relying
 on it for a real ticket.

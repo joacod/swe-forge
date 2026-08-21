@@ -184,8 +184,9 @@ is implied.
 
 Adapters under `.swe-forge/adapters/` are thin loaders. The registry is the
 installation source of truth, and adapters must resolve canonical references
-from the active installation root rather than a project-local `.swe-forge/`
-tree. The adapter catalog is not installed into target projects.
+from the active user-level installation root rather than a project-local
+`.swe-forge/` tree. The adapter catalog remains in the SWE Forge checkout and
+is not installed with a harness projection.
 
 ## State flow
 
