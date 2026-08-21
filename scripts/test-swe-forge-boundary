@@ -1,0 +1,60 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+CHECK=$ROOT/scripts/check-swe-forge-boundary
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-boundary.XXXXXX")
+
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+trap cleanup EXIT HUP INT TERM
+
+fail() {
+  printf 'boundary fixture failure: %s\n' "$*" >&2
+  exit 1
+}
+
+expect_failure() {
+  expected=$1
+  shift
+  if output=$("$@" 2>&1); then
+    fail "expected command to fail: $*"
+  fi
+  case "$output" in
+    *"$expected"*) ;;
+    *) fail "failure did not contain '$expected': $output" ;;
+  esac
+}
+
+"$CHECK" "$ROOT" >/dev/null
+
+fixture=$TMP_ROOT/fixture
+mkdir -p "$fixture/.swe-forge" \
+  "$fixture/.swe-forge/agents" \
+  "$fixture/.swe-forge/contracts" \
+  "$fixture/.swe-forge/policies" \
+  "$fixture/.swe-forge/providers" \
+  "$fixture/.swe-forge/tools" \
+  "$fixture/.swe-forge/workflows" \
+  "$fixture/.swe-forge/adapters/pi" \
+  "$fixture/docs"
+cp "$ROOT/AGENTS.md" "$fixture/AGENTS.md"
+cp "$ROOT/SWE-FORGE.md" "$fixture/SWE-FORGE.md"
+printf '%s\n' 'if harness == "pi": compact' \
+  >"$fixture/.swe-forge/policies/identity-branch.md"
+printf '%s\n' 'if harness == "pi": compact' \
+  >"$fixture/.swe-forge/adapters/pi/README.md"
+printf '%s\n' 'if harness == "pi": compact' \
+  >"$fixture/docs/compatibility.md"
+
+expect_failure 'branch on semantic capabilities, not harness identity' \
+  "$CHECK" "$fixture"
+
+rm "$fixture/.swe-forge/policies/identity-branch.md"
+printf '%s\n' 'if proactive_compaction is available: use it' \
+  >"$fixture/.swe-forge/policies/capability-branch.md"
+"$CHECK" "$fixture" >/dev/null
+
+printf '%s\n' 'PASS: canonical capability-boundary fixture'

@@ -71,7 +71,7 @@ workflow is terminal, whose checkout does not match the active project, or
 whose active marker is false is not eligible for reinjection. A pointer to a
 stale state must never override a newer active snapshot.
 
-Pi and other adapters may derive a bounded continuity block from this section.
+Adapters may derive a bounded continuity block from this section.
 The block is a reminder, not a second workflow specification. It must be
 small, deterministic, and per-turn or otherwise non-duplicating; it must not
 reinject the ticket, transcript, or full policy.
@@ -129,24 +129,24 @@ only a settled event but no compaction API, record the observed signal and use
 its native/manual path. If it exposes neither, use durable checkpoints and
 manual resume; do not claim proactive recovery.
 
-## Pi lifecycle mapping
+## Adapter lifecycle mapping
 
-The Pi adapter keeps Pi-specific API knowledge local to its extension:
+Harness-specific lifecycle API knowledge stays in the adapter/runtime
+integration. A capable adapter may:
 
-- `before_agent_start` appends a bounded state-derived system-prompt reminder;
-- `agent_settled`, not merely `agent_end`, is the preferred safe lifecycle
-  boundary because Pi may still retry, compact-and-retry, or process queued
-  follow-ups after `agent_end`;
-- `ctx.getContextUsage()` supplies observed usage when available;
-- `ctx.compact()` requests programmatic compaction without changing the
-  generic core; and
-- `session_before_compact`/`session_compact` observe the host lifecycle so the
-  extension does not race or duplicate an automatic compaction.
+- inject a bounded state-derived continuation reminder at a host lifecycle
+  boundary;
+- report a settled boundary suitable for context inspection;
+- supply observed context usage when the host exposes it;
+- request host-native compaction without changing the generic core; and
+- observe host compaction events so it does not race or duplicate native
+  recovery.
 
-The Pi extension must not replace the host's own threshold compaction or
-overflow retry. It may request one proactive compaction at a recorded safe
-boundary, then waits for the host callback/event and relies on the next
-`before_agent_start` to re-read and reinject state.
+The canonical core consumes these semantic capabilities and durable state; it
+does not call host APIs or branch on harness identity. An adapter must not
+replace the host's own threshold compaction or overflow retry. When it requests
+proactive compaction, it waits for the host lifecycle to settle and relies on
+the next continuation boundary to re-read and reinject state.
 
 ## Pre-continuation protocol
 

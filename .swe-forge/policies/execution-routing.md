@@ -218,7 +218,7 @@ be recorded in the working spec or run state using this shape:
 
 ```yaml
 runtime_profile:
-  harness: pi
+  harness: <active-harness>
   context_usage:
     status: available | estimated | unavailable | unknown
     source: <observed adapter/runtime evidence>

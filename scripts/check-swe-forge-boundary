@@ -1,0 +1,68 @@
+#!/bin/sh
+
+# Narrow structural guard for canonical workflow semantics. It intentionally
+# scans only canonical sources, not adapters or compatibility/installation docs.
+
+set -eu
+
+ROOT=${1:-$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)}
+
+if [ "$#" -gt 1 ]; then
+  printf 'usage: %s [repository-root]\n' "$0" >&2
+  exit 2
+fi
+
+[ -d "$ROOT" ] || {
+  printf 'canonical boundary check failure: repository root does not exist: %s\n' "$ROOT" >&2
+  exit 1
+}
+
+scan_file() {
+  file=$1
+  matches=$(awk '
+    {
+      line = tolower($0)
+      has_host = line ~ /(^|[^[:alnum:]_])(pi|opencode|claude([[:space:]_-]+code)?|codex|cursor)([^[:alnum:]_]|$)/
+      has_branch = line ~ /(^|[^[:alnum:]_])(if|elif|case)([^[:alnum:]_]|$)/
+      if (has_host && has_branch) {
+        print FNR ":" $0
+      }
+    }
+  ' "$file")
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" | while IFS= read -r match; do
+      printf 'canonical boundary check failure: %s:%s\n' "$file" "$match" >&2
+    done
+    printf '%s\n' 'Canonical workflow sources must branch on semantic capabilities, not harness identity; move host-specific behavior to an adapter/runtime integration.' >&2
+    return 1
+  fi
+}
+
+canonical_files=$(
+  {
+    printf '%s\n' "$ROOT/AGENTS.md" "$ROOT/SWE-FORGE.md"
+    for directory in \
+      "$ROOT/.swe-forge/agents" \
+      "$ROOT/.swe-forge/contracts" \
+      "$ROOT/.swe-forge/policies" \
+      "$ROOT/.swe-forge/providers" \
+      "$ROOT/.swe-forge/tools" \
+      "$ROOT/.swe-forge/workflows"; do
+      [ -d "$directory" ] || continue
+      find "$directory" -type f -print
+    done
+  } | LC_ALL=C sort
+)
+
+while IFS= read -r file; do
+  [ -n "$file" ] || continue
+  [ -f "$file" ] || {
+    printf 'canonical boundary check failure: missing canonical source: %s\n' "$file" >&2
+    exit 1
+  }
+  scan_file "$file"
+done <<EOF_FILES
+$canonical_files
+EOF_FILES
+
+printf '%s\n' 'PASS: canonical capability-boundary structural check'
