@@ -467,11 +467,19 @@ require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent
 require_text '~/.agents/swe-forge' .swe-forge/adapters/shared/agent-skill/global/SKILL.md
 require_text 'disable-model-invocation: true' .swe-forge/adapters/shared/agent-skill/project/SKILL.md
 require_text 'shared/agent-skill/project' .swe-forge/adapters/registry.tsv
-require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' .swe-forge/contracts/task.md
-require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/contracts/task.md
+require_text 'write_access: read-write' .swe-forge/contracts/task.md
+require_text 'worktree_role: shared | integration | worker | none' .swe-forge/contracts/task.md
 require_text 'base_sha:' .swe-forge/contracts/task.md
 require_text 'integration_order:' .swe-forge/contracts/task.md
 require_text 'environment_isolation:' .swe-forge/contracts/task.md
+for removed_task_field in \
+  'requested_mode:' 'preferred_mode:' 'execution_mode:' 'routing:' \
+  'routing.initial:' 'routing.preferred:' 'routing.selected:' 'routing.current:' \
+  'requested_provider:' 'execution_provider:' 'delegation_backend:' \
+  'write_isolation:' 'provider_reason:' 'provider_constraints:' \
+  'parallel_strategy:' 'integration_strategy:' 'requested_delivery:' 'delivery_mode:'; do
+  reject_text "$removed_task_field" .swe-forge/contracts/task.md
+done
 require_text 'RESULT_PROFILE: READ_ONLY' .swe-forge/contracts/result.md
 require_text 'RESULT_PROFILE: WRITABLE' .swe-forge/contracts/result.md
 require_text 'ISOLATED_WRITABLE' .swe-forge/contracts/result.md

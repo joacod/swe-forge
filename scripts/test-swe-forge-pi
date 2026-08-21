@@ -547,10 +547,18 @@ await subagentHandlers.get("tool_result")({
   details: capabilityDetails,
   isError: false,
 }, subagentContext);
+const workerBriefingContract = `worker_briefing:
+  schema: worker-brief/v1
+  objective: inspect only
+  permissions:
+    write_access: read-only
+    topology: SUBAGENTS
+    write_isolation: SHARED
+`;
 const runInput = {
   action: "run",
   role: "reader",
-  taskContract: "TASK_ID: reader-check\nOBJECTIVE: inspect only\nrouting.current: SUBAGENTS\nwrite_access: read-only\n",
+  taskContract: workerBriefingContract,
   expectedOutputContract: "result",
   profile: "READ_ONLY",
 };
@@ -559,6 +567,19 @@ const allowedRun = await subagentHandlers.get("tool_call")({
   input: runInput,
 }, subagentContext);
 if (allowedRun) throw new Error(`negotiated SUBAGENTS run was blocked: ${allowedRun.reason}`);
+
+// A removed task-level routing mirror must not be accepted as a worker
+// briefing, even when canonical run state independently selects SUBAGENTS.
+const removedRoutingRun = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: {
+    ...runInput,
+    taskContract: "TASK_ID: legacy-reader\nOBJECTIVE: inspect only\nrouting.current: SUBAGENTS\nwrite_access: read-only\n",
+  },
+}, subagentContext);
+if (!removedRoutingRun?.block || !removedRoutingRun.reason.includes("removed root-owned routing field")) {
+  throw new Error("removed task routing shape was silently accepted");
+}
 
 // An explicit invocation may discover the optional tool before the canonical
 // run state exists, but task-contract text must not authorize a run. Once the
@@ -667,6 +688,13 @@ const soloPrompt = await subagentHandlers.get("before_agent_start")({
 }, subagentContext);
 if (soloPrompt?.systemPrompt.includes("swe_forge_subagent")) {
   throw new Error("unselected subagent capability was injected into a SOLO run");
+}
+const reroutedAttempt = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: runInput,
+}, subagentContext);
+if (!reroutedAttempt?.block || !reroutedAttempt.reason.includes("Canonical routing selected SOLO")) {
+  throw new Error("adaptive routing did not use current run state at launch");
 }
 
 // A changed topology invalidates the negotiation and protects the shared

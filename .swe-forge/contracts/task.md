@@ -19,32 +19,13 @@ reason: >
 owner_role: implementer
 dependencies: []
 
-requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
-routing:
-  initial: SOLO | SUBAGENTS | ISOLATED
-  preferred: SOLO | SUBAGENTS | ISOLATED
-  selected: SOLO | SUBAGENTS | ISOLATED
-  current: SOLO | SUBAGENTS | ISOLATED
-requested_provider: AUTO | NATIVE | HERDR | NONE
-execution_provider: NATIVE | HERDR | NONE
-delegation_backend: NONE | NATIVE | HERDR | OTHER
-write_isolation: SHARED | WORKTREE
-provider_reason: <why the provider satisfies isolated-execution requirements>
-parallel_strategy: NONE | COMPOSE
-integration_strategy: NONE | CHERRY_PICK
-provider_constraints:
-  non_isolated:
-    execution_provider: NONE
-    parallel_strategy: NONE
-    integration_strategy: NONE
-  isolated:
-    execution_provider: NATIVE | HERDR
-    parallel_strategy: COMPOSE
-    integration_strategy: CHERRY_PICK
+# Run-level request, live topology, provider selection, integration strategy,
+# and delivery mode are owned by the active run state. They are intentionally
+# absent from the task contract; the launch-time worker briefing derives only
+# the bounded current execution facts a worker needs.
 write_access: read-write
 worktree_role: shared | integration | worker | none
 worktree: shared | dedicated
-delivery_mode: GUIDED | PR
 working_spec_ref: <external temporary spec, active context, or none>
 
 # Bounded workers receive a derived projection rather than the complete task
@@ -178,7 +159,7 @@ expected_output:
   - implementation within allowed scope
   - test evidence
   - structured worker result
-  - source-to-integration mapping when routing.current is ISOLATED
+  - source-to-integration mapping for an isolated writable task
 ```
 
 ## Required Fields
@@ -188,17 +169,8 @@ expected_output:
 - `reason`: why this task is separate and useful
 - `owner_role`: role responsible for the work
 - `dependencies`: task IDs that must finish first
-- `requested_mode` and `routing.initial`, `routing.preferred`,
-  `routing.selected`, and `routing.current`: a bounded task projection of the
-  immutable request, semantic preference, and effective topology; the root run
-  state owns live routing, and the projection must not become an independent
-  worker decision
-- `requested_provider`, `execution_provider`, and `provider_reason`: provider
-  preference and evidence; provider selection applies only to `ISOLATED`
-- `delegation_backend` and `write_isolation`: the mechanism and write boundary
-  used by the semantic topology; a read-only Herdr worker remains `SUBAGENTS`
-- `parallel_strategy` and `integration_strategy`: `NONE` for non-isolated
-  tasks, or `COMPOSE` and `CHERRY_PICK` for isolated v1
+- `write_access`, `worktree_role`, and `worktree`: task-local permissions and
+  checkout requirements; they do not select the run topology
 - `worker_mode`: bounded worker mode, depth, root task, and the derived
   `worker_briefing` projection reference; delegated workers default to depth 1
   with zero descendant workers
@@ -215,10 +187,16 @@ expected_output:
 - `expected_output`: artifacts and evidence the worker must return
 - `delegation`: whether child workers are allowed and, if so, their limits
 
+The task contract deliberately omits run-level request, live topology, provider
+selection, integration strategy, and delivery mode. The active run state is
+authoritative; the orchestrator renders the current bounded execution facts
+into the worker briefing immediately before launch. A concrete task-specific
+execution constraint remains task-scoped rather than copying selected run
+state.
+
 Writable tasks additionally require `write_access`, `worktree_role`,
-`worktree`, `delivery_mode`, `checkout_baseline`, and `authorization`.
-`working_spec_ref` is required when a transient spec guides the task and is
-`none` when it does not.
+`worktree`, `checkout_baseline`, and `authorization`. `working_spec_ref` is
+required when a transient spec guides the task and is `none` when it does not.
 
 For an isolated task, `integration` distinguishes the one central
 delivery branch/worktree from the `worker` branch/worktree and local transfer
@@ -226,16 +204,11 @@ commits. `base_sha`, `wave`, `integration_order`, `shared_artifacts`, and
 `environment_isolation` are required. The worker must start from the exact
 recorded integration `HEAD`; a worker cannot choose a different base.
 
-The provider constraint is conditional, not an independent mode: when
-`routing.current` is not `ISOLATED`, `execution_provider` must be `NONE`,
-`parallel_strategy` must be `NONE`, and `integration_strategy` must be `NONE`.
-A non-isolated `SUBAGENTS` task may still use `delegation_backend: NATIVE` or
-`HERDR` with `write_isolation: SHARED`. When `routing.current` is `ISOLATED`,
-`execution_provider` must be `NATIVE` or `HERDR`, `delegation_backend` must
-identify the selected backend, `write_isolation` must be `WORKTREE`,
-`parallel_strategy` must be `COMPOSE`, and `integration_strategy` must be
-`CHERRY_PICK`. `requested_provider` records preference and may remain `AUTO`,
-`NATIVE`, `HERDR`, or `NONE` before selection or after a safe fallback.
+Run-level provider and strategy invariants are owned by the run-state and
+routing policies, not repeated in a task contract. Isolated task contracts
+still record their task-local checkout, ownership, environment, authorization,
+and integration evidence requirements; the current provider and topology are
+derived into the worker briefing when the task is launched.
 
 `authorization` records each delivery or user-directed setup action
 independently. `not-authorized` is the default. Automatic setup of one normal
@@ -304,8 +277,8 @@ cannot reset or increase them.
   authorization is owned by `../policies/delivery.md`; this contract records
   the resulting per-action status.
 - authorization for one action never implies authorization for another action
-- `delivery_mode: GUIDED` must stop at declared review checkpoints unless the
-  user resumes it; `delivery_mode: PR` may proceed without those checkpoints but
+- guided delivery must stop at declared review checkpoints unless the user
+  resumes it; pull-request delivery may proceed without those checkpoints but
   must retain the working-spec, validation, and review evidence
 - workers must not push, create PRs, merge, publish, deploy, or create more
   worktrees unless separately authorized; isolated worker branches are local
