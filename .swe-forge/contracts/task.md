@@ -185,8 +185,10 @@ expected_output:
 - `reason`: why this task is separate and useful
 - `owner_role`: role responsible for the work
 - `dependencies`: task IDs that must finish first
-- `requested_mode`, `preferred_mode`, and `execution_mode`: requested,
-  capability-aware preferred, and selected topology
+- `requested_mode`, `preferred_mode`, and `execution_mode`: a bounded task
+  projection of the immutable request, semantic preference, and effective
+  topology; the root run state owns live routing, and these fields must not
+  become an independent worker decision
 - `requested_provider`, `execution_provider`, and `provider_reason`: provider
   preference and evidence; provider selection applies only to `ISOLATED`
 - `delegation_backend` and `write_isolation`: the mechanism and write boundary

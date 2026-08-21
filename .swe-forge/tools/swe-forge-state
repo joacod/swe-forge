@@ -78,6 +78,73 @@ value_for() {
   awk -v wanted="$key" '$1 == wanted ":" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$file"
 }
 
+# Read one scalar from the deliberately simple state YAML without introducing
+# a general parser. The path is optional so older schema-v2 snapshots remain
+# valid when additive routing or continuation sections are absent.
+scalar_value() {
+  path=$1
+  file=$2
+  awk -v wanted="$path" '
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ || /^[[:space:]]*-/ { next }
+    {
+      leading=$0
+      sub(/[^ ]+.*/, "", leading)
+      indent=length(leading)
+      line=$0
+      sub(/^[ ]*/, "", line)
+      if (line !~ /^[A-Za-z0-9_-]+:/) next
+      key=line
+      sub(/:.*/, "", key)
+      raw=line
+      sub(/^[^:]*:[[:space:]]*/, "", raw)
+      sub(/[[:space:]]+#.*$/, "", raw)
+      sub(/[[:space:]]+$/, "", raw)
+      while (depth > 0 && indents[depth] >= indent) depth--
+      depth++
+      keys[depth]=key
+      indents[depth]=indent
+      current=keys[1]
+      for (i=2; i<=depth; i++) current=current "." keys[i]
+      if (current == wanted) {
+        print raw
+        found=1
+        exit
+      }
+      if (raw != "") depth--
+    }
+    END { if (found) exit 0; exit 1 }
+  ' "$file"
+}
+
+validate_optional_mode() {
+  field=$1
+  file=$2
+  if ! value=$(scalar_value "$field" "$file"); then
+    return 0
+  fi
+  case "$field" in
+    requested_mode)
+      case "$value" in AUTO|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid $field" ;; esac
+      ;;
+    preferred_mode|execution_mode|routing.initial|routing.preferred|routing.selected|routing.current)
+      case "$value" in SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid $field" ;; esac
+      ;;
+    delivery_mode|continuation.delivery.mode)
+      case "$value" in GUIDED|PR) ;; *) fail "invalid $field" ;; esac
+      ;;
+  esac
+}
+
+validate_alias_match() {
+  left=$1
+  right=$2
+  file=$3
+  if left_value=$(scalar_value "$left" "$file") && right_value=$(scalar_value "$right" "$file"); then
+    [ "$left_value" = "$right_value" ] || \
+      fail "$left must match $right when both are present"
+  fi
+}
+
 validate_sha_field() {
   field=$1
   value=$2
@@ -107,12 +174,18 @@ validate_state() {
   [ "$(value_for schema_version "$file")" = 2 ] || \
     fail "schema-v2 state is required (schema_version must be 2)"
 
-  if grep -Eq '^preferred_mode:' "$file"; then
-    case "$(value_for preferred_mode "$file")" in
-      SOLO|SUBAGENTS|ISOLATED) ;;
-      *) fail "invalid preferred topology" ;;
-    esac
-  fi
+  # Additive mode fields are validated only when present. Compatibility
+  # projections are compared only when their nested canonical counterparts
+  # also exist.
+  for field in requested_mode preferred_mode execution_mode \
+    routing.initial routing.preferred routing.selected routing.current \
+    delivery_mode continuation.delivery.mode; do
+    validate_optional_mode "$field" "$file"
+  done
+  validate_alias_match preferred_mode routing.preferred "$file"
+  validate_alias_match execution_mode routing.current "$file"
+  validate_alias_match delivery_mode continuation.delivery.mode "$file"
+
   if grep -Eq '^delegation_backend:' "$file"; then
     case "$(value_for delegation_backend "$file")" in
       NONE|NATIVE|HERDR|OTHER) ;;

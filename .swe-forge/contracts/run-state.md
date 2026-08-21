@@ -100,6 +100,42 @@ delivery_checkout:
   remote_default_evidence: <read-only branch classification evidence>
 ```
 
+### Canonical routing and projection ownership
+
+The live routing facts are owned by `routing` whenever that additive mapping is
+present. The top-level `preferred_mode` and `execution_mode` remain schema-v2
+compatibility projections; they are not a second set of independently
+synchronized decisions. `requested_mode` remains the canonical immutable
+invocation request.
+
+| Field | Meaning and update rule |
+| --- | --- |
+| `requested_mode` | Immutable user/requested topology token (`AUTO` is valid); it records what the invocation asked for, not what the runtime can execute. |
+| `routing.initial` | Initial semantic topology preference computed from the request and discovery; set once when routing starts. |
+| `routing.preferred` | Current semantic topology preference after a deliberate reassessment; it may remain different from the effective topology. |
+| `routing.selected` | Initial effective/executable topology after capability fallback; it records the first executable result and is not rewritten merely because `current` later changes. |
+| `routing.current` | Currently effective/executable topology; update it only when an actual routing change is selected. |
+| `preferred_mode` | Compatibility/summary projection of `routing.preferred` when nested routing exists. |
+| `execution_mode` | Compatibility/summary projection of `routing.current` when nested routing exists; it never means provider. |
+
+At initial routing, write `routing.initial`, `routing.preferred`,
+`routing.selected`, and `routing.current` from the routing decision, then derive
+`preferred_mode` and `execution_mode` from the corresponding nested values. A
+later reassessment updates `routing.preferred` and its `preferred_mode`
+projection; a later effective-topology change updates `routing.current` and its
+`execution_mode` projection. A preferred `SUBAGENTS` topology may therefore
+legitimately run with an effective `SOLO` topology after capability fallback.
+When nested routing is absent from an older schema-v2 snapshot, the available
+top-level fields remain valid legacy state and the additive nested fields are
+not required.
+
+`delivery_mode` owns the active delivery-domain decision.
+`continuation.delivery.mode`, when present, is the compact recovery/continuation
+projection of that decision rather than an independent owner. Modern writers
+update the top-level decision first and write the continuation projection with
+the same value. Both representations are optional for backward compatibility,
+but when both exist they must match.
+
 `invocation_checkout` identifies the checkout that started the run. In a
 normal run it may be the same path as `delivery_checkout`. In an isolated run
 it remains untouched and `delivery_checkout` is the orchestrator-owned

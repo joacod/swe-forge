@@ -443,4 +443,110 @@ EOF_V1
 expect_failure 'schema-v1 state is not resumable' "$ROOT/scripts/swe-forge-state" \
   validate --state "$v1"
 
+# Schema-v2 keeps additive nested routing and continuation sections optional,
+# while modern aliases must agree whenever both representations exist.
+projection_repo=$(make_repo projection)
+projection_state=$(clean_feature_state "$projection_repo")
+(
+  cd "$projection_repo"
+  "$GATE" preflight --state "$projection_state" >/dev/null
+)
+projection_modern=$TMP_ROOT/projection-modern.yaml
+cp "$projection_state/run-state.yaml" "$projection_modern"
+"$ROOT/scripts/swe-forge-state" validate --state "$projection_modern" >/dev/null
+
+strip_top_level_section() {
+  remove=$1
+  input=$2
+  output=$3
+  awk -v remove="$remove" '
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      skip=(section == remove)
+      if (skip) next
+    }
+    !skip { print }
+  ' "$input" >"$output"
+}
+
+replace_top_level_scalar() {
+  key=$1
+  value=$2
+  input=$3
+  output=$4
+  awk -v key="$key" -v value="$value" '
+    $0 ~ "^" key ":[[:space:]]*" {
+      print key ": " value
+      found=1
+      next
+    }
+    { print }
+    END { if (!found) exit 1 }
+  ' "$input" >"$output"
+}
+
+replace_nested_scalar() {
+  section=$1
+  key=$2
+  value=$3
+  input=$4
+  output=$5
+  awk -v section="$section" -v key="$key" -v value="$value" '
+    /^[^[:space:]#][^:]*:/ {
+      current=$1
+      sub(/:$/, "", current)
+    }
+    current == section && $0 ~ "^  " key ":[[:space:]]*" {
+      print "  " key ": " value
+      found=1
+      next
+    }
+    { print }
+    END { if (!found) exit 1 }
+  ' "$input" >"$output"
+}
+
+legacy_no_routing=$TMP_ROOT/projection-legacy-no-routing.yaml
+strip_top_level_section routing "$projection_modern" "$legacy_no_routing"
+"$ROOT/scripts/swe-forge-state" validate --state "$legacy_no_routing" >/dev/null
+
+legacy_no_continuation=$TMP_ROOT/projection-legacy-no-continuation.yaml
+strip_top_level_section continuation "$projection_modern" "$legacy_no_continuation"
+"$ROOT/scripts/swe-forge-state" validate --state "$legacy_no_continuation" >/dev/null
+
+preferred_effective=$TMP_ROOT/projection-preferred-effective.yaml
+cp "$projection_modern" "$preferred_effective.0"
+replace_top_level_scalar preferred_mode SUBAGENTS \
+  "$preferred_effective.0" "$preferred_effective.1"
+replace_nested_scalar routing initial SUBAGENTS \
+  "$preferred_effective.1" "$preferred_effective.2"
+replace_nested_scalar routing preferred SUBAGENTS \
+  "$preferred_effective.2" "$preferred_effective"
+"$ROOT/scripts/swe-forge-state" validate --state "$preferred_effective" >/dev/null
+
+mismatch_preferred=$TMP_ROOT/projection-mismatch-preferred.yaml
+replace_top_level_scalar preferred_mode SUBAGENTS \
+  "$projection_modern" "$mismatch_preferred"
+expect_failure 'preferred_mode must match routing.preferred' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_preferred"
+
+mismatch_execution=$TMP_ROOT/projection-mismatch-execution.yaml
+replace_top_level_scalar execution_mode SUBAGENTS \
+  "$projection_modern" "$mismatch_execution"
+expect_failure 'execution_mode must match routing.current' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_execution"
+
+mismatch_delivery=$TMP_ROOT/projection-mismatch-delivery.yaml
+replace_top_level_scalar delivery_mode GUIDED \
+  "$projection_modern" "$mismatch_delivery"
+expect_failure 'delivery_mode must match continuation.delivery.mode' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_delivery"
+
+invalid_current=$TMP_ROOT/projection-invalid-current.yaml
+replace_nested_scalar routing current BOGUS \
+  "$projection_modern" "$invalid_current"
+expect_failure 'invalid routing.current' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$invalid_current"
+
 printf '%s\n' 'PASS: executable gate tests'

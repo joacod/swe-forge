@@ -208,12 +208,29 @@ write_run_state() {
     printf 'run_id: %s\n' "$(meta_value run_id)"
     printf 'status: running\n'
     printf 'requested_mode: ISOLATED\n'
+    printf 'preferred_mode: ISOLATED\n'
     printf 'execution_mode: ISOLATED\n'
     printf 'requested_provider: AUTO\n'
     printf 'execution_provider: %s\n' "$provider"
+    printf 'delegation_backend: %s\n' "$provider"
+    printf 'write_isolation: WORKTREE\n'
     printf 'provider_reason: capability evidence recorded at %s\n' "$capabilities_ref"
 
     printf 'parallel_strategy: COMPOSE\n'
+    printf 'routing:\n'
+    printf '  initial: ISOLATED\n'
+    printf '  preferred: ISOLATED\n'
+    printf '  selected: ISOLATED\n'
+    printf '  current: ISOLATED\n'
+    printf '  revisions: []\n'
+    printf '  context_value:\n'
+    printf '    projected_pressure: unknown\n'
+    printf '    context_reducibility: unknown\n'
+    printf '    delegatable_context: low\n'
+    printf '    root_context_requirement: high\n'
+    printf '    continuity_risk: unknown\n'
+    printf '    rationale: isolated evidence gate state\n'
+    printf '  runtime_profile_ref: none\n'
     printf 'integration_strategy: CHERRY_PICK\n'
     printf 'requested_delivery: PR\n'
     printf 'delivery_mode: PR\n'
