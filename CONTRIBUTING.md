@@ -25,12 +25,13 @@ Run the repository checks from the project root:
 git diff --check
 ```
 
-The validation batch runs the independent installer, evidence-gate, and
-isolated-worktree fixtures concurrently after syntax and structural checks. It
-runs every suite and returns failure if any required suite fails; it does not
-weaken the final quality gate. During an implementation loop, use only the
-focused suite affected by the current slice and run the batch once on the final
-candidate. Focused changes may run the directly affected suite, such as
+The validation batch runs syntax and structural checks first, then the
+repository's current independent fixture and validation suites. Independent
+suites may run in parallel where appropriate, and any required suite failure
+causes validation to fail; the batch does not weaken the final quality gate.
+During an implementation loop, use only the focused suite affected by the
+current slice and run the batch once on the final candidate. Focused changes may
+run the directly affected suite, such as
 `scripts/test-swe-forge-gate`, `scripts/test-swe-forge-isolated`,
 `scripts/test-swe-forge-pi`, `scripts/test-swe-forge-briefing`, or
 `scripts/test-swe-forge-results`, before the final batch. The local Pi fixture may

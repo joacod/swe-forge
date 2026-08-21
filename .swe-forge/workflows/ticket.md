@@ -363,7 +363,7 @@ review. The reviewer owns review behavior; the contract owns the result shape an
 blocking matrix.
 
 Use a fresh context for independent review when delegation, multi-component
-scope, or medium-or-higher risk makes it useful; this refactor requires it.
+scope, or medium-or-higher risk makes it useful.
 Provide the original ticket, `review_focus`, acceptance criteria, architecture
 decisions, final diff, and validation evidence. The loaded reviewer role and
 review contract define review behavior, relevant findings, and blocking status.
