@@ -25,7 +25,11 @@ beneficial.
 
 ```text
 requested_mode: AUTO
-execution_mode: ISOLATED
+routing:
+  initial: ISOLATED
+  preferred: ISOLATED
+  selected: ISOLATED
+  current: ISOLATED
 requested_provider: HERDR
 execution_provider: HERDR
 provider_reason: Herdr capability proof covers dedicated worktrees, exact bases, structured results, lifecycle control, and central integration for this run.

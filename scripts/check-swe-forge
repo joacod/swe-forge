@@ -184,15 +184,15 @@ require_text 'context:' .swe-forge/contracts/run-state.md
 require_text 'context_strategy:' .swe-forge/contracts/working-spec.md
 require_text 'last_compaction:' .swe-forge/contracts/working-spec.md
 require_text 'workflow_version: 1' .swe-forge/contracts/run-state.md
-require_text 'schema_version: 2' .swe-forge/contracts/run-state.md
+require_text 'schema_version: 3' .swe-forge/contracts/run-state.md
 require_text 'invocation_checkout:' .swe-forge/contracts/run-state.md
 require_text 'delivery_checkout:' .swe-forge/contracts/run-state.md
 require_text 'isolated_eligibility:' .swe-forge/contracts/run-state.md
 require_text 'provider_capabilities:' .swe-forge/contracts/run-state.md
 require_text 'delivery_checkout:' .swe-forge/contracts/working-spec.md
 require_text 'delivery_checkout:' .swe-forge/contracts/review.md
-require_text 'schema-v1 evidence state is not resumable' .swe-forge/tools/swe-forge-gate
-require_text 'schema-v1 state is not resumable' .swe-forge/tools/swe-forge-state
+require_text 'evidence state is stale or unsupported' .swe-forge/tools/swe-forge-gate
+require_text 'stale/unsupported run state' .swe-forge/tools/swe-forge-state
 require_text 'result-bundle.md' .swe-forge/contracts/result.md
 require_text 'swe-forge-isolated-gate' .swe-forge/policies/evidence.md
 require_text 'result-bundle.md' .swe-forge/workflows/isolated-execution.md
@@ -230,21 +230,22 @@ require_text '`/git-pr draft` requests a draft PR' SWE-FORGE.md
 require_text 'The same policy resolves repository branch, commit, title, template, and draft' docs/architecture.md
 require_text '/swe-forge isolated <ticket>' SWE-FORGE.md
 require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
-require_text 'execution_mode: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
+require_text '  current: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
 require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
 require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
 require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
 require_text 'integration_strategy: NONE | CHERRY_PICK' .swe-forge/policies/provider-selection.md
 require_text 'delivery_mode: GUIDED | PR' .swe-forge/contracts/run-state.md
-require_text 'Canonical routing and projection ownership' .swe-forge/contracts/run-state.md
-require_text 'preferred_mode` | Compatibility/summary projection' .swe-forge/contracts/run-state.md
+require_text 'Canonical routing ownership' .swe-forge/contracts/run-state.md
+require_text 'mapping is the sole owner of live topology facts' .swe-forge/contracts/run-state.md
 require_text 'delivery_mode` owns the active delivery-domain decision' .swe-forge/contracts/run-state.md
 reject_text 'requested_mode: AUTO | SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
-reject_text 'execution_mode: SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
-reject_text 'execution_mode: HERDR' SWE-FORGE.md
 require_text 'transient working spec' SWE-FORGE.md
 require_text 'specialist skills optional and on demand' SWE-FORGE.md
 require_text 'risk-proportional testing decision' SWE-FORGE.md
+require_text 'Only current schema v3 is' SWE-FORGE.md
+require_text 'ephemeral internal implementation state' AGENTS.md
+require_text 'root/orchestrator authority' AGENTS.md
 require_text 'side effects' .swe-forge/policies/verification.md
 require_text 'No blanket coverage percentage' .swe-forge/policies/verification.md
 require_text 'specialist_skills:' .swe-forge/contracts/working-spec.md
@@ -482,17 +483,14 @@ require_text 'cleanup_status:' .swe-forge/contracts/run-state.md
 require_text 'provider: NATIVE | HERDR | NONE' .swe-forge/contracts/review.md
 require_text 'delegation_backend: NONE | NATIVE | HERDR | OTHER' .swe-forge/contracts/run-state.md
 require_text 'continuation:' .swe-forge/contracts/run-state.md
-require_text 'preferred_mode: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
-require_text '`routing` mapping is the canonical owner' .swe-forge/policies/execution-routing.md
-require_text 'must not be collapsed into the effective executable topology.' .swe-forge/policies/execution-routing.md
+require_text 'routing.preferred` is the current semantic' .swe-forge/policies/execution-routing.md
+require_text '`routing` mapping is the sole owner' .swe-forge/policies/execution-routing.md
+require_text 'A preferred topology must not be collapsed into the' .swe-forge/policies/execution-routing.md
 require_text 'integrated_validation_checked:' .swe-forge/contracts/review.md
 require_text 'local-only transfer resources' .swe-forge/policies/delivery.md
 require_text 'Completion order' .swe-forge/policies/delivery.md
 require_text 'Integrated-state validation' .swe-forge/policies/delivery.md
 require_text 'forced removal is never automatic' .swe-forge/policies/delivery.md
-reject_text 'execution_mode: HERDR' .swe-forge/contracts/task.md
-reject_text 'execution_mode: HERDR' .swe-forge/contracts/run-state.md
-reject_text 'execution_mode: HERDR' .swe-forge/examples/isolated-ticket.md
 reject_text 'install all' README.md
 reject_text 'install all' docs/installation.md
 reject_text 'install all' scripts/swe-forge

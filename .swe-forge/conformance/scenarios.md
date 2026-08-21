@@ -26,18 +26,19 @@ grading an agent from its explanation alone.
 | Explicit worker runtime override | An explicit user/project worker routing configuration wins over inheritance for the configured worker; unset routing does not trigger role-based optimization. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
-## Run-State Compatibility And Ownership
+## Run-State Ownership And Current Schema
 
 | Scenario | Required behavior |
 | --- | --- |
-| Legacy schema-v2 state without nested routing | Validate successfully; additive nested routing is not mandatory. |
-| Legacy schema-v2 state without continuation delivery projection | Validate successfully; recovery projection remains additive. |
-| Modern state with matching aliases | Validate successfully when `preferred_mode`, `execution_mode`, and `delivery_mode` match their nested projections. |
-| Contradictory preferred routing aliases | Reject deterministically rather than choosing a side. |
-| Contradictory effective routing aliases | Reject deterministically rather than choosing a side. |
-| Contradictory delivery aliases | Reject deterministically rather than choosing a side. |
-| Preferred versus effective topology | Permit semantic preference such as `SUBAGENTS` to differ from effective execution such as `SOLO` after fallback. |
-| Pi loads contradictory active state | Reject the snapshot in the existing state-loading path and preserve legacy fallback only when a representation is genuinely absent. |
+| Valid current schema v3 state | Validate successfully. |
+| Schema v2 state | Reject clearly as stale/unsupported; require a fresh run. |
+| Unknown/future schema version | Reject clearly as stale/unsupported; do not migrate or normalize it. |
+| Current state missing a required routing fact | Reject deterministically. |
+| Current state with preferred/effective divergence | Permit `routing.preferred: SUBAGENTS` with `routing.current: SOLO` after safe fallback. |
+| Malformed current routing | Reject deterministically rather than guessing a topology. |
+| Matching delivery recovery projection | Validate successfully when `continuation.delivery.mode` equals `delivery_mode`. |
+| Contradictory delivery recovery projection | Reject deterministically. |
+| Pi loads stale or malformed active state | Ignore the snapshot rather than interpreting removed fields or falling back to an obsolete representation. |
 
 ## Canonical Load Ordering And Behavior Preservation
 

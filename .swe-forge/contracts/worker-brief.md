@@ -76,7 +76,7 @@ worker_briefing:
       side_effects: local-only | external-read | external-write | destructive
   permissions:
     write_access: read-only | read-write
-    execution_mode: SOLO | SUBAGENTS | ISOLATED
+    topology: SOLO | SUBAGENTS | ISOLATED
     write_isolation: SHARED | WORKTREE
     allowed_actions:
       - <read, edit, validation, or other explicitly assigned action>

@@ -1,24 +1,28 @@
 # Run-State Contract
 
-Run state is a temporary recovery snapshot. It is not a transcript, a task
+Run state is temporary internal recovery state. It is not a transcript, a task
 specification, or a second source of truth. Keep it outside the repository or
 under an already ignored `.swe-forge/runs/` path. Never store credentials,
 private ticket content, or worker transcripts.
 
-## Schema v2
+Only the current run-state schema is supported. State written by an older or
+unknown schema is stale and must not be resumed; start a fresh run instead.
+SWE Forge does not automatically migrate obsolete run-state schemas. A schema
+change updates all first-party producers, consumers, validation, adapters, and
+fixtures together.
+
+## Schema v3
 
 The only current state identity is:
 
 ```yaml
 workflow: swe-forge
 workflow_version: 1
-schema_version: 2
+schema_version: 3
 run_id: <unique-run-id>
 status: planning | running | blocked | reviewing | repairing | accepted | failed
 prior_status: <state before blocked or none>
 requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
-preferred_mode: SOLO | SUBAGENTS | ISOLATED
-execution_mode: SOLO | SUBAGENTS | ISOLATED
 requested_provider: AUTO | NATIVE | HERDR | NONE
 execution_provider: NATIVE | HERDR | NONE
 delegation_backend: NONE | NATIVE | HERDR | OTHER
@@ -100,41 +104,30 @@ delivery_checkout:
   remote_default_evidence: <read-only branch classification evidence>
 ```
 
-### Canonical routing and projection ownership
+### Canonical routing ownership
 
-The live routing facts are owned by `routing` whenever that additive mapping is
-present. The top-level `preferred_mode` and `execution_mode` remain schema-v2
-compatibility projections; they are not a second set of independently
-synchronized decisions. `requested_mode` remains the canonical immutable
-invocation request.
+`requested_mode` is the immutable invocation request. The nested `routing`
+mapping is the sole owner of live topology facts:
 
 | Field | Meaning and update rule |
 | --- | --- |
-| `requested_mode` | Immutable user/requested topology token (`AUTO` is valid); it records what the invocation asked for, not what the runtime can execute. |
 | `routing.initial` | Initial semantic topology preference computed from the request and discovery; set once when routing starts. |
-| `routing.preferred` | Current semantic topology preference after a deliberate reassessment; it may remain different from the effective topology. |
-| `routing.selected` | Initial effective/executable topology after capability fallback; it records the first executable result and is not rewritten merely because `current` later changes. |
+| `routing.preferred` | Current semantic topology preference after deliberate reassessment; it may differ from the effective topology. |
+| `routing.selected` | Initial effective/executable topology after capability fallback; it is not rewritten merely because `current` later changes. |
 | `routing.current` | Currently effective/executable topology; update it only when an actual routing change is selected. |
-| `preferred_mode` | Compatibility/summary projection of `routing.preferred` when nested routing exists. |
-| `execution_mode` | Compatibility/summary projection of `routing.current` when nested routing exists; it never means provider. |
 
-At initial routing, write `routing.initial`, `routing.preferred`,
-`routing.selected`, and `routing.current` from the routing decision, then derive
-`preferred_mode` and `execution_mode` from the corresponding nested values. A
-later reassessment updates `routing.preferred` and its `preferred_mode`
-projection; a later effective-topology change updates `routing.current` and its
-`execution_mode` projection. A preferred `SUBAGENTS` topology may therefore
-legitimately run with an effective `SOLO` topology after capability fallback.
-When nested routing is absent from an older schema-v2 snapshot, the available
-top-level fields remain valid legacy state and the additive nested fields are
-not required.
+At every current-schema workflow stage, first-party writers emit all four
+routing facts. A preferred `SUBAGENTS` topology may therefore legitimately run
+with an effective `SOLO` topology after capability fallback. Consumers read the
+nested fields directly and reject missing or malformed current routing rather
+than inferring it from another representation.
 
 `delivery_mode` owns the active delivery-domain decision.
-`continuation.delivery.mode`, when present, is the compact recovery/continuation
-projection of that decision rather than an independent owner. Modern writers
-update the top-level decision first and write the continuation projection with
-the same value. Both representations are optional for backward compatibility,
-but when both exist they must match.
+`continuation.delivery.mode`, when present, is a compact recovery projection of
+that decision rather than an independent owner. Current writers derive it from
+`delivery_mode`, and validation rejects a contradictory projection. The
+projection is retained because it keeps continuation state self-contained after
+context compaction; it is not a legacy state alias.
 
 `invocation_checkout` identifies the checkout that started the run. In a
 normal run it may be the same path as `delivery_checkout`. In an isolated run
@@ -198,7 +191,7 @@ provider_capabilities:
 ```
 
 `NATIVE` is forbidden while any mandatory capability is `unknown` or
-`unavailable`. `execution_mode` other than `ISOLATED` requires provider and
+`unavailable`. `routing.current` other than `ISOLATED` requires provider and
 strategies to be `NONE`; isolated v1 requires a selected provider, `COMPOSE`,
 and `CHERRY_PICK`.
 
@@ -336,13 +329,15 @@ retries:
   <task_id>: {attempts: 0, ceiling: 1, ceiling_provenance: default}
 ```
 
-A schema-v1 state containing `version: 1` or the old top-level `checkout`
-object must be rejected with an explicit compatibility message. A helper must
-never guess a migration. A future migration must be explicit, dependency-free,
-and tested before it can normalize state. New routing, runtime-profile, and
-continuation sections are additive within schema v2; consumers must continue
-to validate older schema-v2 snapshots that do not contain those optional
-sections and report missing context capability as `unknown`.
+A state whose `schema_version` is not `3` must be rejected as stale or
+unsupported, including older and future versions. No helper guesses a
+migration, normalizes an obsolete snapshot, or rewrites it in place. Start a
+fresh run instead. Routing is required in the current schema. Other sections
+remain stage-dependent: continuation fields are required once a continuation
+snapshot is written, while task, worker, integration, context, and provider
+lifecycle details are present only when their workflow stage makes them
+semantically available. Missing capability information is represented as
+`unknown` where that is the established current model.
 
 ## Rules and transitions
 

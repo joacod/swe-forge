@@ -40,8 +40,8 @@ local dependencies, and registers its local path with Pi. The package is
 optional: without it, `SUBAGENTS` falls back to SOLO/sequential execution.
 
 Continuation and compaction behavior is inert unless the extension finds an
-active, checkout-matching `run-state.yaml` with `workflow_active: true` (or a
-compatible active schema-v2 status). The optional capability observation also
+active, checkout-matching schema-v3 `run-state.yaml` with
+`workflow_active: true`. The optional capability observation also
 activates for an explicit `/swe-forge` prompt so the first routing turn can
 feature-detect the tool before a run-state snapshot exists. It looks first at
 `SWE_FORGE_RUN_STATE`/`SWE_FORGE_STATE`, then an ignored project
@@ -137,11 +137,10 @@ A first capabilities probe is allowed during an explicit `/swe-forge` turn
 before durable routing state exists, but that probe is discovery only. If a run
 attempt reports `Canonical routing is UNKNOWN`, no active checkout-matching
 run-state was discoverable (or it did not expose a usable current topology).
-Persist a complete active schema-v2 run-state with `routing.current: SUBAGENTS`
+Persist a complete active schema-v3 run-state with `routing.current: SUBAGENTS`
 and matching invocation/delivery checkout paths, then request capabilities
-again. Do not use `execution_mode` in the task contract or prompt as a routing
-workaround; the safe result of missing state is the normal SOLO/sequential
-fallback.
+again. The task contract or prompt cannot establish canonical routing; the safe
+result of missing or stale state is the normal SOLO/sequential fallback.
 
 If the tool is absent, inactive, incompatible, or fails before a usable result,
 the canonical workflow uses its existing SOLO/sequential fallback. The bridge

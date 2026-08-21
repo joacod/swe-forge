@@ -204,12 +204,12 @@ ticket/raw invocation
   -> one final report and conservative cleanup
 ```
 
-Run state is temporary or ignored and schema-v2 only. Its short `continuation`
+Run state is temporary or ignored and schema-v3 only. Its short `continuation`
 block is authoritative workflow-control state after compaction; conversation
 summaries and adapter reminders are not. Context-capable adapters re-read this
 state at lifecycle boundaries and may inject only a bounded deterministic
-reminder. A discovered schema-v1 state is rejected with a compatibility
-message; it is never guessed into a new shape.
+reminder. Any state with another schema version is stale, rejected clearly,
+and never migrated or guessed into a new shape; start a fresh run instead.
 
 ## Runtime capability boundary
 

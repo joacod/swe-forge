@@ -99,13 +99,13 @@ commit_plan:
     commit_subject: <imperative subject>
 
 # This transient routing record mirrors root-owned run-state decisions; it is
-# not a second owner. When nested run-state routing exists, preferred_mode and
-# execution_mode are its compatibility projections.
+# not a second owner. The nested routing facts are the only topology owner.
 routing:
   requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
-  preferred_mode: SOLO | SUBAGENTS | ISOLATED
-  selected_mode: SOLO | SUBAGENTS | ISOLATED
-  execution_mode: SOLO | SUBAGENTS | ISOLATED
+  initial: SOLO | SUBAGENTS | ISOLATED
+  preferred: SOLO | SUBAGENTS | ISOLATED
+  selected: SOLO | SUBAGENTS | ISOLATED
+  current: SOLO | SUBAGENTS | ISOLATED
   requested_provider: AUTO | NATIVE | HERDR | NONE
   execution_provider: NATIVE | HERDR | NONE
   delegation_backend: NONE | NATIVE | HERDR | OTHER

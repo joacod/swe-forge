@@ -20,8 +20,11 @@ owner_role: implementer
 dependencies: []
 
 requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
-preferred_mode: SOLO | SUBAGENTS | ISOLATED
-execution_mode: SOLO | SUBAGENTS | ISOLATED
+routing:
+  initial: SOLO | SUBAGENTS | ISOLATED
+  preferred: SOLO | SUBAGENTS | ISOLATED
+  selected: SOLO | SUBAGENTS | ISOLATED
+  current: SOLO | SUBAGENTS | ISOLATED
 requested_provider: AUTO | NATIVE | HERDR | NONE
 execution_provider: NATIVE | HERDR | NONE
 delegation_backend: NONE | NATIVE | HERDR | OTHER
@@ -175,7 +178,7 @@ expected_output:
   - implementation within allowed scope
   - test evidence
   - structured worker result
-  - source-to-integration mapping when execution_mode is ISOLATED
+  - source-to-integration mapping when routing.current is ISOLATED
 ```
 
 ## Required Fields
@@ -185,10 +188,11 @@ expected_output:
 - `reason`: why this task is separate and useful
 - `owner_role`: role responsible for the work
 - `dependencies`: task IDs that must finish first
-- `requested_mode`, `preferred_mode`, and `execution_mode`: a bounded task
-  projection of the immutable request, semantic preference, and effective
-  topology; the root run state owns live routing, and these fields must not
-  become an independent worker decision
+- `requested_mode` and `routing.initial`, `routing.preferred`,
+  `routing.selected`, and `routing.current`: a bounded task projection of the
+  immutable request, semantic preference, and effective topology; the root run
+  state owns live routing, and the projection must not become an independent
+  worker decision
 - `requested_provider`, `execution_provider`, and `provider_reason`: provider
   preference and evidence; provider selection applies only to `ISOLATED`
 - `delegation_backend` and `write_isolation`: the mechanism and write boundary
@@ -223,10 +227,10 @@ commits. `base_sha`, `wave`, `integration_order`, `shared_artifacts`, and
 recorded integration `HEAD`; a worker cannot choose a different base.
 
 The provider constraint is conditional, not an independent mode: when
-`execution_mode` is not `ISOLATED`, `execution_provider` must be `NONE`,
+`routing.current` is not `ISOLATED`, `execution_provider` must be `NONE`,
 `parallel_strategy` must be `NONE`, and `integration_strategy` must be `NONE`.
 A non-isolated `SUBAGENTS` task may still use `delegation_backend: NATIVE` or
-`HERDR` with `write_isolation: SHARED`. When `execution_mode` is `ISOLATED`,
+`HERDR` with `write_isolation: SHARED`. When `routing.current` is `ISOLATED`,
 `execution_provider` must be `NATIVE` or `HERDR`, `delegation_backend` must
 identify the selected backend, `write_isolation` must be `WORKTREE`,
 `parallel_strategy` must be `COMPOSE`, and `integration_strategy` must be

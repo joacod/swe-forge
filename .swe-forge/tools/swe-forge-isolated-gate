@@ -204,12 +204,10 @@ write_run_state() {
   {
     printf 'workflow: swe-forge\n'
     printf 'workflow_version: 1\n'
-    printf 'schema_version: 2\n'
+    printf 'schema_version: 3\n'
     printf 'run_id: %s\n' "$(meta_value run_id)"
     printf 'status: running\n'
     printf 'requested_mode: ISOLATED\n'
-    printf 'preferred_mode: ISOLATED\n'
-    printf 'execution_mode: ISOLATED\n'
     printf 'requested_provider: AUTO\n'
     printf 'execution_provider: %s\n' "$provider"
     printf 'delegation_backend: %s\n' "$provider"
@@ -274,6 +272,26 @@ write_run_state() {
       printf '      status: proven\n'
       printf '      evidence_ref: %s\n' "$capabilities_ref"
     done
+    printf 'continuation:\n'
+    printf '  workflow_active: true\n'
+    printf '  workflow: isolated\n'
+    printf '  phase: planning\n'
+    printf '  step: 0\n'
+    printf '  awaiting: none\n'
+    printf '  next_action:\n'
+    printf '    kind: specify\n'
+    printf '    target: isolated-plan\n'
+    printf '    acceptance: []\n'
+    printf '    expected_context_tokens: unknown\n'
+    printf '  safe_boundary: true\n'
+    printf '  updated_at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf '  delivery:\n'
+    printf '    mode: PR\n'
+    printf '    pr_number: none\n'
+    printf '    pr_state: none\n'
+    printf '  recovery:\n'
+    printf '    host_signal: none\n'
+    printf '    status: none\n'
     printf 'delivery:\n'
     printf '  authorization:\n'
     printf '    worker_transfer_commit: PR\n'
@@ -327,7 +345,7 @@ init_state() {
   mkdir -p "$STATE"
   umask 077
   {
-    printf 'schema_version=2\n'
+    printf 'state_version=2\n'
     printf 'workflow_version=1\n'
     printf 'repository_path=%s\n' "$REPO"
     printf 'run_id=%s\n' "$run_id"

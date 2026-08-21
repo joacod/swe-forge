@@ -345,6 +345,13 @@ worktree and delivery branch from ephemeral worker worktrees and branches,
 records provider and wave state, source-to-integration commit mappings,
 environment resources, and cleanup status.
 
+Run state is temporary internal recovery state. Only current schema v3 is
+supported; obsolete state is stale, rejected clearly, and requires a fresh
+run. SWE Forge does not automatically migrate obsolete schemas. A schema
+change updates all first-party writers, readers, validation, adapters, and
+fixtures together. The nested routing fields are canonical; retain a derived
+projection only when it serves a real current recovery purpose.
+
 ## Checkout And Delivery Safety
 
 Before any writable setup or edit, load and follow
