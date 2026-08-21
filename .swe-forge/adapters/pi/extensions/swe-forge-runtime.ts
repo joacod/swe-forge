@@ -231,6 +231,9 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 	if (!text) return undefined;
 	const values = parseScalarYaml(text);
 	if (values.get("workflow") !== "swe-forge" || !stateMatchesCwd(values, cwd)) return undefined;
+	// Do not let a modern snapshot choose one side of a contradictory alias
+	// pair. Missing additive fields still use the legacy fallback below.
+	if (stateConsistencyError(values)) return undefined;
 
 	const status = values.get("status") ?? "unknown";
 	const explicitActive = boolValue(values.get("continuation.workflow_active"));
@@ -354,6 +357,22 @@ function observeSubagentTool(pi: any): SubagentToolObservation {
 
 function topology(value: string): string {
 	return value.trim().toUpperCase();
+}
+
+function stateConsistencyError(values: Map<string, string>): string | undefined {
+	const aliases: Array<[string, string]> = [
+		["preferred_mode", "routing.preferred"],
+		["execution_mode", "routing.current"],
+		["delivery_mode", "continuation.delivery.mode"],
+	];
+	for (const [leftPath, rightPath] of aliases) {
+		const left = values.get(leftPath);
+		const right = values.get(rightPath);
+		if (left !== undefined && right !== undefined && left !== right) {
+			return `${leftPath} (${left}) does not match ${rightPath} (${right})`;
+		}
+	}
+	return undefined;
 }
 
 function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: string): string {

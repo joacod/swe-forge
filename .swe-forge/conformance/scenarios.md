@@ -26,6 +26,19 @@ grading an agent from its explanation alone.
 | Explicit worker runtime override | An explicit user/project worker routing configuration wins over inheritance for the configured worker; unset routing does not trigger role-based optimization. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
+## Run-State Compatibility And Ownership
+
+| Scenario | Required behavior |
+| --- | --- |
+| Legacy schema-v2 state without nested routing | Validate successfully; additive nested routing is not mandatory. |
+| Legacy schema-v2 state without continuation delivery projection | Validate successfully; recovery projection remains additive. |
+| Modern state with matching aliases | Validate successfully when `preferred_mode`, `execution_mode`, and `delivery_mode` match their nested projections. |
+| Contradictory preferred routing aliases | Reject deterministically rather than choosing a side. |
+| Contradictory effective routing aliases | Reject deterministically rather than choosing a side. |
+| Contradictory delivery aliases | Reject deterministically rather than choosing a side. |
+| Preferred versus effective topology | Permit semantic preference such as `SUBAGENTS` to differ from effective execution such as `SOLO` after fallback. |
+| Pi loads contradictory active state | Reject the snapshot in the existing state-loading path and preserve legacy fallback only when a representation is genuinely absent. |
+
 ## Canonical Load Ordering And Behavior Preservation
 
 | Scenario | Required behavior |

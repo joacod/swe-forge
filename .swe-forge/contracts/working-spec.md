@@ -98,6 +98,9 @@ commit_plan:
     validation: [<targeted check>]
     commit_subject: <imperative subject>
 
+# This transient routing record mirrors root-owned run-state decisions; it is
+# not a second owner. When nested run-state routing exists, preferred_mode and
+# execution_mode are its compatibility projections.
 routing:
   requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
   preferred_mode: SOLO | SUBAGENTS | ISOLATED

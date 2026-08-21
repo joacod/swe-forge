@@ -9,9 +9,11 @@ backend/provider identities, never topologies.
 
 ## Routing record
 
-Every automatic or explicit run records the following fields. Existing
-`execution_mode` is the effective selected/current semantic topology; it is not
-a provider name.
+Every automatic or explicit run records the following fields. The nested
+`routing` mapping is the canonical owner of live topology facts when it is
+present; top-level `preferred_mode` and `execution_mode` are compatibility
+projections, not provider names or independent routing decisions. Full field
+semantics and update rules are defined in the run-state contract.
 
 ```text
 requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
@@ -50,12 +52,21 @@ routing:
   runtime_profile_ref: <capability profile or none>
 ```
 
-`preferred_mode` answers what the policy would choose with the observed
-capabilities. `execution_mode`/`routing.current` answers what the active
-runtime can actually execute. A preferred `SUBAGENTS` result with no backend
-is recorded as `preferred_mode: SUBAGENTS`, `execution_mode: SOLO`,
-`delegation_backend: NONE`, with the fallback reason; it is not silently
-reported as successful delegation.
+`requested_mode` is the immutable invocation request. `routing.initial` is
+the initial semantic preference, `routing.preferred` is the current semantic
+preference after deliberate reassessment, `routing.selected` is the initial
+effective result after capability fallback, and `routing.current` is the
+currently effective topology. `preferred_mode` projects `routing.preferred`
+and `execution_mode` projects `routing.current` when nested routing exists;
+when it does not, older top-level state remains valid. A preferred
+`SUBAGENTS` result with no backend is recorded as `preferred_mode: SUBAGENTS`,
+`execution_mode: SOLO`, `delegation_backend: NONE`, with the fallback reason;
+it is not silently reported as successful delegation. A preferred topology
+must not be collapsed into the effective executable topology.
+
+For delivery state, `delivery_mode` owns the active decision and
+`continuation.delivery.mode` is its compact continuation projection. Both are
+kept for compatibility/recovery and must agree whenever both are present.
 
 `execution_provider` retains its existing narrow meaning: it is the lifecycle
 provider for an `ISOLATED` writable plan and must be `NONE` for non-isolated

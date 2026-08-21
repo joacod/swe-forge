@@ -250,6 +250,24 @@ if (!refreshed?.systemPrompt.includes("phase: implementation")) throw new Error(
 const staleTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
 if (staleTransform) throw new Error("stale PR state overrode newer continuation state");
 
+// A modern snapshot with contradictory compatibility aliases is rejected
+// instead of injecting continuation state or routing shorthand from one side.
+const contradictoryState = path.join(fixtureCwd, "contradictory", "run-state.yaml");
+writeRuntimeState(contradictoryState, {
+  runId: "contradictory-run",
+  current: "SOLO",
+  preferred: "SOLO",
+  topCurrent: "SUBAGENTS",
+  updatedAt: "2045-01-01T00:00:00Z",
+});
+process.env.SWE_FORGE_RUN_STATE = contradictoryState;
+const contradictoryInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (contradictoryInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
+  throw new Error("contradictory aliases were accepted for continuation injection");
+}
+const contradictoryTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
+if (contradictoryTransform) throw new Error("contradictory aliases enabled PR shorthand");
+
 function writeRuntimeState(filePath, options = {}) {
   const expected = options.expected ?? "unknown";
   const yaml = `workflow: swe-forge
@@ -258,8 +276,9 @@ schema_version: 2
 run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
 status: running
 requested_mode: AUTO
-preferred_mode: ${options.preferred ?? "SOLO"}
-execution_mode: ${options.current ?? "SOLO"}
+preferred_mode: ${options.topPreferred ?? options.preferred ?? "SOLO"}
+execution_mode: ${options.topCurrent ?? options.current ?? "SOLO"}
+delivery_mode: ${options.topDelivery ?? "PR"}
 requested_provider: AUTO
 execution_provider: NONE
 delegation_backend: NONE
