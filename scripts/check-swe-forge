@@ -103,6 +103,8 @@ require_text 'pi-runtime:' .github/workflows/ci.yml
 require_text 'actions/setup-node@v4' .github/workflows/ci.yml
 require_text 'node-version: 22.19.0' .github/workflows/ci.yml
 require_text 'SWE_FORGE_PI_CI: "1"' .github/workflows/ci.yml
+require_text 'scripts/test-swe-forge-briefing' .github/workflows/ci.yml
+require_text 'scripts/test-swe-forge-results' .github/workflows/ci.yml
 require_text 'Validation cadence and batching' .swe-forge/policies/verification.md
 validate_registry
 
@@ -234,6 +236,9 @@ require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/pro
 require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
 require_text 'integration_strategy: NONE | CHERRY_PICK' .swe-forge/policies/provider-selection.md
 require_text 'delivery_mode: GUIDED | PR' .swe-forge/contracts/run-state.md
+require_text 'Canonical routing and projection ownership' .swe-forge/contracts/run-state.md
+require_text 'preferred_mode` | Compatibility/summary projection' .swe-forge/contracts/run-state.md
+require_text 'delivery_mode` owns the active delivery-domain decision' .swe-forge/contracts/run-state.md
 reject_text 'requested_mode: AUTO | SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
 reject_text 'execution_mode: SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
 reject_text 'execution_mode: HERDR' SWE-FORGE.md
@@ -478,6 +483,8 @@ require_text 'provider: NATIVE | HERDR | NONE' .swe-forge/contracts/review.md
 require_text 'delegation_backend: NONE | NATIVE | HERDR | OTHER' .swe-forge/contracts/run-state.md
 require_text 'continuation:' .swe-forge/contracts/run-state.md
 require_text 'preferred_mode: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
+require_text '`routing` mapping is the canonical owner' .swe-forge/policies/execution-routing.md
+require_text 'must not be collapsed into the effective executable topology.' .swe-forge/policies/execution-routing.md
 require_text 'integrated_validation_checked:' .swe-forge/contracts/review.md
 require_text 'local-only transfer resources' .swe-forge/policies/delivery.md
 require_text 'Completion order' .swe-forge/policies/delivery.md

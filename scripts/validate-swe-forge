@@ -19,9 +19,10 @@ usage() {
 Usage:
   scripts/validate-swe-forge [--serial]
 
-Run syntax and structural checks first, then run the independent installer,
-evidence-gate, and isolated-worktree fixtures. The default runs the fixture
-suites concurrently and reports every result; --serial is useful for tracing.
+Run syntax and structural checks first, then run the installer,
+evidence-gate, isolated-worktree, Pi runtime, worker briefing, and worker
+result-profile fixtures. The default runs the fixture suites concurrently and
+reports every result; --serial is useful for tracing.
 EOF
 }
 
