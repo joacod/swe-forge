@@ -17,7 +17,7 @@ Do not add the Forge workflow to `CLAUDE.md`.
 
 ## Explicit Skill
 
-The installer links `skills/swe-forge-global/SKILL.md` to:
+The installer links `skills/swe-forge/SKILL.md` to:
 
 ```text
 ~/.claude/skills/swe-forge/SKILL.md
