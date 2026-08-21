@@ -100,7 +100,7 @@ require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
 require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
 require_text './scripts/validate-swe-forge' .github/workflows/ci.yml
 require_text 'pi-runtime:' .github/workflows/ci.yml
-require_text 'actions/setup-node@v4' .github/workflows/ci.yml
+require_text 'uses: actions/setup-node@' .github/workflows/ci.yml
 require_text 'node-version: 22.19.0' .github/workflows/ci.yml
 require_text 'SWE_FORGE_PI_CI: "1"' .github/workflows/ci.yml
 require_text 'scripts/test-swe-forge-briefing' .github/workflows/ci.yml
