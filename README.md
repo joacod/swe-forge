@@ -44,8 +44,9 @@ versions and validation evidence.
 ## Install
 
 SWE Forge has no public release yet; the planned first alpha is
-`v0.1.0-alpha.1`. For development, clone the repository into
-a stable user-level checkout and install the harness projection as links:
+`v0.1.0-alpha.1`. Until publication, `main` is development-only. For
+development, clone the repository into a stable user-level checkout and install
+the harness projection as links:
 
 ```bash
 git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
