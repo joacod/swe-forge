@@ -16,11 +16,11 @@ promise that future harness releases remain compatible without review.
 
 The Pi runtime extension optionally feature-detects the separately installed
 `swe_forge_subagent` tool. It does not import that package or verify it by
-package version; the tool's `protocolVersion: 1`, capabilities, and the
-package's pre-execution Pi compatibility check are the relevant boundaries.
-Missing or incompatible capability negotiation falls back to canonical
-SOLO/sequential behavior, and `ISOLATED` work is never routed through the
-shared-checkout primitive.
+package version; the tool's `protocolVersion: 1`, public AgentSession SDK
+compatibility metadata, and explicit context/process semantics are the relevant
+boundaries. Missing or incompatible capability negotiation falls back to
+canonical SOLO/sequential behavior, and `ISOLATED` work is never routed through
+the shared-checkout primitive.
 
 ## Context-management snapshot
 

@@ -526,8 +526,8 @@ if (allowedCapabilities) throw new Error("capability discovery was unexpectedly 
 const capabilityDetails = {
   protocolVersion: 1,
   packageVersion: "0.1.0",
-  pi: { compatibilityRange: ">=0.84.1 <0.85.0", versionVerification: "before_execution" },
-  isolation: { contextIsolation: true, processIsolation: true, filesystemIsolation: false, osSandbox: false },
+  pi: { compatibilityRange: ">=0.84.1 <0.85.0", runtime: "in_process_agent_session", versionVerification: "public_sdk_api" },
+  isolation: { contextIsolation: true, processIsolation: false, filesystemIsolation: false, osSandbox: false },
   trust: { workerPermissions: "user_os_permissions", sandbox: false },
   sweForge: { installed: true, version: "0.1.0-alpha.1" },
   roles: ["reader", "writer"],

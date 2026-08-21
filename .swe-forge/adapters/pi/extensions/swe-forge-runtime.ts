@@ -423,14 +423,15 @@ function validateCapabilities(value: unknown, role?: unknown, profile?: unknown)
 	if (
 		!isRecord(capabilities.pi) ||
 		typeof capabilities.pi.compatibilityRange !== "string" ||
-		capabilities.pi.versionVerification !== "before_execution"
+		capabilities.pi.runtime !== "in_process_agent_session" ||
+		capabilities.pi.versionVerification !== "public_sdk_api"
 	) {
-		return "capabilities response did not advertise Pi compatibility verification";
+		return "capabilities response did not advertise the supported in-process Pi SDK runtime";
 	}
 	if (
 		!isRecord(capabilities.isolation) ||
 		capabilities.isolation.contextIsolation !== true ||
-		capabilities.isolation.processIsolation !== true ||
+		capabilities.isolation.processIsolation !== false ||
 		capabilities.isolation.filesystemIsolation !== false ||
 		capabilities.isolation.osSandbox !== false
 	) {
