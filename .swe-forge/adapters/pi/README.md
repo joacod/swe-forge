@@ -127,7 +127,7 @@ may launch the independent questions as one batch and must wait at the root
 fan-in barrier before continuing; coupled questions remain root-only or
 sequential. Before the run, the orchestrator places the compact
 `worker_briefing` projection described by
-`~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` in `taskContract`
+`~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` in `workerBriefing`
 with the relevant role and result/review contract. Its inclusion and dependency
 rules remain canonical. The returned result remains untrusted worker data and
 continues through SWE-Forge's normal review, evidence, integration, and delivery
@@ -139,7 +139,7 @@ attempt reports `Canonical routing is UNKNOWN`, no active checkout-matching
 run-state was discoverable (or it did not expose a usable current topology).
 Persist a complete active schema-v3 run-state with `routing.current: SUBAGENTS`
 and matching invocation/delivery checkout paths, then request capabilities
-again. The task contract or prompt cannot establish canonical routing; the safe
+again. The worker briefing or prompt cannot establish canonical routing; the safe
 result of missing or stale state is the normal SOLO/sequential fallback.
 
 If the tool is absent, inactive, incompatible, or fails before a usable result,

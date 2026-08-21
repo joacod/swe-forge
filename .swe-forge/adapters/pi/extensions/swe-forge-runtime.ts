@@ -378,7 +378,7 @@ function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: stri
 			"Canonical routing is UNKNOWN because no active, checkout-matching SWE-Forge run-state is discoverable.",
 			"Use the existing SOLO/sequential fallback.",
 			"Capability discovery may proceed, but before action=run persist a complete active schema-v3 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
-			"The task contract does not establish canonical routing.",
+			"The worker briefing does not establish canonical routing.",
 		].join(" ");
 	}
 	if (current === "UNKNOWN") {
@@ -696,8 +696,11 @@ export default function sweForgeRuntime(pi: any) {
 				reason: `Subagent capability negotiation is incomplete or incompatible: ${capabilityError}. Call action=capabilities first or use the canonical fallback.`,
 			};
 		}
-		if (typeof input.taskContract !== "string" || input.taskContract.trim().length === 0) {
-			return { block: true, reason: "A bounded canonical taskContract is required for subagent execution." };
+		if (typeof input.workerBriefing !== "string" || input.workerBriefing.trim().length === 0) {
+			return {
+				block: true,
+				reason: "A non-empty workerBriefing worker_briefing/v1 projection is required for subagent execution.",
+			};
 		}
 		if (input.expectedOutputContract !== "result" && input.expectedOutputContract !== "review") {
 			return { block: true, reason: "The expected canonical output contract must be result or review." };

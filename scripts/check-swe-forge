@@ -285,7 +285,7 @@ require_text 'Context-heavy transition' .swe-forge/conformance/scenarios.md
 require_text 'PR survives compaction' .swe-forge/conformance/scenarios.md
 require_text 'Herdr read-only backend' .swe-forge/conformance/scenarios.md
 require_text 'Bounded worker' .swe-forge/conformance/scenarios.md
-require_text 'worker briefing projection' .swe-forge/workflows/ticket.md
+require_text 'worker_briefing` projection' .swe-forge/workflows/ticket.md
 require_text 'isolated_execution' .swe-forge/workflows/isolated-execution.md
 require_text 'Stale state pointer' .swe-forge/conformance/scenarios.md
 require_text 'Reliable near-limit signal' .swe-forge/conformance/scenarios.md
@@ -452,6 +452,8 @@ require_text 'worker briefing fixture' scripts/validate-swe-forge
 require_text 'worker result profile fixture' scripts/validate-swe-forge
 require_text 'discoverable-old' scripts/test-swe-forge-pi
 require_text 'project-overrides-global' scripts/test-swe-forge-pi
+require_text 'task_id: reader-check' scripts/test-swe-forge-pi
+require_text 'workerBriefing' scripts/test-swe-forge-pi
 require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'runtime_status=near-limit' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 reject_text 'projected_pressure=high' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
@@ -459,6 +461,13 @@ require_text 'settingsSnapshot' .swe-forge/adapters/pi/extensions/swe-forge-runt
 require_text 'projectSettingsTrusted' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text '.pi/settings.json' .swe-forge/adapters/pi/README.md
 require_text 'ctx.compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'workerBriefing' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'worker_briefing/v1' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'workerBriefing' .swe-forge/adapters/pi/README.md
+require_text '`workerBriefing` argument' .swe-forge/workflows/ticket.md
+reject_text 'taskContract' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+reject_text 'taskContract' .swe-forge/adapters/pi/README.md
+reject_text '`taskContract` argument' .swe-forge/workflows/ticket.md
 require_text 'SWE_FORGE_RUN_STATE' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'Pi 0.84.2' docs/compatibility.md
 require_text 'shared adapter behavior' .swe-forge/adapters/shared/agent-skill/README.md
@@ -467,11 +476,19 @@ require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent
 require_text '~/.agents/swe-forge' .swe-forge/adapters/shared/agent-skill/global/SKILL.md
 require_text 'disable-model-invocation: true' .swe-forge/adapters/shared/agent-skill/project/SKILL.md
 require_text 'shared/agent-skill/project' .swe-forge/adapters/registry.tsv
-require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' .swe-forge/contracts/task.md
-require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/contracts/task.md
+require_text 'write_access: read-write' .swe-forge/contracts/task.md
+require_text 'worktree_role: shared | integration | worker | none' .swe-forge/contracts/task.md
 require_text 'base_sha:' .swe-forge/contracts/task.md
 require_text 'integration_order:' .swe-forge/contracts/task.md
 require_text 'environment_isolation:' .swe-forge/contracts/task.md
+for removed_task_field in \
+  'requested_mode:' 'preferred_mode:' 'execution_mode:' 'routing:' \
+  'routing.initial:' 'routing.preferred:' 'routing.selected:' 'routing.current:' \
+  'requested_provider:' 'execution_provider:' 'delegation_backend:' \
+  'write_isolation:' 'provider_reason:' 'provider_constraints:' \
+  'parallel_strategy:' 'integration_strategy:' 'requested_delivery:' 'delivery_mode:'; do
+  reject_text "$removed_task_field" .swe-forge/contracts/task.md
+done
 require_text 'RESULT_PROFILE: READ_ONLY' .swe-forge/contracts/result.md
 require_text 'RESULT_PROFILE: WRITABLE' .swe-forge/contracts/result.md
 require_text 'ISOLATED_WRITABLE' .swe-forge/contracts/result.md

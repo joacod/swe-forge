@@ -547,10 +547,24 @@ await subagentHandlers.get("tool_result")({
   details: capabilityDetails,
   isError: false,
 }, subagentContext);
+const workerBriefingContract = `worker_briefing:
+  schema: worker-brief/v1
+  task_id: reader-check
+  worker:
+    role: reader
+    mode: delegated_worker
+    depth: 1
+    recursive_delegation: false
+  objective: inspect only
+  permissions:
+    write_access: read-only
+    topology: SUBAGENTS
+    write_isolation: SHARED
+`;
 const runInput = {
   action: "run",
   role: "reader",
-  taskContract: "TASK_ID: reader-check\nOBJECTIVE: inspect only\nrouting.current: SUBAGENTS\nwrite_access: read-only\n",
+  workerBriefing: workerBriefingContract,
   expectedOutputContract: "result",
   profile: "READ_ONLY",
 };
@@ -560,8 +574,22 @@ const allowedRun = await subagentHandlers.get("tool_call")({
 }, subagentContext);
 if (allowedRun) throw new Error(`negotiated SUBAGENTS run was blocked: ${allowedRun.reason}`);
 
+// The adapter requires the new wire field and does not accept the old name as
+// an alias. The companion runtime owns the deeper worker-briefing checks.
+const legacyWireRun = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: {
+    ...runInput,
+    workerBriefing: undefined,
+    taskContract: workerBriefingContract,
+  },
+}, subagentContext);
+if (!legacyWireRun?.block || !legacyWireRun.reason.includes("workerBriefing")) {
+  throw new Error("old taskContract wire field was silently accepted");
+}
+
 // An explicit invocation may discover the optional tool before the canonical
-// run state exists, but task-contract text must not authorize a run. Once the
+// run state exists, but worker-briefing text must not authorize a run. Once the
 // state appears, the same extension must require a fresh capabilities probe.
 const noStateCwd = path.join(fixtureCwd, "no-state");
 fs.mkdirSync(noStateCwd, { recursive: true });
@@ -640,7 +668,20 @@ process.env.SWE_FORGE_RUN_STATE = subagentState;
 const writableInput = {
   action: "run",
   role: "writer",
-  taskContract: "TASK_ID: writer-check\nOBJECTIVE: bounded write\nwrite_access: read-write\n",
+  workerBriefing: `worker_briefing:
+  schema: worker-brief/v1
+  task_id: writer-check
+  worker:
+    role: writer
+    mode: delegated_worker
+    depth: 1
+    recursive_delegation: false
+  objective: bounded write
+  permissions:
+    write_access: read-write
+    topology: SUBAGENTS
+    write_isolation: SHARED
+`,
   expectedOutputContract: "result",
   profile: "WRITABLE",
 };
@@ -667,6 +708,13 @@ const soloPrompt = await subagentHandlers.get("before_agent_start")({
 }, subagentContext);
 if (soloPrompt?.systemPrompt.includes("swe_forge_subagent")) {
   throw new Error("unselected subagent capability was injected into a SOLO run");
+}
+const reroutedAttempt = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: runInput,
+}, subagentContext);
+if (!reroutedAttempt?.block || !reroutedAttempt.reason.includes("Canonical routing selected SOLO")) {
+  throw new Error("adaptive routing did not use current run state at launch");
 }
 
 // A changed topology invalidates the negotiation and protects the shared

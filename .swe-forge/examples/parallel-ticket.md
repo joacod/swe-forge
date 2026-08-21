@@ -147,18 +147,9 @@ dependencies:
   - api-research
   - ui-research
   - test-strategy
-routing:
-  initial: SUBAGENTS
-  preferred: SUBAGENTS
-  selected: SUBAGENTS
-  current: SUBAGENTS
-requested_provider: AUTO
-execution_provider: NONE
-parallel_strategy: NONE
-integration_strategy: NONE
 write_access: read-write
+worktree_role: shared
 worktree: shared
-delivery_mode: GUIDED
 working_spec_ref: none
 checkout_baseline:
   path: <absolute checkout path>
