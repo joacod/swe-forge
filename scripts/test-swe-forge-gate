@@ -526,6 +526,28 @@ remove_nested_scalar() {
   ' "$input" >"$output"
 }
 
+# The earliest generic schema-v3 snapshot keeps the required shell and the
+# writer's initial/unknown values, but has no continuation or later activity.
+minimal_without_continuation=$TMP_ROOT/minimal-v3-no-continuation.yaml
+strip_top_level_section continuation "$projection_modern" "$minimal_without_continuation"
+minimal_without_runtime_profile=$TMP_ROOT/minimal-v3-no-runtime-profile.yaml
+strip_top_level_section runtime_profile "$minimal_without_continuation" \
+  "$minimal_without_runtime_profile"
+minimal_v3=$TMP_ROOT/minimal-v3.yaml
+strip_top_level_section receipt_ref "$minimal_without_runtime_profile" "$minimal_v3"
+"$ROOT/scripts/swe-forge-state" validate --state "$minimal_v3" >/dev/null
+grep -F '  source_to_integration: []' "$minimal_v3" >/dev/null
+grep -F 'workers: {}' "$minimal_v3" >/dev/null
+if grep -Eq '^(continuation|runtime_profile|receipt_ref):' "$minimal_v3"; then
+  fail "minimal schema-v3 fixture contains a later-stage top-level section"
+fi
+
+missing_provider_capabilities=$TMP_ROOT/minimal-v3-missing-provider-capabilities.yaml
+strip_top_level_section provider_capabilities "$minimal_v3" \
+  "$missing_provider_capabilities"
+expect_failure 'schema-v3 state is missing top-level key: provider_capabilities' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$missing_provider_capabilities"
+
 schema_v2=$TMP_ROOT/schema-v2.yaml
 replace_top_level_scalar schema_version 2 "$projection_modern" "$schema_v2"
 expect_failure 'stale/unsupported run state' "$ROOT/scripts/swe-forge-state" \
@@ -540,10 +562,6 @@ missing_routing=$TMP_ROOT/missing-routing-fact.yaml
 remove_nested_scalar routing preferred "$projection_modern" "$missing_routing"
 expect_failure 'routing is missing preferred' "$ROOT/scripts/swe-forge-state" \
   validate --state "$missing_routing"
-
-current_no_continuation=$TMP_ROOT/current-no-continuation.yaml
-strip_top_level_section continuation "$projection_modern" "$current_no_continuation"
-"$ROOT/scripts/swe-forge-state" validate --state "$current_no_continuation" >/dev/null
 
 preferred_effective=$TMP_ROOT/preferred-effective.yaml
 replace_nested_scalar routing preferred SUBAGENTS \

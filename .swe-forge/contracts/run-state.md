@@ -27,7 +27,7 @@ requested_provider: AUTO | NATIVE | HERDR | NONE
 execution_provider: NATIVE | HERDR | NONE
 delegation_backend: NONE | NATIVE | HERDR | OTHER
 write_isolation: SHARED | WORKTREE
-provider_reason: <evidence-backed reason; NONE for non-isolated runs>
+provider_reason: <evidence-backed reason; explicit non-isolated reason when execution_provider is NONE>
 parallel_strategy: NONE | COMPOSE
 integration_strategy: NONE | CHERRY_PICK
 requested_delivery: DEFAULT | GUIDED | PR
@@ -139,6 +139,45 @@ integration object.
 `delivery_checkout` is the only checkout that owns final delivery commits. The
 `delivery` section below records authorization and action status only. Source
 to integration mappings belong to `integration`.
+
+## Required structure and lifecycle
+
+The schema example describes the available state vocabulary; it is not a claim
+that every lifecycle field is populated in the first snapshot. A valid
+schema-v3 snapshot starts with this stable structural shell:
+
+- **Always-present top-level structure:** `workflow`, `workflow_version`,
+  `schema_version`, `run_id`, `status`, `requested_mode`,
+  `requested_provider`, `execution_provider`, `delegation_backend`,
+  `write_isolation`, `provider_reason`, `parallel_strategy`,
+  `integration_strategy`, `requested_delivery`, `delivery_mode`, `reason`,
+  `fallback_used`, `routing`, `invocation_checkout`, `delivery_checkout`,
+  `isolated_eligibility`, `parallel_value`, `provider_capabilities`,
+  `delivery`, `integration`, and `workers`.
+- **Always-present nested fields:** the four `routing` facts; all listed fields
+  in both checkout structures; `status`, `evidence_ref`, and `blockers` in
+  `isolated_eligibility`; `status`, `rationale`, and `overridden_by_user` in
+  `parallel_value`; and every capability plus
+  `provider_capabilities.lifecycle.{wait,inspect,cancel,cleanup}`.
+- **Required containers with initial values:** `delivery`, `integration`, and
+  `workers` exist from creation even when action/result, mapping, and worker
+  collections are empty. `provider_capabilities` exists even for a
+  non-isolated run; its capability and lifecycle evidence may start as
+  `unknown` with explicit `not-applicable` references. Initial eligibility and
+  parallel-value facts likewise use the contract's explicit initial,
+  `unknown`, empty, or false values rather than omission.
+- **Lifecycle-populated contents:** task entries, worker entries, integration
+  mappings/results, delivery actions/results, context/recovery details, and
+  provider lifecycle outcomes are added or filled only when their stage
+  applies. Their absence does not permit omitting a required parent container.
+- **Truly stage-dependent sections:** `continuation` may be absent from a
+  generic schema-v3 state until the first continuation/recovery snapshot is
+  written. Other non-shell sections listed under `Remaining state` are also
+  workflow records, not additions to the initial structural shell.
+
+Missing a required structure or field is malformed current state. A fact that
+is not known yet uses the contract's explicit initial, empty, or `unknown`
+representation instead of ambiguous omission.
 
 ## Routing and provider evidence
 
@@ -332,12 +371,14 @@ retries:
 A state whose `schema_version` is not `3` must be rejected as stale or
 unsupported, including older and future versions. No helper guesses a
 migration, normalizes an obsolete snapshot, or rewrites it in place. Start a
-fresh run instead. Routing is required in the current schema. Other sections
-remain stage-dependent: continuation fields are required once a continuation
-snapshot is written, while task, worker, integration, context, and provider
-lifecycle details are present only when their workflow stage makes them
-semantically available. Missing capability information is represented as
-`unknown` where that is the established current model.
+fresh run instead. The stable shell above is required for every current-schema
+snapshot; lifecycle contents and non-shell sections may be absent until their
+stage applies. When `continuation` is present, the validator requires
+`workflow_active`, `workflow`, `phase`, `step`, `awaiting`, `safe_boundary`,
+`updated_at`, and `continuation.delivery.mode`, with the delivery projection
+matching `delivery_mode`. Pi's active-resume path may require that continuation
+snapshot before it treats a state as resumable; that stricter runtime boundary
+does not change the generic schema-v3 minimum.
 
 ## Rules and transitions
 
