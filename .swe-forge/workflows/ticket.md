@@ -244,7 +244,7 @@ non-isolated execution, record `execution_provider: NONE`,
 isolated workflow before creating workers or resources.
 
 When the Pi optional `swe_forge_subagent` capability is being used, the
-`taskContract` argument carries the rendered worker briefing projection, not
+`workerBriefing` argument carries the rendered `worker_briefing/v1` projection, not
 the complete root task/run state. A first `action: capabilities` call may
 occur before a run-state snapshot exists; that call only discovers the backend
 and does not select a topology. Before any `action: run`, load
@@ -253,7 +253,7 @@ and does not select a topology. Before any `action: run`, load
 `invocation_checkout.path`/`delivery_checkout.path`,
 `continuation.workflow_active: true`, and `routing.current: SUBAGENTS`.
 Then request `action: capabilities` again so negotiation is bound to the new
-run. Task-contract or prompt text is not a substitute for canonical persisted
+run. Worker-briefing or prompt text is not a substitute for canonical persisted
 routing state; if the state is missing, stale, or unmatchable, preserve the
 SOLO/sequential fallback rather than delegating.
 
