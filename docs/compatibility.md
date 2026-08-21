@@ -1,7 +1,8 @@
 # Compatibility
 
-SWE Forge is preparing its first alpha release. The project is a Pi-first
-coding workflow with a portable canonical core and optional harness adapters.
+SWE Forge is preparing its first alpha release, `v0.1.0-alpha.1`. It is a
+Pi-first coding workflow with a portable canonical core and optional harness
+adapters.
 The snapshot below separates the maintenance tier from two different kinds of
 validation. It is evidence for the current adapters, not a promise that future
 harness releases remain compatible without review.
