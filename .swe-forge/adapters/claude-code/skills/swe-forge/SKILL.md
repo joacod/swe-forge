@@ -2,7 +2,7 @@
 name: swe-forge
 description: Explicitly activate the portable SWE Forge workflow with guided or PR delivery for a user-supplied ticket.
 disable-model-invocation: true
-compatibility: Claude Code global skill
+compatibility: Claude Code user-level skill
 ---
 
 The user explicitly invoked SWE Forge.

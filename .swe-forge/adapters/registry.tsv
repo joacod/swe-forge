@@ -1,13 +1,13 @@
 # harness|kind|source|destination|support
-opencode|file|opencode/commands/swe-forge-global.md|.config/opencode/commands/swe-forge.md|.config/opencode/swe-forge
-opencode|file|opencode/commands/git-commit-global.md|.config/opencode/commands/git-commit.md|.config/opencode/swe-forge
-opencode|file|opencode/commands/git-push-global.md|.config/opencode/commands/git-push.md|.config/opencode/swe-forge
-opencode|file|opencode/commands/git-pr-global.md|.config/opencode/commands/git-pr.md|.config/opencode/swe-forge
-opencode|file|opencode/commands/git-sync-global.md|.config/opencode/commands/git-sync.md|.config/opencode/swe-forge
-claude|tree|claude-code/skills/swe-forge-global|.claude/skills/swe-forge|.claude/swe-forge
-codex|tree|shared/agent-skill/global|.agents/skills/swe-forge|.agents/swe-forge
-cursor|tree|shared/agent-skill/global|.agents/skills/swe-forge|.agents/swe-forge
-pi|file|pi/prompts/swe-forge-global.md|.pi/agent/prompts/swe-forge.md|.pi/agent/swe-forge
+opencode|file|opencode/commands/swe-forge.md|.config/opencode/commands/swe-forge.md|.config/opencode/swe-forge
+opencode|file|opencode/commands/git-commit.md|.config/opencode/commands/git-commit.md|.config/opencode/swe-forge
+opencode|file|opencode/commands/git-push.md|.config/opencode/commands/git-push.md|.config/opencode/swe-forge
+opencode|file|opencode/commands/git-pr.md|.config/opencode/commands/git-pr.md|.config/opencode/swe-forge
+opencode|file|opencode/commands/git-sync.md|.config/opencode/commands/git-sync.md|.config/opencode/swe-forge
+claude|tree|claude-code/skills/swe-forge|.claude/skills/swe-forge|.claude/swe-forge
+codex|tree|shared/agent-skill/swe-forge|.agents/skills/swe-forge|.agents/swe-forge
+cursor|tree|shared/agent-skill/swe-forge|.agents/skills/swe-forge|.agents/swe-forge
+pi|file|pi/prompts/swe-forge.md|.pi/agent/prompts/swe-forge.md|.pi/agent/swe-forge
 pi|file|pi/prompts/git-commit.md|.pi/agent/prompts/git-commit.md|.pi/agent/swe-forge
 pi|file|pi/prompts/git-push.md|.pi/agent/prompts/git-push.md|.pi/agent/swe-forge
 pi|file|pi/prompts/git-pr.md|.pi/agent/prompts/git-pr.md|.pi/agent/swe-forge

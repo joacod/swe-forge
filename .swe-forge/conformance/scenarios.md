@@ -190,5 +190,5 @@ fixture exercises Pi state reinjection,
 active-PR `merged` shorthand, safe-boundary proactive compaction, and stale
 snapshot precedence without requiring a model or network. The installer suite
 covers exact target scope, conflicting files, symlinked destination components,
-mode-specific verification, duplicate arguments, global link-only behavior,
+mode-specific verification, duplicate arguments, user-level link-only behavior,
 installation locking, and rollback after an injected write failure.

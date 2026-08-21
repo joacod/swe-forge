@@ -15,7 +15,7 @@ The adapter does not redefine the workflow. The canonical files remain
 
 ## Explicit Command
 
-The installer links `commands/swe-forge-global.md` to:
+The installer links `commands/swe-forge.md` to:
 
 ```text
 ~/.config/opencode/commands/swe-forge.md

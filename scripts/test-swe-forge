@@ -72,26 +72,26 @@ assert_projection() {
     opencode)
       projection_support=$projection_home/.config/opencode/swe-forge
       assert_link "$projection_home/.config/opencode/commands/swe-forge.md" \
-        "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge-global.md"
+        "$ROOT/.swe-forge/adapters/opencode/commands/swe-forge.md"
       for command in $DELIVERY_COMMANDS; do
         assert_link "$projection_home/.config/opencode/commands/$command.md" \
-          "$ROOT/.swe-forge/adapters/opencode/commands/$command-global.md"
+          "$ROOT/.swe-forge/adapters/opencode/commands/$command.md"
       done
       ;;
     claude)
       projection_support=$projection_home/.claude/swe-forge
       assert_link "$projection_home/.claude/skills/swe-forge" \
-        "$ROOT/.swe-forge/adapters/claude-code/skills/swe-forge-global"
+        "$ROOT/.swe-forge/adapters/claude-code/skills/swe-forge"
       ;;
     codex|cursor)
       projection_support=$projection_home/.agents/swe-forge
       assert_link "$projection_home/.agents/skills/swe-forge" \
-        "$ROOT/.swe-forge/adapters/shared/agent-skill/global"
+        "$ROOT/.swe-forge/adapters/shared/agent-skill/swe-forge"
       ;;
     pi)
       projection_support=$projection_home/.pi/agent/swe-forge
       assert_link "$projection_home/.pi/agent/prompts/swe-forge.md" \
-        "$ROOT/.swe-forge/adapters/pi/prompts/swe-forge-global.md"
+        "$ROOT/.swe-forge/adapters/pi/prompts/swe-forge.md"
       for command in $DELIVERY_COMMANDS; do
         assert_link "$projection_home/.pi/agent/prompts/$command.md" \
           "$ROOT/.swe-forge/adapters/pi/prompts/$command.md"
@@ -151,7 +151,7 @@ manifest="$lifecycle_home/.swe-forge-install-state/opencode.tsv"
 test -f "$manifest" || fail 'installation manifest is missing'
 
 managed_link="$lifecycle_home/.config/opencode/commands/git-pr.md"
-managed_target="$ROOT/.swe-forge/adapters/opencode/commands/git-pr-global.md"
+managed_target="$ROOT/.swe-forge/adapters/opencode/commands/git-pr.md"
 rm "$managed_link"
 forge "$lifecycle_home" verify opencode >/dev/null 2>&1 && \
   fail 'verify accepted a missing managed link'
@@ -201,7 +201,7 @@ forge "$shared_home" install codex >/dev/null
 forge "$shared_home" install cursor >/dev/null
 forge "$shared_home" uninstall codex >/dev/null
 assert_link "$shared_home/.agents/skills/swe-forge" \
-  "$ROOT/.swe-forge/adapters/shared/agent-skill/global"
+  "$ROOT/.swe-forge/adapters/shared/agent-skill/swe-forge"
 assert_support_tree "$shared_home/.agents/swe-forge"
 test -f "$shared_home/.swe-forge-install-state/cursor.tsv" || \
   fail 'shared harness manifest was removed too early'
@@ -233,7 +233,7 @@ mkdir -p "$locked_home/.swe-forge-install.lock"
 expect_failure 'another installation may be active' forge "$locked_home" install opencode
 test -d "$locked_home/.swe-forge-install.lock" || fail 'installer removed another lock'
 
-# Registry validation remains transactional before any global write.
+# Registry validation remains transactional before any installation write.
 invalid_source=$TMP_ROOT/invalid-source
 invalid_home=$TMP_ROOT/invalid-home
 mkdir -p "$invalid_source" "$invalid_home"
@@ -241,7 +241,7 @@ cp -R "$ROOT/scripts" "$invalid_source/"
 cp -R "$ROOT/.swe-forge" "$invalid_source/"
 cp "$ROOT/AGENTS.md" "$ROOT/SWE-FORGE.md" "$ROOT/VERSION" "$invalid_source/"
 printf '%s\n' \
-  'opencode|file|opencode/commands/swe-forge-global.md|../outside|.config/opencode/swe-forge' \
+  'opencode|file|opencode/commands/swe-forge.md|../outside|.config/opencode/swe-forge' \
   >"$invalid_source/.swe-forge/adapters/registry.tsv"
 expect_failure 'invalid adapter registry row' env HOME="$invalid_home" \
   "$invalid_source/scripts/swe-forge" install opencode
