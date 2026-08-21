@@ -1,8 +1,12 @@
 # Harness Adapters
 
 Adapters expose the canonical SWE Forge workflow and its explicit delivery
-actions through harness-native features. They are optional integration layers,
-not alternate workflow definitions or execution providers.
+actions through harness-native features. They are optional, asymmetric
+integration layers, not alternate workflow definitions or execution providers.
+SWE Forge is Pi-first: Pi is the reference/first-class adapter, OpenCode is
+compatible/secondary, and Claude Code, Codex, and Cursor are experimental. A
+projection can be useful without providing feature parity or real harness
+validation.
 
 ## Source of Truth
 
@@ -71,7 +75,7 @@ not discovered automatically by a harness while they remain here. Installation
 links only the selected adapter projection and canonical support tree into the
 user-level harness locations. The adapter catalog itself is never installed.
 
-For supported harnesses, use `scripts/swe-forge install <harness>` and
+For an installable harness, use `scripts/swe-forge install <harness>` and
 `scripts/swe-forge verify <harness>`. The installer always links artifacts to
 the stable checkout, and each invocation handles one harness. Providers are not
 installed as a side effect.
@@ -82,13 +86,14 @@ configuration; review it manually first.
 
 ## Adapters
 
-- [OpenCode](opencode/README.md): user-level command and optional native-agent
-  bridge pattern
-- [Claude Code](claude-code/README.md): user-level skill projection
-- [Pi](pi/README.md): user-level prompt-template bridge
-- [Shared Agent Skill](shared/agent-skill/README.md): Codex and Cursor projection
-- [Codex](codex/README.md): shared Agent Skill integration notes
-- [Cursor](cursor/README.md): shared Agent Skill integration notes
+- [Pi](pi/README.md): first-class/reference user-level prompt-template bridge
+- [OpenCode](opencode/README.md): compatible/secondary user-level command and
+  optional native-agent bridge pattern
+- [Claude Code](claude-code/README.md): experimental user-level skill projection
+- [Shared Agent Skill](shared/agent-skill/README.md): experimental Codex and
+  Cursor projection
+- [Codex](codex/README.md): experimental shared Agent Skill integration notes
+- [Cursor](cursor/README.md): experimental shared Agent Skill integration notes
 
 Optional execution providers are documented separately under
 [`.swe-forge/providers/`](../providers/README.md), including the

@@ -8,7 +8,9 @@ assignees: ""
 
 ## Problem
 
-Describe what failed and what you expected to happen.
+Describe what failed and what you expected to happen. Projection or fixture
+validation is useful structural evidence, but it is not a claim that the target
+harness was behaviorally validated.
 
 ## Environment
 
@@ -17,6 +19,8 @@ Describe what failed and what you expected to happen.
 - SWE Forge version or commit:
 - Harness installation command:
 - Command run:
+- Validation kind: projection/fixture / real harness / both
+- Was the target harness actually exercised? yes / no
 
 ## Evidence
 

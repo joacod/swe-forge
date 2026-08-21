@@ -1,7 +1,11 @@
 # OpenCode Adapter
 
 This adapter exposes SWE Forge through current OpenCode user-level
-conventions. OpenCode discovers user commands under
+conventions. OpenCode is the compatible/secondary adapter: it has prior
+successful use, but it is not the reference harness and does not impose parity
+requirements on Pi development. Its demonstrated capabilities may differ from
+Pi while the canonical workflow remains portable. OpenCode discovers user
+commands under
 `~/.config/opencode/commands/`; project agents and commands may still be used
 for unrelated harness configuration. Skills can also be discovered under
 `.opencode/skills/`, `.agents/skills/`, or compatible project locations.

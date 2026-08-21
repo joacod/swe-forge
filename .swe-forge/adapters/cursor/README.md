@@ -1,5 +1,9 @@
 # Cursor Adapter
 
+Cursor is an experimental adapter. Its shared Agent Skill projection and
+installer fixture can be checked structurally, but Cursor has not been
+installed or behaviorally exercised in the current validation environment.
+
 Cursor uses the shared Agent Skill projection at
 [`../shared/agent-skill/`](../shared/agent-skill/). The Cursor-specific
 directory contains these installation notes; the skill payload lives only in

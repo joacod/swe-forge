@@ -1,5 +1,9 @@
 # Codex Adapter
 
+Codex is an experimental adapter. Its shared Agent Skill projection and
+installer fixture can be checked structurally, but Codex has not been
+installed or behaviorally exercised in the current validation environment.
+
 Codex uses the shared Agent Skill projection at
 [`../shared/agent-skill/`](../shared/agent-skill/). The Codex-specific directory
 contains these installation notes; the skill payload lives only in the shared

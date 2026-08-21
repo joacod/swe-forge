@@ -1,9 +1,11 @@
 # Installation
 
-SWE Forge is a portable repository first. Keep one stable checkout as the
-source of truth and install the requested harness projection as links back to
-that checkout. Projects are repositories SWE Forge operates on; SWE Forge is
-not installed into them.
+SWE Forge is a Pi-first coding workflow with a portable canonical repository.
+Keep one stable checkout as the source of truth and install the requested
+harness projection as links back to that checkout. Projects are repositories
+SWE Forge operates on; SWE Forge is not installed into them. Installation
+availability is separate from the support tier and real harness validation
+recorded in the compatibility snapshot.
 
 The dependency-free installer uses the user's home directory and handles one
 harness per invocation:
@@ -18,10 +20,12 @@ scripts/swe-forge update <harness>
 scripts/swe-forge uninstall <harness>
 ```
 
-Supported harness names are `opencode`, `claude`, `codex`, `cursor`, and `pi`.
-Installation is link-based, so a reviewed update to this checkout is reflected
-in the installed projection. The user-level link model is the only supported
-installation path.
+Installable harness names are `opencode`, `claude`, `codex`, `cursor`, and
+`pi`. Installation is link-based, so a reviewed update to this checkout is
+reflected in the installed projection. The user-level link model is the only
+supported installation path; it does not imply equal capabilities or real
+harness validation. See [compatibility](compatibility.md) for current tiers and
+evidence.
 
 ## Recommended installation
 
@@ -164,7 +168,8 @@ scripts/swe-forge verify pi
 
 Verification checks the canonical files, source links, harness locations,
 adapter references, and dangling links. After a successful filesystem check,
-run a small explicit harness invocation:
+remember that projection validation is not real harness validation. For an
+adapter you intend to exercise, run a small explicit harness invocation:
 
 ```text
 /swe-forge <small test ticket>

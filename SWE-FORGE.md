@@ -7,6 +7,13 @@ useful for the current ticket. Execution topology (`SOLO`, `SUBAGENTS`, or
 run may use a native harness capability or the optional Herdr execution
 provider, but neither provider defines SWE Forge behavior.
 
+SWE Forge is Pi-first, not Pi-only: Pi is the first-class/reference harness,
+OpenCode is a compatible secondary harness, and Claude Code, Codex, and Cursor
+are experimental adapters. The canonical workflow remains portable, while
+adapter capabilities may be asymmetric and degrade through documented
+fallbacks. Projection success or fixture coverage does not by itself imply
+real harness validation, and adapter parity is not a project requirement.
+
 ## Activation Contract
 
 SWE Forge must not activate because a task is difficult, because the
@@ -61,6 +68,13 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
 - Treat context reducibility as a first-class routing question: delegate only
   independently evaluable work whose concise result materially reduces root
   context growth.
+- Keep canonical workflow and policy logic dependent on semantic capabilities,
+  not harness identity when the distinction can be expressed as a capability.
+  Harness-specific API, invocation, and lifecycle behavior belongs in the
+  adapter/runtime integration.
+- Allow asymmetric adapter capabilities and use the documented canonical
+  fallback when an optional capability is unavailable; feature parity is not a
+  release requirement.
 - During discovery, assess question shape separately from final topology:
   bounded read-only questions may use `DELEGATED_RESEARCH`, while coupled
   discovery stays `ROOT_ONLY`; this lightweight assessment never creates

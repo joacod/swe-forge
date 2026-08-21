@@ -2,12 +2,15 @@
 
 [![CI](https://github.com/joacod/swe-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/joacod/swe-forge/actions/workflows/ci.yml)
 
-Portable, opt-in workflow orchestration for AI coding harnesses.
+SWE Forge is a Pi-first coding workflow with a portable canonical core and
+optional harness adapters.
 
 SWE Forge helps an agent turn a ticket into a bounded, evidence-backed change:
 inspect, plan, implement, verify, review, and report. It sits above your
 coding harness. It is not a harness, model provider, execution daemon, or
-scheduler, and it never activates from ordinary prompts.
+scheduler, and it never activates from ordinary prompts. Pi is the reference
+harness; other adapters may expose fewer or different capabilities without
+changing the canonical workflow.
 
 For each explicit ticket, it chooses the smallest execution topology that
 preserves reliability, context headroom, and isolation: `SOLO`, `SUBAGENTS`,
@@ -19,10 +22,11 @@ through verification and pull-request creation.
 
 `ISOLATED` is used when concurrent writable work requires separate execution
 environments. SWE Forge may use native harness worktree agents or Herdr as the
-provider. It still produces one integration branch and one final PR. The mode
-is portable at the workflow level, but it is not universally available in every
-harness; the provider-selection policy records demonstrated capabilities and
-explicit fallback.
+provider. It still produces one integration branch and one final PR. The
+workflow is portable at the semantic level, but adapters may expose asymmetric
+capabilities and safe fallbacks; feature parity is not a project requirement.
+The provider-selection policy records demonstrated capabilities and explicit
+fallback.
 
 ## Install
 
@@ -63,7 +67,7 @@ and may be used only when already available and selected safely by the canonical
 provider-selection policy.
 
 See the [compatibility snapshot](docs/compatibility.md) for the pre-release
-harness validation snapshot for the planned alpha and the
+support and validation snapshot for the planned alpha and the
 [changelog](CHANGELOG.md) for known limitations. Run
 `scripts/check-release prepare` when preparing a future alpha release; Forge
 never creates or publishes the tag or release.
@@ -101,13 +105,13 @@ worktree and one integration/delivery branch with the same convention; bounded
 worker branches are local-only.
 Commits, pushes, pull requests, and merges remain separately controlled.
 
-| Harness | Installation | Invocation |
-| --- | --- | --- |
-| [Pi](.swe-forge/adapters/pi/README.md) | `scripts/swe-forge install pi` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [OpenCode](.swe-forge/adapters/opencode/README.md) | `scripts/swe-forge install opencode` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [Claude Code](.swe-forge/adapters/claude-code/README.md) | `scripts/swe-forge install claude` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [Codex](.swe-forge/adapters/codex/README.md) | `scripts/swe-forge install codex` | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
-| [Cursor](.swe-forge/adapters/cursor/README.md) | `scripts/swe-forge install cursor` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| Harness | Support tier | Installation | Invocation |
+| --- | --- | --- | --- |
+| [Pi](.swe-forge/adapters/pi/README.md) | First-class / reference | `scripts/swe-forge install pi` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible / secondary | `scripts/swe-forge install opencode` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [Claude Code](.swe-forge/adapters/claude-code/README.md) | Experimental | `scripts/swe-forge install claude` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
+| [Codex](.swe-forge/adapters/codex/README.md) | Experimental | `scripts/swe-forge install codex` | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
+| [Cursor](.swe-forge/adapters/cursor/README.md) | Experimental | `scripts/swe-forge install cursor` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
 
 Explicit topology and delivery can be combined:
 

@@ -39,6 +39,16 @@ When changing this repository itself:
   frameworks, telemetry, benchmarks, speculative abstractions, or unneeded
   compatibility machinery. Detailed contracts and policies remain canonical
   in `SWE-FORGE.md` and `.swe-forge/`.
+- SWE Forge is Pi-first, not Pi-only: Pi is the first-class/reference harness;
+  OpenCode is compatible/secondary; Claude Code, Codex, and Cursor are
+  experimental. These tiers describe current maintenance and testing
+  commitment, not a parity guarantee.
+- Keep the canonical workflow portable and branch on semantic capabilities,
+  not harness identity. Harness-specific APIs and lifecycle behavior belong in
+  adapters, and missing optional capabilities use the documented fallback.
+- New Pi functionality does not require parity implementations elsewhere. Do
+  not add abstractions solely for hypothetical parity or delete an adapter
+  because its support is experimental; tiers may change with real validation.
 
 ## Installation Requests
 

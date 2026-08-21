@@ -5,6 +5,11 @@ discovery, explicit invocation, delegation, permissions, isolation, or model
 routing. Natural-language activation through `AGENTS.md` is always the
 fallback.
 
+SWE Forge is Pi-first, not Pi-only. Pi is the reference adapter, while other
+adapters may expose a smaller or different capability set with safe canonical
+fallbacks. A new adapter starts as experimental by default; it does not need to
+reproduce every Pi capability before it can be useful.
+
 ## Research Current Documentation
 
 Before writing adapter files, verify the harness's current official guidance
@@ -57,6 +62,21 @@ An adapter may still contain:
 Keep the adapter smaller than the canonical workflow. A loader should say which
 canonical files to read, not reproduce their procedure.
 
+## Required Adapter Work
+
+Adding an adapter requires these bounded pieces, in this order:
+
+1. project the canonical workflow into the host's supported extension mechanism;
+2. translate the host's invocation syntax into the canonical ticket input;
+3. declare or detect only capabilities the adapter actually demonstrates;
+4. use canonical semantics and documented fallbacks when a capability is absent;
+5. document the support tier and validation level honestly.
+
+Projection and fixture checks are useful structural evidence, but they are not a
+substitute for exercising SWE Forge through the real harness. Promote an
+experimental adapter only when actual use and maintenance evidence warrant it;
+do not create parity work as a prerequisite for adding an adapter.
+
 ## Activation
 
 Any command, skill, or native feature must preserve the mandatory explicit
@@ -98,5 +118,9 @@ Test an adapter in an isolated fake home or controlled fixture:
 8. the repository installer can install and verify the adapter in a temporary
    home without overwriting collisions
 
-Update the adapter when official harness behavior changes, but do not change
-the canonical architecture to match one vendor's terminology.
+Record projection/fixture validation separately from real harness validation.
+In particular, a successful installer or generated skill fixture does not mean
+that the maintainer has behaviorally validated the harness. Update the adapter
+when official harness behavior changes, but do not change the canonical
+architecture to match one vendor's terminology or require feature parity with
+Pi.

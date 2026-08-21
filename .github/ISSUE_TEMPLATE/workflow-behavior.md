@@ -8,7 +8,9 @@ assignees: ""
 
 ## Behavior
 
-What did SWE Forge do, and what should it have done instead?
+What did SWE Forge do, and what should it have done instead? Report observed
+workflow behavior separately from installer or projection/fixture validation;
+a successful projection does not establish harness behavior.
 
 ## Ticket and invocation
 

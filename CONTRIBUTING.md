@@ -1,8 +1,10 @@
 # Contributing to SWE Forge
 
-Thanks for helping improve SWE Forge. The project is a portable workflow
-specification layer, so changes should preserve the separation between the
-canonical workflow and harness-specific projections.
+Thanks for helping improve SWE Forge. The project is a Pi-first coding
+workflow with a portable canonical core, so changes should preserve the
+separation between the canonical workflow and asymmetric harness projections.
+Pi is the reference harness; new Pi capabilities do not require parity work in
+experimental adapters.
 
 ## Before changing files
 
@@ -13,6 +15,12 @@ canonical workflow and harness-specific projections.
 - Do not commit temporary run state, transcripts, credentials, or generated
   installation trees.
 - Keep Herdr as an optional execution provider; it is not a topology.
+- Keep canonical logic capability-oriented rather than branching on harness
+  identity. Harness-specific APIs and lifecycle behavior belong in adapters,
+  and missing optional capabilities must use the canonical fallback.
+- Treat projection/fixture validation and real harness validation as separate
+  evidence. Do not delete an experimental adapter or claim parity because it
+  has not yet been exercised.
 
 ## Validate locally
 
@@ -33,8 +41,9 @@ During an implementation loop, use only the focused suite affected by the
 current slice and run the batch once on the final candidate. Focused changes may
 run the directly affected suite, such as
 `scripts/test-swe-forge-gate`, `scripts/test-swe-forge-isolated`,
-`scripts/test-swe-forge-pi`, `scripts/test-swe-forge-briefing`, or
-`scripts/test-swe-forge-results`, before the final batch. The local Pi fixture may
+`scripts/test-swe-forge-pi`, `scripts/test-swe-forge-briefing`,
+`scripts/test-swe-forge-results`, or `scripts/test-swe-forge-boundary`, before the
+final batch. The local Pi fixture may
 report `SKIP` when the installed Node runtime cannot execute TypeScript; the
 dedicated `pi-runtime` CI job pins a supported Node version and treats that
 condition as a failure.

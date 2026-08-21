@@ -1,5 +1,10 @@
 # Claude Code Adapter
 
+Claude Code is an experimental adapter. Installer and skill projection fixtures
+show that the files can be installed with the expected structure; they do not
+constitute behavioral validation. The maintainer has not actively exercised
+SWE Forge through Claude Code.
+
 Claude Code reads `CLAUDE.md`, not `AGENTS.md`, so the repository root includes
 the smallest compatible bridge:
 
