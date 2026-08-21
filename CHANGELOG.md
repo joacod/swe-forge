@@ -23,7 +23,8 @@ change between alpha releases.
   repeating unchanged run-state validation.
 - Receipt generation now keeps a run-local copy by default without adding
   workflow metadata to pull requests.
-- Continue collecting real-run reports across supported harnesses.
+- Continue collecting real-run reports across harness adapters; projection
+  fixtures are not a substitute for real harness evidence.
 - The planned first alpha, `v0.1.0-alpha.1`, remains unpublished. Its tagged
   installation instructions become usable only after a separate manual
   publication; until then, `main` remains development-only.
@@ -38,7 +39,9 @@ compatibility, and known limitations.
 
 - Portable `SOLO`, `SUBAGENTS`, and `ISOLATED` workflow guidance.
 - Separate `GUIDED` and `PR` delivery modes with explicit delivery boundaries.
-- Registry-driven adapters for Pi, OpenCode, Claude Code, Codex, and Cursor.
+- A first-class/reference Pi adapter, a compatible/secondary OpenCode adapter,
+  and experimental Claude Code, Codex, and Cursor adapters, with no feature-
+  parity requirement.
 - Transactional source-link installation and verification with collision and
   rollback checks.
 - Executable evidence gates and compact run receipts.
@@ -46,7 +49,8 @@ compatibility, and known limitations.
 
 ### Known limitations
 
-- The planned release is experimental and does not promise stable compatibility.
+- The planned release is experimental and does not promise stable or
+  feature-parity compatibility across harness adapters.
 - All harness installations are user-level source links and require a current
   managed manifest for safe update or uninstall. Obsolete installations are
   inspectable, but destructive operations refuse to guess ownership.

@@ -1,12 +1,16 @@
 ---
 name: Real-run report
-about: Share what happened on a real SWE Forge ticket
+about: Share what happened during an actual harness run of a SWE Forge ticket
 title: "[Run report] "
 labels: ""
 assignees: ""
 ---
 
 ## Run details
+
+This template is for actual harness usage. Installer or projection-only checks
+belong in the installation/adapter template and should not be reported as real
+harness validation.
 
 - Harness and version:
 - Model:

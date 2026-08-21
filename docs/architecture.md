@@ -1,9 +1,9 @@
 # Architecture
 
-SWE Forge is a portable specification layer above coding harnesses. Its
-architecture separates canonical workflow logic from role definitions,
-contracts, policies, execution providers, and harness integrations. Execution
-topology, provider, and delivery are orthogonal:
+SWE Forge is a Pi-first coding workflow with a portable canonical core above
+coding harnesses. Its architecture separates canonical workflow logic from
+role definitions, contracts, policies, execution providers, and harness
+integrations. Execution topology, provider, and delivery are orthogonal:
 
 - topology controls coordination: `SOLO`, `SUBAGENTS`, or `ISOLATED`
 - routing records context value and separates preferred from effective topology
@@ -63,6 +63,28 @@ only ephemeral isolated worker branches use internal run/task namespacing.
 Providers are not topology branches. The orchestrator remains accountable for
 foundation, Git/evidence validation, central integration, final verification,
 review, delivery, and cleanup.
+
+## Capability boundary
+
+Canonical workflow and policy code may depend on semantic capabilities. It must
+not depend on the identity of a harness when the distinction can be expressed
+as a capability. This keeps the workflow portable while allowing adapters to
+provide richer or reduced host behavior.
+
+Adapters may:
+
+- translate invocation syntax;
+- project canonical workflow material into host-specific locations;
+- detect and advertise only demonstrated host capabilities;
+- implement host-specific lifecycle integration; and
+- provide host-specific execution backends or richer behavior.
+
+Canonical workflow and policy sources own routing and topology semantics,
+contracts, evidence requirements, delivery semantics, and documented fallback
+behavior. When an adapter capability is absent, canonical execution uses the
+safe fallback where one exists. Do not add a heavyweight `Harness` class or
+plugin framework merely to model asymmetric support; the capability boundary
+is the intended abstraction.
 
 ## Routing boundary
 

@@ -75,13 +75,17 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
   "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
   "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-briefing" \
-  "$ROOT/scripts/test-swe-forge-results" "$ROOT/scripts/swe-forge-gate" \
+  "$ROOT/scripts/test-swe-forge-results" "$ROOT/scripts/check-swe-forge-boundary" \
+  "$ROOT/scripts/test-swe-forge-boundary" "$ROOT/scripts/swe-forge-gate" \
   "$ROOT/scripts/test-swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
   "$ROOT/scripts/swe-forge-state" \
   "$ROOT/scripts/swe-forge-isolated-gate" \
   "$ROOT/scripts/check-release"
+[ -x "$ROOT/scripts/check-swe-forge-boundary" ] || fail "canonical boundary check is not executable"
+[ -x "$ROOT/scripts/test-swe-forge-boundary" ] || fail "canonical boundary fixture is not executable"
+"$ROOT/scripts/check-swe-forge-boundary" "$ROOT" >/dev/null
 [ -x "$ROOT/.swe-forge/tools/swe-forge-gate" ] || fail "evidence gate is not executable"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-state" ] || fail "run-state validator is not executable"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" ] || fail "isolated gate is not executable"
@@ -445,6 +449,7 @@ require_text 'test-swe-forge-pi' CONTRIBUTING.md
 require_text 'test-swe-forge-briefing' CONTRIBUTING.md
 require_text 'worker briefing fixture' scripts/validate-swe-forge
 require_text 'worker result profile fixture' scripts/validate-swe-forge
+require_text 'canonical boundary fixture' scripts/validate-swe-forge
 require_text 'discoverable-old' scripts/test-swe-forge-pi
 require_text 'project-overrides-global' scripts/test-swe-forge-pi
 require_text 'task_id: reader-check' scripts/test-swe-forge-pi
@@ -459,7 +464,7 @@ require_text 'ctx.compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.t
 require_text 'workerBriefing' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'worker_briefing/v1' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'workerBriefing' .swe-forge/adapters/pi/README.md
-require_text '`workerBriefing` argument' .swe-forge/workflows/ticket.md
+require_text 'worker_briefing/v1' .swe-forge/workflows/ticket.md
 reject_text 'taskContract' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 reject_text 'taskContract' .swe-forge/adapters/pi/README.md
 reject_text '`taskContract` argument' .swe-forge/workflows/ticket.md

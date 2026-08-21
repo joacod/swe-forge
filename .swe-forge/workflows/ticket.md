@@ -243,19 +243,19 @@ non-isolated execution, record `execution_provider: NONE`,
 `ISOLATED` is selected, follow the loaded provider-selection policy and
 isolated workflow before creating workers or resources.
 
-When the Pi optional `swe_forge_subagent` capability is being used, the
-`workerBriefing` argument carries the rendered `worker_briefing/v1` projection, not
-the complete root task/run state. A first `action: capabilities` call may
-occur before a run-state snapshot exists; that call only discovers the backend
-and does not select a topology. Before any `action: run`, load
-`.swe-forge/contracts/run-state.md` and persist a complete active schema-v3 snapshot in a discoverable location, with
-`workflow: swe-forge`, a non-terminal status, matching
-`invocation_checkout.path`/`delivery_checkout.path`,
-`continuation.workflow_active: true`, and `routing.current: SUBAGENTS`.
-Then request `action: capabilities` again so negotiation is bound to the new
-run. Worker-briefing or prompt text is not a substitute for canonical persisted
-routing state; if the state is missing, stale, or unmatchable, preserve the
-SOLO/sequential fallback rather than delegating.
+When an optional native `SUBAGENTS` backend is being used, the selected
+adapter or provider carries the rendered `worker_briefing/v1` projection, not
+the complete root task/run state. A capability probe may occur before a
+run-state snapshot exists, but that probe only discovers the backend and does
+not select a topology. Before any worker launch, load
+`.swe-forge/contracts/run-state.md` and persist a complete active schema-v3
+snapshot in a discoverable location, with `workflow: swe-forge`, a non-terminal
+status, matching `invocation_checkout.path`/`delivery_checkout.path`,
+`continuation.workflow_active: true`, and `routing.current: SUBAGENTS`. Then
+repeat backend capability negotiation so it is bound to the new run. A worker
+briefing or prompt is not a substitute for canonical persisted routing state;
+if the state is missing, stale, or unmatchable, preserve the SOLO/sequential
+fallback rather than delegating.
 
 ### 7. Test Strategy
 

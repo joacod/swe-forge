@@ -376,8 +376,8 @@ snapshot; lifecycle contents and non-shell sections may be absent until their
 stage applies. When `continuation` is present, the validator requires
 `workflow_active`, `workflow`, `phase`, `step`, `awaiting`, `safe_boundary`,
 `updated_at`, and `continuation.delivery.mode`, with the delivery projection
-matching `delivery_mode`. Pi's active-resume path may require that continuation
-snapshot before it treats a state as resumable; that stricter runtime boundary
+matching `delivery_mode`. An active-resume adapter may require that
+continuation snapshot before it treats a state as resumable; that stricter runtime boundary
 does not change the generic schema-v3 minimum.
 
 ## Rules and transitions

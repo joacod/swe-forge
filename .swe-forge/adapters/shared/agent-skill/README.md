@@ -1,8 +1,10 @@
 # Shared Agent Skill Adapter
 
-Codex and Cursor both support the open Agent Skills layout. This shared
-projection keeps one skill payload and one explicit-invocation policy for both
-harnesses:
+Codex and Cursor both support the open Agent Skills layout. They are
+experimental adapters: the shared projection can be structurally validated,
+but projection success is not real harness validation and neither target is
+currently installed or behaviorally exercised. This shared projection keeps
+one skill payload and one explicit-invocation policy for both harnesses:
 
 ```text
 Skill:    ~/.agents/skills/swe-forge/
