@@ -134,7 +134,19 @@ for issue_template in \
 done
 require_text 'v0.1.0-alpha.1' README.md
 require_text 'issues/new/choose' README.md
-require_text 'scripts/swe-forge status' README.md
+require_text '## What it does' README.md
+require_text '## Harnesses' README.md
+require_text '## Install' README.md
+require_text '## Use' README.md
+require_text '## Documentation' README.md
+require_text 'Pi-first' README.md
+require_text '`SOLO`' README.md
+require_text '`SUBAGENTS`' README.md
+require_text '`ISOLATED`' README.md
+require_text 'scripts/swe-forge install pi' README.md
+require_text 'scripts/swe-forge verify pi' README.md
+require_text '/swe-forge pr <ticket>' README.md
+require_text 'Neither mode merges automatically' README.md
 require_text 'scripts/swe-forge update' docs/installation.md
 require_text 'The manifest records' docs/installation.md
 require_text 'Run metadata:' .swe-forge/contracts/receipt.md
@@ -316,11 +328,11 @@ require_text 'DRAFT | OPEN | MERGED | CLOSED | none' .swe-forge/contracts/run-st
 require_text 'The same rule applies to SWE Forge' .swe-forge/policies/delivery.md
 require_text 'Receipts remain private run-evidence artifacts' .swe-forge/policies/delivery.md
 require_text 'private run-evidence artifacts' .swe-forge/policies/delivery.md
-require_text 'never copied into the PR description' README.md
-require_text '### Repository-aware delivery' README.md
-require_text 'project-specific SWE Forge configuration is required or written' README.md
-require_text 'latest template' README.md
-require_text '`/git-pr draft`' README.md
+require_text 'Support tiers and available capabilities are asymmetric' README.md
+require_text 'feature parity is not' README.md
+require_text 'no public release yet' README.md
+require_text 'stable user-level checkout' README.md
+require_text 'as links' README.md
 require_text 'Project-facing PR content' .swe-forge/conformance/scenarios.md
 reject_text 'add it to the PR description' SWE-FORGE.md
 reject_text 'add it to the PR description' README.md

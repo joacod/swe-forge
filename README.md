@@ -2,272 +2,96 @@
 
 [![CI](https://github.com/joacod/swe-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/joacod/swe-forge/actions/workflows/ci.yml)
 
-SWE Forge is a Pi-first coding workflow with a portable canonical core and
-optional harness adapters.
+SWE Forge turns explicit coding tickets into bounded, evidence-backed changes.
+It sits above your coding harness: it helps inspect, plan, implement, verify,
+review, and report without replacing the harness itself.
 
-SWE Forge helps an agent turn a ticket into a bounded, evidence-backed change:
-inspect, plan, implement, verify, review, and report. It sits above your
-coding harness. It is not a harness, model provider, execution daemon, or
-scheduler, and it never activates from ordinary prompts. Pi is the reference
-harness; other adapters may expose fewer or different capabilities without
-changing the canonical workflow.
+SWE Forge is Pi-first, with a portable canonical workflow and asymmetric
+harness adapters. It is opt-in, so ordinary harness prompts remain ordinary
+prompts.
 
-For each explicit ticket, it chooses the smallest execution topology that
-preserves reliability, context headroom, and isolation: `SOLO`, `SUBAGENTS`,
-or `ISOLATED`. Routing considers context reducibility rather than prompt length
-alone and records preferred versus effective topology when a backend is
-unavailable. Delivery is a separate choice: `GUIDED` is the default for
-reviewable increments, while opt-in `PR` mode can carry a well-specified ticket
-through verification and pull-request creation.
+## What it does
 
-`ISOLATED` is used when concurrent writable work requires separate execution
-environments. SWE Forge may use native harness worktree agents or Herdr as the
-provider. It still produces one integration branch and one final PR. The
-workflow is portable at the semantic level, but adapters may expose asymmetric
-capabilities and safe fallbacks; feature parity is not a project requirement.
-The provider-selection policy records demonstrated capabilities and explicit
-fallback.
+```text
+ticket → inspect and plan → choose a topology → implement → verify and review → deliver/report
+```
+
+It chooses the smallest useful execution topology:
+
+- `SOLO` for tightly coupled work
+- `SUBAGENTS` when bounded delegation adds value
+- `ISOLATED` when concurrent writable work needs separate environments
+
+Runs can work directly in one context, use subagents when available and
+useful, or use isolated writable workers when the host and provider can support
+them safely. The [workflow specification](SWE-FORGE.md) and
+[architecture guide](docs/architecture.md) describe the deeper behavior.
+
+## Harnesses
+
+| Harness | Tier |
+| --- | --- |
+| [Pi](.swe-forge/adapters/pi/README.md) | First-class / reference |
+| [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible / secondary |
+| [Claude Code](.swe-forge/adapters/claude-code/README.md) | Experimental |
+| [Codex](.swe-forge/adapters/codex/README.md) | Experimental |
+| [Cursor](.swe-forge/adapters/cursor/README.md) | Experimental |
+
+Support tiers and available capabilities are asymmetric; feature parity is not
+required. See the [compatibility snapshot](docs/compatibility.md) for current
+versions and validation evidence.
 
 ## Install
 
-The planned first experimental release is `v0.1.0-alpha.1`. It is reserved
-but not currently published, so no released tag is available yet. Pin the
-source checkout only after the tag and release are published. Until then,
-`main` is development-only:
+SWE Forge has no public release yet; the planned first alpha is
+`v0.1.0-alpha.1`. For development, clone the repository into
+a stable user-level checkout and install the harness projection as links:
 
 ```bash
-# Use only after the v0.1.0-alpha.1 tag and release are published:
-git clone --branch v0.1.0-alpha.1 --depth 1 \
-  https://github.com/joacod/swe-forge.git ~/tools/swe-forge
+git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
-```
-
-For development before publication, clone the repository normally and treat
-that checkout as development-only.
-
-For development, a personal checkout may follow `main`, but public
-installations should use a release tag. Install the requested harness from the
-stable checkout:
-
-```bash
 scripts/swe-forge install pi
+scripts/swe-forge verify pi
 ```
 
-The installer creates links back to this checkout, so reviewed source updates
-are available to future harness sessions. The optional Pi `SUBAGENTS` backend
-is a separate package and is not installed by this command. Until it is
-published to npm, follow the [pre-publication source install](docs/installation.md#optional-pi-subagents-backend)
-to clone both repositories and register the local package.
-
-See the [installation guide](docs/installation.md) for harness locations,
-verification, lifecycle commands, and conflicts.
-
-Installation does not install Herdr. Herdr is an optional execution provider
-and may be used only when already available and selected safely by the canonical
-provider-selection policy.
-
-See the [compatibility snapshot](docs/compatibility.md) for the pre-release
-support and validation snapshot for the planned alpha and the
-[changelog](CHANGELOG.md) for known limitations. Run
-`scripts/check-release prepare` when preparing a future alpha release; Forge
-never creates or publishes the tag or release.
-
-## Installer lifecycle
-
-The dependency-free installer exposes read-only inspection and conservative
-lifecycle operations in addition to `install` and `verify`:
-
-```bash
-scripts/swe-forge version
-scripts/swe-forge status pi
-scripts/swe-forge doctor pi
-scripts/swe-forge install pi --dry-run
-scripts/swe-forge update opencode --dry-run
-scripts/swe-forge update opencode
-scripts/swe-forge uninstall opencode
-```
-
-Installations record an exact managed manifest. `update` and `uninstall` refuse
-modified, missing, or ambiguous managed entries rather than guessing. Legacy
-installations without a manifest can be inspected and verified, but destructive
-lifecycle operations stop until the installation is reviewed and recreated.
-`--dry-run` performs planning and conflict checks without creating locks,
-files, links, or manifests.
+Replace `pi` with `opencode`, `claude`, `codex`, or `cursor` as needed. See the
+[installation guide](docs/installation.md) for the supported link locations
+and optional capabilities.
 
 ## Use
 
-Installation only makes it available; it does not activate the workflow.
-Invoke it explicitly with a ticket. Ordinary prompts continue to use your
-harness normally. A clean normal default branch gets one dedicated task
-branch automatically, using the conventional
-`<type>/<short-kebab-case-description>` form without a project-name prefix. An isolated run instead uses one run-owned integration
-worktree and one integration/delivery branch with the same convention; bounded
-worker branches are local-only.
-Commits, pushes, pull requests, and merges remain separately controlled.
-
-| Harness | Support tier | Installation | Invocation |
-| --- | --- | --- | --- |
-| [Pi](.swe-forge/adapters/pi/README.md) | First-class / reference | `scripts/swe-forge install pi` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible / secondary | `scripts/swe-forge install opencode` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [Claude Code](.swe-forge/adapters/claude-code/README.md) | Experimental | `scripts/swe-forge install claude` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-| [Codex](.swe-forge/adapters/codex/README.md) | Experimental | `scripts/swe-forge install codex` | `$swe-forge <ticket>` or `$swe-forge pr <ticket>` |
-| [Cursor](.swe-forge/adapters/cursor/README.md) | Experimental | `scripts/swe-forge install cursor` | `/swe-forge <ticket>` or `/swe-forge pr <ticket>` |
-
-Explicit topology and delivery can be combined:
-
-```text
-/swe-forge isolated <ticket>
-/swe-forge isolated pr <ticket>
-/swe-forge pr isolated <ticket>
-```
-
-The canonical topology words are `solo`, `subagents`, and `isolated`. A leading
-`herdr` is not a topology alias. The workflow gives migration guidance to use
-`isolated` and request Herdr as a separate execution-provider preference.
-
-## How it works
-
-SWE Forge turns an explicit ticket into a bounded, evidence-backed change:
-
-```text
-ticket
-  → assess whether discovery has independent, context-reducible questions
-  → inspect the repository and clarify important decisions
-  → define acceptance criteria and the smallest compatible approach
-  → choose SOLO, SUBAGENTS, or ISOLATED
-  → select NATIVE or optional HERDR only for ISOLATED when demonstrated
-  → implement and validate bounded slices or dependency waves
-  → centrally integrate isolated results in planned order when applicable
-  → verify, independently review, and repair when needed
-  → run executable evidence gates and generate a compact receipt when useful
-  → report ACCEPTED, BLOCKED, or FAILED
-```
-
-The original ticket remains authoritative. When clarification is needed, Forge
-asks only questions whose answers could change behavior, scope, compatibility,
-safety, or delivery. A temporary working spec may organize the intent,
-scenarios, assumptions, and validation, but ticket-specific specs are not
-normally added to the repository. Long-running runs also record the active
-harness's context capabilities: when a reliable near-limit signal exists, Forge
-persists the short state, compacts before the next continuation, and rechecks
-state and Git; when no portable signal exists, it uses durable checkpoints
-rather than guessing.
-
-Every ticket also records a risk-proportional testing decision: focused
-behavioral tests when they add signal, existing coverage or focused manual
-evidence when sufficient, and no blanket coverage target or mandatory TDD.
-Long-running runs persist a compact continuation state separately from
-conversation summaries so Pi and other capable adapters can recover workflow
-phase and user shorthand after compaction.
-
-`GUIDED` mode keeps a human checkpoint between reviewable slices. `PR` mode is
-an explicit low-touch path that can continue through validation, review, push,
-and pull-request creation. Neither mode merges automatically. Commits, pushes,
-PR creation, and post-merge synchronization remain separately controlled
-actions, and optional specialist skills are loaded only when requested or
-clearly useful.
-
-When `ISOLATED` applies, the workflow requires a foundation phase, a dependency
-DAG, wave barriers, at most two concurrent writable workers by default, exact
-base SHAs, explicit shared-artifact ownership, isolated runtime resources,
-worker-level and integrated validation, source-to-integration mappings, and
-conservative cleanup. Worker completion order never determines integration
-order. Worker branches never receive pushes or PRs.
-
-The detailed lifecycle lives in the [workflow specification](SWE-FORGE.md),
-[ticket procedure](.swe-forge/workflows/ticket.md), and
-[isolated execution workflow](.swe-forge/workflows/isolated-execution.md). The
-canonical ownership/load map and minimal topology load sets are in
-[architecture](docs/architecture.md).
-
-## Delivery modes
-
-### Guided (default)
-
-Use the normal invocation when you want to steer the work and review smaller
-diffs:
+Invoke SWE Forge explicitly through the installed harness entry point:
 
 ```text
 /swe-forge <ticket>
-  → create or reuse one task branch
-  → implement and validate one cohesive slice
-  → checkpoint: review the diff
-  → say "continue" or "go"; go commits the slice and continues
-  → repeat until the feature is complete
-  → use /git-commit if needed, then /git-push and /git-pr separately
 ```
 
-For explicit `isolated` or automatic isolated routing, the setup checkpoint
-shows the worker count, wave, task ownership, provider, worktree plan,
-integration order, shared artifacts, and environment resources. `continue`
-authorizes only that local setup; `go` authorizes a reviewed integration-branch
-commit. The integration branch remains the sole delivery branch.
+The default `GUIDED` mode is reviewable and keeps you in the loop. Use `PR` mode
+for the lower-touch path through pull-request creation:
 
-After reviewing and manually merging the PR, say `merged` (or run
-`/git-sync merged`). Forge verifies the PR was actually merged before returning
-to the remote default branch and fast-forwarding it. It never merges
-automatically.
+```text
+/swe-forge pr <ticket>
+```
 
-### PR mode
+Neither mode merges automatically. When needed, request the isolated topology
+explicitly:
 
-Use `/swe-forge pr <ticket>` when the change is clear enough for low-touch
-execution. Forge performs a short alignment interview only when important
-requirements are missing, keeps the working spec temporary, and records an
-ordered commit plan before editing. Each meaningful plan step is validated and
-committed separately; a one-step ticket is not split artificially. Forge then
-runs the full verification and review gates and stops with one PR available to
-review. For `ISOLATED`, it central-integrates worker transfer commits into one
-integration/delivery branch and still creates exactly one final PR. Its PR
-title and description are concise, project-facing, and limited to the outcome,
-motivation, relevant validation, and material risks or follow-ups. They never
-include receipts or tool/process metadata, including when the target repository
-is SWE Forge itself; it still never merges.
+```text
+/swe-forge isolated <ticket>
+```
 
-The delivery helpers are intentionally atomic: `/git-push` only pushes; use
-`/git-pr` separately to create or report the pull request. In PR mode, a compact
-SWE Forge receipt can be generated after the PR URL exists as private run
-evidence; it is never copied into the PR description. Commit and PR messages
-follow the repository delivery policy: concise imperative subjects, clear
-subject/body separation, and bodies that preserve what/why context when needed,
-without tool attribution or unrelated detail. The final harness output also
-starts with a short plain-language work summary of what changed, what improved,
-and any material notes, separate from the private receipt. See the harness adapter
-documentation for the available
-`git-commit`, `git-push`, `git-pr`, and `git-sync` loaders.
+Codex exposes the same explicit skill as `$swe-forge`; the other listed
+adapters use `/swe-forge`.
 
-### Repository-aware delivery
-
-Delivery artifacts automatically follow repository conventions when they can be
-discovered confidently. User instructions take precedence, followed by
-repository documentation, native templates/configuration, strong recurring Git
-history, and finally SWE Forge's defaults. Discovery is runtime-only: no
-project-specific SWE Forge configuration is required or written.
-
-Immediately before creating a pull request, Forge retrieves the latest template
-from the remote default branch when provider access is available, preserves its
-structure and checklists, and fills only relevant sections. `/git-pr draft`
-creates a draft PR; `/git-pr` keeps the normal/open behavior.
-
-## Feedback
-
-Please report friction through the [issue templates](https://github.com/joacod/swe-forge/issues/new/choose):
-[installation or adapter problem](https://github.com/joacod/swe-forge/issues/new?template=installation-adapter.md),
-[workflow behavior problem](https://github.com/joacod/swe-forge/issues/new?template=workflow-behavior.md),
-or [real-run report](https://github.com/joacod/swe-forge/issues/new?template=real-run-report.md).
-Redact credentials, private ticket details, transcripts, and personal paths.
-
-## Learn more
+## Documentation
 
 - [Workflow specification](SWE-FORGE.md)
-- [Installation guide](docs/installation.md)
-- [Compatibility snapshot](docs/compatibility.md)
-- [Changelog](CHANGELOG.md)
-- [Planned v0.1.0-alpha.1 release notes](docs/releases/v0.1.0-alpha.1.md)
+- [Installation](docs/installation.md)
 - [Architecture](docs/architecture.md)
-- [Adapter index](.swe-forge/adapters/README.md)
-- [Execution providers](.swe-forge/providers/README.md)
-- [Executable evidence and receipts](.swe-forge/policies/evidence.md)
-- [Release readiness](scripts/check-release)
-- [Adding a harness](docs/adding-a-harness.md)
-- [Adding an optional specialist skill](docs/adding-a-skill.md)
+- [Harness compatibility](docs/compatibility.md)
+- [Adapter documentation](.swe-forge/adapters/README.md)
 - [Contributing](CONTRIBUTING.md)
+
+## Status
+
+SWE Forge is pre-alpha. For feedback, [open an issue](https://github.com/joacod/swe-forge/issues/new/choose).
