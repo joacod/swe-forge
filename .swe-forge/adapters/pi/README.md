@@ -1,18 +1,18 @@
 # Pi Adapter
 
-This adapter exposes SWE Forge through Pi's global prompt-template convention
-plus one small optional runtime extension. Canonical workflow behavior remains
+This adapter exposes SWE Forge through Pi's prompt-template convention plus
+one small optional runtime extension. Canonical workflow behavior remains
 in the support tree; the extension translates Pi lifecycle capabilities into
 the generic context and continuation contracts and feature-detects the optional
 `swe_forge_subagent` capability.
 
-## Global Installation
+## Installation
 
-Install the source-linked global bridge explicitly:
+Install the source-linked bridge explicitly:
 
 ```bash
-scripts/swe-forge install pi --global
-scripts/swe-forge verify pi --global
+scripts/swe-forge install pi
+scripts/swe-forge verify pi
 ```
 
 The installer creates or links:
@@ -29,8 +29,8 @@ The installer creates or links:
 
 The prompt and extension loaders resolve canonical files under
 `~/.pi/agent/swe-forge/`, never against a project-local `.swe-forge/` tree.
-Link mode is the default, so updating the stable SWE Forge checkout updates
-the installed source after review. Global copy mode remains unsupported.
+The links point to the stable SWE Forge checkout, so a reviewed source update
+updates future sessions.
 
 The optional `swe_forge_subagent` package is not installed by the commands
 above. Until that package is published to npm, use the

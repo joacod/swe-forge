@@ -15,8 +15,7 @@ Describe what failed and what you expected to happen.
 - Harness and version:
 - Operating system:
 - SWE Forge version or commit:
-- Scope: project / global
-- Mode: link / copy
+- Harness installation command:
 - Command run:
 
 ## Evidence
@@ -26,5 +25,6 @@ personal paths when sharing publicly.
 
 ## Reproduction
 
-List the smallest repeatable sequence, including whether the target already
-contained an `AGENTS.md`, `SWE-FORGE.md`, `.swe-forge/`, or adapter files.
+List the smallest repeatable sequence, including whether the user home
+already contained the harness entry, canonical support directory, or adapter
+files.

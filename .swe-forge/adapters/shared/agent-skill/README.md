@@ -5,23 +5,20 @@ projection keeps one skill payload and one explicit-invocation policy for both
 harnesses:
 
 ```text
-Project: .agents/skills/swe-forge/
-Global:  ~/.agents/skills/swe-forge/
-Support: ~/.agents/swe-forge/
+Skill:    ~/.agents/skills/swe-forge/
+Support:  ~/.agents/swe-forge/
 ```
 
 Install either harness explicitly:
 
 ```bash
-scripts/swe-forge install codex --target /path/to/project
-scripts/swe-forge install cursor --target /path/to/project
-scripts/swe-forge install codex --global
-scripts/swe-forge install cursor --global
+scripts/swe-forge install codex
+scripts/swe-forge install cursor
 ```
 
 The installer registry maps both Codex and Cursor to this shared source tree
-and destination. Installing both is unnecessary and is intentionally not
-offered as a multi-harness operation.
+and user-level destination. Installing both is unnecessary and is intentionally
+not offered as a multi-harness operation.
 
 The skill sets `disable-model-invocation: true` for hosts that support that
 field, while `agents/openai.yaml` disables implicit invocation in Codex. Users
@@ -29,8 +26,7 @@ invoke the installed skill explicitly as `$swe-forge` in Codex or
 `/swe-forge` in Cursor. The canonical support tree also exposes provider
 runbooks, including optional Herdr documentation; it does not install provider
 tools. State "Use `isolated` with Herdr as the execution provider" in the
-natural-language ticket when that preference is wanted. See [shared adapter
-shared adapter behavior](../../README.md) for the workflow and delivery rules.
+natural-language ticket when that preference is wanted. See [shared adapter behavior](../../README.md) for the workflow and delivery rules.
 
 References checked on 2026-08-11:
 

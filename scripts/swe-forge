@@ -2,15 +2,11 @@
 
 set -eu
 
-PROGRAM=${0##*/}
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
 SOURCE_ROOT=$(CDPATH= cd "$SCRIPT_DIR/.." && pwd -P)
 RUN_TMP=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge.XXXXXX")
 CONFLICTS=0
 VERIFY_FAILURES=0
-MODE=link
-SCOPE=project
-TARGET=
 DRY_RUN=0
 MANIFEST_BASE=
 MANIFEST_DIR=
@@ -18,21 +14,17 @@ MANIFEST_PATH=
 MANIFEST_ENTRIES=
 MANIFEST_BACKUP=
 MANIFEST_WAS_EXISTING=0
-BACKUP_RECORDS=
 REMOVED_LINKS=
 TRANSACTION_ACTIVE=0
 LOCK_DIR=
 LOCK_OWNED=0
-STAGE_COUNTER=0
 CRITICAL_SECTION=0
 PENDING_SIGNAL=0
 CREATED_FILES=$RUN_TMP/created-files
 CREATED_DIRS=$RUN_TMP/created-dirs
-BACKUP_RECORDS=$RUN_TMP/backup-records
 REMOVED_LINKS=$RUN_TMP/removed-links
 : >"$CREATED_FILES"
 : >"$CREATED_DIRS"
-: >"$BACKUP_RECORDS"
 : >"$REMOVED_LINKS"
 ADAPTER_REGISTRY=$SOURCE_ROOT/.swe-forge/adapters/registry.tsv
 REGISTRY_VALIDATOR=$SOURCE_ROOT/scripts/lib/registry.sh
@@ -42,11 +34,6 @@ rollback() {
   while IFS= read -r created_file; do
     rm -f "$created_file"
   done <"$CREATED_FILES"
-
-  while IFS="$(printf '\t')" read -r backup_path backup_source; do
-    [ -n "${backup_path:-}" ] || continue
-    cp -p "$backup_source" "$backup_path" 2>/dev/null || true
-  done <"$BACKUP_RECORDS"
 
   while IFS="$(printf '\t')" read -r removed_path removed_target; do
     [ -n "${removed_path:-}" ] || continue
@@ -146,23 +133,8 @@ source_tree_state() {
   fi
 }
 
-file_hash() {
-  hash_path=$1
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$hash_path" | awk '{print $1}'
-  elif command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$hash_path" | awk '{print $1}'
-  else
-    die 'neither shasum nor sha256sum is available for managed-copy fingerprints'
-  fi
-}
-
 manifest_set_paths() {
-  if [ "$SCOPE" = global ]; then
-    MANIFEST_BASE=$HOME
-  else
-    MANIFEST_BASE=$TARGET
-  fi
+  MANIFEST_BASE=$HOME
   MANIFEST_DIR=$MANIFEST_BASE/.swe-forge-install-state
   MANIFEST_PATH=$MANIFEST_DIR/$HARNESS.tsv
   assert_real_ancestors "$MANIFEST_DIR/manifest"
@@ -177,7 +149,7 @@ manifest_relative_path() {
   manifest_absolute_path=$1
   case "$manifest_absolute_path" in
     "$MANIFEST_BASE"/*) printf '%s\n' "${manifest_absolute_path#"$MANIFEST_BASE"/}" ;;
-    *) die "managed path escapes installation base: $manifest_absolute_path" ;;
+    *) die "managed path escapes user home: $manifest_absolute_path" ;;
   esac
 }
 
@@ -185,48 +157,31 @@ manifest_add() {
   manifest_kind=$1
   manifest_destination=$2
   manifest_source=$3
-  manifest_fingerprint=$4
-  manifest_link_target=$5
+  manifest_link_target=$4
   reject_unsupported_path "$manifest_destination"
   reject_unsupported_path "$manifest_source"
   manifest_relative=$(manifest_relative_path "$manifest_destination")
-  printf 'entry\t%s\t%s\t%s\t%s\t%s\n' \
+  printf 'entry\t%s\t%s\t%s\t%s\n' \
     "$manifest_kind" "$manifest_relative" "$manifest_source" \
-    "$manifest_fingerprint" "$manifest_link_target" >>"$MANIFEST_ENTRIES"
+    "$manifest_link_target" >>"$MANIFEST_ENTRIES"
 }
 
 manifest_add_file() {
   manifest_source=$1
   manifest_destination=$2
-  if [ "$MODE" = link ]; then
-    manifest_add file "$manifest_destination" "$manifest_source" - "$manifest_source"
-  else
-    manifest_add file "$manifest_destination" "$manifest_source" \
-      "$(file_hash "$manifest_source")" -
-  fi
+  manifest_add file "$manifest_destination" "$manifest_source" "$manifest_source"
 }
 
 manifest_add_directory_link() {
   manifest_source=$1
   manifest_destination=$2
-  manifest_add dir "$manifest_destination" "$manifest_source" - "$manifest_source"
-}
-
-manifest_add_bridge() {
-  manifest_destination=$1
-  if [ "$MODE" = link ]; then
-    manifest_add bridge "$manifest_destination" "$SOURCE_ROOT/AGENTS.md" - AGENTS.md
-  else
-    manifest_add bridge "$manifest_destination" bridge \
-      "$(file_hash "$RUN_TMP/claude-bridge")" -
-  fi
+  manifest_add dir "$manifest_destination" "$manifest_source" "$manifest_source"
 }
 
 manifest_support_relative() {
-  while IFS='|' read -r manifest_harness manifest_scope manifest_kind \
+  while IFS='|' read -r manifest_harness manifest_kind \
     manifest_source manifest_destination manifest_support; do
     case "$manifest_harness" in ''|\#*) continue ;; esac
-    [ "$manifest_scope" = "$SCOPE" ] || continue
     if [ "$manifest_support" != - ]; then
       printf '%s\n' "$manifest_support"
       return 0
@@ -239,52 +194,27 @@ build_manifest_inventory() {
   MANIFEST_ENTRIES=$RUN_TMP/manifest-entries
   : >"$MANIFEST_ENTRIES"
 
-  if [ "$SCOPE" = global ]; then
-    manifest_support=$(manifest_support_relative) || \
-      die "global adapter is missing a canonical support path"
-    canonical_destination_root=$(adapter_destination "$manifest_support")
-  else
-    canonical_destination_root=$TARGET
-  fi
+  manifest_support=$(manifest_support_relative) || \
+    die "adapter is missing a canonical support path"
+  canonical_destination_root=$(adapter_destination "$manifest_support")
 
   manifest_add_file "$SOURCE_ROOT/AGENTS.md" "$canonical_destination_root/AGENTS.md"
   manifest_add_file "$SOURCE_ROOT/SWE-FORGE.md" "$canonical_destination_root/SWE-FORGE.md"
   manifest_add_file "$SOURCE_ROOT/VERSION" "$canonical_destination_root/VERSION"
-  if [ "$MODE" = link ]; then
-    while IFS= read -r manifest_source_dir; do
-      manifest_entry_name=${manifest_source_dir##*/}
-      manifest_add_directory_link "$manifest_source_dir" \
-        "$canonical_destination_root/.swe-forge/$manifest_entry_name"
-    done <"$RUN_TMP/canonical-dirs"
-  else
-    while IFS= read -r manifest_source_file; do
-      manifest_relative=${manifest_source_file#"$SOURCE_ROOT/"}
-      manifest_add_file "$manifest_source_file" "$canonical_destination_root/$manifest_relative"
-    done <"$RUN_TMP/canonical-files"
-  fi
+  while IFS= read -r manifest_source_dir; do
+    manifest_entry_name=${manifest_source_dir##*/}
+    manifest_add_directory_link "$manifest_source_dir" \
+      "$canonical_destination_root/.swe-forge/$manifest_entry_name"
+  done <"$RUN_TMP/canonical-dirs"
 
-  while IFS='|' read -r manifest_harness manifest_scope manifest_kind \
+  while IFS='|' read -r manifest_harness manifest_kind \
     manifest_source manifest_destination manifest_support; do
     case "$manifest_harness" in ''|\#*) continue ;; esac
-    [ "$manifest_scope" = "$SCOPE" ] || continue
     manifest_source_path=$(adapter_source "$manifest_source")
     manifest_destination_path=$(adapter_destination "$manifest_destination")
     case "$manifest_kind" in
       file) manifest_add_file "$manifest_source_path" "$manifest_destination_path" ;;
-      tree)
-        if [ "$MODE" = link ]; then
-          manifest_add_directory_link "$manifest_source_path" "$manifest_destination_path"
-        else
-          manifest_tree_files=$RUN_TMP/manifest-tree-files
-          find "$manifest_source_path" -type f -print >"$manifest_tree_files"
-          while IFS= read -r manifest_tree_file; do
-            manifest_tree_relative=${manifest_tree_file#"$manifest_source_path/"}
-            manifest_add_file "$manifest_tree_file" \
-              "$manifest_destination_path/$manifest_tree_relative"
-          done <"$manifest_tree_files"
-        fi
-        ;;
-      bridge) manifest_add_bridge "$manifest_destination_path" ;;
+      tree) manifest_add_directory_link "$manifest_source_path" "$manifest_destination_path" ;;
       *) die "unsupported adapter artifact kind: $manifest_kind" ;;
     esac
   done <"$ADAPTER_ROWS"
@@ -305,53 +235,37 @@ manifest_entry_field() {
     '$1 == "entry" && $3 == wanted { print $field; exit }' "$MANIFEST_PATH"
 }
 
-manifest_has_entry() {
-  [ -n "$(manifest_entry_field "$1" 2)" ]
-}
-
 validate_manifest() {
   [ -f "$MANIFEST_PATH" ] && [ ! -L "$MANIFEST_PATH" ] || \
     die "managed installation manifest is missing or not a regular file: $MANIFEST_PATH"
-  [ "$(manifest_meta manifest_version "$MANIFEST_PATH")" = 1 ] || \
+  [ "$(manifest_meta manifest_version "$MANIFEST_PATH")" = 2 ] || \
     die "unsupported managed installation manifest: $MANIFEST_PATH"
   [ "$(manifest_meta harness "$MANIFEST_PATH")" = "$HARNESS" ] || \
     die "managed installation manifest belongs to another harness"
-  [ "$(manifest_meta scope "$MANIFEST_PATH")" = "$SCOPE" ] || \
-    die "managed installation manifest belongs to another scope"
   [ "$(manifest_meta base "$MANIFEST_PATH")" = "$MANIFEST_BASE" ] || \
-    die "managed installation manifest base does not match the selected target"
-  manifest_mode=$(manifest_meta mode "$MANIFEST_PATH")
-  case "$manifest_mode" in link|copy) ;; *) die "managed installation manifest has no valid mode" ;; esac
+    die "managed installation manifest base does not match user home"
 
   manifest_entries_found=0
   while IFS="$(printf '\t')" read -r manifest_marker manifest_kind \
-    manifest_relative manifest_source manifest_fingerprint manifest_link_target; do
+    manifest_relative manifest_source manifest_link_target; do
     [ "${manifest_marker:-}" = entry ] || continue
     manifest_entries_found=$((manifest_entries_found + 1))
-    case "$manifest_kind" in file|dir|bridge) ;; *) die "managed manifest has an invalid entry kind" ;; esac
+    case "$manifest_kind" in file|dir) ;; *) die "managed manifest has an invalid entry kind" ;; esac
     case "$manifest_relative" in
       ''|/*|..|../*|*/..|*/../*|.|./*|*/./*) die "managed manifest path is unsafe: $manifest_relative" ;;
     esac
     manifest_destination=$MANIFEST_BASE/$manifest_relative
     assert_real_ancestors "$manifest_destination"
-    if [ "$manifest_mode" = link ]; then
-      [ -n "${manifest_link_target:-}" ] || die "managed link entry has no target"
-    else
-      [ -n "${manifest_fingerprint:-}" ] || die "managed copy entry has no fingerprint"
-    fi
+    [ -n "${manifest_link_target:-}" ] || \
+      die "managed link entry has no target"
   done <"$MANIFEST_PATH"
   [ "$manifest_entries_found" -gt 0 ] || die "managed installation manifest has no entries"
 }
 
-load_manifest_mode() {
+load_manifest() {
   manifest_set_paths
   if path_exists "$MANIFEST_PATH"; then
     validate_manifest
-    manifest_mode=$(manifest_meta mode "$MANIFEST_PATH")
-    if [ "$SEEN_MODE" -eq 1 ] && [ "$MODE" != "$manifest_mode" ]; then
-      die "requested mode $MODE does not match managed installation mode $manifest_mode"
-    fi
-    MODE=$manifest_mode
   elif [ "$ACTION" = update ] || [ "$ACTION" = uninstall ]; then
     die "no managed installation manifest found; refusing destructive $ACTION"
   fi
@@ -373,39 +287,30 @@ manifest_write() {
   manifest_tmp=$MANIFEST_PATH.tmp.$$
   begin_create
   {
-    printf 'manifest_version=1\n'
+    printf 'manifest_version=2\n'
     printf 'source_root=%s\n' "$SOURCE_ROOT"
     printf 'source_version=%s\n' "$(source_version)"
     printf 'source_commit=%s\n' "$(source_commit)"
     printf 'harness=%s\n' "$HARNESS"
-    printf 'scope=%s\n' "$SCOPE"
-    printf 'mode=%s\n' "$MODE"
     printf 'base=%s\n' "$MANIFEST_BASE"
     printf 'updated_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     while IFS="$(printf '\t')" read -r manifest_marker manifest_kind \
-      manifest_relative manifest_source manifest_fingerprint manifest_link_target; do
+      manifest_relative manifest_source manifest_link_target; do
       [ "${manifest_marker:-}" = entry ] || continue
       manifest_destination=$MANIFEST_BASE/$manifest_relative
-      if [ "$MODE" = link ]; then
-        [ -L "$manifest_destination" ] || die "managed link disappeared before manifest write: $manifest_destination"
-        manifest_link_target=$(readlink "$manifest_destination")
-        manifest_fingerprint=-
-      else
-        [ -f "$manifest_destination" ] && [ ! -L "$manifest_destination" ] || \
-          die "managed copy disappeared before manifest write: $manifest_destination"
-        manifest_fingerprint=$(file_hash "$manifest_destination")
-        manifest_link_target=-
-      fi
-      printf 'entry\t%s\t%s\t%s\t%s\t%s\n' \
+      [ -L "$manifest_destination" ] || \
+        die "managed link disappeared before manifest write: $manifest_destination"
+      manifest_link_target=$(readlink "$manifest_destination")
+      printf 'entry\t%s\t%s\t%s\t%s\n' \
         "$manifest_kind" "$manifest_relative" "$manifest_source" \
-        "$manifest_fingerprint" "$manifest_link_target"
+        "$manifest_link_target"
     done <"$MANIFEST_ENTRIES"
   } >"$manifest_tmp" || {
     end_create
     rm -f "$manifest_tmp"
     die "could not write managed installation manifest"
   }
-  record_file "$manifest_tmp"
+  printf '%s\n' "$manifest_tmp" >>"$CREATED_FILES"
   end_create
   begin_create
   if ! mv "$manifest_tmp" "$MANIFEST_PATH"; then
@@ -415,41 +320,10 @@ manifest_write() {
   end_create
 }
 
-record_backup() {
-  backup_destination=$1
-  if [ -f "$backup_destination" ] && [ ! -L "$backup_destination" ]; then
-    if awk -F '\t' -v wanted="$backup_destination" '$1 == wanted { found=1 } END { exit !found }' \
-      "$BACKUP_RECORDS"; then
-      return
-    fi
-    backup_counter=${STAGE_COUNTER}
-    STAGE_COUNTER=$((STAGE_COUNTER + 1))
-    backup_source=$RUN_TMP/backup.$$.${backup_counter}
-    cp -p "$backup_destination" "$backup_source" || \
-      die "could not back up managed file: $backup_destination"
-    printf '%s\t%s\n' "$backup_destination" "$backup_source" >>"$BACKUP_RECORDS"
-  fi
-}
-
-replace_copy_file() {
-  replace_source=$1
-  replace_destination=$2
-  record_backup "$replace_destination"
-  STAGE_COUNTER=$((STAGE_COUNTER + 1))
-  replace_stage=$replace_destination.swe-forge-stage.$$.$STAGE_COUNTER
-  begin_create
-  if ! cp -p "$replace_source" "$replace_stage"; then
-    end_create
-    die "could not stage updated copied file: $replace_destination"
-  fi
-  record_file "$replace_stage"
-  end_create
-  begin_create
-  if ! mv "$replace_stage" "$replace_destination"; then
-    end_create
-    die "could not publish updated copied file: $replace_destination"
-  fi
-  end_create
+record_removed_link() {
+  removed_link_path=$1
+  removed_link_target=$(readlink "$removed_link_path")
+  printf '%s\t%s\n' "$removed_link_path" "$removed_link_target" >>"$REMOVED_LINKS"
 }
 
 print_version() {
@@ -464,20 +338,17 @@ usage() {
 Usage:
   scripts/swe-forge version
   scripts/swe-forge install <harness> [options]
-  scripts/swe-forge verify <harness> [options]
-  scripts/swe-forge status <harness> [options]
-  scripts/swe-forge doctor <harness> [options]
+  scripts/swe-forge verify <harness>
+  scripts/swe-forge status <harness>
+  scripts/swe-forge doctor <harness>
   scripts/swe-forge update <harness> [options]
-  scripts/swe-forge uninstall <harness> [options]
+  scripts/swe-forge uninstall <harness>
 
 Options:
-  --target PATH       Install into this repository or folder.
-  --global            Install into the harness user-level directories.
-  --mode link|copy    Link to this checkout or copy a snapshot.
   --dry-run           Plan install/update without writing anything.
 
-If --target and --global are omitted, install asks for a target when used from
-an interactive terminal. Other actions require an explicit target or --global.
+Installations link the selected harness projection and canonical support tree
+back to this SWE Forge checkout under the user's home directory.
 EOF
 }
 
@@ -524,29 +395,36 @@ record_dir() {
 }
 
 ensure_dir() {
-  ensure_current=$1
-  assert_real_ancestors "$ensure_current"
+  ensure_target=$1
+  assert_real_ancestors "$ensure_target"
+  case "$ensure_target" in
+    "$HOME") return 0 ;;
+    "$HOME"/*) ensure_relative=${ensure_target#"$HOME"/} ;;
+    *) die "managed directory escapes user home: $ensure_target" ;;
+  esac
 
-  if path_exists "$ensure_current"; then
-    [ -d "$ensure_current" ] && [ ! -L "$ensure_current" ] || die "$ensure_current must be a real directory"
-    return
-  fi
-
-  ensure_parent=$(dirname "$ensure_current")
-  [ "$ensure_parent" = "$ensure_current" ] || ensure_dir "$ensure_parent"
-  ensure_current=$1
-  begin_create
-  mkdir "$ensure_current"
-  record_dir "$ensure_current"
-  end_create
+  ensure_current=$HOME
+  ensure_old_ifs=$IFS
+  IFS=/
+  set -- $ensure_relative
+  IFS=$ensure_old_ifs
+  for ensure_part do
+    [ -n "$ensure_part" ] || continue
+    ensure_current=$ensure_current/$ensure_part
+    if path_exists "$ensure_current"; then
+      [ -d "$ensure_current" ] && [ ! -L "$ensure_current" ] || \
+        die "$ensure_current must be a real directory"
+      continue
+    fi
+    begin_create
+    mkdir "$ensure_current"
+    record_dir "$ensure_current"
+    end_create
+  done
 }
 
 acquire_lock() {
-  if [ "$SCOPE" = global ]; then
-    LOCK_DIR=$HOME/.swe-forge-install.lock
-  else
-    LOCK_DIR=$TARGET/.swe-forge-install.lock
-  fi
+  LOCK_DIR=$HOME/.swe-forge-install.lock
   assert_real_ancestors "$LOCK_DIR"
   begin_create
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -588,15 +466,13 @@ same_path() {
 validate_registry_row() {
   registry_line_number=$1
   registry_harness=$2
-  registry_scope=$3
-  registry_kind=$4
-  registry_source_rel=$5
-  registry_destination_rel=$6
-  registry_support_rel=$7
+  registry_kind=$3
+  registry_source_rel=$4
+  registry_destination_rel=$5
+  registry_support_rel=$6
 
   if ! swe_forge_registry_row_is_valid \
     "$registry_harness" \
-    "$registry_scope" \
     "$registry_kind" \
     "$registry_source_rel" \
     "$registry_destination_rel" \
@@ -605,33 +481,21 @@ validate_registry_row() {
   fi
 
   case "$registry_kind" in
-    file)
+    file|tree)
       registry_source_path=$SOURCE_ROOT/.swe-forge/adapters/$registry_source_rel
-      [ -f "$registry_source_path" ] || \
-        die "adapter registry file source is missing at line $registry_line_number: $registry_source_rel"
+      if [ "$registry_kind" = file ]; then
+        [ -f "$registry_source_path" ] || \
+          die "adapter registry file source is missing at line $registry_line_number: $registry_source_rel"
+      else
+        [ -d "$registry_source_path" ] || \
+          die "adapter registry tree source is missing at line $registry_line_number: $registry_source_rel"
+      fi
       ;;
-    tree)
-      registry_source_path=$SOURCE_ROOT/.swe-forge/adapters/$registry_source_rel
-      [ -d "$registry_source_path" ] || \
-        die "adapter registry tree source is missing at line $registry_line_number: $registry_source_rel"
-      ;;
-    bridge) ;;
   esac
 }
 
 prepare_manifests() {
-  canonical_files=$RUN_TMP/canonical-files
   canonical_dirs=$RUN_TMP/canonical-dirs
-
-  find "$SOURCE_ROOT/.swe-forge" -type f \
-    ! -name '.DS_Store' \
-    ! -path "$SOURCE_ROOT/.swe-forge/adapters" \
-    ! -path "$SOURCE_ROOT/.swe-forge/adapters/*" \
-    ! -path "$SOURCE_ROOT/.swe-forge/runs/*" \
-    ! -path "$SOURCE_ROOT/.swe-forge/.runs/*" \
-    ! -path "$SOURCE_ROOT/.swe-forge/generated/*" \
-    -print >"$canonical_files"
-
   : >"$canonical_dirs"
   for source_entry in "$SOURCE_ROOT/.swe-forge"/*; do
     [ -d "$source_entry" ] || continue
@@ -644,7 +508,8 @@ prepare_manifests() {
 
   : >"$ADAPTER_ROWS"
   registry_line_number=0
-  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+  while IFS='|' read -r adapter_harness adapter_kind adapter_source_rel \
+    adapter_destination_rel adapter_support_rel; do
     registry_line_number=$((registry_line_number + 1))
     case "$adapter_harness" in
       ''|\#*) continue ;;
@@ -652,16 +517,14 @@ prepare_manifests() {
     validate_registry_row \
       "$registry_line_number" \
       "$adapter_harness" \
-      "$adapter_scope" \
       "$adapter_kind" \
       "$adapter_source_rel" \
       "$adapter_destination_rel" \
       "$adapter_support_rel"
     [ "$adapter_harness" = "$HARNESS" ] || continue
-    printf '%s|%s|%s|%s|%s|%s\n' \
-      "$adapter_harness" "$adapter_scope" "$adapter_kind" \
-      "$adapter_source_rel" "$adapter_destination_rel" "$adapter_support_rel" \
-      >>"$ADAPTER_ROWS"
+    printf '%s|%s|%s|%s|%s\n' \
+      "$adapter_harness" "$adapter_kind" "$adapter_source_rel" \
+      "$adapter_destination_rel" "$adapter_support_rel" >>"$ADAPTER_ROWS"
   done <"$ADAPTER_REGISTRY"
   [ -s "$ADAPTER_ROWS" ] || die "no adapter targets registered for harness: $HARNESS"
 }
@@ -683,7 +546,7 @@ preflight_file() {
     return
   fi
 
-  if [ "$MODE" = link ] && same_path "$source" "$destination"; then
+  if same_path "$source" "$destination"; then
     return
   fi
 
@@ -693,24 +556,11 @@ preflight_file() {
   fi
 
   if [ -L "$destination" ]; then
-    if [ "$MODE" = copy ]; then
-      conflict "$destination is a symlink; copy mode requires a regular file"
-      return
-    fi
-    if ! same_path "$source" "$destination"; then
-      conflict "$destination is a symlink to a different source"
-    fi
+    conflict "$destination is a symlink to a different source"
     return
   fi
 
-  if [ "$MODE" = link ]; then
-    conflict "$destination exists as a regular file; remove it after review or use --mode copy"
-    return
-  fi
-
-  if ! cmp -s "$source" "$destination"; then
-    conflict "$destination differs from the SWE Forge source"
-  fi
+  conflict "$destination exists as a regular file; remove it after review"
 }
 
 preflight_dir_link() {
@@ -729,147 +579,23 @@ preflight_dir_link() {
   conflict "$destination already exists and is not linked to the SWE Forge source"
 }
 
-preflight_tree_copy() {
-  source_root=$1
-  destination_root=$2
-  tree_files=$RUN_TMP/tree-files
-
-  find "$source_root" -type f -print >"$tree_files"
-  while IFS= read -r source_file; do
-    relative=${source_file#"$source_root/"}
-    preflight_file "$source_file" "$destination_root/$relative"
-    if ! path_exists "$destination_root/$relative"; then
-      conflict "$destination_root is an existing copied tree missing $relative; replace the snapshot after review"
-    fi
-  done <"$tree_files"
-
-  if [ -d "$destination_root" ] && [ ! -L "$destination_root" ]; then
-    destination_entries=$RUN_TMP/preflight-tree-destination-entries
-    find "$destination_root" -print >"$destination_entries"
-    while IFS= read -r destination_entry; do
-      [ "$destination_entry" != "$destination_root" ] || continue
-      relative=${destination_entry#"$destination_root/"}
-      source_entry=$source_root/$relative
-      if [ -L "$destination_entry" ]; then
-        conflict "$destination_entry is a symlink; copy mode requires real entries"
-      elif [ -d "$destination_entry" ]; then
-        [ -d "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
-      elif [ -f "$destination_entry" ]; then
-        [ -f "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
-      else
-        conflict "$destination_entry has an unsupported file type"
-      fi
-    done <"$destination_entries"
-  fi
-}
-
 preflight_canonical() {
   destination_root=$1
-  existing_copy=0
-  if [ "$MODE" = copy ] && {
-    path_exists "$destination_root/AGENTS.md" ||
-    path_exists "$destination_root/SWE-FORGE.md" ||
-    path_exists "$destination_root/VERSION" ||
-    path_exists "$destination_root/.swe-forge"
-  }; then
-    existing_copy=1
-  fi
-
   preflight_file "$SOURCE_ROOT/AGENTS.md" "$destination_root/AGENTS.md"
   preflight_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
   preflight_file "$SOURCE_ROOT/VERSION" "$destination_root/VERSION"
   preflight_container "$destination_root/.swe-forge"
-  if [ "$existing_copy" -eq 1 ]; then
-    path_exists "$destination_root/AGENTS.md" || \
-      conflict "$destination_root is an existing copied snapshot missing AGENTS.md; replace it after review"
-    path_exists "$destination_root/SWE-FORGE.md" || \
-      conflict "$destination_root is an existing copied snapshot missing SWE-FORGE.md; replace it after review"
-    path_exists "$destination_root/VERSION" || \
-      conflict "$destination_root is an existing copied snapshot missing VERSION; replace it after review"
-  fi
 
-  if [ "$MODE" = link ]; then
-    while IFS= read -r source_dir; do
-      entry_name=${source_dir##*/}
-      preflight_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
-    done <"$RUN_TMP/canonical-dirs"
-  else
-    while IFS= read -r source_file; do
-      relative=${source_file#"$SOURCE_ROOT/"}
-      preflight_file "$source_file" "$destination_root/$relative"
-      if [ "$existing_copy" -eq 1 ] && ! path_exists "$destination_root/$relative"; then
-        conflict "$destination_root is an existing copied snapshot missing $relative; replace it after review"
-      fi
-    done <"$RUN_TMP/canonical-files"
-
-    if [ -d "$destination_root/.swe-forge" ] && [ ! -L "$destination_root/.swe-forge" ]; then
-      destination_entries=$RUN_TMP/destination-canonical-entries
-      find "$destination_root/.swe-forge" -print >"$destination_entries"
-      while IFS= read -r destination_entry; do
-        [ "$destination_entry" != "$destination_root/.swe-forge" ] || continue
-        relative=${destination_entry#"$destination_root/"}
-        case "$relative" in
-          .swe-forge/runs|.swe-forge/runs/*|.swe-forge/.runs|.swe-forge/.runs/*|.swe-forge/generated|.swe-forge/generated/*) continue ;;
-        esac
-        source_entry=$SOURCE_ROOT/$relative
-        if [ -L "$destination_entry" ]; then
-          conflict "$destination_entry is a symlink; copy mode requires real entries"
-        elif [ -d "$destination_entry" ]; then
-          [ -d "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
-        elif [ -f "$destination_entry" ]; then
-          [ -f "$source_entry" ] || conflict "$destination_entry is not managed by the current SWE Forge source"
-        else
-          conflict "$destination_entry has an unsupported file type"
-        fi
-      done <"$destination_entries"
-    fi
-  fi
+  while IFS= read -r source_dir; do
+    entry_name=${source_dir##*/}
+    preflight_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
+  done <"$RUN_TMP/canonical-dirs"
 }
 
 preflight_adapter_tree() {
   source_root=$1
   destination_root=$2
-
-  if [ "$MODE" = link ]; then
-    preflight_dir_link "$source_root" "$destination_root"
-  else
-    if path_exists "$destination_root"; then
-      if [ ! -d "$destination_root" ] || [ -L "$destination_root" ]; then
-        conflict "$destination_root must be a real directory for copy mode"
-      else
-        preflight_tree_copy "$source_root" "$destination_root"
-      fi
-    fi
-  fi
-}
-
-preflight_bridge() {
-  destination=$1
-  agents_destination=$2
-
-  if ! path_exists "$destination"; then
-    return
-  fi
-
-  if same_path "$SOURCE_ROOT/CLAUDE.md" "$destination"; then
-    return
-  fi
-
-  if [ -L "$destination" ]; then
-    if ! same_path "$agents_destination" "$destination"; then
-      conflict "$destination is not linked to AGENTS.md"
-    fi
-    return
-  fi
-
-  if [ "$MODE" = link ]; then
-    conflict "$destination exists as a regular file; remove it after review or use --mode copy"
-    return
-  fi
-
-  if ! cmp -s "$RUN_TMP/claude-bridge" "$destination"; then
-    conflict "$destination must be the minimal @AGENTS.md bridge or be reviewed manually"
-  fi
+  preflight_dir_link "$source_root" "$destination_root"
 }
 
 adapter_parent_containers() {
@@ -890,11 +616,7 @@ adapter_parent_containers() {
 }
 
 adapter_destination() {
-  if [ "$SCOPE" = global ]; then
-    printf '%s/%s\n' "$HOME" "$1"
-  else
-    printf '%s/%s\n' "$TARGET" "$1"
-  fi
+  printf '%s/%s\n' "$HOME" "$1"
 }
 
 adapter_source() {
@@ -903,7 +625,8 @@ adapter_source() {
 
 adapter_is_registered() {
   adapter_requested=$1
-  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+  while IFS='|' read -r adapter_harness adapter_kind adapter_source_rel \
+    adapter_destination_rel adapter_support_rel; do
     case "$adapter_harness" in
       ''|\#*) continue ;;
     esac
@@ -914,26 +637,10 @@ adapter_is_registered() {
   return 1
 }
 
-adapter_supports_scope() {
-  adapter_requested_scope=$1
-  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
-    case "$adapter_harness" in
-      ''|\#*) continue ;;
-    esac
-    if [ "$adapter_harness" = "$HARNESS" ] && [ "$adapter_scope" = "$adapter_requested_scope" ]; then
-      return 0
-    fi
-  done <"$ADAPTER_REGISTRY"
-  return 1
-}
-
 preflight_adapter_support() {
   adapter_support=$1
-  [ "$adapter_support" != - ] || return 0
   adapter_support_path=$(adapter_destination "$adapter_support")
-  adapter_parent_containers \
-    "$HOME" \
-    "$(dirname "$adapter_support")"
+  adapter_parent_containers "$HOME" "$(dirname "$adapter_support")"
   preflight_canonical "$adapter_support_path"
 }
 
@@ -943,45 +650,29 @@ preflight_adapter_artifact() {
   adapter_destination_path=$3
   adapter_destination_rel=$4
 
-  if [ "$SCOPE" = global ]; then
-    adapter_parent_base=$HOME
-  else
-    adapter_parent_base=$TARGET
-  fi
-  adapter_parent_containers \
-    "$adapter_parent_base" \
-    "$(dirname "$adapter_destination_rel")"
-
+  adapter_parent_containers "$HOME" "$(dirname "$adapter_destination_rel")"
   case "$adapter_kind" in
     file) preflight_file "$adapter_source_path" "$adapter_destination_path" ;;
     tree) preflight_adapter_tree "$adapter_source_path" "$adapter_destination_path" ;;
-    bridge) preflight_bridge "$adapter_destination_path" "$TARGET/AGENTS.md" ;;
     *) die "unsupported adapter artifact kind: $adapter_kind" ;;
   esac
 }
 
 preflight_install() {
   CONFLICTS=0
+  manifest_support=$(manifest_support_relative) || \
+    die "adapter is missing a canonical support path"
+  preflight_adapter_support "$manifest_support"
 
-  if [ "$SCOPE" != global ]; then
-    preflight_canonical "$TARGET"
-  fi
-
-  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+  while IFS='|' read -r adapter_harness adapter_kind adapter_source_rel \
+    adapter_destination_rel adapter_support_rel; do
     case "$adapter_harness" in
       ''|\#*) continue ;;
     esac
-    [ "$adapter_scope" = "$SCOPE" ] || continue
-
-    adapter_source_path=$(adapter_source "$adapter_source_rel")
-    adapter_destination_path=$(adapter_destination "$adapter_destination_rel")
-    if [ "$SCOPE" = global ]; then
-      preflight_adapter_support "$adapter_support_rel"
-    fi
     preflight_adapter_artifact \
       "$adapter_kind" \
-      "$adapter_source_path" \
-      "$adapter_destination_path" \
+      "$(adapter_source "$adapter_source_rel")" \
+      "$(adapter_destination "$adapter_destination_rel")" \
       "$adapter_destination_rel"
   done <"$ADAPTER_ROWS"
 
@@ -995,43 +686,17 @@ install_file() {
   path_exists "$destination" && return
   assert_real_ancestors "$destination"
   ensure_dir "$(dirname "$destination")"
-  if [ "$MODE" = link ]; then
-    begin_create
-    if ! ln -s "$source" "$destination"; then
-      end_create
-      die "could not install source link: $destination"
-    fi
-    record_file "$destination"
+  begin_create
+  if ! ln -s "$source" "$destination"; then
     end_create
-  else
-    STAGE_COUNTER=$((STAGE_COUNTER + 1))
-    stage_dir=$(dirname "$destination")/.swe-forge-stage.$$.$STAGE_COUNTER
-    begin_create
-    mkdir "$stage_dir" || die "could not create staging directory: $stage_dir"
-    record_dir "$stage_dir"
-    end_create
-    begin_create
-    record_file "$stage_dir/file"
-    if ! cp "$source" "$stage_dir/file"; then
-      end_create
-      die "could not stage copied file: $destination"
-    fi
-    end_create
-    begin_create
-    if ! ln "$stage_dir/file" "$destination"; then
-      end_create
-      die "destination appeared during installation: $destination"
-    fi
-    record_file "$destination"
-    end_create
-    rm -f "$stage_dir/file"
-    rmdir "$stage_dir"
+    die "could not install source link: $destination"
   fi
+  record_file "$destination"
+  end_create
 }
 
 install_dir_container() {
-  destination=$1
-  ensure_dir "$destination"
+  ensure_dir "$1"
 }
 
 install_dir_link() {
@@ -1051,21 +716,7 @@ install_dir_link() {
 }
 
 install_tree() {
-  source_root=$1
-  destination_root=$2
-  tree_files=$RUN_TMP/tree-files
-
-  if [ "$MODE" = link ]; then
-    install_dir_link "$source_root" "$destination_root"
-    return
-  fi
-
-  install_dir_container "$destination_root"
-  find "$source_root" -type f -print >"$tree_files"
-  while IFS= read -r source_file; do
-    relative=${source_file#"$source_root/"}
-    install_file "$source_file" "$destination_root/$relative"
-  done <"$tree_files"
+  install_dir_link "$1" "$2"
 }
 
 install_canonical() {
@@ -1076,36 +727,10 @@ install_canonical() {
   install_file "$SOURCE_ROOT/VERSION" "$destination_root/VERSION"
   install_dir_container "$destination_root/.swe-forge"
 
-  if [ "$MODE" = link ]; then
-    while IFS= read -r source_dir; do
-      entry_name=${source_dir##*/}
-      install_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
-    done <"$RUN_TMP/canonical-dirs"
-  else
-    while IFS= read -r source_file; do
-      relative=${source_file#"$SOURCE_ROOT/"}
-      install_file "$source_file" "$destination_root/$relative"
-    done <"$RUN_TMP/canonical-files"
-  fi
-}
-
-install_bridge() {
-  destination=$1
-
-  path_exists "$destination" && return
-  assert_real_ancestors "$destination"
-  ensure_dir "$(dirname "$destination")"
-  if [ "$MODE" = link ]; then
-    begin_create
-    if ! ln -s AGENTS.md "$destination"; then
-      end_create
-      die "could not install CLAUDE.md bridge: $destination"
-    fi
-    record_file "$destination"
-    end_create
-  else
-    install_file "$RUN_TMP/claude-bridge" "$destination"
-  fi
+  while IFS= read -r source_dir; do
+    entry_name=${source_dir##*/}
+    install_dir_link "$source_dir" "$destination_root/.swe-forge/$entry_name"
+  done <"$RUN_TMP/canonical-dirs"
 }
 
 install_adapter_artifact() {
@@ -1116,25 +741,20 @@ install_adapter_artifact() {
   case "$adapter_kind" in
     file) install_file "$adapter_source_path" "$adapter_destination_path" ;;
     tree) install_tree "$adapter_source_path" "$adapter_destination_path" ;;
-    bridge) install_bridge "$adapter_destination_path" ;;
     *) die "unsupported adapter artifact kind: $adapter_kind" ;;
   esac
 }
 
 install_requested() {
-  if [ "$SCOPE" != global ]; then
-    install_canonical "$TARGET"
-  fi
+  manifest_support=$(manifest_support_relative) || \
+    die "adapter is missing a canonical support path"
+  install_canonical "$(adapter_destination "$manifest_support")"
 
-  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+  while IFS='|' read -r adapter_harness adapter_kind adapter_source_rel \
+    adapter_destination_rel adapter_support_rel; do
     case "$adapter_harness" in
       ''|\#*) continue ;;
     esac
-    [ "$adapter_scope" = "$SCOPE" ] || continue
-
-    if [ "$SCOPE" = global ] && [ "$adapter_support_rel" != - ]; then
-      install_canonical "$(adapter_destination "$adapter_support_rel")"
-    fi
     install_adapter_artifact \
       "$adapter_kind" \
       "$(adapter_source "$adapter_source_rel")" \
@@ -1150,75 +770,25 @@ verify_file() {
     verify_failure "$destination is missing"
     return
   fi
-  if [ "$MODE" = link ]; then
-    if [ ! -L "$destination" ]; then
-      verify_failure "$destination is not a source link"
-    elif ! same_path "$source" "$destination"; then
-      verify_failure "$destination does not link to the current SWE Forge source"
-    fi
-  else
-    if [ ! -f "$destination" ] || [ -L "$destination" ]; then
-      verify_failure "$destination is not a regular copied file"
-    elif ! cmp -s "$source" "$destination"; then
-      verify_failure "$destination does not match the current SWE Forge source"
-    fi
-  fi
-}
-
-verify_content_file() {
-  source=$1
-  destination=$2
-  if [ ! -f "$destination" ] || ! cmp -s "$source" "$destination"; then
-    verify_failure "$destination does not match the current SWE Forge source"
+  if [ ! -L "$destination" ]; then
+    verify_failure "$destination is not a source link"
+  elif ! same_path "$source" "$destination"; then
+    verify_failure "$destination does not link to the current SWE Forge source"
   fi
 }
 
 verify_dir_mapping() {
   source=$1
   destination=$2
-  if [ "$MODE" = link ]; then
-    if [ ! -L "$destination" ]; then
-      verify_failure "$destination is not a source directory link"
-    elif ! same_path "$source" "$destination"; then
-      verify_failure "$destination does not link to the current SWE Forge source"
-    fi
-  elif [ ! -d "$destination" ] || [ -L "$destination" ]; then
-    verify_failure "$destination is not a real copied directory"
+  if [ ! -L "$destination" ]; then
+    verify_failure "$destination is not a source directory link"
+  elif ! same_path "$source" "$destination"; then
+    verify_failure "$destination does not link to the current SWE Forge source"
   fi
 }
 
 verify_tree() {
-  source_root=$1
-  destination_root=$2
-  tree_files=$RUN_TMP/verify-tree-files
-
-  verify_dir_mapping "$source_root" "$destination_root"
-  if [ "$MODE" = link ]; then
-    return
-  fi
-
-  find "$source_root" -type f -print >"$tree_files"
-  while IFS= read -r source_file; do
-    relative=${source_file#"$source_root/"}
-    verify_file "$source_file" "$destination_root/$relative"
-  done <"$tree_files"
-
-  destination_entries=$RUN_TMP/verify-tree-destination-entries
-  find "$destination_root" -print >"$destination_entries"
-  while IFS= read -r destination_entry; do
-    [ "$destination_entry" != "$destination_root" ] || continue
-    relative=${destination_entry#"$destination_root/"}
-    source_entry=$source_root/$relative
-    if [ -L "$destination_entry" ]; then
-      verify_failure "$destination_entry is a symlink; copy mode requires real entries"
-    elif [ -d "$destination_entry" ]; then
-      [ -d "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
-    elif [ -f "$destination_entry" ]; then
-      [ -f "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
-    else
-      verify_failure "$destination_entry has an unsupported file type"
-    fi
-  done <"$destination_entries"
+  verify_dir_mapping "$1" "$2"
 }
 
 verify_canonical() {
@@ -1228,73 +798,16 @@ verify_canonical() {
   verify_file "$SOURCE_ROOT/SWE-FORGE.md" "$destination_root/SWE-FORGE.md"
   verify_file "$SOURCE_ROOT/VERSION" "$destination_root/VERSION"
 
-  if ! path_exists "$destination_root/.swe-forge" || [ ! -d "$destination_root/.swe-forge" ]; then
-    verify_failure "$destination_root/.swe-forge is missing"
-    return
-  fi
-  if [ -L "$destination_root/.swe-forge" ]; then
+  if ! path_exists "$destination_root/.swe-forge" || \
+    [ ! -d "$destination_root/.swe-forge" ] || [ -L "$destination_root/.swe-forge" ]; then
     verify_failure "$destination_root/.swe-forge must be a real directory"
     return
   fi
 
-  if [ "$MODE" = link ]; then
-    while IFS= read -r source_dir; do
-      entry_name=${source_dir##*/}
-      verify_dir_mapping "$source_dir" "$destination_root/.swe-forge/$entry_name"
-    done <"$RUN_TMP/canonical-dirs"
-
-    while IFS= read -r source_file; do
-      relative=${source_file#"$SOURCE_ROOT/"}
-      verify_content_file "$source_file" "$destination_root/$relative"
-    done <"$RUN_TMP/canonical-files"
-  else
-    while IFS= read -r source_file; do
-      relative=${source_file#"$SOURCE_ROOT/"}
-      verify_file "$source_file" "$destination_root/$relative"
-    done <"$RUN_TMP/canonical-files"
-
-    destination_entries=$RUN_TMP/verify-destination-canonical-entries
-    find "$destination_root/.swe-forge" -print >"$destination_entries"
-    while IFS= read -r destination_entry; do
-      [ "$destination_entry" != "$destination_root/.swe-forge" ] || continue
-      relative=${destination_entry#"$destination_root/"}
-      case "$relative" in
-        .swe-forge/runs|.swe-forge/runs/*|.swe-forge/.runs|.swe-forge/.runs/*|.swe-forge/generated|.swe-forge/generated/*) continue ;;
-      esac
-      source_entry=$SOURCE_ROOT/$relative
-      if [ -L "$destination_entry" ]; then
-        verify_failure "$destination_entry is a symlink; copy mode requires real entries"
-      elif [ -d "$destination_entry" ]; then
-        [ -d "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
-      elif [ -f "$destination_entry" ]; then
-        [ -f "$source_entry" ] || verify_failure "$destination_entry is not managed by the current SWE Forge source"
-      else
-        verify_failure "$destination_entry has an unsupported file type"
-      fi
-    done <"$destination_entries"
-  fi
-}
-
-verify_bridge() {
-  destination=$1
-  agents_destination=$2
-
-  if ! path_exists "$destination"; then
-    verify_failure "$destination is missing"
-    return
-  fi
-
-  if [ "$MODE" = link ]; then
-    if [ ! -L "$destination" ]; then
-      verify_failure "$destination is not linked to AGENTS.md"
-    elif ! same_path "$agents_destination" "$destination"; then
-      verify_failure "$destination is not linked to AGENTS.md"
-    fi
-  elif [ ! -f "$destination" ] || [ -L "$destination" ]; then
-    verify_failure "$destination is not a regular copied bridge"
-  elif ! cmp -s "$RUN_TMP/claude-bridge" "$destination"; then
-    verify_failure "$destination is not the minimal @AGENTS.md bridge"
-  fi
+  while IFS= read -r source_dir; do
+    entry_name=${source_dir##*/}
+    verify_dir_mapping "$source_dir" "$destination_root/.swe-forge/$entry_name"
+  done <"$RUN_TMP/canonical-dirs"
 }
 
 verify_adapter_artifact() {
@@ -1305,27 +818,21 @@ verify_adapter_artifact() {
   case "$adapter_kind" in
     file) verify_file "$adapter_source_path" "$adapter_destination_path" ;;
     tree) verify_tree "$adapter_source_path" "$adapter_destination_path" ;;
-    bridge) verify_bridge "$adapter_destination_path" "$TARGET/AGENTS.md" ;;
     *) die "unsupported adapter artifact kind: $adapter_kind" ;;
   esac
 }
 
 verify_requested() {
   VERIFY_FAILURES=0
+  manifest_support=$(manifest_support_relative) || \
+    die "adapter is missing a canonical support path"
+  verify_canonical "$(adapter_destination "$manifest_support")"
 
-  if [ "$SCOPE" != global ]; then
-    verify_canonical "$TARGET"
-  fi
-
-  while IFS='|' read -r adapter_harness adapter_scope adapter_kind adapter_source_rel adapter_destination_rel adapter_support_rel; do
+  while IFS='|' read -r adapter_harness adapter_kind adapter_source_rel \
+    adapter_destination_rel adapter_support_rel; do
     case "$adapter_harness" in
       ''|\#*) continue ;;
     esac
-    [ "$adapter_scope" = "$SCOPE" ] || continue
-
-    if [ "$SCOPE" = global ] && [ "$adapter_support_rel" != - ]; then
-      verify_canonical "$(adapter_destination "$adapter_support_rel")"
-    fi
     verify_adapter_artifact \
       "$adapter_kind" \
       "$(adapter_source "$adapter_source_rel")" \
@@ -1339,43 +846,19 @@ verify_requested() {
   info "PASS: SWE Forge $HARNESS installation is valid"
 }
 
-select_inspection_mode() {
-  manifest_set_paths
-  if path_exists "$MANIFEST_PATH" && [ -f "$MANIFEST_PATH" ] && [ ! -L "$MANIFEST_PATH" ]; then
-    if (validate_manifest) >/dev/null 2>&1; then
-      MODE=$(manifest_meta mode "$MANIFEST_PATH")
-      return 0
-    fi
-    MODE=link
-  elif [ "$SCOPE" = global ]; then
-    MODE=link
-  elif [ -L "$TARGET/AGENTS.md" ] || [ -L "$TARGET/SWE-FORGE.md" ]; then
-    MODE=link
-  else
-    MODE=copy
-  fi
-}
-
 status_requested() {
-  select_inspection_mode
   info "source: $SOURCE_ROOT"
   info "version: $(source_version)"
   info "commit: $(source_commit)"
   info "source state: $(source_tree_state)"
   info "harness: $HARNESS"
-  info "scope: $SCOPE"
-  if [ "$SCOPE" = global ]; then
-    info "target: $HOME"
-  else
-    info "target: $TARGET"
-  fi
-  info "mode: $MODE"
+  info "home: $HOME"
   if path_exists "$MANIFEST_PATH" && [ -f "$MANIFEST_PATH" ] && [ ! -L "$MANIFEST_PATH" ]; then
     if (validate_manifest) >/dev/null 2>&1; then
       info "manifest: $MANIFEST_PATH"
       info "managed paths: $(awk -F '\t' '$1 == "entry" { count++ } END { print count + 0 }' "$MANIFEST_PATH")"
       while IFS="$(printf '\t')" read -r status_marker status_kind status_relative \
-        status_source status_fingerprint status_link_target; do
+        status_source status_link_target; do
         [ "${status_marker:-}" = entry ] || continue
         info "managed: $MANIFEST_BASE/$status_relative"
       done <"$MANIFEST_PATH"
@@ -1385,7 +868,7 @@ status_requested() {
       info "manifest: INVALID ($MANIFEST_PATH)"
     fi
   else
-    info 'manifest: missing (legacy installation; destructive lifecycle operations refuse)'
+    info 'manifest: missing (unmanaged installation; destructive lifecycle operations refuse)'
   fi
   if verify_requested; then
     info 'verification: PASS'
@@ -1428,75 +911,42 @@ inventory_has_entry() {
   [ -n "$(inventory_field "$1" 2)" ]
 }
 
-record_removed_link() {
-  removed_link_path=$1
-  removed_link_target=$(readlink "$removed_link_path")
-  printf '%s\t%s\n' "$removed_link_path" "$removed_link_target" >>"$REMOVED_LINKS"
-}
-
 update_plan() {
   UPDATE_PLAN=$RUN_TMP/update-plan
   : >"$UPDATE_PLAN"
   while IFS="$(printf '\t')" read -r update_marker update_kind update_relative \
-    update_source update_fingerprint update_link_target; do
+    update_source update_link_target; do
     [ "${update_marker:-}" = entry ] || continue
     update_destination=$MANIFEST_BASE/$update_relative
-    update_old_hash=$(manifest_entry_field "$update_relative" 5)
-    update_old_target=$(manifest_entry_field "$update_relative" 6)
-    if [ "$MODE" = link ]; then
-      if ! path_exists "$update_destination"; then
-        update_action=add
-      elif [ ! -L "$update_destination" ]; then
-        die "managed link was replaced by a non-link: $update_destination"
-      elif [ "$(readlink "$update_destination")" != "$update_link_target" ]; then
-        [ "$(readlink "$update_destination")" = "$update_old_target" ] || \
-          die "managed link was modified: $update_destination"
-        update_action=relink
-      else
-        update_action=noop
-      fi
-      printf 'action\t%s\t%s\t%s\t%s\t%s\n' "$update_action" "$update_kind" \
-        "$update_relative" "$update_source" "$update_link_target" >>"$UPDATE_PLAN"
+    update_old_target=$(manifest_entry_field "$update_relative" 5)
+    if ! path_exists "$update_destination"; then
+      update_action=add
+    elif [ ! -L "$update_destination" ]; then
+      die "managed link was replaced by a non-link: $update_destination"
+    elif [ "$(readlink "$update_destination")" != "$update_link_target" ]; then
+      [ "$(readlink "$update_destination")" = "$update_old_target" ] || \
+        die "managed link was modified: $update_destination"
+      update_action=relink
     else
-      if ! path_exists "$update_destination"; then
-        update_action=add
-      elif [ ! -f "$update_destination" ] || [ -L "$update_destination" ]; then
-        die "managed copy is not a regular file: $update_destination"
-      else
-        update_current_hash=$(file_hash "$update_destination")
-        if [ "$update_current_hash" = "$update_fingerprint" ]; then
-          update_action=noop
-        elif [ -n "$update_old_hash" ] && [ "$update_current_hash" = "$update_old_hash" ]; then
-          update_action=update
-        else
-          die "managed copy was modified; refusing update: $update_destination"
-        fi
-      fi
-      printf 'action\t%s\t%s\t%s\t%s\t-\n' "$update_action" "$update_kind" \
-        "$update_relative" "$update_source" >>"$UPDATE_PLAN"
+      update_action=noop
     fi
+    printf 'action\t%s\t%s\t%s\t%s\t%s\n' "$update_action" "$update_kind" \
+      "$update_relative" "$update_source" "$update_link_target" >>"$UPDATE_PLAN"
   done <"$MANIFEST_ENTRIES"
 
   while IFS="$(printf '\t')" read -r update_marker update_kind update_relative \
-    update_source update_fingerprint update_link_target; do
+    update_source update_link_target; do
     [ "${update_marker:-}" = entry ] || continue
     inventory_has_entry "$update_relative" && continue
     update_destination=$MANIFEST_BASE/$update_relative
     if ! path_exists "$update_destination"; then
       continue
     fi
-    if [ "$MODE" = link ]; then
-      [ -L "$update_destination" ] || die "stale managed entry is not a link: $update_destination"
-      [ "$(readlink "$update_destination")" = "$update_link_target" ] || \
-        die "stale managed link was modified: $update_destination"
-    else
-      [ -f "$update_destination" ] && [ ! -L "$update_destination" ] || \
-        die "stale managed entry is not a regular file: $update_destination"
-      [ "$(file_hash "$update_destination")" = "$update_fingerprint" ] || \
-        die "stale managed copy was modified: $update_destination"
-    fi
-    printf 'action\tremove\t%s\t%s\t%s\n' "$update_relative" "$update_source" \
-      "$update_link_target" >>"$UPDATE_PLAN"
+    [ -L "$update_destination" ] || die "stale managed entry is not a link: $update_destination"
+    [ "$(readlink "$update_destination")" = "$update_link_target" ] || \
+      die "stale managed link was modified: $update_destination"
+    printf 'action\tremove\t%s\t%s\t%s\t%s\n' "$update_kind" "$update_relative" \
+      "$update_source" "$update_link_target" >>"$UPDATE_PLAN"
   done <"$MANIFEST_PATH"
 }
 
@@ -1529,26 +979,14 @@ execute_update_plan() {
           rm -f "$update_destination"
         fi
         case "$update_kind" in
-          bridge) install_bridge "$update_destination" ;;
           dir) install_dir_link "$update_source" "$update_destination" ;;
           file) install_file "$update_source" "$update_destination" ;;
           *) die "unsupported managed update kind: $update_kind" ;;
         esac
         ;;
-      update)
-        if [ "$update_kind" = bridge ]; then
-          update_source=$RUN_TMP/claude-bridge
-        fi
-        replace_copy_file "$update_source" "$update_destination"
-        ;;
       remove)
-        if [ "$MODE" = link ]; then
-          record_removed_link "$update_destination"
-          rm -f "$update_destination"
-        else
-          record_backup "$update_destination"
-          rm -f "$update_destination"
-        fi
+        record_removed_link "$update_destination"
+        rm -f "$update_destination"
         ;;
       *) die "unsupported managed update action: $update_action" ;;
     esac
@@ -1560,7 +998,7 @@ update_requested() {
   build_manifest_inventory
   update_plan
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: no files, links, locks, or manifests will be changed"
+    info 'dry-run: no files, links, locks, or manifests will be changed'
     print_update_plan
     return 0
   fi
@@ -1571,7 +1009,6 @@ update_requested() {
   TRANSACTION_ACTIVE=0
   info "updated: $MANIFEST_PATH"
   info "source version: $(source_version)"
-  info "mode: $MODE"
 }
 
 manifest_is_shared() {
@@ -1592,24 +1029,17 @@ uninstall_requested() {
   validate_manifest
   uninstall_count=0
   while IFS="$(printf '\t')" read -r uninstall_marker uninstall_kind \
-    uninstall_relative uninstall_source uninstall_fingerprint uninstall_link_target; do
+    uninstall_relative uninstall_source uninstall_link_target; do
     [ "${uninstall_marker:-}" = entry ] || continue
     uninstall_destination=$MANIFEST_BASE/$uninstall_relative
     if ! path_exists "$uninstall_destination"; then
       info "already absent: $uninstall_destination"
       continue
     fi
-    if [ "$MODE" = link ]; then
-      [ -L "$uninstall_destination" ] || \
-        die "managed link is no longer a link; refusing uninstall: $uninstall_destination"
-      [ "$(readlink "$uninstall_destination")" = "$uninstall_link_target" ] || \
-        die "managed link was modified; refusing uninstall: $uninstall_destination"
-    else
-      [ -f "$uninstall_destination" ] && [ ! -L "$uninstall_destination" ] || \
-        die "managed copy is not a regular file; refusing uninstall: $uninstall_destination"
-      [ "$(file_hash "$uninstall_destination")" = "$uninstall_fingerprint" ] || \
-        die "managed copy was modified; refusing uninstall: $uninstall_destination"
-    fi
+    [ -L "$uninstall_destination" ] || \
+      die "managed link is no longer a link; refusing uninstall: $uninstall_destination"
+    [ "$(readlink "$uninstall_destination")" = "$uninstall_link_target" ] || \
+      die "managed link was modified; refusing uninstall: $uninstall_destination"
     if manifest_is_shared "$uninstall_relative"; then
       info "keep shared entry: $uninstall_destination"
     else
@@ -1622,23 +1052,18 @@ uninstall_requested() {
   cp -p "$MANIFEST_PATH" "$MANIFEST_BACKUP" || die 'could not back up uninstall manifest'
   TRANSACTION_ACTIVE=1
   while IFS="$(printf '\t')" read -r uninstall_marker uninstall_kind \
-    uninstall_relative uninstall_source uninstall_fingerprint uninstall_link_target; do
+    uninstall_relative uninstall_source uninstall_link_target; do
     [ "${uninstall_marker:-}" = entry ] || continue
     uninstall_destination=$MANIFEST_BASE/$uninstall_relative
     path_exists "$uninstall_destination" || continue
     manifest_is_shared "$uninstall_relative" && continue
-    if [ "$MODE" = link ]; then
-      record_removed_link "$uninstall_destination"
-      rm -f "$uninstall_destination"
-    else
-      record_backup "$uninstall_destination"
-      rm -f "$uninstall_destination"
-    fi
+    record_removed_link "$uninstall_destination"
+    rm -f "$uninstall_destination"
   done <"$MANIFEST_PATH"
   rm -f "$MANIFEST_PATH"
   rmdir "$MANIFEST_DIR" 2>/dev/null || true
   TRANSACTION_ACTIVE=0
-  info "uninstalled: $HARNESS ($SCOPE)"
+  info "uninstalled: $HARNESS"
   info "removed managed entries: $uninstall_count"
 }
 
@@ -1646,73 +1071,25 @@ install_dry_run() {
   build_manifest_inventory
   info 'dry-run: no files, links, locks, or manifests will be changed'
   while IFS="$(printf '\t')" read -r dry_marker dry_kind dry_relative \
-    dry_source dry_fingerprint dry_link_target; do
+    dry_source dry_link_target; do
     [ "${dry_marker:-}" = entry ] || continue
     info "would manage: $MANIFEST_BASE/$dry_relative"
   done <"$MANIFEST_ENTRIES"
 }
 
-choose_destination() {
-  if [ "$SCOPE" = global ]; then
-    [ -z "$TARGET" ] || die "--target cannot be combined with --global"
-    return
-  fi
-
-  if [ -z "$TARGET" ]; then
-    if [ "$ACTION" != install ] || [ ! -t 0 ]; then
-      die "no target supplied; use --target PATH or --global"
-    fi
-    printf 'Install SWE Forge into a repository/folder, or type global: '
-    IFS= read -r TARGET || die "no installation target supplied"
-    case "$TARGET" in
-      global|globally)
-        TARGET=
-        SCOPE=global
-        return
-        ;;
-      '')
-        die "no installation target supplied"
-        ;;
-    esac
-  fi
-
-  [ -d "$TARGET" ] || die "target directory does not exist: $TARGET"
-  reject_unsupported_path "$TARGET"
-  case "$TARGET" in
-    /*) ;;
-    *) TARGET=$PWD/$TARGET ;;
-  esac
-  [ ! -L "$TARGET" ] || die "target directory must not be a symlink: $TARGET"
-  assert_real_ancestors "$TARGET/child"
-  TARGET=$(CDPATH= cd "$TARGET" && pwd -P)
-}
-
-validate_scope() {
-  if [ "$SCOPE" != global ]; then
-    return
-  fi
-
-  [ -n "${HOME:-}" ] || die "HOME must be set for --global"
+validate_home() {
+  [ -n "${HOME:-}" ] || die 'HOME must be set for installation'
   case "$HOME" in
     /*) ;;
-    *) die "HOME must be an absolute path for --global" ;;
+    *) die 'HOME must be an absolute path for installation' ;;
   esac
   reject_unsupported_path "$HOME"
-  [ -d "$HOME" ] && [ ! -L "$HOME" ] || die "HOME must be a real directory for --global: $HOME"
+  [ -d "$HOME" ] && [ ! -L "$HOME" ] || die "HOME must be a real directory: $HOME"
   assert_real_ancestors "$HOME/child"
   HOME=$(CDPATH= cd "$HOME" && pwd -P)
-  [ "$MODE" = link ] || die "--mode copy is not supported with --global"
-}
-
-validate_harness_scope() {
-  adapter_supports_scope "$SCOPE" || \
-    die "$HARNESS installation does not support $SCOPE scope"
 }
 
 parse_args() {
-  SEEN_TARGET=0
-  SEEN_GLOBAL=0
-  SEEN_MODE=0
   if [ "$#" -eq 1 ] && { [ "$1" = -h ] || [ "$1" = --help ]; }; then
     usage
     exit 0
@@ -1740,41 +1117,22 @@ parse_args() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --target)
-        [ "$#" -ge 2 ] || die "--target requires a path"
-        [ "$SEEN_TARGET" -eq 0 ] || die "target supplied more than once"
-        [ -n "$2" ] || die "--target requires a non-empty path"
-        SEEN_TARGET=1
-        TARGET=$2
-        shift 2
+        die '--target is no longer supported; SWE Forge installations are user-level'
         ;;
       --global)
-        [ "$SEEN_GLOBAL" -eq 0 ] || die "global scope supplied more than once"
-        SEEN_GLOBAL=1
-        SCOPE=global
-        shift
+        die '--global is no longer supported; user-level installation is implicit'
         ;;
       --mode)
-        [ "$#" -ge 2 ] || die "--mode requires link or copy"
-        [ "$SEEN_MODE" -eq 0 ] || die "--mode supplied more than once"
-        SEEN_MODE=1
-        MODE=$2
-        case "$MODE" in
-          link|copy) ;;
-          *) die "unsupported mode: $MODE (use link or copy)" ;;
-        esac
-        shift 2
+        die '--mode is no longer supported; installations always link to this checkout'
         ;;
       --dry-run)
         [ "$ACTION" = install ] || [ "$ACTION" = update ] || \
-          die "--dry-run is supported only for install and update"
+          die '--dry-run is supported only for install and update'
         DRY_RUN=1
         shift
         ;;
       global|globally)
-        [ "$SEEN_GLOBAL" -eq 0 ] || die "global scope supplied more than once"
-        SEEN_GLOBAL=1
-        SCOPE=global
-        shift
+        die 'installation scope arguments are no longer supported; installation is user-level'
         ;;
       -h|--help)
         usage
@@ -1784,10 +1142,7 @@ parse_args() {
         die "unknown option: $1"
         ;;
       *)
-        [ "$SEEN_TARGET" -eq 0 ] || die "target supplied more than once"
-        SEEN_TARGET=1
-        TARGET=$1
-        shift
+        die "unexpected argument: $1 (project installation is no longer supported)"
         ;;
     esac
   done
@@ -1801,15 +1156,12 @@ main() {
 
   parse_args "$@"
   prepare_manifests
-  printf '%s\n' '@AGENTS.md' >"$RUN_TMP/claude-bridge"
-  choose_destination
-  validate_scope
-  validate_harness_scope
+  validate_home
   manifest_set_paths
 
   case "$ACTION" in
     install)
-      load_manifest_mode
+      load_manifest
       if [ "$DRY_RUN" -eq 1 ]; then
         preflight_install
         install_dry_run
@@ -1824,20 +1176,16 @@ main() {
         manifest_write
         TRANSACTION_ACTIVE=0
         info "source: $SOURCE_ROOT"
-        if [ "$SCOPE" = global ]; then
-          info "scope: global harness configuration"
-        else
-          info "target: $TARGET"
-        fi
-        info "mode: $MODE"
+        info 'installation: user harness configuration'
+        info "home: $HOME"
         info "manifest: $MANIFEST_PATH"
         invocation_hint
       else
-        die "installation completed but verification failed"
+        die 'installation completed but verification failed'
       fi
       ;;
     verify)
-      verify_requested || die "verification failed"
+      verify_requested || die 'verification failed'
       ;;
     status)
       status_requested || exit 1
@@ -1846,14 +1194,14 @@ main() {
       doctor_requested || exit 1
       ;;
     update)
-      load_manifest_mode
+      load_manifest
       if [ "$DRY_RUN" -eq 0 ]; then
         acquire_lock
       fi
       update_requested
       ;;
     uninstall)
-      load_manifest_mode
+      load_manifest
       acquire_lock
       uninstall_requested
       ;;
