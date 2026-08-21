@@ -114,7 +114,11 @@ tasks:
 
 ```text
 requested_mode: AUTO
-execution_mode: SUBAGENTS
+routing:
+  initial: SUBAGENTS
+  preferred: SUBAGENTS
+  selected: SUBAGENTS
+  current: SUBAGENTS
 requested_provider: AUTO
 execution_provider: NONE
 parallel_strategy: NONE
@@ -143,7 +147,11 @@ dependencies:
   - api-research
   - ui-research
   - test-strategy
-execution_mode: SUBAGENTS
+routing:
+  initial: SUBAGENTS
+  preferred: SUBAGENTS
+  selected: SUBAGENTS
+  current: SUBAGENTS
 requested_provider: AUTO
 execution_provider: NONE
 parallel_strategy: NONE
@@ -283,7 +291,11 @@ no critical or high-confidence correctness finding, and reports:
 
 ```text
 requested_mode: AUTO
-execution_mode: SUBAGENTS
+routing:
+  initial: SUBAGENTS
+  preferred: SUBAGENTS
+  selected: SUBAGENTS
+  current: SUBAGENTS
 requested_provider: AUTO
 execution_provider: NONE
 parallel_strategy: NONE

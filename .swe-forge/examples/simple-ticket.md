@@ -33,7 +33,11 @@ distinguishes a missing optional field from existing numeric cases.
 
 ```text
 requested_mode: AUTO
-execution_mode: SOLO
+routing:
+  initial: SOLO
+  preferred: SOLO
+  selected: SOLO
+  current: SOLO
 requested_provider: AUTO
 execution_provider: NONE
 parallel_strategy: NONE

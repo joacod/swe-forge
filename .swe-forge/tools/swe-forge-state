@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# Dependency-free structural validator for SWE Forge run-state schema v2.
-# It deliberately rejects schema-v1 state instead of guessing a migration.
+# Dependency-free structural validator for the current SWE Forge run-state schema.
+# Obsolete and unknown schemas are stale; this helper never migrates them.
 
 set -eu
 
@@ -20,8 +20,8 @@ usage() {
 Usage:
   swe-forge-state validate --state FILE|DIRECTORY
 
-The validator accepts only workflow_version 1 / schema_version 2 state.
-Schema-v1 state must be explicitly migrated by a higher-level workflow.
+The validator accepts only workflow_version 1 / schema_version 3 state.
+Obsolete or unknown state must be replaced by starting a fresh run.
 EOF
 }
 
@@ -79,8 +79,8 @@ value_for() {
 }
 
 # Read one scalar from the deliberately simple state YAML without introducing
-# a general parser. The path is optional so older schema-v2 snapshots remain
-# valid when additive routing or continuation sections are absent.
+# a general parser. The path is optional for stage-dependent current-schema
+# sections that are not semantically available yet.
 scalar_value() {
   path=$1
   file=$2
@@ -116,33 +116,29 @@ scalar_value() {
   ' "$file"
 }
 
-validate_optional_mode() {
+required_scalar() {
   field=$1
   file=$2
-  if ! value=$(scalar_value "$field" "$file"); then
-    return 0
-  fi
-  case "$field" in
-    requested_mode)
-      case "$value" in AUTO|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid $field" ;; esac
-      ;;
-    preferred_mode|execution_mode|routing.initial|routing.preferred|routing.selected|routing.current)
-      case "$value" in SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid $field" ;; esac
-      ;;
-    delivery_mode|continuation.delivery.mode)
-      case "$value" in GUIDED|PR) ;; *) fail "invalid $field" ;; esac
-      ;;
-  esac
+  scalar_value "$field" "$file" || fail "current schema is missing $field"
 }
 
-validate_alias_match() {
-  left=$1
-  right=$2
-  file=$3
-  if left_value=$(scalar_value "$left" "$file") && right_value=$(scalar_value "$right" "$file"); then
-    [ "$left_value" = "$right_value" ] || \
-      fail "$left must match $right when both are present"
-  fi
+validate_enum() {
+  field=$1
+  file=$2
+  shift 2
+  value=$(required_scalar "$field" "$file")
+  for allowed do
+    [ "$value" = "$allowed" ] && return 0
+  done
+  fail "invalid $field"
+}
+
+validate_delivery_projection() {
+  file=$1
+  projection=$(required_scalar continuation.delivery.mode "$file")
+  canonical=$(required_scalar delivery_mode "$file")
+  [ "$projection" = "$canonical" ] || \
+    fail "continuation.delivery.mode must match delivery_mode"
 }
 
 validate_sha_field() {
@@ -157,47 +153,41 @@ validate_sha_field() {
 validate_state() {
   file=$(state_file "$1")
 
-  if grep -Eq '^[[:space:]]*version:[[:space:]]*1([[:space:]]|$)' "$file"; then
-    fail "schema-v1 state is not resumable; migrate it explicitly to schema_version: 2"
-  fi
-  if grep -Eq '^[[:space:]]*checkout:[[:space:]]*$' "$file"; then
-    fail "legacy checkout identity is not accepted; use invocation_checkout and delivery_checkout"
+  schema=$(value_for schema_version "$file" || true)
+  [ "$schema" = 3 ] || \
+    fail "stale/unsupported run state: only schema_version: 3 is supported; start a fresh run"
+  if grep -Eq '^(preferred_mode|execution_mode):' "$file"; then
+    fail "schema-v3 state contains removed routing field; start a fresh run"
   fi
 
-  for key in workflow workflow_version schema_version invocation_checkout delivery_checkout \
-    isolated_eligibility parallel_value provider_capabilities delivery; do
-    top_level "$key" "$file" || fail "schema-v2 state is missing top-level key: $key"
+  for key in workflow workflow_version schema_version run_id status requested_mode \
+    requested_provider execution_provider delegation_backend write_isolation \
+    provider_reason parallel_strategy integration_strategy requested_delivery \
+    delivery_mode reason fallback_used routing invocation_checkout \
+    delivery_checkout isolated_eligibility parallel_value provider_capabilities \
+    delivery integration workers; do
+    top_level "$key" "$file" || fail "schema-v3 state is missing top-level key: $key"
   done
 
   [ "$(value_for workflow "$file")" = swe-forge ] || fail "workflow must be swe-forge"
   [ "$(value_for workflow_version "$file")" = 1 ] || fail "workflow_version must be 1"
-  [ "$(value_for schema_version "$file")" = 2 ] || \
-    fail "schema-v2 state is required (schema_version must be 2)"
+  [ "$(value_for schema_version "$file")" = 3 ] || fail "schema_version must be 3"
+  validate_enum status "$file" planning running blocked reviewing repairing accepted failed
+  validate_enum requested_mode "$file" AUTO SOLO SUBAGENTS ISOLATED
+  validate_enum requested_provider "$file" AUTO NATIVE HERDR NONE
+  validate_enum execution_provider "$file" NATIVE HERDR NONE
+  validate_enum delegation_backend "$file" NONE NATIVE HERDR OTHER
+  validate_enum write_isolation "$file" SHARED WORKTREE
+  validate_enum parallel_strategy "$file" NONE COMPOSE
+  validate_enum integration_strategy "$file" NONE CHERRY_PICK
+  validate_enum requested_delivery "$file" DEFAULT GUIDED PR
+  validate_enum delivery_mode "$file" GUIDED PR
 
-  # Additive mode fields are validated only when present. Compatibility
-  # projections are compared only when their nested canonical counterparts
-  # also exist.
-  for field in requested_mode preferred_mode execution_mode \
-    routing.initial routing.preferred routing.selected routing.current \
-    delivery_mode continuation.delivery.mode; do
-    validate_optional_mode "$field" "$file"
+  for field in initial preferred selected current; do
+    nested_key routing "$field" "$file" || \
+      fail "routing is missing $field"
+    validate_enum "routing.$field" "$file" SOLO SUBAGENTS ISOLATED
   done
-  validate_alias_match preferred_mode routing.preferred "$file"
-  validate_alias_match execution_mode routing.current "$file"
-  validate_alias_match delivery_mode continuation.delivery.mode "$file"
-
-  if grep -Eq '^delegation_backend:' "$file"; then
-    case "$(value_for delegation_backend "$file")" in
-      NONE|NATIVE|HERDR|OTHER) ;;
-      *) fail "invalid delegation backend" ;;
-    esac
-  fi
-  if grep -Eq '^write_isolation:' "$file"; then
-    case "$(value_for write_isolation "$file")" in
-      SHARED|WORKTREE) ;;
-      *) fail "invalid write isolation" ;;
-    esac
-  fi
 
   for key in path branch head_sha classification mutation_allowed baseline_ref; do
     nested_key invocation_checkout "$key" "$file" || \
@@ -226,18 +216,19 @@ validate_state() {
       fail "provider_capabilities.lifecycle is missing $key"
   done
 
-  # Routing and continuation are additive schema-v2 fields. Older v2 state
-  # remains valid, but a producer that includes a continuation must provide a
-  # complete durable control snapshot rather than a summary-shaped fragment.
+  # Continuation is stage-dependent. Once a current-schema producer writes it,
+  # its durable control fields and self-contained delivery projection are
+  # required; a pre-continuation state may omit the whole section.
   if top_level continuation "$file" 2>/dev/null; then
     for key in workflow_active workflow phase step awaiting safe_boundary updated_at; do
       nested_key continuation "$key" "$file" || \
         fail "continuation is missing $key"
     done
-    continuation_active=$(awk '$1 == "workflow_active:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
-    case "$continuation_active" in true|false) ;; *) fail "continuation.workflow_active must be true or false" ;; esac
-    continuation_safe=$(awk '$1 == "safe_boundary:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
-    case "$continuation_safe" in true|false) ;; *) fail "continuation.safe_boundary must be true or false" ;; esac
+    validate_enum continuation.workflow_active "$file" true false
+    validate_enum continuation.safe_boundary "$file" true false
+    required_scalar continuation.delivery.mode "$file" >/dev/null
+    validate_enum continuation.delivery.mode "$file" GUIDED PR
+    validate_delivery_projection "$file"
   fi
 
   for field in invocation_checkout_head_sha delivery_checkout_base_sha \
@@ -261,7 +252,7 @@ validate_state() {
   mutation_allowed=$(awk '$1 == "mutation_allowed:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$file")
   case "$mutation_allowed" in true|false) ;; *) fail "invocation_checkout.mutation_allowed must be true or false" ;; esac
 
-  printf 'PASS: schema-v2 run state is structurally valid: %s\n' "$file"
+  printf 'PASS: schema-v3 run state is structurally valid: %s\n' "$file"
 }
 
 main() {

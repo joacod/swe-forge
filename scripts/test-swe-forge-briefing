@@ -105,7 +105,7 @@ worker_briefing:
     - command: scripts/test-parser
   permissions:
     write_access: read-only
-    execution_mode: SUBAGENTS
+    topology: SUBAGENTS
     write_isolation: SHARED
     forbidden_actions: [peer communication, expand scope]
   return:
@@ -132,7 +132,7 @@ worker_briefing:
     allowed_writes: [src/parser.ts]
   permissions:
     write_access: read-write
-    execution_mode: SUBAGENTS
+    topology: SUBAGENTS
     write_isolation: SHARED
   return:
     profile: WRITABLE

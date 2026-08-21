@@ -231,27 +231,21 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 	if (!text) return undefined;
 	const values = parseScalarYaml(text);
 	if (values.get("workflow") !== "swe-forge" || !stateMatchesCwd(values, cwd)) return undefined;
-	// Do not let a modern snapshot choose one side of a contradictory alias
-	// pair. Missing additive fields still use the legacy fallback below.
-	if (stateConsistencyError(values)) return undefined;
+	if (currentStateError(values)) return undefined;
 
 	const status = values.get("status") ?? "unknown";
-	const explicitActive = boolValue(values.get("continuation.workflow_active"));
-	const workflowActive = explicitActive ?? (ACTIVE_STATUSES.has(status) && !TERMINAL_STATUSES.has(status));
-	if (!workflowActive || TERMINAL_STATUSES.has(status)) return undefined;
+	if (!ACTIVE_STATUSES.has(status) && !TERMINAL_STATUSES.has(status)) return undefined;
+	const workflowActive = boolValue(values.get("continuation.workflow_active"));
+	if (workflowActive !== true || TERMINAL_STATUSES.has(status)) return undefined;
 
-	let updatedAt = 0;
 	const recordedTime = values.get("continuation.updated_at");
-	if (recordedTime) {
-		const parsedTime = Date.parse(recordedTime);
-		if (Number.isFinite(parsedTime)) updatedAt = parsedTime;
-	}
+	if (!recordedTime) return undefined;
+	const updatedAt = Date.parse(recordedTime);
+	if (!Number.isFinite(updatedAt)) return undefined;
+
 	let modifiedAt: number;
 	try {
 		modifiedAt = fs.statSync(filePath).mtimeMs;
-		// A valid durable timestamp is authoritative. File mtime is only the
-		// fallback for legacy snapshots that do not record continuation time.
-		if (updatedAt === 0) updatedAt = modifiedAt;
 	} catch {
 		return undefined;
 	}
@@ -264,18 +258,10 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 		modifiedAt,
 		status,
 		workflowActive,
-		preferredTopology: displayValue(
-			values,
-			"routing.preferred",
-			displayValue(values, "preferred_mode", displayValue(values, "execution_mode", "unknown")),
-		),
-		currentTopology: displayValue(
-			values,
-			"routing.current",
-			displayValue(values, "routing.selected", displayValue(values, "execution_mode", "unknown")),
-		),
-		deliveryMode: displayValue(values, "continuation.delivery.mode", displayValue(values, "delivery_mode", "unknown")),
-		phase: displayValue(values, "continuation.phase", displayValue(values, "current_wave", "unknown")),
+		preferredTopology: displayValue(values, "routing.preferred", "unknown"),
+		currentTopology: displayValue(values, "routing.current", "unknown"),
+		deliveryMode: displayValue(values, "delivery_mode", "unknown"),
+		phase: displayValue(values, "continuation.phase", "unknown"),
 		step: displayValue(values, "continuation.step", "none"),
 		awaiting: displayValue(values, "continuation.awaiting", "none"),
 		nextActionKind: displayValue(values, "continuation.next_action.kind", "none"),
@@ -359,18 +345,29 @@ function topology(value: string): string {
 	return value.trim().toUpperCase();
 }
 
-function stateConsistencyError(values: Map<string, string>): string | undefined {
-	const aliases: Array<[string, string]> = [
-		["preferred_mode", "routing.preferred"],
-		["execution_mode", "routing.current"],
-		["delivery_mode", "continuation.delivery.mode"],
-	];
-	for (const [leftPath, rightPath] of aliases) {
-		const left = values.get(leftPath);
-		const right = values.get(rightPath);
-		if (left !== undefined && right !== undefined && left !== right) {
-			return `${leftPath} (${left}) does not match ${rightPath} (${right})`;
+function currentStateError(values: Map<string, string>): string | undefined {
+	if (values.get("schema_version") !== "3") return "unsupported run-state schema";
+	if (values.has("preferred_mode") || values.has("execution_mode")) {
+		return "run-state contains removed routing fields";
+	}
+	const topologyFields = ["routing.initial", "routing.preferred", "routing.selected", "routing.current"];
+	for (const field of topologyFields) {
+		const value = values.get(field);
+		if (!value || !["SOLO", "SUBAGENTS", "ISOLATED"].includes(topology(value))) {
+			return `missing or malformed ${field}`;
 		}
+	}
+	const deliveryMode = values.get("delivery_mode");
+	if (!deliveryMode || !["GUIDED", "PR"].includes(deliveryMode)) return "missing or malformed delivery_mode";
+	const workflowActive = boolValue(values.get("continuation.workflow_active"));
+	if (workflowActive === undefined) return "missing or malformed continuation.workflow_active";
+	if (boolValue(values.get("continuation.safe_boundary")) === undefined) return "missing or malformed continuation.safe_boundary";
+	if (!values.get("continuation.updated_at") || !Number.isFinite(Date.parse(values.get("continuation.updated_at")!))) {
+		return "missing or malformed continuation.updated_at";
+	}
+	const projection = values.get("continuation.delivery.mode");
+	if (projection === undefined || projection !== deliveryMode) {
+		return "continuation.delivery.mode does not match delivery_mode";
 	}
 	return undefined;
 }
@@ -380,8 +377,8 @@ function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: stri
 		return [
 			"Canonical routing is UNKNOWN because no active, checkout-matching SWE-Forge run-state is discoverable.",
 			"Use the existing SOLO/sequential fallback.",
-			"Capability discovery may proceed, but before action=run persist a complete active schema-v2 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
-			"The task contract's execution_mode does not establish canonical routing.",
+			"Capability discovery may proceed, but before action=run persist a complete active schema-v3 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
+			"The task contract does not establish canonical routing.",
 		].join(" ");
 	}
 	if (current === "UNKNOWN") {
@@ -410,7 +407,7 @@ function subagentCapabilityPrompt(observation: SubagentToolObservation, run: Act
 		`current topology: ${current} (preferred: ${preferred})`,
 		"Canonical routing owns whether to use this shared-checkout capability; use it only for one bounded SUBAGENTS task.",
 		"Call action=capabilities first and require the requested role and READ_ONLY/WRITABLE profile before action=run.",
-		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v2 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
+		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v3 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
 		"Pass only the canonical worker_briefing projection to action=run. Missing or incompatible capability falls back to SOLO/sequential; never use it for ISOLATED work.",
 	].join("\n");
 }

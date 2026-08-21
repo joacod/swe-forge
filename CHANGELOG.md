@@ -16,7 +16,7 @@ change between alpha releases.
 - Model/provider/reasoning-mode optimization remains intentionally out of scope
   for this change.
 - Final alpha hardening adds exact candidate-content evidence binding,
-  schema-v2 run state, machine-valid isolated worker results, executable
+  schema-v3 run state, machine-valid isolated worker results, executable
   isolated Git conformance, head-bound receipts, and release-readiness checks.
 - PR runs now plan meaningful implementation slices before editing, preserve one
   validated commit per slice, and support sequential slice evidence without

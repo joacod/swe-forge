@@ -1,7 +1,7 @@
 # Isolated Execution-Provider Selection Policy
 
 Use this policy only after hard routing eligibility selects
-`execution_mode: ISOLATED`. It defines writable-provider capability evidence,
+`routing.current: ISOLATED`. It defines writable-provider capability evidence,
 not workflow behavior or delivery authorization. Read-only delegation backend
 selection for `SUBAGENTS` belongs to `policies/execution-routing.md`; a Herdr
 research worker therefore does not load this isolated provider machinery.

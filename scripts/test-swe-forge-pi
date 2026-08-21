@@ -43,12 +43,10 @@ mkdir -p "$old_dir" "$new_dir" "$fixture_cwd"
 cat >"$old_dir/run-state.yaml" <<EOF_STATE
 workflow: swe-forge
 workflow_version: 1
-schema_version: 2
+schema_version: 3
 run_id: old-run
 status: running
 requested_mode: AUTO
-preferred_mode: SUBAGENTS
-execution_mode: SOLO
 requested_provider: AUTO
 execution_provider: NONE
 delegation_backend: NONE
@@ -57,9 +55,12 @@ invocation_checkout:
   path: $fixture_cwd
 delivery_checkout:
   path: $fixture_cwd
+delivery_mode: PR
 routing:
-  current: SOLO
+  initial: SUBAGENTS
   preferred: SUBAGENTS
+  selected: SOLO
+  current: SOLO
   context_value:
     projected_pressure: high
 continuation:
@@ -85,12 +86,10 @@ EOF_STATE
 cat >"$new_dir/run-state.yaml" <<EOF_STATE
 workflow: swe-forge
 workflow_version: 1
-schema_version: 2
+schema_version: 3
 run_id: newer-run
 status: running
 requested_mode: AUTO
-preferred_mode: SOLO
-execution_mode: SOLO
 requested_provider: AUTO
 execution_provider: NONE
 delegation_backend: NONE
@@ -99,9 +98,12 @@ invocation_checkout:
   path: $fixture_cwd
 delivery_checkout:
   path: $fixture_cwd
+delivery_mode: PR
 routing:
-  current: SOLO
+  initial: SOLO
   preferred: SOLO
+  selected: SOLO
+  current: SOLO
   context_value:
     projected_pressure: low
 continuation:
@@ -177,13 +179,21 @@ fs.writeFileSync(
   boundedState,
   `workflow: swe-forge
 workflow_version: 1
-schema_version: 2
+schema_version: 3
 run_id: ${oversized}
 status: running
+requested_mode: AUTO
+requested_provider: AUTO
+delivery_mode: PR
 invocation_checkout:
   path: ${fixtureCwd}
 delivery_checkout:
   path: ${fixtureCwd}
+routing:
+  initial: SOLO
+  preferred: SOLO
+  selected: SOLO
+  current: SOLO
 continuation:
   workflow_active: true
   workflow: ticket
@@ -247,49 +257,71 @@ const newer = path.join(path.dirname(process.env.SWE_FORGE_RUN_STATE), "..", "ne
 process.env.SWE_FORGE_RUN_STATE = path.resolve(newer);
 const refreshed = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
 if (!refreshed?.systemPrompt.includes("phase: implementation")) throw new Error("newer state did not win");
-const staleTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
-if (staleTransform) throw new Error("stale PR state overrode newer continuation state");
+const newerTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
+if (newerTransform) throw new Error("stale PR state overrode newer continuation state");
 
-// A modern snapshot with contradictory compatibility aliases is rejected
-// instead of injecting continuation state or routing shorthand from one side.
-const contradictoryState = path.join(fixtureCwd, "contradictory", "run-state.yaml");
-writeRuntimeState(contradictoryState, {
-  runId: "contradictory-run",
-  current: "SOLO",
-  preferred: "SOLO",
-  topCurrent: "SUBAGENTS",
-  updatedAt: "2045-01-01T00:00:00Z",
-});
-process.env.SWE_FORGE_RUN_STATE = contradictoryState;
-const contradictoryInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
-if (contradictoryInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
-  throw new Error("contradictory aliases were accepted for continuation injection");
+// Obsolete schema state is stale, not a compatibility input. Pi must ignore
+// it rather than inferring routing or delivery from its old fields.
+const staleState = path.join(fixtureCwd, "stale", "run-state.yaml");
+fs.mkdirSync(path.dirname(staleState), { recursive: true });
+fs.writeFileSync(
+  staleState,
+  `workflow: swe-forge
+workflow_version: 1
+schema_version: 2
+run_id: stale-run
+status: running
+preferred_mode: SUBAGENTS
+execution_mode: SOLO
+invocation_checkout:
+  path: ${fixtureCwd}
+delivery_checkout:
+  path: ${fixtureCwd}
+`,
+);
+process.env.SWE_FORGE_RUN_STATE = staleState;
+const staleInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (staleInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
+  throw new Error("stale schema state was accepted for continuation injection");
 }
-const contradictoryTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
-if (contradictoryTransform) throw new Error("contradictory aliases enabled PR shorthand");
+const staleTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
+if (staleTransform) throw new Error("stale schema state enabled PR shorthand");
+
+// A malformed current routing section is also ignored; no obsolete field is
+// consulted as a substitute for the missing canonical fact.
+const malformedState = path.join(fixtureCwd, "malformed", "run-state.yaml");
+writeRuntimeState(malformedState, { runId: "malformed-run", updatedAt: "2045-01-01T00:00:00Z" });
+fs.writeFileSync(malformedState, fs.readFileSync(malformedState, "utf8").replace("  current: SOLO\n", ""));
+process.env.SWE_FORGE_RUN_STATE = malformedState;
+const malformedInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (malformedInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
+  throw new Error("malformed current routing state was accepted");
+}
 
 function writeRuntimeState(filePath, options = {}) {
   const expected = options.expected ?? "unknown";
+  const current = options.current ?? "SOLO";
+  const preferred = options.preferred ?? "SOLO";
   const yaml = `workflow: swe-forge
 workflow_version: 1
-schema_version: 2
+schema_version: 3
 run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
 status: running
 requested_mode: AUTO
-preferred_mode: ${options.topPreferred ?? options.preferred ?? "SOLO"}
-execution_mode: ${options.topCurrent ?? options.current ?? "SOLO"}
-delivery_mode: ${options.topDelivery ?? "PR"}
 requested_provider: AUTO
 execution_provider: NONE
 delegation_backend: NONE
 write_isolation: SHARED
+delivery_mode: PR
 invocation_checkout:
   path: ${options.cwd ?? fixtureCwd}
 delivery_checkout:
   path: ${options.cwd ?? fixtureCwd}
 routing:
-  current: ${options.current ?? "SOLO"}
-  preferred: ${options.preferred ?? "SOLO"}
+  initial: ${options.initial ?? preferred}
+  preferred: ${preferred}
+  selected: ${options.selected ?? current}
+  current: ${current}
   context_value:
     projected_pressure: ${options.projected ?? "low"}
 continuation:
@@ -518,7 +550,7 @@ await subagentHandlers.get("tool_result")({
 const runInput = {
   action: "run",
   role: "reader",
-  taskContract: "TASK_ID: reader-check\nOBJECTIVE: inspect only\nexecution_mode: SUBAGENTS\nwrite_access: read-only\n",
+  taskContract: "TASK_ID: reader-check\nOBJECTIVE: inspect only\nrouting.current: SUBAGENTS\nwrite_access: read-only\n",
   expectedOutputContract: "result",
   profile: "READ_ONLY",
 };

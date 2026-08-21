@@ -68,7 +68,9 @@ state=$(clean_feature_state "$repo")
 (
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
-  grep -F 'preferred_mode: SOLO' "$state/run-state.yaml" >/dev/null
+  grep -F 'schema_version: 3' "$state/run-state.yaml" >/dev/null
+  grep -F '  preferred: SOLO' "$state/run-state.yaml" >/dev/null
+  grep -F '  current: SOLO' "$state/run-state.yaml" >/dev/null
   grep -F 'delegation_backend: NONE' "$state/run-state.yaml" >/dev/null
   grep -F 'continuation:' "$state/run-state.yaml" >/dev/null
   grep -F 'safe_boundary: true' "$state/run-state.yaml" >/dev/null
@@ -432,7 +434,7 @@ state=$(clean_feature_state "$repo")
 expect_failure 'candidate fingerprint differs' "$GATE" commit-slice \
   --state "$state" --checkpoint 1 --message 'Reject replacement' --authorized-by PR
 
-# Schema-v1 state is rejected rather than guessed into a new shape.
+# Obsolete and unknown run-state schemas are rejected rather than migrated.
 v1=$TMP_ROOT/schema-v1.yaml
 cat >"$v1" <<'EOF_V1'
 workflow: swe-forge
@@ -440,11 +442,9 @@ version: 1
 checkout:
   path: /tmp/legacy
 EOF_V1
-expect_failure 'schema-v1 state is not resumable' "$ROOT/scripts/swe-forge-state" \
+expect_failure 'stale/unsupported run state' "$ROOT/scripts/swe-forge-state" \
   validate --state "$v1"
 
-# Schema-v2 keeps additive nested routing and continuation sections optional,
-# while modern aliases must agree whenever both representations exist.
 projection_repo=$(make_repo projection)
 projection_state=$(clean_feature_state "$projection_repo")
 (
@@ -507,46 +507,64 @@ replace_nested_scalar() {
   ' "$input" >"$output"
 }
 
-legacy_no_routing=$TMP_ROOT/projection-legacy-no-routing.yaml
-strip_top_level_section routing "$projection_modern" "$legacy_no_routing"
-"$ROOT/scripts/swe-forge-state" validate --state "$legacy_no_routing" >/dev/null
+remove_nested_scalar() {
+  section=$1
+  key=$2
+  input=$3
+  output=$4
+  awk -v section="$section" -v key="$key" '
+    /^[^[:space:]#][^:]*:/ {
+      current=$1
+      sub(/:$/, "", current)
+    }
+    current == section && $0 ~ "^  " key ":[[:space:]]*" {
+      found=1
+      next
+    }
+    { print }
+    END { if (!found) exit 1 }
+  ' "$input" >"$output"
+}
 
-legacy_no_continuation=$TMP_ROOT/projection-legacy-no-continuation.yaml
-strip_top_level_section continuation "$projection_modern" "$legacy_no_continuation"
-"$ROOT/scripts/swe-forge-state" validate --state "$legacy_no_continuation" >/dev/null
+schema_v2=$TMP_ROOT/schema-v2.yaml
+replace_top_level_scalar schema_version 2 "$projection_modern" "$schema_v2"
+expect_failure 'stale/unsupported run state' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$schema_v2"
 
-preferred_effective=$TMP_ROOT/projection-preferred-effective.yaml
-cp "$projection_modern" "$preferred_effective.0"
-replace_top_level_scalar preferred_mode SUBAGENTS \
-  "$preferred_effective.0" "$preferred_effective.1"
-replace_nested_scalar routing initial SUBAGENTS \
-  "$preferred_effective.1" "$preferred_effective.2"
+future_schema=$TMP_ROOT/schema-future.yaml
+replace_top_level_scalar schema_version 99 "$projection_modern" "$future_schema"
+expect_failure 'stale/unsupported run state' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$future_schema"
+
+missing_routing=$TMP_ROOT/missing-routing-fact.yaml
+remove_nested_scalar routing preferred "$projection_modern" "$missing_routing"
+expect_failure 'routing is missing preferred' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$missing_routing"
+
+current_no_continuation=$TMP_ROOT/current-no-continuation.yaml
+strip_top_level_section continuation "$projection_modern" "$current_no_continuation"
+"$ROOT/scripts/swe-forge-state" validate --state "$current_no_continuation" >/dev/null
+
+preferred_effective=$TMP_ROOT/preferred-effective.yaml
 replace_nested_scalar routing preferred SUBAGENTS \
-  "$preferred_effective.2" "$preferred_effective"
+  "$projection_modern" "$preferred_effective"
 "$ROOT/scripts/swe-forge-state" validate --state "$preferred_effective" >/dev/null
 
-mismatch_preferred=$TMP_ROOT/projection-mismatch-preferred.yaml
-replace_top_level_scalar preferred_mode SUBAGENTS \
-  "$projection_modern" "$mismatch_preferred"
-expect_failure 'preferred_mode must match routing.preferred' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_preferred"
-
-mismatch_execution=$TMP_ROOT/projection-mismatch-execution.yaml
-replace_top_level_scalar execution_mode SUBAGENTS \
-  "$projection_modern" "$mismatch_execution"
-expect_failure 'execution_mode must match routing.current' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_execution"
-
-mismatch_delivery=$TMP_ROOT/projection-mismatch-delivery.yaml
-replace_top_level_scalar delivery_mode GUIDED \
-  "$projection_modern" "$mismatch_delivery"
-expect_failure 'delivery_mode must match continuation.delivery.mode' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_delivery"
-
-invalid_current=$TMP_ROOT/projection-invalid-current.yaml
+invalid_current=$TMP_ROOT/invalid-current.yaml
 replace_nested_scalar routing current BOGUS \
   "$projection_modern" "$invalid_current"
 expect_failure 'invalid routing.current' \
   "$ROOT/scripts/swe-forge-state" validate --state "$invalid_current"
+
+mismatch_delivery=$TMP_ROOT/mismatch-delivery.yaml
+sed 's/^    mode: PR$/    mode: GUIDED/' "$projection_modern" >"$mismatch_delivery"
+expect_failure 'continuation.delivery.mode must match delivery_mode' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_delivery"
+
+removed_alias=$TMP_ROOT/removed-alias.yaml
+awk '/^requested_mode:/ { print; print "preferred_mode: SOLO"; next } { print }' \
+  "$projection_modern" >"$removed_alias"
+expect_failure 'removed routing field' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$removed_alias"
 
 printf '%s\n' 'PASS: executable gate tests'

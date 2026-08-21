@@ -10,15 +10,11 @@ backend/provider identities, never topologies.
 ## Routing record
 
 Every automatic or explicit run records the following fields. The nested
-`routing` mapping is the canonical owner of live topology facts when it is
-present; top-level `preferred_mode` and `execution_mode` are compatibility
-projections, not provider names or independent routing decisions. Full field
+`routing` mapping is the sole owner of live topology facts. Full field
 semantics and update rules are defined in the run-state contract.
 
 ```text
 requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED
-preferred_mode: SOLO | SUBAGENTS | ISOLATED
-execution_mode: SOLO | SUBAGENTS | ISOLATED
 requested_provider: AUTO | NATIVE | HERDR | NONE
 execution_provider: NATIVE | HERDR | NONE
 delegation_backend: NONE | NATIVE | HERDR | OTHER
@@ -56,17 +52,17 @@ routing:
 the initial semantic preference, `routing.preferred` is the current semantic
 preference after deliberate reassessment, `routing.selected` is the initial
 effective result after capability fallback, and `routing.current` is the
-currently effective topology. `preferred_mode` projects `routing.preferred`
-and `execution_mode` projects `routing.current` when nested routing exists;
-when it does not, older top-level state remains valid. A preferred
-`SUBAGENTS` result with no backend is recorded as `preferred_mode: SUBAGENTS`,
-`execution_mode: SOLO`, `delegation_backend: NONE`, with the fallback reason;
-it is not silently reported as successful delegation. A preferred topology
-must not be collapsed into the effective executable topology.
+currently effective topology. A preferred `SUBAGENTS` result with no backend
+retains that preference in `routing.preferred` while `routing.current` records
+the safe `SOLO` fallback with its reason; it is not silently reported as
+successful delegation. A preferred topology must not be collapsed into the
+effective executable topology.
 
 For delivery state, `delivery_mode` owns the active decision and
-`continuation.delivery.mode` is its compact continuation projection. Both are
-kept for compatibility/recovery and must agree whenever both are present.
+`continuation.delivery.mode` is its compact continuation projection. The
+projection is retained because continuation recovery needs a self-contained
+delivery fact; it is derived from the canonical field and must agree whenever
+present.
 
 `execution_provider` retains its existing narrow meaning: it is the lifecycle
 provider for an `ISOLATED` writable plan and must be `NONE` for non-isolated

@@ -1,7 +1,7 @@
 # Herdr Isolated-Execution Provider Runbook
 
 Use this runbook only after the orchestrator has selected
-`execution_mode: ISOLATED`, provider selection has recorded
+`routing.current: ISOLATED`, provider selection has recorded
 `execution_provider: HERDR`, and the Herdr environment ownership check
 succeeds. This runbook is a provider implementation note; the canonical
 behavior lives in `.swe-forge/workflows/isolated-execution.md`, the task and

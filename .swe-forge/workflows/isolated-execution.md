@@ -1,7 +1,7 @@
 # Isolated Execution Workflow
 
 Use this workflow only after `workflows/ticket.md` has selected
-`execution_mode: ISOLATED` and provider capability evidence has been recorded.
+`routing.current: ISOLATED` and provider capability evidence has been recorded.
 It defines the isolated operational sequence; authorization remains canonical
 in `policies/delivery.md`, result shape in `contracts/result-bundle.md`, and
 Git/evidence enforcement in `.swe-forge/tools/swe-forge-isolated-gate`.

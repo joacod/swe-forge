@@ -22,7 +22,7 @@ authorization, and final acceptance.
 ## Selection
 
 Use `.swe-forge/policies/provider-selection.md` only after routing selects
-`execution_mode: ISOLATED`; it owns mandatory writable-provider proof. The
+`routing.current: ISOLATED`; it owns mandatory writable-provider proof. The
 execution-routing policy may record a proven provider as a
 `delegation_backend` for read-only `SUBAGENTS` without loading isolated
 provider machinery. In that case `execution_provider: NONE` and

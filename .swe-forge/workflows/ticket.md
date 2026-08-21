@@ -232,7 +232,7 @@ the selected provider runbook under `.swe-forge/providers/`, and
 machinery for a non-isolated run.
 
 Record the routing fields and reasons defined by the loaded execution-routing
-policy, including `preferred_mode`, effective `execution_mode`,
+policy, including nested `routing.preferred` and `routing.current`,
 `delegation_backend`, `write_isolation`, `context_value`, runtime capability
 profile, and any revision history. Choose the smallest safe topology; explicit
 requests do not bypass hard eligibility, provider capability, validation, scope,
@@ -248,14 +248,14 @@ When the Pi optional `swe_forge_subagent` capability is being used, the
 the complete root task/run state. A first `action: capabilities` call may
 occur before a run-state snapshot exists; that call only discovers the backend
 and does not select a topology. Before any `action: run`, load
-`.swe-forge/contracts/run-state.md` and persist a complete active schema-v2 snapshot in a discoverable location, with
+`.swe-forge/contracts/run-state.md` and persist a complete active schema-v3 snapshot in a discoverable location, with
 `workflow: swe-forge`, a non-terminal status, matching
 `invocation_checkout.path`/`delivery_checkout.path`,
 `continuation.workflow_active: true`, and `routing.current: SUBAGENTS`.
 Then request `action: capabilities` again so negotiation is bound to the new
-run. `execution_mode` in a task contract, prompt text, or conversation is not
-a substitute for canonical persisted routing state; if the state is missing or
-unmatchable, preserve the SOLO/sequential fallback rather than delegating.
+run. Task-contract or prompt text is not a substitute for canonical persisted
+routing state; if the state is missing, stale, or unmatchable, preserve the
+SOLO/sequential fallback rather than delegating.
 
 ### 7. Test Strategy
 

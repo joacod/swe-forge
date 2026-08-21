@@ -19,6 +19,27 @@ Activate it only when the user explicitly:
 
 When activated, read `SWE-FORGE.md` and follow the workflow it defines.
 
+## Maintaining SWE Forge
+
+When changing this repository itself:
+
+- Run state is ephemeral internal implementation state. Only the current
+  schema is supported; reject obsolete state rather than migrating it. Update
+  producers, consumers, validation, adapters, and fixtures atomically. Do not
+  add compatibility shims, legacy fallbacks, or duplicate compatibility fields
+  without a concrete current need. Keep one canonical owner; retain derived
+  projections only for a real recovery purpose.
+- Preserve root/orchestrator authority, bounded task-specific worker context,
+  no peer-to-peer worker communication, proportional worker results, compact
+  root-accepted dependency digests, conservative read-only fan-out/fan-in, and
+  stage-triggered minimal policy loading. Add deterministic enforcement only
+  where the risk/reward is clear.
+- Prefer deletion, consolidation, canonical ownership, small deterministic
+  guards, and low-risk changes over new orchestration/state/message
+  frameworks, telemetry, benchmarks, speculative abstractions, or unneeded
+  compatibility machinery. Detailed contracts and policies remain canonical
+  in `SWE-FORGE.md` and `.swe-forge/`.
+
 ## Installation Requests
 
 Installation is separate from workflow activation. When the user explicitly
