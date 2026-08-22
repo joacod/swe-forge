@@ -15,11 +15,21 @@ harness validation.
 - Harness and version:
 - Model:
 - Operating system:
+- SWE Forge version or commit:
 - Repository type or stack:
+- Raw invocation (including mode tokens):
 - Ticket size: small / medium / large
+- Requested topology: AUTO / SOLO / SUBAGENTS / ISOLATED
 - Selected topology: SOLO / SUBAGENTS / ISOLATED / unknown
+- Requested provider, if any: AUTO / NATIVE / HERDR / NONE / unknown
+- Selected execution provider: NATIVE / HERDR / NONE / unknown
+- Delegation backend, if used: NATIVE / HERDR / OTHER / NONE / unknown
+- Routing fallback or revision, if any:
 - Delivery mode: GUIDED / PR
+- Final status: ACCEPTED / BLOCKED / FAILED / unknown
+- Did it create a delivery branch? yes / no / unknown
 - Did it create a PR? yes / no / not applicable
+- Was context pressure, compaction, or overflow recovery observed? yes / no / unknown
 
 ## What happened?
 
