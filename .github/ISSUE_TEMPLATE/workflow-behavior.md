@@ -14,11 +14,20 @@ a successful projection does not establish harness behavior.
 
 ## Ticket and invocation
 
-- Invocation (`/swe-forge ...` or equivalent):
-- Delivery mode: guided / PR
-- Requested topology:
-- Selected topology, if known:
-- Did it create a branch or PR?
+- Harness and version:
+- SWE Forge version or commit:
+- Raw invocation (`/swe-forge ...` or equivalent, including mode tokens):
+- Delivery mode: GUIDED / PR
+- Requested topology: AUTO / SOLO / SUBAGENTS / ISOLATED
+- Selected topology, if known: SOLO / SUBAGENTS / ISOLATED / unknown
+- Requested provider, if any: AUTO / NATIVE / HERDR / NONE / unknown
+- Selected execution provider, if known: NATIVE / HERDR / NONE / unknown
+- Delegation backend, if used: NATIVE / HERDR / OTHER / NONE / unknown
+- Routing fallback or revision, if any:
+- Final status, if known: ACCEPTED / BLOCKED / FAILED / unknown
+- Did it create a delivery branch? yes / no / unknown
+- Did it create a PR? yes / no / not applicable
+- Was context pressure, compaction, or overflow recovery involved? yes / no / unknown
 
 ## Evidence
 

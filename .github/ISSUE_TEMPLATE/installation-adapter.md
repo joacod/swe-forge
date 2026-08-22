@@ -17,8 +17,10 @@ harness was behaviorally validated.
 - Harness and version:
 - Operating system:
 - SWE Forge version or commit:
+- Installer action: install / verify / status / doctor / update / uninstall / other
 - Harness installation command:
 - Command run:
+- Installation state: fresh / existing managed / legacy or copied / unknown
 - Validation kind: projection/fixture / real harness / both
 - Was the target harness actually exercised? yes / no
 
@@ -30,5 +32,5 @@ personal paths when sharing publicly.
 ## Reproduction
 
 List the smallest repeatable sequence, including whether the user home
-already contained the harness entry, canonical support directory, or adapter
-files.
+already contained the harness entry, canonical support directory, adapter
+files, or a current managed manifest.
