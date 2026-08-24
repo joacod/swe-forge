@@ -165,10 +165,15 @@ pull-request creation:
 /swe-forge pr isolated <ticket>     # same, delivery token first
 ```
 
-Reserved-token parsing, raw-argument preservation, incomplete-input handling,
-and Herdr migration guidance are owned by the loaded ticket procedure. The
-examples above describe the supported public grammar without duplicating its
-parser rules here.
+The shared `.swe-forge/tools/swe-forge-invocation` primitive deterministically
+parses reserved tokens, preserves raw arguments, reports incomplete input, and
+reports removed-provider migration state. Its interface is `parse
+--raw-arguments TEXT` (or `parse --stdin`) and its one-line JSON result contains
+`raw_arguments`, `parsed_ticket`, `requested_mode`, `requested_delivery`,
+`delivery_mode`, `input_status`, and `consumed_tokens`. The loaded ticket
+procedure owns consuming those normalized facts and responding to their status;
+automatic topology and provider selection remain agentic. The examples above
+describe the supported public syntax without duplicating parser rules here.
 
 The ticket workflow loads `.swe-forge/policies/execution-routing.md` before the
 final topology decision. That policy owns context value, preferred versus

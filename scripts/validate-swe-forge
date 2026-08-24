@@ -95,6 +95,7 @@ run_check 'shell syntax' syntax sh -n \
   "$ROOT/scripts/test-swe-forge-gate" \
   "$ROOT/scripts/test-swe-forge-isolated" \
   "$ROOT/scripts/test-swe-forge-pi" \
+  "$ROOT/scripts/test-swe-forge-invocation" \
   "$ROOT/scripts/test-swe-forge-briefing" \
   "$ROOT/scripts/test-swe-forge-results" \
   "$ROOT/scripts/check-release" \
@@ -102,7 +103,9 @@ run_check 'shell syntax' syntax sh -n \
   "$ROOT/scripts/swe-forge-isolated-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
-  "$ROOT/.swe-forge/tools/swe-forge-isolated-gate"
+  "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
+  "$ROOT/.swe-forge/tools/swe-forge-invocation" \
+  "$ROOT/scripts/swe-forge-invocation"
 if ! report_check 'shell syntax' syntax; then
   exit 1
 fi
@@ -121,6 +124,8 @@ if [ "$parallel" = yes ]; then
   isolated_pid=$!
   run_check 'Pi runtime fixture' pi "$ROOT/scripts/test-swe-forge-pi" &
   pi_pid=$!
+  run_check 'invocation parser fixture' invocation "$ROOT/scripts/test-swe-forge-invocation" &
+  invocation_pid=$!
   run_check 'worker briefing fixture' briefing "$ROOT/scripts/test-swe-forge-briefing" &
   briefing_pid=$!
   run_check 'worker result profile fixture' results "$ROOT/scripts/test-swe-forge-results" &
@@ -134,6 +139,7 @@ if [ "$parallel" = yes ]; then
   wait "$gate_pid"
   wait "$isolated_pid"
   wait "$pi_pid"
+  wait "$invocation_pid"
   wait "$briefing_pid"
   wait "$results_pid"
   wait "$boundary_pid"
@@ -142,6 +148,7 @@ else
   run_check 'evidence-gate fixtures' gate "$ROOT/scripts/test-swe-forge-gate"
   run_check 'isolated-worktree fixtures' isolated "$ROOT/scripts/test-swe-forge-isolated"
   run_check 'Pi runtime fixture' pi "$ROOT/scripts/test-swe-forge-pi"
+  run_check 'invocation parser fixture' invocation "$ROOT/scripts/test-swe-forge-invocation"
   run_check 'worker briefing fixture' briefing "$ROOT/scripts/test-swe-forge-briefing"
   run_check 'worker result profile fixture' results "$ROOT/scripts/test-swe-forge-results"
   run_check 'canonical boundary fixture' boundary "$ROOT/scripts/test-swe-forge-boundary"
@@ -152,6 +159,7 @@ if ! report_check 'installer fixture tests' installer; then failures=$((failures
 if ! report_check 'evidence-gate fixtures' gate; then failures=$((failures + 1)); fi
 if ! report_check 'isolated-worktree fixtures' isolated; then failures=$((failures + 1)); fi
 if ! report_check 'Pi runtime fixture' pi; then failures=$((failures + 1)); fi
+if ! report_check 'invocation parser fixture' invocation; then failures=$((failures + 1)); fi
 if ! report_check 'worker briefing fixture' briefing; then failures=$((failures + 1)); fi
 if ! report_check 'worker result profile fixture' results; then failures=$((failures + 1)); fi
 if ! report_check 'canonical boundary fixture' boundary; then failures=$((failures + 1)); fi

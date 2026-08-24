@@ -73,7 +73,7 @@ provide richer or reduced host behavior.
 
 Adapters may:
 
-- translate invocation syntax;
+- preserve and forward host invocation arguments to the shared parser;
 - project canonical workflow material into host-specific locations;
 - detect and advertise only demonstrated host capabilities;
 - implement host-specific lifecycle integration; and
@@ -214,7 +214,7 @@ is not installed with a harness projection.
 
 ```text
 ticket/raw invocation
-  -> parsed modes and immutable raw ticket
+  -> shared parser facts and immutable raw ticket
   -> acceptance and transient PR working spec
   -> context capability, context-value, and durable continuation plan
   -> architecture, ownership, and validation plan

@@ -36,9 +36,12 @@ Use SWE Forge.
 <ticket>
 ```
 
-Project-specific `CLAUDE.md` configuration remains the harness's concern and
-is not changed by the SWE Forge installer. See [shared adapter behavior](../README.md)
-for the workflow and delivery rules.
+Claude Code has no verified pre-agent runtime hook in this adapter. The skill
+therefore leaves raw arguments untouched and the canonical ticket bootstrap
+invokes `~/.claude/swe-forge/.swe-forge/tools/swe-forge-invocation` once before
+workflow reasoning. Project-specific `CLAUDE.md` configuration remains the
+harness's concern and is not changed by the SWE Forge installer. See
+[shared adapter behavior](../README.md) for the workflow and delivery rules.
 
 ## Native Subagents
 

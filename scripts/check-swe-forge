@@ -74,12 +74,13 @@ validate_registry() {
 sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
   "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
-  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-briefing" \
-  "$ROOT/scripts/test-swe-forge-results" "$ROOT/scripts/check-swe-forge-boundary" \
-  "$ROOT/scripts/test-swe-forge-boundary" "$ROOT/scripts/swe-forge-gate" \
-  "$ROOT/scripts/test-swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-gate" \
-  "$ROOT/.swe-forge/tools/swe-forge-state" \
+  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-invocation" \
+  "$ROOT/scripts/test-swe-forge-briefing" "$ROOT/scripts/test-swe-forge-results" \
+  "$ROOT/scripts/check-swe-forge-boundary" "$ROOT/scripts/test-swe-forge-boundary" \
+  "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
+  "$ROOT/.swe-forge/tools/swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
+  "$ROOT/.swe-forge/tools/swe-forge-invocation" "$ROOT/scripts/swe-forge-invocation" \
   "$ROOT/scripts/swe-forge-state" \
   "$ROOT/scripts/swe-forge-isolated-gate" \
   "$ROOT/scripts/check-release"
@@ -93,6 +94,9 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/swe-forge-isolated-gate" ] || fail "isolated gate wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-pi" ] || fail "Pi runtime fixture is not executable"
+[ -x "$ROOT/scripts/test-swe-forge-invocation" ] || fail "invocation parser fixture is not executable"
+[ -x "$ROOT/.swe-forge/tools/swe-forge-invocation" ] || fail "invocation parser is not executable"
+[ -x "$ROOT/scripts/swe-forge-invocation" ] || fail "invocation parser wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-briefing" ] || fail "worker briefing fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-results" ] || fail "worker result profile fixture is not executable"
 [ -x "$ROOT/scripts/validate-swe-forge" ] || fail "validation batch is not executable"
@@ -374,9 +378,14 @@ require_text '`/git-pr draft` forwards an explicit draft request' .swe-forge/ada
 require_text '/git-pr [draft]' .swe-forge/adapters/opencode/README.md
 require_text 'ISOLATED' .swe-forge/workflows/ticket.md
 require_text '/swe-forge isolated <ticket>' .swe-forge/workflows/ticket.md
-require_text 'The `herdr` topology token was removed' .swe-forge/workflows/ticket.md
-require_text 'use Herdr as the provider for this' .swe-forge/workflows/ticket.md
-require_text 'requested_provider: HERDR' .swe-forge/workflows/ticket.md
+require_text 'swe-forge-invocation' .swe-forge/workflows/ticket.md
+require_text 'input_status' .swe-forge/workflows/ticket.md
+require_text 'parse --raw-arguments TEXT' .swe-forge/tools/swe-forge-invocation
+require_text 'consumed_tokens' .swe-forge/tools/swe-forge-invocation
+require_text 'MIGRATION_REQUIRED' .swe-forge/tools/swe-forge-invocation
+reject_text 'inspect the first token' .swe-forge/workflows/ticket.md
+reject_text 'delivery token was consumed' .swe-forge/workflows/ticket.md
+require_text 'requested_provider: HERDR' .swe-forge/policies/provider-selection.md
 require_text 'Hard isolated eligibility' .swe-forge/policies/execution-routing.md
 require_text 'Economic preference' .swe-forge/policies/execution-routing.md
 require_text 'Prefer `NATIVE`' .swe-forge/policies/provider-selection.md
@@ -464,6 +473,7 @@ require_text '### Context management' .swe-forge/adapters/pi/README.md
 require_text 'agent_settled' .swe-forge/adapters/pi/README.md
 require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'test-swe-forge-pi' CONTRIBUTING.md
+require_text 'test-swe-forge-invocation' CONTRIBUTING.md
 require_text 'test-swe-forge-briefing' CONTRIBUTING.md
 require_text 'worker briefing fixture' scripts/validate-swe-forge
 require_text 'worker result profile fixture' scripts/validate-swe-forge

@@ -17,5 +17,5 @@ relative reference under `~/.agents/swe-forge/`, never against a project-local
 preserve the raw invocation arguments as the original ticket.
 
 The explicit skill entry passes the request as raw invocation arguments. Keep
-those arguments unchanged; the ticket procedure owns reserved-token parsing,
-provider migration guidance, and delivery-mode handling.
+those arguments unchanged; the ticket procedure invokes the shared parser
+bootstrap when the host cannot provide normalized facts before the agent turn.

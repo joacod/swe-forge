@@ -130,6 +130,7 @@ cd "$ROOT"
 SWE_FORGE_RUN_STATE="$old_dir/run-state.yaml" \
   node $NODE_TS_ARGS --input-type=module - "$ROOT" "$fixture_cwd" <<'NODE'
 import * as fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -377,6 +378,13 @@ const freshPi = {
   on(name, handler) {
     freshHandlers.set(name, handler);
   },
+  async exec(command, args) {
+    try {
+      return { stdout: execFileSync(command, args, { encoding: "utf8" }), code: 0 };
+    } catch (error) {
+      return { stdout: "", code: error?.status ?? 1 };
+    }
+  },
   appendEntry() {},
 };
 extension(freshPi);
@@ -390,6 +398,22 @@ const freshStart = await freshHandlers.get("before_agent_start")({
   systemPrompt: "base",
 }, freshContext);
 const freshStartPrompt = freshStart?.systemPrompt ?? "";
+if (!freshStartPrompt.includes("[SWE-FORGE NORMALIZED INVOCATION]")) {
+  throw new Error("fresh invocation did not receive normalized parser facts");
+}
+for (const normalizedValue of [
+  '"raw_arguments":"pr fresh task"',
+  '"parsed_ticket":"fresh task"',
+  '"requested_mode":"AUTO"',
+  '"requested_delivery":"PR"',
+  '"delivery_mode":"PR"',
+  '"input_status":"COMPLETE"',
+  '"consumed_tokens":["pr"]',
+]) {
+  if (!freshStartPrompt.includes(normalizedValue)) {
+    throw new Error(`normalized invocation facts omitted ${normalizedValue}`);
+  }
+}
 for (const staleValue of [
   "SWE-FORGE ACTIVE RUN",
   "PR: #901 OPEN",

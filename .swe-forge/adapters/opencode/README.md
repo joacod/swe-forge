@@ -22,7 +22,14 @@ The installer links `commands/swe-forge.md` to:
 ```
 
 The command uses OpenCode's file references and `$ARGUMENTS` substitution to
-load the canonical instructions only when the user types `/swe-forge`.
+load the canonical instructions only when the user types `/swe-forge`. The
+canonical ticket bootstrap invokes
+`~/.config/opencode/swe-forge/.swe-forge/tools/swe-forge-invocation` exactly
+once and passes its normalized result to the agent; this adapter does not copy
+grammar into the command body. OpenCode's template shell interpolation does not
+provide a verified safe raw-argv boundary for arbitrary multiline ticket text,
+so the bootstrap path is the portable integration point rather than an inline
+adapter parser.
 
 The delivery helpers are separate explicit commands:
 
