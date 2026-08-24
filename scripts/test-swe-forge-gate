@@ -586,7 +586,7 @@ remove_nested_scalar() {
 }
 
 # The earliest generic schema-v3 snapshot keeps the required shell and the
-# writer's initial/unknown values, but has no continuation or later activity.
+# state tool's initial/unknown values, but has no continuation or later activity.
 minimal_without_continuation=$TMP_ROOT/minimal-v3-no-continuation.yaml
 strip_top_level_section continuation "$projection_modern" "$minimal_without_continuation"
 minimal_without_runtime_profile=$TMP_ROOT/minimal-v3-no-runtime-profile.yaml

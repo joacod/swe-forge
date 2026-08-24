@@ -702,6 +702,11 @@ init_state() {
     init_delivery_authorization=not-authorized
     init_delivery_status_value=not-authorized
   fi
+  if [ "$init_write_isolation" = WORKTREE ] && [ "$init_delivery_authorization" = PR ]; then
+    init_worker_authorization=PR
+  else
+    init_worker_authorization=not-authorized
+  fi
   state_tmp=$init_state_dir/run-state.yaml.tmp.$$
   umask 077
   {
@@ -788,6 +793,8 @@ init_state() {
     done
     printf 'delivery:\n'
     printf '  authorization:\n'
+    printf '    worker_setup: %s\n' "$init_worker_authorization"
+    printf '    worker_transfer_commit: %s\n' "$init_worker_authorization"
     printf '    commit: %s\n' "$init_delivery_authorization"
     printf '    push: %s\n' "$init_delivery_authorization"
     printf '    create_pull_request: %s\n' "$init_delivery_authorization"
