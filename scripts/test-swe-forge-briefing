@@ -241,6 +241,8 @@ cmp -s "$TMP_ROOT/read.brief" "$TMP_ROOT/read-again.brief" || fail 'repeated ren
 # Structural failures are rejected by the same executable validator.
 sed '/^  objective:/d' "$TMP_ROOT/read.brief" >"$TMP_ROOT/missing-objective.brief"
 expect_failure 'missing required objective' "$TOOL" validate --brief "$TMP_ROOT/missing-objective.brief"
+sed "s/^  objective: 'Inspect the bounded worker boundary\.'$/  objective: ''/" "$TMP_ROOT/read.brief" >"$TMP_ROOT/empty-objective.brief"
+expect_failure 'empty required objective' "$TOOL" validate --brief "$TMP_ROOT/empty-objective.brief"
 sed 's/write_access: read-only/write_access: read-write/' "$TMP_ROOT/read.brief" >"$TMP_ROOT/illegal-permission.brief"
 expect_failure 'read-only worker with writable permission' "$TOOL" validate --brief "$TMP_ROOT/illegal-permission.brief"
 sed 's/^state\twrite_isolation\tSHARED$/state\twrite_isolation\tWORKTREE/' "$TMP_ROOT/read.input" >"$TMP_ROOT/bad-state.input"
@@ -287,6 +289,8 @@ for required in \
 done
 sed '/integration_checkpoint_sha:/d' "$TMP_ROOT/isolated.brief" >"$TMP_ROOT/missing-isolated-field.brief"
 expect_failure 'isolated writer missing safety field' "$TOOL" validate --brief "$TMP_ROOT/missing-isolated-field.brief"
+sed 's/^    provider: NATIVE$/    provider: BOGUS/' "$TMP_ROOT/isolated.brief" >"$TMP_ROOT/illegal-provider.brief"
+expect_failure 'isolated worker with incompatible provider' "$TOOL" validate --brief "$TMP_ROOT/illegal-provider.brief"
 sed '/git.base_sha/d' "$TMP_ROOT/isolated.input" >"$TMP_ROOT/missing-isolated-input.input"
 # The line-oriented input deliberately remains invalid if a required isolated
 # execution fact is absent; the renderer must not invent it.

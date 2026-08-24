@@ -550,11 +550,11 @@ structural_validate() {
       if ($0 == "  schema: worker-brief/v1") schema = 1
       if ($0 ~ /^  task_id:[[:space:]]+/) { task_id = top_level_scalar($0); task_id_seen = 1 }
       if ($0 == "  worker:") worker = 1
-      if ($0 ~ /^    role:[[:space:]]+/) { role_seen = 1; role = top_level_scalar($0) }
+      if ($0 ~ /^    role:[[:space:]]+/) { role = top_level_scalar($0); role_seen = (role != "") }
       if ($0 == "    mode: delegated_worker") mode = 1
       if ($0 ~ /^    depth:[[:space:]]+[0-9]+$/) depth = 1
       if ($0 == "    recursive_delegation: false") recursive = 1
-      if ($0 ~ /^  objective:[[:space:]]+/) objective = 1
+      if ($0 ~ /^  objective:[[:space:]]+/) { objective_value = top_level_scalar($0); objective = (objective_value != "") }
       if ($0 == "  acceptance:") { acceptance_seen = 1; acceptance_section = 1; acceptance_count = 0; next }
       if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  acceptance:") acceptance_section = 0
       if (acceptance_section && $0 ~ /^    - /) acceptance_count++
@@ -574,25 +574,33 @@ structural_validate() {
       if ($0 ~ /^    topology:[[:space:]]+/) topology = top_level_scalar($0)
       if ($0 ~ /^    write_isolation:[[:space:]]+/) write_isolation = top_level_scalar($0)
       if ($0 == "    allowed_actions:") { allowed_actions = 1; allowed_actions_section = 1; next }
-      if ($0 == "    forbidden_actions:") forbidden_actions = 1
-      if ($0 ~ /^    [A-Za-z_]+:/ && $0 != "    allowed_actions:") allowed_actions_section = 0
-      if (allowed_actions_section && $0 == "      - edit") edit_action = 1
+      if ($0 == "    forbidden_actions:") { forbidden_actions = 1; forbidden_actions_section = 1; allowed_actions_section = 0 }
+      if ($0 ~ /^  [A-Za-z_]+:/) { allowed_actions_section = 0; forbidden_actions_section = 0 }
+      if ($0 ~ /^    [A-Za-z_]+:/ && $0 != "    allowed_actions:" && $0 != "    forbidden_actions:") { allowed_actions_section = 0; forbidden_actions_section = 0 }
+      if (allowed_actions_section && $0 == "      - read") { allowed_read_action = 1; allowed_action_count++ }
+      if (allowed_actions_section && $0 == "      - edit") { edit_action = 1; allowed_edit_action = 1; allowed_action_count++ }
+      if (allowed_actions_section && $0 == "      - validation") { allowed_validation_action = 1; allowed_action_count++ }
+      if (forbidden_actions_section && $0 == "      - delivery") { forbidden_delivery = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - recursive delegation") { forbidden_recursion = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - peer communication") { forbidden_peer = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - scope expansion") { forbidden_scope = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - topology decisions") { forbidden_topology = 1; forbidden_action_count++ }
       if ($0 == "  return:") result = 1
       if ($0 ~ /^    profile:[[:space:]]+/) profile = top_level_scalar($0)
       if ($0 ~ /^    contract:[[:space:]]+/) contract = top_level_scalar($0)
       if ($0 == "    expected_output:" || $0 ~ /^    expected_output: \[\]$/) { expected_output = 1; expected_output_section = 1 }
       if ($0 ~ /^    [A-Za-z_]+:/ && $0 != "    expected_output:") expected_output_section = 0
       if (expected_output_section && $0 ~ /^      - /) expected_output_items++
-      if ($0 == "  dependencies:") { dependencies = 1; dependency_child = 0; next }
+      if ($0 == "  dependencies:") { dependencies_seen = 1; dependencies = 1; dependency_child = 0; next }
       if (dependencies && $0 ~ /^    (completed|pending):/) dependency_child = 1
       if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  dependencies:") dependencies = 0
-      if ($0 == "  isolated_execution:") isolated = 1
+      if ($0 == "  isolated_execution:") { isolated_seen = 1; isolated = 1 }
       if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  isolated_execution:") isolated = 0
       if ($0 ~ /^      - / && allowed_writes_section && $0 ~ /none/) repository_none_write = 1
       if ($0 ~ /^      - / && allowed_writes_section && $0 !~ /none/) repository_non_none_write = 1
       if ($0 ~ /^    isolated_execution:/) malformed_isolated_indent = 1
-      if ($0 ~ /^    provider:/) isolated_provider = 1
-      if ($0 ~ /^    delegation_backend:/) isolated_backend = 1
+      if ($0 ~ /^    provider:/) { isolated_provider = 1; isolated_provider_value = top_level_scalar($0) }
+      if ($0 ~ /^    delegation_backend:/) { isolated_backend = 1; isolated_backend_value = top_level_scalar($0) }
       if ($0 ~ /^      path:/) isolated_path = 1
       if ($0 ~ /^      branch:/) isolated_branch = 1
       if ($0 ~ /^      worktree_role: worker$/) isolated_role = 1
@@ -623,16 +631,16 @@ structural_validate() {
       if ($0 == "      temporary_directories:" || $0 ~ /^      temporary_directories: \[\]$/) env_temporary = 1
       if ($0 == "      external_resources:" || $0 ~ /^      external_resources: \[\]$/) env_external = 1
       if ($0 == "      cleanup_commands:" || $0 ~ /^      cleanup_commands: \[\]$/) env_cleanup = 1
-      if ($0 ~ /^      create_branch: /) auth_create_branch = 1
-      if ($0 ~ /^      create_worktree: /) auth_create_worktree = 1
-      if ($0 ~ /^      worker_setup: /) auth_worker_setup = 1
-      if ($0 ~ /^      worker_transfer_commit: /) auth_worker_transfer = 1
-      if ($0 ~ /^      commit: /) auth_commit = 1
-      if ($0 ~ /^      push: /) auth_push = 1
-      if ($0 ~ /^      create_pull_request: /) auth_pr = 1
-      if ($0 ~ /^      publish: /) auth_publish = 1
-      if ($0 ~ /^      deploy: /) auth_deploy = 1
-      if ($0 ~ /^      merge: /) auth_merge = 1
+      if ($0 ~ /^      create_branch: /) { auth_create_branch = 1; if ($0 != "      create_branch: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      create_worktree: /) { auth_create_worktree = 1; if ($0 != "      create_worktree: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      worker_setup: /) { auth_worker_setup = 1; value = $0; sub(/^      worker_setup: /, "", value); if (value != "not-authorized" && value != "PR" && value != "continue") auth_bad = 1 }
+      if ($0 ~ /^      worker_transfer_commit: /) { auth_worker_transfer = 1; value = $0; sub(/^      worker_transfer_commit: /, "", value); if (value != "not-authorized" && value != "PR" && value != "continue") auth_bad = 1 }
+      if ($0 ~ /^      commit: /) { auth_commit = 1; if ($0 != "      commit: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      push: /) { auth_push = 1; if ($0 != "      push: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      create_pull_request: /) { auth_pr = 1; if ($0 != "      create_pull_request: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      publish: /) { auth_publish = 1; if ($0 != "      publish: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      deploy: /) { auth_deploy = 1; if ($0 != "      deploy: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      merge: /) { auth_merge = 1; if ($0 != "      merge: not-authorized") auth_bad = 1 }
     }
     END {
       required(root, "worker_briefing root")
@@ -660,36 +668,43 @@ structural_validate() {
       required(profile != "", "return.profile")
       required(expected_output && expected_output_items > 0, "return.expected_output")
       required(forbidden_actions, "permissions.forbidden_actions")
+      required(allowed_read_action && allowed_validation_action, "read and validation permissions")
+      required(forbidden_action_count == 5 && forbidden_delivery && forbidden_recursion && forbidden_peer && forbidden_scope && forbidden_topology, "canonical forbidden permissions")
       if (profile == "READ_ONLY" || profile == "REVIEW") {
         if (profile == "REVIEW") required(role == "reviewer", "reviewer role for REVIEW profile")
         required(write_access == "read-only", "read-only profile permissions")
         required(topology == "SUBAGENTS" && write_isolation == "SHARED", "shared read-only execution")
-        required(!isolated, "omission of isolated_execution for read-only worker")
+        required(!isolated_seen, "omission of isolated_execution for read-only worker")
         required(!edit_action, "omission of edit permission for read-only worker")
         required(repository_none_write && !repository_non_none_write, "read-only allowed_writes omission")
+        required(!allowed_edit_action && allowed_action_count == 2, "read-only allowed actions")
       } else if (profile == "WRITABLE") {
         required(write_access == "read-write", "writable profile permissions")
         required(topology == "SUBAGENTS" && write_isolation == "SHARED", "shared writable execution")
-        required(!isolated, "omission of isolated_execution for shared writable worker")
+        required(!isolated_seen, "omission of isolated_execution for shared writable worker")
         required(edit_action, "edit permission for writable worker")
         required(!repository_none_write, "writable allowed_writes")
+        required(allowed_edit_action && allowed_action_count == 3, "writable allowed actions")
       } else if (profile == "ISOLATED_WRITABLE") {
         required(write_access == "read-write", "isolated writable profile permissions")
         required(topology == "ISOLATED" && write_isolation == "WORKTREE", "isolated writable execution")
-        required(isolated, "isolated_execution")
+        required(isolated_seen, "isolated_execution")
+        required(isolated_provider_value == "NATIVE" || isolated_provider_value == "HERDR", "isolated provider")
+        required(isolated_backend_value == "NATIVE" || isolated_backend_value == "HERDR", "isolated delegation backend")
         required(edit_action, "edit permission for isolated worker")
+        required(allowed_action_count == 3, "isolated writable allowed actions")
         required(isolated_provider && isolated_backend && isolated_path && isolated_branch && isolated_role && isolated_kind && isolated_integration_path && isolated_integration_branch, "isolated checkout fields")
         required(isolated_base && isolated_checkpoint && isolated_wave && isolated_order, "isolated Git fields")
         required(isolated_allowed_scope && isolated_forbidden_scope && isolated_shared && isolated_environment && isolated_authorization && isolated_transfer, "isolated safety sections")
         required(env_setup && env_copied && env_ports && env_databases && env_docker && env_temporary && env_external && env_cleanup, "isolated environment fields")
-        required(auth_create_branch && auth_create_worktree && auth_worker_setup && auth_worker_transfer && auth_commit && auth_push && auth_pr && auth_publish && auth_deploy && auth_merge, "isolated authorization fields")
+        required(auth_create_branch && auth_create_worktree && auth_worker_setup && auth_worker_transfer && auth_commit && auth_push && auth_pr && auth_publish && auth_deploy && auth_merge && !auth_bad, "isolated authorization fields")
         required(transfer_local && transfer_strategy && transfer_bundle && transfer_commits && transfer_sources && transfer_mapping, "isolated transfer fields")
       } else fatal("unknown result profile: " profile)
-      if (profile != "ISOLATED_WRITABLE") required(!isolated_provider && !isolated_backend && !isolated_path && !isolated_branch && !isolated_integration_path && !isolated_integration_branch && !isolated_base && !isolated_checkpoint && !isolated_environment && !isolated_authorization && !isolated_transfer, "omission of isolated-only fields")
+      if (profile != "ISOLATED_WRITABLE") required(!isolated_seen && !isolated_provider && !isolated_backend && !isolated_path && !isolated_branch && !isolated_integration_path && !isolated_integration_branch && !isolated_base && !isolated_checkpoint && !isolated_wave && !isolated_order && !isolated_allowed_scope && !isolated_forbidden_scope && !isolated_shared && !isolated_environment && !isolated_authorization && !isolated_transfer && !transfer_local && !transfer_strategy && !transfer_bundle && !transfer_commits && !transfer_sources && !transfer_mapping, "omission of isolated-only fields")
       if (profile == "READ_ONLY" || profile == "WRITABLE") required(contract == ".swe-forge/contracts/result.md", "result.md contract reference")
       if (profile == "REVIEW") required(contract == ".swe-forge/contracts/review.md", "review.md contract reference")
       if (profile == "ISOLATED_WRITABLE") required(contract == ".swe-forge/contracts/result-bundle.md", "result-bundle.md contract reference")
-      if (dependencies) required(dependency_child, "valid dependency inclusion")
+      if (dependencies_seen) required(dependency_child, "valid dependency inclusion")
       print "PASS: worker briefing is structurally valid"
     }
   ' "$brief"
