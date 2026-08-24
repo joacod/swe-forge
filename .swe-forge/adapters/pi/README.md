@@ -53,10 +53,10 @@ temporary-state locations. It chooses the newest active snapshot by
 An operator can therefore use an explicit state path without allowing an old
 pointer to override a newer run. On normal turns, an active matching snapshot
 is automatically used for continuation and recovery. An explicit new
-`/swe-forge ...` invocation is a fresh-run boundary: it fences the previously
-active `run_id` instead of injecting or trusting it during startup, and normal
-continuation resumes once the new invocation persists its own run-state with a
-different `run_id`.
+`/swe-forge ...` invocation is a fresh-run boundary: it fences the `run_id`s
+already active and discoverable for the checkout instead of injecting or
+trusting them during startup, and normal continuation resumes once the new
+invocation persists its own run-state with a different `run_id`.
 
 ## Invocation
 
