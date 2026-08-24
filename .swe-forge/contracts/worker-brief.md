@@ -1,27 +1,41 @@
 # Worker Briefing Projection
 
 This is a small worker-facing **projection schema**, not a second task
-contract. The canonical task contract and active run state remain the sole
-source of truth. The orchestrator renders one briefing from those sources for
-each bounded launch; a worker never edits the projection to change scope,
-authorization, topology, or acceptance.
+contract. The canonical task contract and active run state remain the source of
+truth. The root agent chooses the semantic task; the canonical renderer owns
+its mechanical launch projection.
 
-## Rendering boundary
+## Executable owner
 
-- Render the briefing immediately before launch from the assigned task and the
-  current run-state facts.
-- Include only the fields below that the worker's role, write access, and
-  execution mode require.
-- Preserve references to repository files and symbols so the worker can inspect
-  its allowed scope. Do not paste large file contents into the briefing.
-- Pass the briefing with the canonical role and the applicable result or review
-  contract. Do not pass the root transcript, unrelated ticket history, or the
-  complete SWE Forge specification merely because the orchestrator loaded it.
-- If a dependency is complete, derive its compact `dependency_digest` from the
-  accepted structured result and the assigned task's needs before rendering the
-  briefing; never forward the complete result.
-- The briefing cannot add acceptance criteria, widen scope, grant an action,
-  or replace the task contract; omitted fields remain root-owned state.
+Use the portable tool at `.swe-forge/tools/swe-forge-worker-brief` immediately
+before launch:
+
+```text
+swe-forge-worker-brief render --input FILE|- [--output FILE]
+swe-forge-worker-brief validate --brief FILE|- [--input FILE|-]
+```
+
+The transient `worker-brief-input/v1` record set supplies the semantic task,
+current canonical execution facts, current isolated-execution facts when
+applicable, and the root-selected dependency digest. The tool emits the
+canonical YAML `worker_briefing` projection. `validate --brief` checks a
+received projection structurally; adding `--input` re-renders the input and
+rejects any non-deterministic, scope-expanding, permission-changing, or
+incompatible projection. The tool's `--help` owns the record grammar; do not
+recreate it in an adapter or provider.
+
+The renderer mechanically owns schema/version, projection shape, mode and
+recursion defaults, permission/topology consequences, result-profile and
+contract selection, conditional isolated safety data, and dependency-result
+eligibility. Profile selection is deterministic: reviewer plus read-only is
+`REVIEW`, other read-only is `READ_ONLY`, shared read-write is `WRITABLE`, and
+isolated read-write is `ISOLATED_WRITABLE`. It does not decide whether an
+objective is good, whether acceptance is sufficient, whether a dependency fact
+is relevant, or whether delegation is appropriate.
+
+Pass the validated output unchanged with the canonical role and applicable
+result/review contract. Do not pass the root transcript, unrelated ticket
+history, complete run state, or large pasted repository files.
 
 ## Projection schema
 
@@ -30,22 +44,22 @@ worker_briefing:
   schema: worker-brief/v1
   task_id: <assigned task identifier>
   worker:
-    role: <canonical role name>
-    mode: delegated_worker | root_orchestrator
+    role: <canonical role name selected for the task>
+    mode: delegated_worker
     depth: <depth from root owner>
     recursive_delegation: false
-  objective: <one bounded objective>
+  objective: <one bounded objective selected by the root>
   acceptance:
-    - <relevant checkable criterion copied from the task contract>
+    - <relevant checkable criterion selected by the root>
   repository:
     instructions:
       - <relevant AGENTS.md, CONTRIBUTING.md, or local instruction path>
     allowed_reads:
-      - <repository-relative path, symbol, or command scope>
+      - <repository-relative path, symbol, or command scope selected by the root>
     allowed_writes:
       - <repository-relative path or none>
   architecture_decisions:
-    - <only a decision that affects this task>
+    - <only a root decision that affects this task>
   dependencies:
     completed:
       - task_id: <accepted dependency task in status done>
@@ -66,7 +80,6 @@ worker_briefing:
             - <unresolved blocker or risk that affects B>
           source_refs:
             - <accepted result or evidence reference for deeper inspection>
-        # Omit empty digest categories; source_refs are references, not copied content.
     pending:
       - <dependency or none>
   validation:
@@ -76,22 +89,20 @@ worker_briefing:
       side_effects: local-only | external-read | external-write | destructive
   permissions:
     write_access: read-only | read-write
-    # Derived at launch from the current run state; never copied from the task.
     topology: SOLO | SUBAGENTS | ISOLATED
-    # The current run-state write boundary, projected for this launch.
     write_isolation: SHARED | WORKTREE
     allowed_actions:
-      - <read, edit, validation, or other explicitly assigned action>
+      - <mechanically derived read/edit/validation action>
     forbidden_actions:
-      - <delivery, recursion, or other prohibited action>
+      - <mechanically derived delivery, recursion, or scope prohibition>
   return:
-    profile: <READ_ONLY | WRITABLE | ISOLATED_WRITABLE | REVIEW, derived from result.md>
-    contract: <canonical result.md or review.md path>
+    profile: READ_ONLY | WRITABLE | ISOLATED_WRITABLE | REVIEW
+    contract: <canonical result.md, result-bundle.md, or review.md path>
     expected_output:
       - <structured fields the orchestrator will consume>
 
-  # Include this section only for an ISOLATED read-write worker. It is not
-  # present for read-only or non-isolated workers.
+  # Present only for an ISOLATED writable worker. The renderer treats this
+  # safety section as all-or-nothing.
   isolated_execution:
     provider: NATIVE | HERDR
     delegation_backend: NATIVE | HERDR
@@ -142,38 +153,52 @@ worker_briefing:
       source_to_integration_mapping: required
 ```
 
+## Root-selected semantic content
+
+The root remains responsible for the objective, task decomposition, canonical
+role, depth and ownership, relevant acceptance criteria, repository
+instructions, allowed reads and writes, architecture decisions, validation
+entries, expected result fields, dependency relevance, and the decision to
+delegate. These are copied or checked, not inferred from a prompt or a
+provider. The renderer does not replace task or run state and cannot grant
+scope or authority.
+
 ## Dependency digest rules
 
 `dependencies.completed` contains one digest per completed dependency that is
-relevant to the assigned task. The root orchestrator renders it only after the
-dependency's structured result is accepted and only selects entries that B
-needs for its objective or acceptance criteria. A digest is transient launch
-context; it is not persisted as a task-to-task message, and its source result
-remains root-owned.
+relevant to the assigned task. The root renders it only after the dependency's
+structured result is accepted and selects entries that the next worker needs
+for its objective or acceptance criteria. The digest is transient launch
+context; it is not persisted as a task-to-task message.
 
-The digest must omit reasoning transcripts, exploration history, unrelated
-findings, full test logs, full diffs when paths or commits are enough, and
-delivery metadata unrelated to B. It must not grant B new scope, permissions,
-authority, or a way to contact A. B must request a contract revision before
-expanding scope even when the digest points to additional material.
+The digest may contain only concise, accepted B-relevant entries: accepted
+decisions, relevant facts, changed interfaces, paths or symbols,
+authoritative assumptions, validation facts, unresolved risks, and source
+references. It must omit reasoning transcripts, exploration history, unrelated
+findings, full logs, full diffs, and unrelated delivery metadata. It cannot
+grant new scope, permissions, authority, or a peer communication channel.
+
+The renderer rejects a digest for an undeclared, incomplete, or unaccepted
+dependency. It does not decide which accepted facts are relevant.
 
 ## Inclusion rules
 
+The renderer owns this inclusion matrix. Other workflow, policy, adapter, and
+provider files point here rather than repeating it.
+
 | Worker | Include | Omit |
 | --- | --- | --- |
-| Read-only | role, objective, relevant acceptance, repository instructions, allowed reads, relevant architecture/dependencies, assigned validation, read-only permissions, return shape | writable scope/actions, delivery authorization, provider state, worktree/base/transfer state, unrelated run continuation |
-| Non-isolated read-write | the common fields plus allowed writes, assigned write/validation permissions, and any current checkout fact needed to edit safely | isolated provider, worktree, integration-order, environment-isolation, and transfer fields |
-| Isolated read-write | the common fields plus the complete `isolated_execution` section | unrelated root state and transcript |
+| Read-only | common semantic fields, read-only permissions, selected result/review contract | writable scope/actions, provider state, worktree/base/transfer state, isolated execution |
+| Non-isolated read-write | common fields, allowed writes, shared-checkout permissions, writable result contract | isolated provider, worktree, integration-order, environment-isolation, and transfer fields |
+| Isolated read-write | common fields, writable permissions, complete isolated safety section, result bundle contract | unrelated root state and transcript |
 
-`isolated_execution` is an all-or-nothing safety section. Do not shorten it
-when the worker is writable: exact Git identity and base, ownership, runtime
-resource isolation, per-action authorization, local-only transfer, and result
-requirements must travel together. If a required value is unavailable, do not
-invent it; block or serialize the task through the normal workflow.
+`isolated_execution` is all-or-nothing. Missing provider, exact Git/base,
+ownership, resource-isolation, authorization, local-transfer, or result fields
+blocks rendering rather than being guessed. Read-only and shared writable
+briefs must not acquire provider or worktree fields merely because the root
+knows them.
 
-The `return.profile` value is a pointer to the selected canonical contract,
-not a new result schema. `READ_ONLY` and `WRITABLE` use `result.md`,
-`ISOLATED_WRITABLE` uses the complete `result-bundle.md`, and `REVIEW` uses
-`review.md`. A worker may discover implementation details with its allowed
-repository tools. The root supplies pointers and decisions, not an exploration
-transcript.
+Workers discover implementation details through their allowed paths and
+symbols. They must request a contract revision before expanding scope and must
+not create PRs, push, merge, publish, deploy, reroute, redo root discovery, or
+spawn descendants by default.

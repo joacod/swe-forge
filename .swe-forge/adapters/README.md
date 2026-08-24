@@ -47,9 +47,11 @@ or reviewing a host projection:
   portable invocation parser/bootstrap primitive
 - [`workflows/ticket.md`](../workflows/ticket.md) — normalized-fact ingestion,
   sequencing, and conditional source loads
-- [`policies/delegation.md`](../policies/delegation.md) and
-  [`contracts/worker-brief.md`](../contracts/worker-brief.md) — bounded worker
-  context and dependency handoffs
+- [`tools/swe-forge-worker-brief`](../tools/swe-forge-worker-brief) and
+  [`contracts/worker-brief.md`](../contracts/worker-brief.md) — canonical worker
+  briefing rendering, validation, bounded context, and dependency handoffs
+- [`policies/delegation.md`](../policies/delegation.md) — semantic delegation
+  boundaries and root-owned dependency selection
 - [`policies/delivery.md`](../policies/delivery.md) — delivery and local-resource
   authorization
 - [`policies/context.md`](../policies/context.md) — continuation and compaction

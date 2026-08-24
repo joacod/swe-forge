@@ -137,7 +137,35 @@ import { pathToFileURL } from "node:url";
 const root = process.argv[2];
 const fixtureCwd = process.argv[3];
 const modulePath = path.join(root, ".swe-forge", "adapters", "pi", "extensions", "swe-forge-runtime.ts");
+const workerBriefTool = path.join(root, ".swe-forge", "tools", "swe-forge-worker-brief");
 const { default: extension } = await import(pathToFileURL(modulePath).href);
+
+function renderWorkerBriefing({ taskId, role, writeAccess, allowedRead, allowedWrite }) {
+  const inputPath = path.join(fixtureCwd, "brief-inputs", `${taskId}.input`);
+  const records = [
+    "worker-brief-input/v1",
+    `task\tid\t${taskId}`,
+    `task\towner_role\t${role}`,
+    "task\tdepth\t1",
+    `task\tobjective\tBounded ${taskId} worker objective.`,
+    `task\twrite_access\t${writeAccess}`,
+    "task\tacceptance\tThe worker stays within the generated briefing scope.",
+    "task\tinstruction\tAGENTS.md",
+    `task\tallowed_read\t${allowedRead}`,
+    ...(allowedWrite ? [`task\tallowed_write\t${allowedWrite}`] : []),
+    "task\texpected_output\tstructured result evidence",
+    "task\tvalidation\tscripts/test-swe-forge-briefing\trequired\talways\tlocal-only",
+    "state\trouting.current\tSUBAGENTS",
+    "state\twrite_isolation\tSHARED",
+    "state\texecution_provider\tNONE",
+    "state\tdelegation_backend\tNATIVE",
+    "state\tparallel_strategy\tNONE",
+    "state\tintegration_strategy\tNONE",
+  ];
+  fs.mkdirSync(path.dirname(inputPath), { recursive: true });
+  fs.writeFileSync(inputPath, records.join("\n") + "\n");
+  return execFileSync(workerBriefTool, ["render", "--input", inputPath], { encoding: "utf8" });
+}
 const testHome = path.join(fixtureCwd, "home");
 fs.mkdirSync(path.join(testHome, ".pi", "agent"), { recursive: true });
 process.env.HOME = testHome;
@@ -627,6 +655,13 @@ const subagentPi = {
   appendEntry(type, data) {
     subagentEntries.push({ type, data });
   },
+  exec(command, args) {
+    try {
+      return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), stderr: "" };
+    } catch (error) {
+      return { code: error?.status ?? 1, stdout: error?.stdout?.toString?.() ?? "", stderr: error?.stderr?.toString?.() ?? "" };
+    }
+  },
 };
 extension(subagentPi);
 const subagentContext = {
@@ -671,20 +706,12 @@ await subagentHandlers.get("tool_result")({
   details: capabilityDetails,
   isError: false,
 }, subagentContext);
-const workerBriefingContract = `worker_briefing:
-  schema: worker-brief/v1
-  task_id: reader-check
-  worker:
-    role: reader
-    mode: delegated_worker
-    depth: 1
-    recursive_delegation: false
-  objective: inspect only
-  permissions:
-    write_access: read-only
-    topology: SUBAGENTS
-    write_isolation: SHARED
-`;
+const workerBriefingContract = renderWorkerBriefing({
+  taskId: "reader-check",
+  role: "reader",
+  writeAccess: "read-only",
+  allowedRead: "src/parser.ts#parseRecord",
+});
 const runInput = {
   action: "run",
   role: "reader",
@@ -697,6 +724,16 @@ const allowedRun = await subagentHandlers.get("tool_call")({
   input: runInput,
 }, subagentContext);
 if (allowedRun) throw new Error(`negotiated SUBAGENTS run was blocked: ${allowedRun.reason}`);
+const invalidBriefRun = await subagentHandlers.get("tool_call")({
+  toolName: "swe_forge_subagent",
+  input: {
+    ...runInput,
+    workerBriefing: workerBriefingContract.replace(/^  objective:.*$/m, ""),
+  },
+}, subagentContext);
+if (!invalidBriefRun?.block || !invalidBriefRun.reason.includes("Canonical worker briefing validation failed")) {
+  throw new Error("invalid canonical worker briefing was not rejected by the Pi adapter");
+}
 
 // The adapter requires the new wire field and does not accept the old name as
 // an alias. The companion runtime owns the deeper worker-briefing checks.
@@ -729,6 +766,9 @@ const noStatePi = {
   },
   getActiveTools() {
     return ["swe_forge_subagent"];
+  },
+  exec(command, args) {
+    return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), stderr: "" };
   },
 };
 extension(noStatePi);
@@ -792,20 +832,13 @@ process.env.SWE_FORGE_RUN_STATE = subagentState;
 const writableInput = {
   action: "run",
   role: "writer",
-  workerBriefing: `worker_briefing:
-  schema: worker-brief/v1
-  task_id: writer-check
-  worker:
-    role: writer
-    mode: delegated_worker
-    depth: 1
-    recursive_delegation: false
-  objective: bounded write
-  permissions:
-    write_access: read-write
-    topology: SUBAGENTS
-    write_isolation: SHARED
-`,
+  workerBriefing: renderWorkerBriefing({
+    taskId: "writer-check",
+    role: "writer",
+    writeAccess: "read-write",
+    allowedRead: "src/parser.ts",
+    allowedWrite: "src/parser.ts",
+  }),
   expectedOutputContract: "result",
   profile: "WRITABLE",
 };

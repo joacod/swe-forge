@@ -44,18 +44,14 @@ worktree identity, and environment isolation. All tasks in one wave start from
 the same exact integration SHA. Integration follows dependencies and the
 recorded plan; completion order never determines integration order.
 
-Immediately before launch, render the `worker_briefing` projection from the
-canonical task and run state. For a task with completed dependencies, the root
-adds only the B-relevant `dependency_digest` derived from each accepted
-structured result; it never forwards a full result or opens a worker channel.
-An isolated writable briefing must include the complete `isolated_execution`
-safety section from `../contracts/worker-brief.md`: provider/backend, worker and
-integration Git identity, exact base and checkpoint SHAs, ownership,
-environment isolation, per-action authorization, local-only transfer,
-integration order, and result bundle. The digest is additive and does not
-shorten those fields, expand scope, or change the central integration plan. It
-must still omit unrelated root state, transcripts, ticket history, and pasted
-repository contents.
+Immediately before launch, write the transient `worker-brief-input/v1`
+records and invoke `../tools/swe-forge-worker-brief`. The renderer validates
+that the current state and isolated execution facts are consistent, includes
+the complete `isolated_execution` safety section, and rejects missing fields;
+it owns the inclusion matrix. The root accepts completed results and selects
+only B-relevant digest entries. Send the validated output unchanged with the
+canonical role and result-bundle contract; never forward a full result,
+transcript, unrelated state, ticket history, or pasted repository contents.
 
 ## Worker lifecycle
 
@@ -65,9 +61,9 @@ For each ready wave:
    exact recorded base
 2. keep workers out of the integration checkout and prohibit worker delivery
    actions
-3. send each worker only its rendered briefing (including any compact,
-   accepted dependency digest), canonical role, relevant repository-instruction
-   references, and fixed result-bundle contract; workers never message peers
+3. send each worker only the validated renderer output, canonical role,
+   relevant repository-instruction references, and fixed result-bundle
+   contract; workers never message peers
 4. collect one fixed `result/` bundle per writable worker
 5. run `swe-forge-isolated-gate validate-result`, which checks actual worktree
    and branch identity, exact base/head, declared commits and changed paths,

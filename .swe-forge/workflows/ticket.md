@@ -179,17 +179,16 @@ non-overlapping. Otherwise use sequential waves or `SOLO`; unsettled shared
 architecture, contracts, schemas, lockfiles, or generated artifacts require
 foundation work first.
 
-Before launching any worker, render the compact `worker_briefing` projection
-from the canonical task contract and current run-state facts using
-`.swe-forge/contracts/worker-brief.md`. If a task has completed dependencies,
-first accept each dependency's structured result and derive only the
-B-relevant `dependency_digest` entries for `dependencies.completed`; do not
-forward the dependency's complete result. Pass only that projection, the
-applicable canonical role, relevant repository-instruction references, and the
-result/review contract. Do not forward the root transcript, unrelated ticket
-history, the full SWE Forge specification, or pasted repository contents. A
-digest is transient launch context and does not expand the worker contract or
-create a peer communication channel.
+Before launching any worker, write the transient `worker-brief-input/v1`
+records from the semantic task, current run-state facts, current execution
+facts, and any root-selected dependency digest, then invoke
+`.swe-forge/tools/swe-forge-worker-brief render`. Validate the generated output
+with the same tool and pass it unchanged with the applicable canonical role and
+result/review contract. The tool owns the mechanical projection and inclusion
+matrix. The root still accepts dependency results and selects only B-relevant
+digest entries; the digest is transient and cannot expand scope or create a
+peer channel. Do not forward the root transcript, unrelated ticket history,
+full specification, or pasted repository contents.
 
 ### 6. Route
 
@@ -297,7 +296,7 @@ record the pre-edit baseline, and use the one permitted task or integration
 branch. Preserve dirty, detached, protected, or ambiguous state instead of
 resetting, stashing, cleaning, or overwriting it.
 
-Delegated workers receive only the rendered worker briefing and the
+Delegated workers receive only the validated renderer output and the
 applicable canonical role/result contract. When a dependency completes, record
 its accepted result reference in the root-owned run-state task graph and derive
 future digests at the next launch; do not persist a per-ticket handoff file.

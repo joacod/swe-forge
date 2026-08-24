@@ -1,0 +1,794 @@
+#!/bin/sh
+
+# Canonical worker-brief/v1 renderer and structural validator.
+# The input is a transient, tab-separated worker-brief-input/v1 record set. It
+# keeps semantic task data, current canonical execution facts, and the selected
+# dependency digest structured without introducing a persistence format.
+
+set -eu
+
+PROGRAM=${0##*/}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-worker-brief.XXXXXX")
+
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+trap cleanup EXIT HUP INT TERM
+
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  swe-forge-worker-brief render --input FILE|- [--output FILE]
+  swe-forge-worker-brief validate --brief FILE|- [--input FILE|-]
+
+`render` accepts one transient worker-brief-input/v1 record set and writes a
+canonical worker_briefing YAML projection to stdout or --output. `validate`
+checks a generated projection structurally. When --input is supplied, it also
+re-renders the input and rejects any non-canonical, scope-expanding, or
+permission-changing projection.
+
+Input records are tab-separated and use these forms:
+  worker-brief-input/v1
+  task      <field> <value>
+  task      validation <command> <requirement> <condition> <side_effects>
+  task      shared_artifact <artifact> <owner>
+  state     <canonical execution-state field> <value>
+  state     dependency <task_id> <status> <accepted_result_ref>
+  execution <field> <value>
+  execution shared_artifact <artifact> <owner>
+  digest    <task_id> <category> <selected dependency fact>
+
+Repeated task fields provide ordered lists. The canonical input fields are
+listed by `worker-brief.md` and are intentionally limited to semantic task
+content, canonical state facts, current isolated-execution facts, and the
+root-selected dependency digest. Values may not contain tabs or newlines.
+EOF
+}
+
+copy_input() {
+  source=$1
+  destination=$2
+  if [ "$source" = - ]; then
+    cat >"$destination"
+  else
+    [ -f "$source" ] || fail "input file does not exist: $source"
+    cp "$source" "$destination"
+  fi
+}
+
+render_input() {
+  input=$1
+  output=$2
+  awk -F '\t' '
+    function fatal(message) {
+      print "FAIL: " message > "/dev/stderr"
+      exit 1
+    }
+    function clean(value,    result) {
+      result = value
+      if (index(result, "\r") || index(result, "\n")) fatal("input values may not contain control characters")
+      sub(/^[[:space:]]+/, "", result)
+      sub(/[[:space:]]+$/, "", result)
+      if (result == "") fatal("input values may not be empty")
+      return result
+    }
+    function set_scalar(key, value) {
+      if (key in scalar) fatal("duplicate input field: " key)
+      scalar[key] = clean(value)
+    }
+    function add_list(key, value,    n) {
+      n = ++list_count[key]
+      list[key, n] = clean(value)
+    }
+    function add_digest(task_id, category, value,    key, n) {
+      key = task_id SUBSEP category
+      if (!(task_id in digest_task_seen)) {
+        digest_task_seen[task_id] = 1
+        digest_task[++digest_task_count] = task_id
+      }
+      if (!(key in digest_seen)) digest_seen[key] = 1
+      n = ++digest_count[key]
+      digest[key, n] = clean(value)
+    }
+    function require_scalar(key, label) {
+      if (!(key in scalar) || scalar[key] == "") fatal("missing " label)
+      return scalar[key]
+    }
+    function list_contains(key, value,    i) {
+      for (i = 1; i <= list_count[key]; i++) if (list[key, i] == value) return 1
+      return 0
+    }
+    function valid_sha(value, label) {
+      if (value !~ /^[0-9A-Fa-f]+$/ || length(value) != 40) fatal(label " must be a full 40-character SHA")
+    }
+    function valid_requirement(value) {
+      if (value != "required" && value != "conditional" && value != "informational") fatal("invalid validation requirement: " value)
+    }
+    function valid_side_effect(value) {
+      if (value != "local-only" && value != "external-read" && value != "external-write" && value != "destructive") fatal("invalid validation side effect: " value)
+    }
+    function valid_dependency_status(value) {
+      if (value != "pending" && value != "ready" && value != "running" && value != "blocked" && value != "done" && value != "failed" && value != "skipped") fatal("invalid dependency status: " value)
+    }
+    function yaml_quote(value,    result, quote) {
+      result = value
+      quote = sprintf("%c", 39)
+      gsub(quote, quote quote, result)
+      return quote result quote
+    }
+    function indent(level) {
+      return sprintf("%*s", level, "")
+    }
+    function print_list(level, label, key,    i) {
+      if (list_count[key] == 0) {
+        print indent(level) label ": []"
+        return
+      }
+      print indent(level) label ":"
+      for (i = 1; i <= list_count[key]; i++) print indent(level + 2) "- " yaml_quote(list[key, i])
+    }
+    function print_execution_list(level, label, key,    i) {
+      if (list_count["execution." key] == 0) {
+        print indent(level) label ": []"
+        return
+      }
+      print indent(level) label ":"
+      for (i = 1; i <= list_count["execution." key]; i++) print indent(level + 2) "- " yaml_quote(list["execution." key, i])
+    }
+    function task_scope_matches_execution(task_key, execution_key, label,    i) {
+      if (list_count[task_key] != list_count[execution_key]) fatal(label " does not match the canonical task scope")
+      for (i = 1; i <= list_count[task_key]; i++) if (!list_contains(execution_key, list[task_key, i])) fatal(label " expands the canonical task scope")
+      for (i = 1; i <= list_count[execution_key]; i++) if (!list_contains(task_key, list[execution_key, i])) fatal(label " expands the canonical task scope")
+    }
+    function artifacts_match(    i, j, found) {
+      if (task_artifact_count != exec_artifact_count) fatal("isolated shared_artifacts do not match the canonical task")
+      for (i = 1; i <= task_artifact_count; i++) {
+        found = 0
+        for (j = 1; j <= exec_artifact_count; j++) {
+          if (task_artifact[i] == exec_artifact[j] && task_artifact_owner[i] == exec_artifact_owner[j]) found = 1
+        }
+        if (!found) fatal("isolated shared_artifacts expand or change the canonical task")
+      }
+    }
+    function require_execution_scalar(key, label) {
+      if (!("execution." key in scalar) || scalar["execution." key] == "") fatal("missing isolated execution field: " label)
+      return scalar["execution." key]
+    }
+    function require_authorization(action,    key, value) {
+      key = "execution.authorization." action
+      if (!(key in scalar)) fatal("missing isolated authorization field: " action)
+      value = scalar[key]
+      if (action == "worker_setup" || action == "worker_transfer_commit") {
+        if (value != "not-authorized" && value != "PR" && value != "continue") fatal("invalid isolated authorization: " action)
+      } else if (value != "not-authorized") {
+        fatal("isolated worker may not authorize " action)
+      }
+      return value
+    }
+    function validate_input(    top, access, i, id, key, category, status, ref, action, value, required_categories) {
+      if (!header_seen) fatal("input is missing worker-brief-input/v1 header")
+
+      require_scalar("task.id", "task id")
+      require_scalar("task.owner_role", "task owner role")
+      require_scalar("task.depth", "task depth")
+      require_scalar("task.objective", "task objective")
+      access = require_scalar("task.write_access", "task write_access")
+      if (access != "read-only" && access != "read-write") fatal("task write_access must be read-only or read-write")
+      if (scalar["task.depth"] !~ /^[0-9]+$/ || scalar["task.depth"] < 1) fatal("task depth must be a positive integer")
+      if (list_count["task.acceptance"] == 0) fatal("task acceptance must contain at least one criterion")
+      if (list_count["task.allowed_read"] == 0) fatal("task allowed_read must contain at least one scope")
+      if (access == "read-only" && list_count["task.allowed_write"] > 0) fatal("read-only task cannot declare allowed writes")
+      if (access == "read-write" && list_count["task.allowed_write"] == 0) fatal("writable task must declare allowed writes")
+      if (list_count["task.expected_output"] == 0) fatal("task expected_output must contain at least one field")
+      if (validation_count == 0) fatal("task validation must contain at least one check")
+      for (i = 1; i <= validation_count; i++) {
+        if (validation_command[i] == "") fatal("validation command may not be empty")
+        valid_requirement(validation_requirement[i])
+        if (validation_condition[i] == "") fatal("validation condition may not be empty")
+        valid_side_effect(validation_side_effects[i])
+      }
+      for (i = 1; i <= list_count["task.allowed_write"]; i++) {
+        if (list["task.allowed_write", i] == "none" || list_contains("task.forbidden_scope", list["task.allowed_write", i])) fatal("task allowed write expands into forbidden scope")
+      }
+      top = require_scalar("state.routing.current", "current topology")
+      if (top != "SOLO" && top != "SUBAGENTS" && top != "ISOLATED") fatal("invalid current topology: " top)
+      require_scalar("state.write_isolation", "write isolation")
+      require_scalar("state.execution_provider", "execution provider")
+      require_scalar("state.delegation_backend", "delegation backend")
+      require_scalar("state.parallel_strategy", "parallel strategy")
+      require_scalar("state.integration_strategy", "integration strategy")
+      if (top == "SOLO") {
+        if (scalar["state.write_isolation"] != "SHARED" || scalar["state.execution_provider"] != "NONE" || scalar["state.delegation_backend"] != "NONE" || scalar["state.parallel_strategy"] != "NONE" || scalar["state.integration_strategy"] != "NONE") fatal("SOLO execution facts are inconsistent")
+        fatal("delegated worker briefing cannot launch from SOLO topology")
+      } else if (top == "SUBAGENTS") {
+        if (scalar["state.write_isolation"] != "SHARED" || scalar["state.execution_provider"] != "NONE" || scalar["state.parallel_strategy"] != "NONE" || scalar["state.integration_strategy"] != "NONE") fatal("SUBAGENTS execution facts are inconsistent")
+        if (scalar["state.delegation_backend"] != "NONE" && scalar["state.delegation_backend"] != "NATIVE" && scalar["state.delegation_backend"] != "HERDR" && scalar["state.delegation_backend"] != "OTHER") fatal("invalid SUBAGENTS delegation backend")
+        if (access == "read-write" && list_count["task.allowed_write"] == 0) fatal("shared writable worker is missing write scope")
+      } else {
+        if (access != "read-write") fatal("read-only worker cannot receive isolated permissions")
+        if (scalar["state.write_isolation"] != "WORKTREE" || (scalar["state.execution_provider"] != "NATIVE" && scalar["state.execution_provider"] != "HERDR") || (scalar["state.delegation_backend"] != "NATIVE" && scalar["state.delegation_backend"] != "HERDR") || scalar["state.parallel_strategy"] != "COMPOSE" || scalar["state.integration_strategy"] != "CHERRY_PICK") fatal("ISOLATED execution facts are inconsistent")
+      }
+      if (scalar["task.owner_role"] == "reviewer" && access != "read-only") fatal("review worker must be read-only")
+
+      for (i = 1; i <= task_dependency_count; i++) {
+        id = task_dependency[i]
+        if (!(id in dependency_status)) fatal("missing canonical state for dependency: " id)
+        status = dependency_status[id]
+        ref = dependency_ref[id]
+        valid_dependency_status(status)
+        if (status == "done") {
+          if (ref == "" || ref == "none" || ref == "NONE") fatal("completed dependency lacks accepted result evidence: " id)
+        } else if (ref != "" && ref != "none" && ref != "NONE") fatal("non-completed dependency has accepted result evidence: " id)
+      }
+      for (i = 1; i <= dependency_state_count; i++) {
+        id = dependency_state_id[i]
+        if (!list_contains("task.dependencies", id)) fatal("canonical state contains an undeclared dependency: " id)
+      }
+      for (i = 1; i <= digest_task_count; i++) {
+        id = digest_task[i]
+        if (!list_contains("task.dependencies", id)) fatal("dependency digest is outside the canonical task dependencies: " id)
+        if (dependency_status[id] != "done" || dependency_ref[id] == "" || dependency_ref[id] == "none" || dependency_ref[id] == "NONE") fatal("dependency digest requires accepted result evidence: " id)
+      }
+      for (key in digest_count) {
+        split(key, key_parts, SUBSEP)
+        category = key_parts[2]
+        if (category != "accepted_decisions" && category != "relevant_facts" && category != "changed_interfaces" && category != "paths_symbols" && category != "authoritative_assumptions" && category != "validation_facts" && category != "unresolved_risks" && category != "source_refs") fatal("invalid dependency digest category: " category)
+      }
+
+      if (top == "ISOLATED") {
+        require_execution_scalar("provider", "provider")
+        require_execution_scalar("delegation_backend", "delegation_backend")
+        if (scalar["execution.provider"] != scalar["state.execution_provider"]) fatal("isolated provider does not match canonical state")
+        if (scalar["execution.delegation_backend"] != scalar["state.delegation_backend"]) fatal("isolated delegation backend does not match canonical state")
+        require_execution_scalar("checkout.path", "checkout.path")
+        require_execution_scalar("checkout.branch", "checkout.branch")
+        require_execution_scalar("checkout.worktree_role", "checkout.worktree_role")
+        require_execution_scalar("checkout.worktree_kind", "checkout.worktree_kind")
+        require_execution_scalar("checkout.integration_path", "checkout.integration_path")
+        require_execution_scalar("checkout.integration_branch", "checkout.integration_branch")
+        if (scalar["execution.checkout.worktree_role"] != "worker" || scalar["execution.checkout.worktree_kind"] != "worker") fatal("isolated checkout must identify a worker worktree")
+        if (scalar["execution.checkout.path"] !~ /^\// || scalar["execution.checkout.integration_path"] !~ /^\//) fatal("isolated checkout paths must be absolute")
+        require_execution_scalar("git.base_sha", "git.base_sha")
+        require_execution_scalar("git.integration_checkpoint_sha", "git.integration_checkpoint_sha")
+        require_execution_scalar("git.wave", "git.wave")
+        require_execution_scalar("git.integration_order", "git.integration_order")
+        valid_sha(scalar["execution.git.base_sha"], "isolated base_sha")
+        valid_sha(scalar["execution.git.integration_checkpoint_sha"], "isolated integration_checkpoint_sha")
+        if (scalar["execution.git.wave"] !~ /^[0-9]+$/ || scalar["execution.git.wave"] < 1) fatal("isolated wave must be a positive integer")
+        if (scalar["execution.git.integration_order"] !~ /^[0-9]+$/ || scalar["execution.git.integration_order"] < 1) fatal("isolated integration_order must be a positive integer")
+        task_scope_matches_execution("task.allowed_write", "execution.ownership.allowed_scope", "isolated allowed_scope")
+        task_scope_matches_execution("task.forbidden_scope", "execution.ownership.forbidden_scope", "isolated forbidden_scope")
+        artifacts_match()
+        for (action in required_authorizations) require_authorization(action)
+        if (scalar["execution.transfer.local_only"] != "true") fatal("isolated transfer must be local_only: true")
+        if (scalar["execution.transfer.integration_strategy"] != scalar["state.integration_strategy"]) fatal("isolated transfer strategy does not match canonical state")
+        if (scalar["execution.transfer.integration_strategy"] != "CHERRY_PICK") fatal("isolated transfer must use CHERRY_PICK")
+        require_execution_scalar("transfer.result_bundle", "transfer.result_bundle")
+        if (scalar["execution.transfer.required_deliverable_commits"] != "true") fatal("isolated transfer requires deliverable commits")
+        if (scalar["execution.transfer.source_to_integration_mapping"] != "required") fatal("isolated transfer requires source-to-integration mapping")
+      }
+    }
+    function emit_input(    i, id, status, key, category, j, pending_count, completed_count, any_digest, access, profile, contract, top, action, value) {
+      top = scalar["state.routing.current"]
+      access = scalar["task.write_access"]
+      if (scalar["task.owner_role"] == "reviewer") profile = "REVIEW"
+      else if (access == "read-only") profile = "READ_ONLY"
+      else if (top == "ISOLATED") profile = "ISOLATED_WRITABLE"
+      else profile = "WRITABLE"
+      if (profile == "REVIEW") contract = ".swe-forge/contracts/review.md"
+      else if (profile == "ISOLATED_WRITABLE") contract = ".swe-forge/contracts/result-bundle.md"
+      else contract = ".swe-forge/contracts/result.md"
+
+      print "worker_briefing:"
+      print "  schema: worker-brief/v1"
+      print "  task_id: " yaml_quote(scalar["task.id"])
+      print "  worker:"
+      print "    role: " yaml_quote(scalar["task.owner_role"])
+      print "    mode: delegated_worker"
+      print "    depth: " scalar["task.depth"]
+      print "    recursive_delegation: false"
+      print "  objective: " yaml_quote(scalar["task.objective"])
+      print "  acceptance:"
+      for (i = 1; i <= list_count["task.acceptance"]; i++) print "    - " yaml_quote(list["task.acceptance", i])
+      print "  repository:"
+      print_list(4, "instructions", "task.instruction")
+      print_list(4, "allowed_reads", "task.allowed_read")
+      if (access == "read-only") {
+        print "    allowed_writes:"
+        print "      - 'none'"
+      } else print_list(4, "allowed_writes", "task.allowed_write")
+      print_list(2, "architecture_decisions", "task.architecture_decision")
+
+      any_digest = 0
+      for (i = 1; i <= digest_task_count; i++) {
+        id = digest_task[i]
+        for (key in digest_count) {
+          split(key, key_parts, SUBSEP)
+          if (key_parts[1] == id && digest_count[key] > 0) any_digest = 1
+        }
+      }
+      pending_count = 0
+      for (i = 1; i <= task_dependency_count; i++) if (dependency_status[task_dependency[i]] != "done") pending_id[++pending_count] = task_dependency[i]
+      if (any_digest || pending_count > 0) {
+        print "  dependencies:"
+        if (any_digest) {
+          print "    completed:"
+          for (i = 1; i <= task_dependency_count; i++) {
+            id = task_dependency[i]
+            if (dependency_status[id] != "done") continue
+            has_digest = 0
+            for (key in digest_count) {
+              split(key, key_parts, SUBSEP)
+              if (key_parts[1] == id && digest_count[key] > 0) has_digest = 1
+            }
+            if (!has_digest) continue
+            print "      - task_id: " yaml_quote(id)
+            print "        dependency_digest:"
+            for (category_index = 1; category_index <= 8; category_index++) {
+              category = digest_categories[category_index]
+              key = id SUBSEP category
+              if (digest_count[key] == 0) continue
+              print "          " category ":"
+              for (j = 1; j <= digest_count[key]; j++) print "            - " yaml_quote(digest[key, j])
+            }
+          }
+        }
+        if (pending_count > 0) {
+          print "    pending:"
+          for (i = 1; i <= pending_count; i++) print "      - " yaml_quote(pending_id[i])
+        }
+      }
+
+      print "  validation:"
+      for (i = 1; i <= validation_count; i++) {
+        print "    - command: " yaml_quote(validation_command[i])
+        print "      requirement: " validation_requirement[i]
+        print "      condition: " yaml_quote(validation_condition[i])
+        print "      side_effects: " validation_side_effects[i]
+      }
+      print "  permissions:"
+      print "    write_access: " access
+      print "    topology: " top
+      print "    write_isolation: " scalar["state.write_isolation"]
+      print "    allowed_actions:"
+      print "      - read"
+      if (access == "read-write") print "      - edit"
+      print "      - validation"
+      print "    forbidden_actions:"
+      print "      - delivery"
+      print "      - recursive delegation"
+      print "      - peer communication"
+      print "      - scope expansion"
+      print "      - topology decisions"
+      print "  return:"
+      print "    profile: " profile
+      print "    contract: " contract
+      print_list(4, "expected_output", "task.expected_output")
+
+      if (profile == "ISOLATED_WRITABLE") {
+        print "  isolated_execution:"
+        print "    provider: " scalar["execution.provider"]
+        print "    delegation_backend: " scalar["execution.delegation_backend"]
+        print "    checkout:"
+        print "      path: " yaml_quote(scalar["execution.checkout.path"])
+        print "      branch: " yaml_quote(scalar["execution.checkout.branch"])
+        print "      worktree_role: worker"
+        print "      worktree_kind: worker"
+        print "      integration_path: " yaml_quote(scalar["execution.checkout.integration_path"])
+        print "      integration_branch: " yaml_quote(scalar["execution.checkout.integration_branch"])
+        print "    git:"
+        print "      base_sha: " scalar["execution.git.base_sha"]
+        print "      integration_checkpoint_sha: " scalar["execution.git.integration_checkpoint_sha"]
+        print "      wave: " scalar["execution.git.wave"]
+        print "      integration_order: " scalar["execution.git.integration_order"]
+        print "    ownership:"
+        print_list(6, "allowed_scope", "task.allowed_write")
+        print_list(6, "forbidden_scope", "task.forbidden_scope")
+        print "      shared_artifacts:"
+        if (task_artifact_count == 0) print "        []"
+        else for (i = 1; i <= task_artifact_count; i++) {
+          print "        - artifact: " yaml_quote(task_artifact[i])
+          print "          owner: " yaml_quote(task_artifact_owner[i])
+        }
+        print "    environment_isolation:"
+        print_execution_list(6, "setup_commands", "environment.setup_commands")
+        print_execution_list(6, "copied_ignored_files", "environment.copied_ignored_files")
+        print_execution_list(6, "ports", "environment.ports")
+        print_execution_list(6, "databases", "environment.databases")
+        print_execution_list(6, "docker_projects", "environment.docker_projects")
+        print_execution_list(6, "temporary_directories", "environment.temporary_directories")
+        print_execution_list(6, "external_resources", "environment.external_resources")
+        print_execution_list(6, "cleanup_commands", "environment.cleanup_commands")
+        print "    authorization:"
+        for (action_index = 1; action_index <= authorization_count; action_index++) {
+          action = authorization_actions[action_index]
+          print "      " action ": " scalar["execution.authorization." action]
+        }
+        print "    transfer:"
+        print "      local_only: " scalar["execution.transfer.local_only"]
+        print "      integration_strategy: " scalar["execution.transfer.integration_strategy"]
+        print "      result_bundle: " yaml_quote(scalar["execution.transfer.result_bundle"])
+        print "      required_deliverable_commits: " scalar["execution.transfer.required_deliverable_commits"]
+        print_execution_list(6, "source_commits", "transfer.source_commits")
+        print "      source_to_integration_mapping: " scalar["execution.transfer.source_to_integration_mapping"]
+      }
+    }
+    BEGIN {
+      header_seen = 0
+      validation_count = 0
+      task_dependency_count = 0
+      dependency_state_count = 0
+      digest_task_count = 0
+      task_artifact_count = 0
+      exec_artifact_count = 0
+      digest_categories[1] = "accepted_decisions"
+      digest_categories[2] = "relevant_facts"
+      digest_categories[3] = "changed_interfaces"
+      digest_categories[4] = "paths_symbols"
+      digest_categories[5] = "authoritative_assumptions"
+      digest_categories[6] = "validation_facts"
+      digest_categories[7] = "unresolved_risks"
+      digest_categories[8] = "source_refs"
+      authorization_actions[1] = "create_branch"
+      authorization_actions[2] = "create_worktree"
+      authorization_actions[3] = "worker_setup"
+      authorization_actions[4] = "worker_transfer_commit"
+      authorization_actions[5] = "commit"
+      authorization_actions[6] = "push"
+      authorization_actions[7] = "create_pull_request"
+      authorization_actions[8] = "publish"
+      authorization_actions[9] = "deploy"
+      authorization_actions[10] = "merge"
+      authorization_count = 10
+      for (i = 1; i <= authorization_count; i++) required_authorizations[authorization_actions[i]] = 1
+    }
+    FNR == 1 {
+      if ($0 != "worker-brief-input/v1") fatal("input must start with worker-brief-input/v1")
+      header_seen = 1
+      next
+    }
+    /^[[:space:]]*$/ || /^[[:space:]]*#/ { next }
+    {
+      if ($1 == "task") {
+        if ($2 == "validation") {
+          if (NF != 6) fatal("task validation record requires command, requirement, condition, and side effects")
+          validation_command[++validation_count] = clean($3)
+          validation_requirement[validation_count] = clean($4)
+          validation_condition[validation_count] = clean($5)
+          validation_side_effects[validation_count] = clean($6)
+        } else if ($2 == "dependency") {
+          if (NF != 3) fatal("task dependency record requires one task id")
+          task_dependency[++task_dependency_count] = clean($3)
+          if (list_count["task.dependencies"] && list_contains("task.dependencies", task_dependency[task_dependency_count])) fatal("duplicate task dependency: " task_dependency[task_dependency_count])
+          list["task.dependencies", task_dependency_count] = task_dependency[task_dependency_count]
+          list_count["task.dependencies"] = task_dependency_count
+        } else if ($2 == "shared_artifact") {
+          if (NF != 4) fatal("task shared_artifact record requires artifact and owner")
+          task_artifact[++task_artifact_count] = clean($3)
+          task_artifact_owner[task_artifact_count] = clean($4)
+        } else if ($2 == "acceptance" || $2 == "instruction" || $2 == "allowed_read" || $2 == "allowed_write" || $2 == "architecture_decision" || $2 == "forbidden_scope" || $2 == "expected_output") {
+          if (NF != 3) fatal("task list record requires one value: " $2)
+          add_list("task." $2, $3)
+        } else if ($2 == "id" || $2 == "owner_role" || $2 == "depth" || $2 == "objective" || $2 == "write_access") {
+          if (NF != 3) fatal("task scalar record requires one value: " $2)
+          set_scalar("task." $2, $3)
+        } else {
+          fatal("unknown task input field: " $2)
+        }
+      } else if ($1 == "state") {
+        if ($2 == "dependency") {
+          if (NF != 5) fatal("state dependency record requires task id, status, and accepted result reference")
+          dependency_state_id[++dependency_state_count] = clean($3)
+          if (dependency_state_id[dependency_state_count] in dependency_status) fatal("duplicate canonical state dependency: " dependency_state_id[dependency_state_count])
+          dependency_status[dependency_state_id[dependency_state_count]] = clean($4)
+          dependency_ref[dependency_state_id[dependency_state_count]] = clean($5)
+        } else if ($2 == "routing.current" || $2 == "write_isolation" || $2 == "execution_provider" || $2 == "delegation_backend" || $2 == "parallel_strategy" || $2 == "integration_strategy") {
+          if (NF != 3) fatal("state scalar record requires one value: " $2)
+          set_scalar("state." $2, $3)
+        } else {
+          fatal("unknown state input field: " $2)
+        }
+      } else if ($1 == "execution") {
+        if ($2 == "shared_artifact") {
+          if (NF != 4) fatal("execution shared_artifact record requires artifact and owner")
+          exec_artifact[++exec_artifact_count] = clean($3)
+          exec_artifact_owner[exec_artifact_count] = clean($4)
+        } else if ($2 ~ /^authorization\.(create_branch|create_worktree|worker_setup|worker_transfer_commit|commit|push|create_pull_request|publish|deploy|merge)$/ || $2 ~ /^(provider|delegation_backend|checkout\.path|checkout\.branch|checkout\.worktree_role|checkout\.worktree_kind|checkout\.integration_path|checkout\.integration_branch|git\.base_sha|git\.integration_checkpoint_sha|git\.wave|git\.integration_order|transfer\.local_only|transfer\.integration_strategy|transfer\.result_bundle|transfer\.required_deliverable_commits|transfer\.source_to_integration_mapping)$/) {
+          if (NF != 3) fatal("execution scalar record requires one value: " $2)
+          set_scalar("execution." $2, $3)
+        } else if ($2 ~ /^(ownership\.allowed_scope|ownership\.forbidden_scope|environment\.setup_commands|environment\.copied_ignored_files|environment\.ports|environment\.databases|environment\.docker_projects|environment\.temporary_directories|environment\.external_resources|environment\.cleanup_commands|transfer\.source_commits)$/) {
+          if (NF != 3) fatal("execution list record requires one value: " $2)
+          add_list("execution." $2, $3)
+        } else {
+          fatal("unknown execution input field: " $2)
+        }
+      } else if ($1 == "digest") {
+        if (NF != 4) fatal("digest record requires task id, category, and selected value")
+        add_digest(clean($2), clean($3), $4)
+      } else {
+        fatal("unknown worker-brief input record: " $1)
+      }
+    }
+    END {
+      validate_input()
+      emit_input()
+    }
+  ' "$input" >"$output"
+}
+
+structural_validate() {
+  brief=$1
+  awk '
+    function fatal(message) {
+      print "FAIL: " message > "/dev/stderr"
+      exit 1
+    }
+    function unquote(value,    result) {
+      result = value
+      if (result ~ /^\047/ && result ~ /\047$/) {
+        sub(/^\047/, "", result)
+        sub(/\047$/, "", result)
+        gsub(/\047\047/, "\047", result)
+      }
+      return result
+    }
+    function required(flag, label) {
+      if (!flag) fatal("brief is missing " label)
+    }
+    function top_level_scalar(prefix,    value) {
+      value = prefix
+      sub(/^[^:]*:[[:space:]]*/, "", value)
+      return unquote(value)
+    }
+    {
+      if ($0 == "worker_briefing:") root = 1
+      if ($0 == "  schema: worker-brief/v1") schema = 1
+      if ($0 ~ /^  task_id:[[:space:]]+/) { task_id = top_level_scalar($0); task_id_seen = 1 }
+      if ($0 == "  worker:") worker = 1
+      if ($0 ~ /^    role:[[:space:]]+/) { role = top_level_scalar($0); role_seen = (role != "") }
+      if ($0 == "    mode: delegated_worker") mode = 1
+      if ($0 ~ /^    depth:[[:space:]]+[0-9]+$/) depth = 1
+      if ($0 == "    recursive_delegation: false") recursive = 1
+      if ($0 ~ /^  objective:[[:space:]]+/) { objective_value = top_level_scalar($0); objective = (objective_value != "") }
+      if ($0 == "  acceptance:") { acceptance_seen = 1; acceptance_section = 1; acceptance_count = 0; next }
+      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  acceptance:") acceptance_section = 0
+      if (acceptance_section && $0 ~ /^    - /) acceptance_count++
+      if ($0 == "  repository:") repository = 1
+      if ($0 == "    instructions:" || $0 ~ /^    instructions: \[\]$/) instructions = 1
+      if ($0 == "    allowed_reads:" || $0 ~ /^    allowed_reads: \[\]$/) allowed_reads = 1
+      if ($0 == "    allowed_writes:" || $0 ~ /^    allowed_writes: \[\]$/) { allowed_writes = 1; allowed_writes_section = 1 }
+      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  repository:") { repository_section = 0; allowed_writes_section = 0 }
+      if ($0 == "  repository:") repository_section = 1
+      if (repository_section && $0 ~ /^    [A-Za-z_]+:/ && $0 != "    allowed_writes:") allowed_writes_section = 0
+      if ($0 == "  architecture_decisions:" || $0 ~ /^  architecture_decisions: \[\]$/) architecture = 1
+      if ($0 == "  validation:") { validation_seen = 1; validation_section = 1; validation_count = 0; next }
+      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  validation:") validation_section = 0
+      if (validation_section && $0 ~ /^    - command: /) validation_count++
+      if ($0 == "  permissions:") permissions = 1
+      if ($0 ~ /^    write_access:[[:space:]]+/) write_access = top_level_scalar($0)
+      if ($0 ~ /^    topology:[[:space:]]+/) topology = top_level_scalar($0)
+      if ($0 ~ /^    write_isolation:[[:space:]]+/) write_isolation = top_level_scalar($0)
+      if ($0 == "    allowed_actions:") { allowed_actions = 1; allowed_actions_section = 1; next }
+      if ($0 == "    forbidden_actions:") { forbidden_actions = 1; forbidden_actions_section = 1; allowed_actions_section = 0 }
+      if ($0 ~ /^  [A-Za-z_]+:/) { allowed_actions_section = 0; forbidden_actions_section = 0 }
+      if ($0 ~ /^    [A-Za-z_]+:/ && $0 != "    allowed_actions:" && $0 != "    forbidden_actions:") { allowed_actions_section = 0; forbidden_actions_section = 0 }
+      if (allowed_actions_section && $0 == "      - read") { allowed_read_action = 1; allowed_action_count++ }
+      if (allowed_actions_section && $0 == "      - edit") { edit_action = 1; allowed_edit_action = 1; allowed_action_count++ }
+      if (allowed_actions_section && $0 == "      - validation") { allowed_validation_action = 1; allowed_action_count++ }
+      if (forbidden_actions_section && $0 == "      - delivery") { forbidden_delivery = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - recursive delegation") { forbidden_recursion = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - peer communication") { forbidden_peer = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - scope expansion") { forbidden_scope = 1; forbidden_action_count++ }
+      if (forbidden_actions_section && $0 == "      - topology decisions") { forbidden_topology = 1; forbidden_action_count++ }
+      if ($0 == "  return:") result = 1
+      if ($0 ~ /^    profile:[[:space:]]+/) profile = top_level_scalar($0)
+      if ($0 ~ /^    contract:[[:space:]]+/) contract = top_level_scalar($0)
+      if ($0 == "    expected_output:" || $0 ~ /^    expected_output: \[\]$/) { expected_output = 1; expected_output_section = 1 }
+      if ($0 ~ /^    [A-Za-z_]+:/ && $0 != "    expected_output:") expected_output_section = 0
+      if (expected_output_section && $0 ~ /^      - /) expected_output_items++
+      if ($0 == "  dependencies:") { dependencies_seen = 1; dependencies = 1; dependency_child = 0; next }
+      if (dependencies && $0 ~ /^    (completed|pending):/) dependency_child = 1
+      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  dependencies:") dependencies = 0
+      if ($0 == "  isolated_execution:") { isolated_seen = 1; isolated = 1 }
+      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  isolated_execution:") isolated = 0
+      if ($0 ~ /^      - / && allowed_writes_section && $0 ~ /none/) repository_none_write = 1
+      if ($0 ~ /^      - / && allowed_writes_section && $0 !~ /none/) repository_non_none_write = 1
+      if ($0 ~ /^    isolated_execution:/) malformed_isolated_indent = 1
+      if ($0 ~ /^    provider:/) { isolated_provider = 1; isolated_provider_value = top_level_scalar($0) }
+      if ($0 ~ /^    delegation_backend:/) { isolated_backend = 1; isolated_backend_value = top_level_scalar($0) }
+      if ($0 ~ /^      path:/) isolated_path = 1
+      if ($0 ~ /^      branch:/) isolated_branch = 1
+      if ($0 ~ /^      worktree_role: worker$/) isolated_role = 1
+      if ($0 ~ /^      worktree_kind: worker$/) isolated_kind = 1
+      if ($0 ~ /^      integration_path:/) isolated_integration_path = 1
+      if ($0 ~ /^      integration_branch:/) isolated_integration_branch = 1
+      if ($0 ~ /^      base_sha:[[:space:]]+[0-9A-Fa-f]+$/) { value = $0; sub(/^      base_sha:[[:space:]]+/, "", value); if (length(value) == 40) isolated_base = 1 }
+      if ($0 ~ /^      integration_checkpoint_sha:[[:space:]]+[0-9A-Fa-f]+$/) { value = $0; sub(/^      integration_checkpoint_sha:[[:space:]]+/, "", value); if (length(value) == 40) isolated_checkpoint = 1 }
+      if ($0 ~ /^      wave:[[:space:]]+[0-9]+$/) isolated_wave = 1
+      if ($0 ~ /^      integration_order:[[:space:]]+[0-9]+$/) isolated_order = 1
+      if ($0 == "      allowed_scope:" || $0 ~ /^      allowed_scope: \[\]$/) isolated_allowed_scope = 1
+      if ($0 == "      forbidden_scope:" || $0 ~ /^      forbidden_scope: \[\]$/) isolated_forbidden_scope = 1
+      if ($0 == "      shared_artifacts:") isolated_shared = 1
+      if ($0 == "    environment_isolation:") isolated_environment = 1
+      if ($0 == "    authorization:") isolated_authorization = 1
+      if ($0 == "    transfer:") isolated_transfer = 1
+      if ($0 == "      local_only: true") transfer_local = 1
+      if ($0 == "      source_commits: []" || $0 == "      source_commits:") transfer_sources = 1
+      if ($0 == "      integration_strategy: CHERRY_PICK") transfer_strategy = 1
+      if ($0 ~ /^      result_bundle:/) transfer_bundle = 1
+      if ($0 == "      required_deliverable_commits: true") transfer_commits = 1
+      if ($0 ~ /^      source_to_integration_mapping: required$/) transfer_mapping = 1
+      if ($0 == "      setup_commands:" || $0 ~ /^      setup_commands: \[\]$/) env_setup = 1
+      if ($0 == "      copied_ignored_files:" || $0 ~ /^      copied_ignored_files: \[\]$/) env_copied = 1
+      if ($0 == "      ports:" || $0 ~ /^      ports: \[\]$/) env_ports = 1
+      if ($0 == "      databases:" || $0 ~ /^      databases: \[\]$/) env_databases = 1
+      if ($0 == "      docker_projects:" || $0 ~ /^      docker_projects: \[\]$/) env_docker = 1
+      if ($0 == "      temporary_directories:" || $0 ~ /^      temporary_directories: \[\]$/) env_temporary = 1
+      if ($0 == "      external_resources:" || $0 ~ /^      external_resources: \[\]$/) env_external = 1
+      if ($0 == "      cleanup_commands:" || $0 ~ /^      cleanup_commands: \[\]$/) env_cleanup = 1
+      if ($0 ~ /^      create_branch: /) { auth_create_branch = 1; if ($0 != "      create_branch: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      create_worktree: /) { auth_create_worktree = 1; if ($0 != "      create_worktree: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      worker_setup: /) { auth_worker_setup = 1; value = $0; sub(/^      worker_setup: /, "", value); if (value != "not-authorized" && value != "PR" && value != "continue") auth_bad = 1 }
+      if ($0 ~ /^      worker_transfer_commit: /) { auth_worker_transfer = 1; value = $0; sub(/^      worker_transfer_commit: /, "", value); if (value != "not-authorized" && value != "PR" && value != "continue") auth_bad = 1 }
+      if ($0 ~ /^      commit: /) { auth_commit = 1; if ($0 != "      commit: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      push: /) { auth_push = 1; if ($0 != "      push: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      create_pull_request: /) { auth_pr = 1; if ($0 != "      create_pull_request: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      publish: /) { auth_publish = 1; if ($0 != "      publish: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      deploy: /) { auth_deploy = 1; if ($0 != "      deploy: not-authorized") auth_bad = 1 }
+      if ($0 ~ /^      merge: /) { auth_merge = 1; if ($0 != "      merge: not-authorized") auth_bad = 1 }
+    }
+    END {
+      required(root, "worker_briefing root")
+      required(schema, "schema worker-brief/v1")
+      required(task_id_seen && task_id != "", "task_id")
+      required(worker, "worker")
+      required(role_seen, "worker role")
+      required(mode, "delegated_worker mode")
+      required(depth, "worker depth")
+      required(recursive, "recursive_delegation: false")
+      required(objective, "objective")
+      required(acceptance_seen && acceptance_count > 0, "acceptance")
+      required(repository, "repository")
+      required(instructions, "repository.instructions")
+      required(allowed_reads, "repository.allowed_reads")
+      required(allowed_writes, "repository.allowed_writes")
+      required(architecture, "architecture_decisions")
+      required(validation_seen && validation_count > 0, "validation")
+      required(permissions, "permissions")
+      required(allowed_actions, "permissions.allowed_actions")
+      required(write_access == "read-only" || write_access == "read-write", "valid write_access")
+      required(topology == "SUBAGENTS" || topology == "ISOLATED", "delegated topology")
+      required(write_isolation == "SHARED" || write_isolation == "WORKTREE", "write_isolation")
+      required(result, "return")
+      required(profile != "", "return.profile")
+      required(expected_output && expected_output_items > 0, "return.expected_output")
+      required(forbidden_actions, "permissions.forbidden_actions")
+      required(allowed_read_action && allowed_validation_action, "read and validation permissions")
+      required(forbidden_action_count == 5 && forbidden_delivery && forbidden_recursion && forbidden_peer && forbidden_scope && forbidden_topology, "canonical forbidden permissions")
+      if (profile == "READ_ONLY" || profile == "REVIEW") {
+        if (profile == "REVIEW") required(role == "reviewer", "reviewer role for REVIEW profile")
+        required(write_access == "read-only", "read-only profile permissions")
+        required(topology == "SUBAGENTS" && write_isolation == "SHARED", "shared read-only execution")
+        required(!isolated_seen, "omission of isolated_execution for read-only worker")
+        required(!edit_action, "omission of edit permission for read-only worker")
+        required(repository_none_write && !repository_non_none_write, "read-only allowed_writes omission")
+        required(!allowed_edit_action && allowed_action_count == 2, "read-only allowed actions")
+      } else if (profile == "WRITABLE") {
+        required(write_access == "read-write", "writable profile permissions")
+        required(topology == "SUBAGENTS" && write_isolation == "SHARED", "shared writable execution")
+        required(!isolated_seen, "omission of isolated_execution for shared writable worker")
+        required(edit_action, "edit permission for writable worker")
+        required(!repository_none_write, "writable allowed_writes")
+        required(allowed_edit_action && allowed_action_count == 3, "writable allowed actions")
+      } else if (profile == "ISOLATED_WRITABLE") {
+        required(write_access == "read-write", "isolated writable profile permissions")
+        required(topology == "ISOLATED" && write_isolation == "WORKTREE", "isolated writable execution")
+        required(isolated_seen, "isolated_execution")
+        required(isolated_provider_value == "NATIVE" || isolated_provider_value == "HERDR", "isolated provider")
+        required(isolated_backend_value == "NATIVE" || isolated_backend_value == "HERDR", "isolated delegation backend")
+        required(edit_action, "edit permission for isolated worker")
+        required(allowed_action_count == 3, "isolated writable allowed actions")
+        required(isolated_provider && isolated_backend && isolated_path && isolated_branch && isolated_role && isolated_kind && isolated_integration_path && isolated_integration_branch, "isolated checkout fields")
+        required(isolated_base && isolated_checkpoint && isolated_wave && isolated_order, "isolated Git fields")
+        required(isolated_allowed_scope && isolated_forbidden_scope && isolated_shared && isolated_environment && isolated_authorization && isolated_transfer, "isolated safety sections")
+        required(env_setup && env_copied && env_ports && env_databases && env_docker && env_temporary && env_external && env_cleanup, "isolated environment fields")
+        required(auth_create_branch && auth_create_worktree && auth_worker_setup && auth_worker_transfer && auth_commit && auth_push && auth_pr && auth_publish && auth_deploy && auth_merge && !auth_bad, "isolated authorization fields")
+        required(transfer_local && transfer_strategy && transfer_bundle && transfer_commits && transfer_sources && transfer_mapping, "isolated transfer fields")
+      } else fatal("unknown result profile: " profile)
+      if (profile != "ISOLATED_WRITABLE") required(!isolated_seen && !isolated_provider && !isolated_backend && !isolated_path && !isolated_branch && !isolated_integration_path && !isolated_integration_branch && !isolated_base && !isolated_checkpoint && !isolated_wave && !isolated_order && !isolated_allowed_scope && !isolated_forbidden_scope && !isolated_shared && !isolated_environment && !isolated_authorization && !isolated_transfer && !transfer_local && !transfer_strategy && !transfer_bundle && !transfer_commits && !transfer_sources && !transfer_mapping, "omission of isolated-only fields")
+      if (profile == "READ_ONLY" || profile == "WRITABLE") required(contract == ".swe-forge/contracts/result.md", "result.md contract reference")
+      if (profile == "REVIEW") required(contract == ".swe-forge/contracts/review.md", "review.md contract reference")
+      if (profile == "ISOLATED_WRITABLE") required(contract == ".swe-forge/contracts/result-bundle.md", "result-bundle.md contract reference")
+      if (dependencies_seen) required(dependency_child, "valid dependency inclusion")
+      print "PASS: worker briefing is structurally valid"
+    }
+  ' "$brief"
+}
+
+render_command() {
+  input_arg=
+  output_arg=-
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --input)
+        [ "$#" -ge 2 ] || fail '--input requires a file or -'
+        input_arg=$2
+        shift 2
+        ;;
+      --output)
+        [ "$#" -ge 2 ] || fail '--output requires a file'
+        output_arg=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown render option: $1" ;;
+    esac
+  done
+  [ -n "$input_arg" ] || fail 'render requires --input'
+  input_file=$TMP_ROOT/input
+  copy_input "$input_arg" "$input_file"
+  rendered=$TMP_ROOT/rendered
+  render_input "$input_file" "$rendered" || fail 'worker-brief input is invalid'
+  structural_validate "$rendered" >/dev/null || fail 'renderer produced an invalid worker briefing'
+  if [ "$output_arg" = - ]; then
+    cat "$rendered"
+  else
+    cp "$rendered" "$output_arg"
+  fi
+}
+
+validate_command() {
+  brief_arg=
+  input_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --brief)
+        [ "$#" -ge 2 ] || fail '--brief requires a file or -'
+        brief_arg=$2
+        shift 2
+        ;;
+      --input)
+        [ "$#" -ge 2 ] || fail '--input requires a file or -'
+        input_arg=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown validate option: $1" ;;
+    esac
+  done
+  [ -n "$brief_arg" ] || fail 'validate requires --brief'
+  brief_file=$TMP_ROOT/brief
+  copy_input "$brief_arg" "$brief_file"
+  structural_validate "$brief_file" >/dev/null || fail 'worker briefing failed structural validation'
+  if [ -n "$input_arg" ]; then
+    input_file=$TMP_ROOT/input
+    copy_input "$input_arg" "$input_file"
+    expected=$TMP_ROOT/expected
+    render_input "$input_file" "$expected" || fail 'worker-brief input is invalid'
+    if ! cmp -s "$brief_file" "$expected"; then
+      fail 'worker briefing is not the deterministic projection of the supplied task and execution facts'
+    fi
+  fi
+  printf 'PASS: worker briefing validated\n'
+}
+
+[ "$#" -gt 0 ] || { usage >&2; exit 2; }
+command=$1
+shift
+case "$command" in
+  render) render_command "$@" ;;
+  validate) validate_command "$@" ;;
+  -h|--help) usage ;;
+  *) fail "unknown operation: $command" ;;
+esac

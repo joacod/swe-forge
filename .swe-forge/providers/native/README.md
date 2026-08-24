@@ -19,12 +19,13 @@ selection.
 ## Boundary
 
 The harness owns only its documented worker lifecycle and command translation.
-At launch, pass the compact `worker_briefing` projection from
-`../../contracts/worker-brief.md` with the applicable canonical role and result
-or review contract. The root orchestrator owns routing, task contracts,
-local-resource authorization, Git/evidence validation, worker acceptance,
-central transfer and integration commits, final validation, review, delivery,
-and cleanup.
+At launch, pass the unchanged output of
+`../../tools/swe-forge-worker-brief render` with the applicable canonical role
+and result or review contract. The root orchestrator owns the structured input,
+routing, task contracts, local-resource authorization, Git/evidence validation,
+worker acceptance, central transfer and integration commits, final validation,
+review, delivery, and cleanup. This provider does not construct briefing
+fields.
 There is no provider-independent launcher and no claim that all harnesses
 expose equivalent operations.
 

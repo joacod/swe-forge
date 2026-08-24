@@ -92,9 +92,10 @@ No adapter, skill, command, or vendor-specific instruction is canonical.
   independent read-only questions, then fan in once at the root before
   continuing; coupled questions remain root-only or sequential.
 - Give workers bounded tasks with explicit ownership and acceptance criteria.
-- Keep the complete task/run state root-owned and derive a compact
-  worker-facing briefing projection for each launch; never forward the root
-  transcript or unrelated state merely because the orchestrator loaded it.
+- Keep the complete task/run state root-owned and invoke the canonical
+  `.swe-forge/tools/swe-forge-worker-brief` renderer for each launch; never
+  forward the root transcript or unrelated state merely because the
+  orchestrator loaded it.
 - When a task depends on completed work, derive a small accepted
   `dependency_digest` for that task from the relevant structured result and
   acceptance needs; never open a peer channel or forward the complete result.

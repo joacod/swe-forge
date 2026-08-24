@@ -47,10 +47,11 @@ harness's concern and is not changed by the SWE Forge installer. See
 
 Claude Code supports project subagents under `.claude/agents/`. Add a thin
 role bridge only when native registration provides a real benefit. Before
-launch, pass the compact `worker_briefing` projection from
-`../../contracts/worker-brief.md` with the relevant canonical role and
-result/review contract; its inclusion and dependency rules remain canonical.
-Native workers with dedicated worktrees, exact integration bases, structured
+launch, invoke `../../tools/swe-forge-worker-brief render` with the root-produced
+structured input and pass its validated output unchanged with the relevant
+canonical role and result/review contract. The renderer owns inclusion and
+dependency rules; this adapter does not construct briefing fields. Native
+workers with dedicated worktrees, exact integration bases, structured
 results, and lifecycle control may satisfy the `NATIVE` provider contract for
 `ISOLATED`; otherwise writable delegation remains sequential in `SUBAGENTS`.
 

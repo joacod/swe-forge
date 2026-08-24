@@ -431,6 +431,51 @@ function invocationParserPath(): string | undefined {
 	return undefined;
 }
 
+function workerBriefToolPath(): string | undefined {
+	const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+	const candidates = [
+		path.join(os.homedir(), ".pi", "agent", "swe-forge", ".swe-forge", "tools", "swe-forge-worker-brief"),
+		path.join(sourceRoot, ".swe-forge", "tools", "swe-forge-worker-brief"),
+	];
+	for (const candidate of candidates) {
+		try {
+			if (fs.statSync(candidate).isFile()) return candidate;
+		} catch {
+			// A missing installation preserves the canonical SOLO/sequential fallback.
+		}
+	}
+	return undefined;
+}
+
+async function validateWorkerBriefing(pi: any, briefing: string, signal?: AbortSignal): Promise<string | undefined> {
+	const validator = workerBriefToolPath();
+	if (!validator || typeof pi.exec !== "function") {
+		return "the canonical worker-brief validator is unavailable";
+	}
+	let directory: string | undefined;
+	try {
+		directory = fs.mkdtempSync(path.join(os.tmpdir(), "swe-forge-worker-brief-"));
+		const briefPath = path.join(directory, "worker-brief.yaml");
+		fs.writeFileSync(briefPath, briefing, { encoding: "utf8", mode: 0o600 });
+		const result = await pi.exec(validator, ["validate", "--brief", briefPath], { signal, timeout: 5000 });
+		if (result?.code !== 0) {
+			const detail = typeof result?.stderr === "string" && result.stderr.trim() ? result.stderr.trim() : "structural validation failed";
+			return detail.slice(0, MAX_FIELD_LENGTH);
+		}
+		return undefined;
+	} catch {
+		return "the canonical worker-brief validator could not be executed";
+	} finally {
+		if (directory) {
+			try {
+				fs.rmSync(directory, { recursive: true, force: true });
+			} catch {
+				// The temporary validation directory is run-local and best-effort.
+			}
+		}
+	}
+}
+
 function normalizedInvocation(value: unknown, rawArguments: string): NormalizedInvocation | undefined {
 	if (!isRecord(value) || value.raw_arguments !== rawArguments || typeof value.parsed_ticket !== "string") {
 		return undefined;
@@ -764,7 +809,7 @@ export default function sweForgeRuntime(pi: any) {
 		return { systemPrompt: `${event.systemPrompt}\n\n${blocks.join("\n\n")}` };
 	});
 
-	on("tool_call", (event, ctx) => {
+	on("tool_call", async (event, ctx) => {
 		if (event.toolName !== SUBAGENT_TOOL_NAME) return undefined;
 		const run = refresh(ctx.cwd);
 		const input = isRecord(event.input) ? event.input : {};
@@ -824,6 +869,13 @@ export default function sweForgeRuntime(pi: any) {
 		}
 		if (input.expectedOutputContract !== "result" && input.expectedOutputContract !== "review") {
 			return { block: true, reason: "The expected canonical output contract must be result or review." };
+		}
+		const briefingError = await validateWorkerBriefing(pi, input.workerBriefing, ctx.signal);
+		if (briefingError) {
+			return {
+				block: true,
+				reason: `Canonical worker briefing validation failed: ${briefingError}. Use the renderer or the SOLO/sequential fallback.`,
+			};
 		}
 		return undefined;
 	});
