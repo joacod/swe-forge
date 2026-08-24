@@ -382,20 +382,14 @@ register_integration() {
   clean_checkout "$path" || fail "integration checkout is dirty"
   git -C "$path" merge-base --is-ancestor "$base" "$(git -C "$path" rev-parse HEAD)" || fail "integration base is not an ancestor"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$path" "$branch" "$base" "$base" "$base" "$order" 0 >"$STATE/integration.tsv"
-  tmp=$STATE/run-state.$$.tmp
-  awk -v path="$path" -v branch="$branch" -v base="$base" '
-    BEGIN { section="" }
-    /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
-    section == "delivery_checkout" && $0 ~ /^  path:/ { print "  path: " path; next }
-    section == "delivery_checkout" && $0 ~ /^  branch:/ { print "  branch: " branch; next }
-    section == "delivery_checkout" && $0 ~ /^  kind:/ { print "  kind: integration"; next }
-    section == "delivery_checkout" && $0 ~ /^  base_sha:/ { print "  base_sha: " base; next }
-    section == "delivery_checkout" && $0 ~ /^  head_sha:/ { print "  head_sha: " base; next }
-    section == "delivery_checkout" && $0 ~ /^  checkpoint_sha:/ { print "  checkpoint_sha: " base; next }
-    { print }
-  ' "$STATE/run-state.yaml" >"$tmp"
-  mv "$tmp" "$STATE/run-state.yaml"
-  "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
+  "$SCRIPT_DIR/swe-forge-state" set-delivery-checkout \
+    --state "$STATE/run-state.yaml" \
+    --path "$path" \
+    --branch "$branch" \
+    --kind integration \
+    --base-sha "$base" \
+    --head-sha "$base" \
+    --checkpoint-sha "$base" >/dev/null
   printf 'PASS: integration checkout registered in planned order %s\n' "$order"
 }
 

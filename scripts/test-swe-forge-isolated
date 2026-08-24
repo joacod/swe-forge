@@ -123,8 +123,21 @@ sed 's|^    evidence_ref:.*$|    evidence_ref: missing-capability-proof|' \
   "$state/run-state.yaml" >"$missing_proof_ref"
 expect_failure 'capability proof must be a regular file' "$ROOT/scripts/swe-forge-state" \
   validate --state "$missing_proof_ref"
+integration_invocation_head_before=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state/run-state.yaml")
+integration_reason_before=$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state/run-state.yaml")
 "$GATE" register-integration --state "$state" --path "$integration" \
   --branch integration --base-sha "$base" --worker-order A,B >/dev/null
+integration_path=$(CDPATH= cd "$integration" && pwd -P)
+grep -F "  path: $integration_path" "$state/run-state.yaml" >/dev/null
+grep -F '  branch: integration' "$state/run-state.yaml" >/dev/null
+grep -F '  kind: integration' "$state/run-state.yaml" >/dev/null
+grep -F "  base_sha: $base" "$state/run-state.yaml" >/dev/null
+grep -F "  head_sha: $base" "$state/run-state.yaml" >/dev/null
+grep -F "  checkpoint_sha: $base" "$state/run-state.yaml" >/dev/null
+[ "$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state/run-state.yaml")" = "$integration_invocation_head_before" ] || \
+  fail 'integration registration changed invocation checkout facts'
+[ "$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state/run-state.yaml")" = "$integration_reason_before" ] || \
+  fail 'integration registration changed unrelated run-state fields'
 expect_failure 'central integration checkout is already registered' "$GATE" register-integration \
   --state "$state" --path "$integration" --branch integration --base-sha "$base" \
   --worker-order A,B

@@ -218,51 +218,6 @@ write_meta() {
   mv "$meta_tmp" "$STATE/meta.env"
 }
 
-update_state_checkout() {
-  new_head=$1
-  state_file=$STATE/run-state.yaml
-  [ -f "$state_file" ] || return 0
-  tmp=$state_file.tmp.$$
-  awk -v wanted="$new_head" '
-    BEGIN { section="" }
-    /^[^[:space:]#][^:]*:/ {
-      section=$1
-      sub(/:$/, "", section)
-    }
-    section == "delivery_checkout" && $0 ~ /^[[:space:]]{2}head_sha:/ {
-      print "  head_sha: " wanted
-      next
-    }
-    section == "delivery_checkout" && $0 ~ /^[[:space:]]{2}checkpoint_sha:/ {
-      print "  checkpoint_sha: " wanted
-      next
-    }
-    { print }
-  ' "$state_file" >"$tmp"
-  mv "$tmp" "$state_file"
-}
-
-update_state_receipt_ref() {
-  receipt_ref=$1
-  state_file=$STATE/run-state.yaml
-  [ -f "$state_file" ] || return 0
-  reject_control_chars "$receipt_ref"
-  tmp=$state_file.tmp.$$
-  awk -v wanted="$receipt_ref" '
-    BEGIN { found=0 }
-    /^receipt_ref:/ && found == 0 {
-      print "receipt_ref: " wanted
-      found=1
-      next
-    }
-    { print }
-    END {
-      if (found == 0) print "receipt_ref: " wanted
-    }
-  ' "$state_file" >"$tmp"
-  mv "$tmp" "$state_file"
-}
-
 update_meta_checkout() {
   new_head=$1
   meta_tmp=$STATE/meta.env.tmp.$$
@@ -1096,7 +1051,10 @@ commit_slice() {
   [ "$staged_fp" = "$checkpoint_fp" ] || fail "staged tree fingerprint differs from checkpoint $checkpoint_id"
   git -C "$CHECKOUT" commit -m "$message"
   new_head=$(git -C "$CHECKOUT" rev-parse HEAD)
-  update_state_checkout "$new_head"
+  "$SCRIPT_DIR/swe-forge-state" set-delivery-checkout \
+    --state "$STATE/run-state.yaml" \
+    --head-sha "$new_head" \
+    --checkpoint-sha "$new_head" >/dev/null
   update_meta_checkout "$new_head"
   rm -f "$current_paths" "$staged_before" "$staged_tmp" "$unstaged_tmp"
   printf 'PASS: committed checkpoint %s\n' "$checkpoint_id"
@@ -1456,7 +1414,9 @@ receipt_run() {
   fi
   receipt_text "$execution" "$delivery" "$PR_URL" >"$output_tmp"
   mv "$output_tmp" "$output"
-  update_state_receipt_ref "$output"
+  "$SCRIPT_DIR/swe-forge-state" set-receipt-ref \
+    --state "$STATE/run-state.yaml" \
+    --receipt-ref "$output" >/dev/null
   cat "$output"
   [ "$final_blockers" -eq 0 ]
 }

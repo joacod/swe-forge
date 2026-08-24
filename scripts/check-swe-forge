@@ -223,10 +223,20 @@ require_text 'evidence state is stale or unsupported' .swe-forge/tools/swe-forge
 require_text 'stale/unsupported run state' .swe-forge/tools/swe-forge-state
 require_text 'swe-forge-state init' .swe-forge/tools/swe-forge-state
 require_text 'swe-forge-state set-continuation' .swe-forge/tools/swe-forge-state
+require_text 'swe-forge-state set-delivery-checkout' .swe-forge/tools/swe-forge-state
+require_text 'swe-forge-state set-receipt-ref' .swe-forge/tools/swe-forge-state
+require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-gate
+require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-gate
+require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-isolated-gate
 reject_text 'write_run_state' .swe-forge/tools/swe-forge-gate
 reject_text 'write_run_state' .swe-forge/tools/swe-forge-isolated-gate
+reject_text 'delivery_checkout' .swe-forge/tools/swe-forge-gate
+reject_text 'receipt_ref' .swe-forge/tools/swe-forge-gate
+reject_text 'delivery_checkout' .swe-forge/tools/swe-forge-isolated-gate
 require_text 'swe-forge-state init' SWE-FORGE.md
 require_text 'swe-forge-state set-continuation' .swe-forge/policies/context.md
+require_text 'set-delivery-checkout' SWE-FORGE.md
+require_text 'set-receipt-ref' SWE-FORGE.md
 require_text 'result-bundle.md' .swe-forge/contracts/result.md
 require_text 'swe-forge-isolated-gate' .swe-forge/policies/evidence.md
 require_text 'result-bundle.md' .swe-forge/workflows/isolated-execution.md
@@ -255,7 +265,7 @@ require_text 'Acceptance handoff' .swe-forge/policies/verification.md
 require_text 'Cleanup Handoff' .swe-forge/policies/failure-recovery.md
 reject_text '## Final Gate' .swe-forge/policies/verification.md
 require_text 'receipt_ref' .swe-forge/contracts/run-state.md
-require_text 'receipt_ref' .swe-forge/tools/swe-forge-gate
+require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
 require_text 'Final status: ACCEPTED | BLOCKED | FAILED' .swe-forge/contracts/receipt.md
 reject_text 'Merge performed: no' .swe-forge/contracts/receipt.md
 require_text 'pre-edit baseline' SWE-FORGE.md

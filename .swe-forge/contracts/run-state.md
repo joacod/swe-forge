@@ -399,7 +399,10 @@ does not change the generic schema-v3 minimum.
 - State is updated only from actual Git/provider/evidence facts or an explicit
   orchestrator decision. Use `swe-forge-state set-continuation` for bounded
   continuation updates; the operation owns the update timestamp and derived
-  delivery projection while preserving unrelated state.
+  delivery projection while preserving unrelated state. Use
+  `swe-forge-state set-delivery-checkout` and `set-receipt-ref` for their
+  purpose-specific canonical mutations; callers do not structurally edit
+  `run-state.yaml`.
 - A resumed run inspects real checkout, branch, worktree, provider, and process
   state before trusting this snapshot.
 - `continuation` is the authoritative workflow-control snapshot; conversation

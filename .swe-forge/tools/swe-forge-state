@@ -1,7 +1,8 @@
 #!/bin/sh
 
-# Dependency-free structural validator for the current SWE Forge run-state schema.
-# Obsolete and unknown schemas are stale; this helper never migrates them.
+# Dependency-free validator and bounded mutation owner for the current SWE Forge
+# run-state schema. Obsolete and unknown schemas are stale; this helper never
+# migrates them.
 
 set -eu
 
@@ -21,14 +22,22 @@ Usage:
   swe-forge-state validate --state FILE|DIRECTORY
   swe-forge-state init --state DIRECTORY [--checkout PATH] [options]
   swe-forge-state set-continuation --state FILE|DIRECTORY [options]
+  swe-forge-state set-delivery-checkout --state FILE|DIRECTORY \
+    --head-sha SHA --checkpoint-sha SHA
+  swe-forge-state set-delivery-checkout --state FILE|DIRECTORY \
+    --path PATH --branch BRANCH --kind integration --base-sha SHA \
+    --head-sha SHA --checkpoint-sha SHA
+  swe-forge-state set-receipt-ref --state FILE|DIRECTORY --receipt-ref REF
 
 `init` creates the current schema-v3 structural shell from explicit routing,
 delivery, checkout, and normalized invocation facts. Pass the parser's
 `requested_mode`, `requested_delivery`, and `delivery_mode` values unchanged.
-`set-continuation` accepts only the bounded
-continuation surface; it generates `updated_at` and derives the delivery
-projection. Both write operations validate a temporary result before atomic
-replacement. Obsolete or unknown state must be replaced by starting a fresh run.
+`set-continuation` accepts only the bounded continuation surface; it generates
+`updated_at` and derives the delivery projection. `set-delivery-checkout`
+accepts only normal checkpoint or isolated integration checkout facts, and
+`set-receipt-ref` owns the optional receipt reference. All write operations
+validate a temporary result before atomic replacement. Obsolete or unknown
+state must be replaced by starting a fresh run.
 EOF
 }
 
@@ -1007,6 +1016,233 @@ init_state() {
   printf 'PASS: schema-v3 run state initialized: %s\n' "$init_state_file"
 }
 
+set_delivery_checkout() {
+  delivery_state_arg=
+  delivery_path_arg=
+  delivery_branch_arg=
+  delivery_kind_arg=
+  delivery_base_sha_arg=
+  delivery_head_sha_arg=
+  delivery_checkpoint_sha_arg=
+  delivery_path_supplied=false
+  delivery_branch_supplied=false
+  delivery_kind_supplied=false
+  delivery_base_sha_supplied=false
+  delivery_head_sha_supplied=false
+  delivery_checkpoint_sha_supplied=false
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a file or directory"
+        delivery_state_arg=$2
+        shift 2
+        ;;
+      --path|--delivery-path)
+        [ "$#" -ge 2 ] || fail "$1 requires a path"
+        delivery_path_arg=$2
+        delivery_path_supplied=true
+        shift 2
+        ;;
+      --branch)
+        [ "$#" -ge 2 ] || fail "--branch requires a name"
+        delivery_branch_arg=$2
+        delivery_branch_supplied=true
+        shift 2
+        ;;
+      --kind)
+        [ "$#" -ge 2 ] || fail "--kind requires integration"
+        delivery_kind_arg=$2
+        delivery_kind_supplied=true
+        shift 2
+        ;;
+      --base-sha|--base)
+        [ "$#" -ge 2 ] || fail "$1 requires a SHA"
+        delivery_base_sha_arg=$2
+        delivery_base_sha_supplied=true
+        shift 2
+        ;;
+      --head-sha|--head)
+        [ "$#" -ge 2 ] || fail "$1 requires a SHA"
+        delivery_head_sha_arg=$2
+        delivery_head_sha_supplied=true
+        shift 2
+        ;;
+      --checkpoint-sha|--checkpoint)
+        [ "$#" -ge 2 ] || fail "$1 requires a SHA"
+        delivery_checkpoint_sha_arg=$2
+        delivery_checkpoint_sha_supplied=true
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown set-delivery-checkout option: $1" ;;
+    esac
+  done
+
+  [ -n "$delivery_state_arg" ] || fail "--state is required"
+  delivery_state_file=$(state_file "$delivery_state_arg")
+  validate_state "$delivery_state_file" >/dev/null
+
+  delivery_integration_fields_supplied=false
+  for delivery_supplied in \
+    "$delivery_path_supplied" "$delivery_branch_supplied" \
+    "$delivery_kind_supplied" "$delivery_base_sha_supplied"; do
+    [ "$delivery_supplied" = true ] && delivery_integration_fields_supplied=true
+  done
+
+  if [ "$delivery_integration_fields_supplied" = true ]; then
+    [ "$delivery_path_supplied" = true ] || fail "integration checkout update requires --path"
+    [ "$delivery_branch_supplied" = true ] || fail "integration checkout update requires --branch"
+    [ "$delivery_kind_supplied" = true ] || fail "integration checkout update requires --kind"
+    [ "$delivery_base_sha_supplied" = true ] || fail "integration checkout update requires --base-sha"
+    [ "$delivery_head_sha_supplied" = true ] || fail "integration checkout update requires --head-sha"
+    [ "$delivery_checkpoint_sha_supplied" = true ] || fail "integration checkout update requires --checkpoint-sha"
+    require_scalar_arg delivery_checkout.path "$delivery_path_arg"
+    case "$delivery_path_arg" in
+      /*) ;;
+      *) fail "delivery_checkout.path must be absolute" ;;
+    esac
+    require_scalar_arg delivery_checkout.branch "$delivery_branch_arg"
+    require_enum_arg delivery_checkout.kind "$delivery_kind_arg" integration
+    require_scalar_arg delivery_checkout.base_sha "$delivery_base_sha_arg"
+    validate_sha_field delivery_checkout.base_sha "$delivery_base_sha_arg"
+  else
+    [ "$delivery_head_sha_supplied" = true ] || fail "checkpoint update requires --head-sha"
+    [ "$delivery_checkpoint_sha_supplied" = true ] || fail "checkpoint update requires --checkpoint-sha"
+    [ "$delivery_path_supplied" = false ] || fail "--path requires an integration checkout update"
+    [ "$delivery_branch_supplied" = false ] || fail "--branch requires an integration checkout update"
+    [ "$delivery_kind_supplied" = false ] || fail "--kind requires an integration checkout update"
+    [ "$delivery_base_sha_supplied" = false ] || fail "--base-sha requires an integration checkout update"
+  fi
+
+  require_scalar_arg delivery_checkout.head_sha "$delivery_head_sha_arg"
+  validate_sha_field delivery_checkout.head_sha "$delivery_head_sha_arg"
+  require_scalar_arg delivery_checkout.checkpoint_sha "$delivery_checkpoint_sha_arg"
+  validate_sha_field delivery_checkout.checkpoint_sha "$delivery_checkpoint_sha_arg"
+
+  state_tmp=$delivery_state_file.tmp.$$
+  awk \
+    -v update_path="$delivery_path_supplied" \
+    -v update_branch="$delivery_branch_supplied" \
+    -v update_kind="$delivery_kind_supplied" \
+    -v update_base_sha="$delivery_base_sha_supplied" \
+    -v update_head_sha="$delivery_head_sha_supplied" \
+    -v update_checkpoint_sha="$delivery_checkpoint_sha_supplied" \
+    -v path_value="$delivery_path_arg" \
+    -v branch_value="$delivery_branch_arg" \
+    -v kind_value="$delivery_kind_arg" \
+    -v base_sha_value="$delivery_base_sha_arg" \
+    -v head_sha_value="$delivery_head_sha_arg" \
+    -v checkpoint_sha_value="$delivery_checkpoint_sha_arg" '
+    BEGIN { section="" }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+    }
+    section == "delivery_checkout" && update_path == "true" && $0 ~ /^  path:/ {
+      print "  path: " path_value
+      path_count++
+      next
+    }
+    section == "delivery_checkout" && update_branch == "true" && $0 ~ /^  branch:/ {
+      print "  branch: " branch_value
+      branch_count++
+      next
+    }
+    section == "delivery_checkout" && update_kind == "true" && $0 ~ /^  kind:/ {
+      print "  kind: " kind_value
+      kind_count++
+      next
+    }
+    section == "delivery_checkout" && update_base_sha == "true" && $0 ~ /^  base_sha:/ {
+      print "  base_sha: " base_sha_value
+      base_sha_count++
+      next
+    }
+    section == "delivery_checkout" && update_head_sha == "true" && $0 ~ /^  head_sha:/ {
+      print "  head_sha: " head_sha_value
+      head_sha_count++
+      next
+    }
+    section == "delivery_checkout" && update_checkpoint_sha == "true" && $0 ~ /^  checkpoint_sha:/ {
+      print "  checkpoint_sha: " checkpoint_sha_value
+      checkpoint_sha_count++
+      next
+    }
+    { print }
+    END {
+      if (update_path == "true" && path_count != 1) exit 1
+      if (update_branch == "true" && branch_count != 1) exit 1
+      if (update_kind == "true" && kind_count != 1) exit 1
+      if (update_base_sha == "true" && base_sha_count != 1) exit 1
+      if (update_head_sha == "true" && head_sha_count != 1) exit 1
+      if (update_checkpoint_sha == "true" && checkpoint_sha_count != 1) exit 1
+    }
+  ' "$delivery_state_file" >"$state_tmp" || \
+    fail "delivery_checkout update could not locate the current state fields"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$delivery_state_file"
+  state_tmp=
+  printf 'PASS: delivery checkout updated: %s\n' "$delivery_state_file"
+}
+
+set_receipt_ref() {
+  receipt_state_arg=
+  receipt_ref_arg=
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a file or directory"
+        receipt_state_arg=$2
+        shift 2
+        ;;
+      --receipt-ref)
+        [ "$#" -ge 2 ] || fail "--receipt-ref requires a reference"
+        receipt_ref_arg=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown set-receipt-ref option: $1" ;;
+    esac
+  done
+
+  [ -n "$receipt_state_arg" ] || fail "--state is required"
+  receipt_state_file=$(state_file "$receipt_state_arg")
+  validate_state "$receipt_state_file" >/dev/null
+  require_scalar_arg receipt_ref "$receipt_ref_arg"
+
+  state_tmp=$receipt_state_file.tmp.$$
+  if ! awk -v wanted="$receipt_ref_arg" '
+    BEGIN { found=0 }
+    /^receipt_ref:/ {
+      count++
+      if (count == 1) {
+        print "receipt_ref: " wanted
+        found=1
+        next
+      }
+    }
+    { print }
+    END {
+      if (count > 1) exit 1
+      if (count == 0) print "receipt_ref: " wanted
+    }
+  ' "$receipt_state_file" >"$state_tmp"; then
+    fail "current state contains duplicate receipt_ref fields"
+  fi
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$receipt_state_file"
+  state_tmp=
+  printf 'PASS: receipt reference updated: %s\n' "$receipt_state_file"
+}
+
 set_continuation() {
   continuation_state_arg=
   continuation_workflow_active=
@@ -1235,6 +1471,12 @@ main() {
       ;;
     set-continuation)
       set_continuation "$@"
+      ;;
+    set-delivery-checkout)
+      set_delivery_checkout "$@"
+      ;;
+    set-receipt-ref)
+      set_receipt_ref "$@"
       ;;
     -h|--help) usage ;;
     *) fail "unknown command: $command" ;;

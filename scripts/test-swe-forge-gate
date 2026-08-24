@@ -196,6 +196,90 @@ expect_failure 'continuation.delivery.mode must match delivery_mode' \
 [ "$(cksum "$atomic_state")" = "$atomic_before" ] || \
   fail "failed continuation update corrupted the previous state"
 
+# Focused coverage for the bounded canonical state mutations. The normal
+# checkpoint shape updates only the two commit fields, while the integration
+# shape establishes the complete delivery checkout without changing invocation
+# facts or unrelated state.
+state_ops=$TMP_ROOT/state-operations.yaml
+cp "$early_state/run-state.yaml" "$state_ops"
+ops_invocation_head=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
+ops_reason=$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state_ops")
+ops_run_id=$(awk '$1 == "run_id:" { print $2; exit }' "$state_ops")
+ops_delivery_path=$(awk '$1 == "path:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
+ops_sha=$(printf '%040d' 7)
+"$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$state_ops" \
+  --head-sha "$ops_sha" --checkpoint-sha "$ops_sha" >/dev/null
+ops_head=$(awk '$1 == "head_sha:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
+ops_checkpoint=$(awk '$1 == "checkpoint_sha:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
+[ "$ops_head" = "$ops_sha" ] || fail "normal checkout update did not set head_sha"
+[ "$ops_checkpoint" = "$ops_sha" ] || fail "normal checkout update did not set checkpoint_sha"
+[ "$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")" = "$ops_invocation_head" ] || \
+  fail "normal checkout update changed invocation facts"
+[ "$(awk '$1 == "path:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")" = "$ops_delivery_path" ] || \
+  fail "normal checkout update changed unrelated checkout fields"
+[ "$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state_ops")" = "$ops_reason" ] || \
+  fail "normal checkout update changed unrelated run-state fields"
+[ "$(awk '$1 == "run_id:" { print $2; exit }' "$state_ops")" = "$ops_run_id" ] || \
+  fail "normal checkout update changed run_id"
+
+"$ROOT/scripts/swe-forge-state" set-receipt-ref --state "$state_ops" \
+  --receipt-ref "$TMP_ROOT/state-receipt.md" >/dev/null
+grep -F "receipt_ref: $TMP_ROOT/state-receipt.md" "$state_ops" >/dev/null
+[ "$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state_ops")" = "$ops_reason" ] || \
+  fail "receipt update changed unrelated run-state fields"
+
+integration_state=$TMP_ROOT/integration-update.yaml
+cp "$early_state/run-state.yaml" "$integration_state"
+integration_path=$TMP_ROOT/integration-worktree
+"$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$integration_state" \
+  --path "$integration_path" --branch integration --kind integration \
+  --base-sha "$ops_sha" --head-sha "$ops_sha" --checkpoint-sha "$ops_sha" >/dev/null
+grep -F "  path: $integration_path" "$integration_state" >/dev/null
+grep -F '  branch: integration' "$integration_state" >/dev/null
+grep -F '  kind: integration' "$integration_state" >/dev/null
+grep -F "  base_sha: $ops_sha" "$integration_state" >/dev/null
+grep -F "  head_sha: $ops_sha" "$integration_state" >/dev/null
+grep -F "  checkpoint_sha: $ops_sha" "$integration_state" >/dev/null
+[ "$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$integration_state")" = "$ops_invocation_head" ] || \
+  fail "integration checkout update changed invocation facts"
+[ "$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$integration_state")" = "$ops_reason" ] || \
+  fail "integration checkout update changed unrelated run-state fields"
+
+invalid_checkout=$TMP_ROOT/invalid-checkout.yaml
+cp "$early_state/run-state.yaml" "$invalid_checkout"
+invalid_checkout_before=$(cksum "$invalid_checkout")
+expect_failure 'delivery_checkout.head_sha is not a hexadecimal SHA' \
+  "$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$invalid_checkout" \
+  --head-sha invalid --checkpoint-sha "$ops_sha"
+[ "$(cksum "$invalid_checkout")" = "$invalid_checkout_before" ] || \
+  fail "invalid checkout arguments changed canonical state"
+
+invalid_result=$TMP_ROOT/invalid-result.yaml
+cp "$early_state/run-state.yaml" "$invalid_result"
+invalid_result_before=$(cksum "$invalid_result")
+expect_failure 'invalid delivery_checkout.kind' \
+  "$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$invalid_result" \
+  --path "$integration_path" --branch integration --kind task \
+  --base-sha "$ops_sha" --head-sha "$ops_sha" --checkpoint-sha "$ops_sha"
+[ "$(cksum "$invalid_result")" = "$invalid_result_before" ] || \
+  fail "invalid resulting checkout state replaced the previous state"
+
+malformed_update=$TMP_ROOT/malformed-update.yaml
+sed 's/^schema_version: 3$/schema_version: 2/' "$early_state/run-state.yaml" >"$malformed_update"
+malformed_before=$(cksum "$malformed_update")
+expect_failure 'stale/unsupported run state' \
+  "$ROOT/scripts/swe-forge-state" set-receipt-ref --state "$malformed_update" \
+  --receipt-ref "$TMP_ROOT/receipt.md"
+[ "$(cksum "$malformed_update")" = "$malformed_before" ] || \
+  fail "malformed current state was changed"
+
+receipt_optional=$TMP_ROOT/receipt-optional.yaml
+grep -v '^receipt_ref:' "$integration_state" >"$receipt_optional"
+"$ROOT/scripts/swe-forge-state" validate --state "$receipt_optional" >/dev/null
+"$ROOT/scripts/swe-forge-state" set-receipt-ref --state "$receipt_optional" \
+  --receipt-ref "$TMP_ROOT/optional-receipt.md" >/dev/null
+grep -F "receipt_ref: $TMP_ROOT/optional-receipt.md" "$receipt_optional" >/dev/null
+
 # Regression: PR mode can validate and commit multiple sequential slices in one
 # run, including a newly added file whose fingerprint is stable before and after
 # staging.
