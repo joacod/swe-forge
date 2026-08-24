@@ -44,6 +44,21 @@ workers from one exact integration SHA, keep them out of the integration
 checkout, return structured results, expose wait/inspect/cancel/cleanup, and
 leave integration to the orchestrator.
 
+The `capabilities-ref` supplied to isolated initialization is a local,
+machine-readable TSV proof, not a free-form label:
+
+```text
+schema_version<TAB>1
+provider<TAB>NATIVE | HERDR
+<capability-key><TAB>proven<TAB><evidence-reference>
+```
+
+It contains exactly one record for each mandatory capability and lifecycle
+operation listed above. `swe-forge-state` rejects missing, duplicate,
+unproven, or non-evidenced records before it emits `status: proven`. The proof
+records the provider's observed evidence; it does not replace the provider's
+responsibility to perform the capability checks.
+
 `HERDR` requires `test "${HERDR_ENV:-}" = 1` and the provider's own capability
 proof. It may be preferred when separate processes/harnesses, visible panes,
 persistent sessions, stronger supervision, or explicit user preference

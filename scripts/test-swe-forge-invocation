@@ -55,7 +55,7 @@ assert_parse 'solo fix pr isolated guided is ticket content' \
 raw_file=$TMP_ROOT/raw-arguments
 printf '  solo\tpr  preserve  "quoted"  \\\\ text\nwith a second line  \n' >"$raw_file"
 actual=$($PARSER parse --stdin <"$raw_file")
-expected='{"raw_arguments":"  solo\tpr  preserve  \"quoted\"  \\ text\nwith a second line  \n","parsed_ticket":"preserve  \"quoted\"  \\ text\nwith a second line","requested_mode":"SOLO","requested_delivery":"PR","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["solo","pr"]}'
+expected='{"raw_arguments":"  solo\tpr  preserve  \"quoted\"  \\\\ text\nwith a second line  \n","parsed_ticket":"preserve  \"quoted\"  \\\\ text\nwith a second line","requested_mode":"SOLO","requested_delivery":"PR","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["solo","pr"]}'
 [ "$actual" = "$expected" ] || {
   printf 'expected: %s\nactual:   %s\n' "$expected" "$actual" >&2
   fail 'whitespace or exact-content preservation failed'
@@ -68,6 +68,15 @@ while [ "$iteration" -le 20 ]; do
   [ "$current" = "$first" ] || fail 'repeated parser output was not deterministic'
   iteration=$((iteration + 1))
 done
+
+# Ticket-sized raw input must remain a bounded bootstrap operation rather than
+# copying the unparsed remainder once per character.
+long_ticket=$(awk 'BEGIN { for (i = 0; i < 9000; i++) printf "x"; print "" }')
+long_parse=$($PARSER parse --raw-arguments "pr $long_ticket")
+case "$long_parse" in
+  *'"input_status":"COMPLETE"'*) ;;
+  *) fail 'long invocation was not parsed as a complete ticket' ;;
+esac
 
 # The normalized request values map directly to the canonical state writer;
 # no fixture or adapter writes a second state representation.

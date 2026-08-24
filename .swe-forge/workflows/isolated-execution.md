@@ -24,9 +24,10 @@ Before creating worker resources:
 
 1. complete the shared foundation (contracts, interfaces, schemas, fixtures,
    architecture, dependency decisions, and generated-artifact ownership)
-2. prove hard eligibility and economic parallel value
-3. record provider capabilities and choose `NATIVE` or `HERDR` only when all
-   mandatory capabilities are proven
+2. make the semantic hard-eligibility and economic parallel-value decisions;
+   the state initializer and isolated gate reject their mechanical consequences
+3. obtain provider evidence in the required machine-readable proof and choose
+   `NATIVE` or `HERDR` only when every mandatory capability is proven
 4. prepare one setup checkpoint containing integration branch/worktree, provider
    evidence, worker count, current wave, task ownership, shared-artifact owner,
    exact worker base SHA, integration order, runtime resources, and cleanup

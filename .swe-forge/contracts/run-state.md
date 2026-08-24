@@ -234,10 +234,19 @@ provider_capabilities:
     evidence_ref: <capability proof>
 ```
 
-`NATIVE` is forbidden while any mandatory capability is `unknown` or
-`unavailable`. `routing.current` other than `ISOLATED` requires provider and
-strategies to be `NONE`; isolated v1 requires a selected provider, `COMPOSE`,
-and `CHERRY_PICK`.
+The canonical state validator enforces the mechanical routing consequences:
+`SOLO` and `SUBAGENTS` require `SHARED` write isolation, no execution
+provider, `NONE` parallel/integration strategies, and no isolated provider;
+`ISOLATED` requires `WORKTREE`, a selected `NATIVE` or `HERDR` provider and
+isolated delegation backend, `COMPOSE`, `CHERRY_PICK`, eligible isolation,
+and an untouched invocation checkout. An explicit `requested_mode` must be retained
+as `routing.initial`, and `requested_delivery` must resolve to `delivery_mode`.
+
+For `ISOLATED`, every mandatory capability and lifecycle status must be
+`proven`; `NATIVE` is never upgraded from `unknown` or `unavailable`. The
+initializer validates the machine-readable capability proof before emitting
+those statuses, while the isolated gate remains responsible for actual
+worktree, Git, result, and integration evidence.
 
 ## Remaining state
 

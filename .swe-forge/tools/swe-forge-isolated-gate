@@ -30,7 +30,7 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/swe-forge-isolated-gate init --state DIR --repo INVOCATION_CHECKOUT \
-    --run-id ID --provider NATIVE|HERDR --capabilities-ref REF \
+    --run-id ID --provider NATIVE|HERDR --capabilities-ref FILE \
     [--requested-mode MODE] [--requested-provider PROVIDER]
     (the invocation checkout remains untouched; register-integration supplies
     the separate orchestrator delivery worktree)
@@ -50,6 +50,9 @@ Usage:
   scripts/swe-forge-isolated-gate cleanup-eligible --state DIR \
     [--task-id ID|--all]
   scripts/swe-forge-isolated-gate recover --state DIR
+
+`--capabilities-ref` must name the machine-readable TSV proof accepted by
+`swe-forge-state`; a non-empty reference string is not capability proof.
 
 Result bundle:
   result/meta.tsv commits.txt files.txt validations.tsv scope-exceptions.txt
@@ -191,6 +194,46 @@ integration_field() {
   integration_values | awk -F '\t' -v number="$field" '{ print $number; exit }'
 }
 
+validate_worker_order() {
+  order=$1
+  [ -n "$order" ] || fail "integration order must contain at least two workers"
+  old_ifs=$IFS
+  IFS=','
+  seen=
+  count=0
+  for ordered_task in $order; do
+    IFS=$old_ifs
+    [ -n "$ordered_task" ] || fail "integration order contains an empty worker"
+    case ",$seen," in
+      *",$ordered_task,"*) fail "integration order repeats worker: $ordered_task" ;;
+    esac
+    if [ -n "$seen" ]; then seen="$seen,$ordered_task"; else seen=$ordered_task; fi
+    count=$((count + 1))
+    IFS=','
+  done
+  IFS=$old_ifs
+  [ "$count" -ge 2 ] || fail "isolated execution requires at least two planned workers"
+}
+
+validate_registered_worker_order() {
+  order=$1
+  validate_worker_order "$order"
+  registered_count=$(awk -F "$TAB" '$1 != "" { count++ } END { print count + 0 }' "$STATE/workers.tsv")
+  ordered_count=0
+  old_ifs=$IFS
+  IFS=','
+  for ordered_task in $order; do
+    IFS=$old_ifs
+    [ -n "$(worker_values "$ordered_task")" ] || \
+      fail "integration order references an unregistered worker: $ordered_task"
+    ordered_count=$((ordered_count + 1))
+    IFS=','
+  done
+  IFS=$old_ifs
+  [ "$ordered_count" -eq "$registered_count" ] || \
+    fail "integration order must list every registered worker exactly once"
+}
+
 init_state() {
   state_arg=
   repo_arg=
@@ -326,9 +369,11 @@ register_integration() {
   [ -n "$branch" ] || fail "--branch is required"
   [ -n "$base" ] || fail "--base-sha is required"
   [ -n "$order" ] || fail "--worker-order is required"
+  [ ! -s "$STATE/integration.tsv" ] || fail "central integration checkout is already registered"
   full_sha base "$base"
   reject_control_chars "$branch"
   reject_control_chars "$order"
+  validate_worker_order "$order"
   path=$(repo_root "$path")
   [ "$path" != "$(meta_value repository_path)" ] || fail "integration checkout must differ from invocation checkout"
   assert_delivery_branch "$branch"
@@ -450,9 +495,17 @@ register_worker() {
   assert_delivery_branch "$branch"
   [ -z "$(worker_values "$task")" ] || fail "worker is already registered: $task"
   path=$(repo_root "$path")
+  path=$(CDPATH= cd "$path" && pwd -P)
+  integration_path=$(integration_field 1)
+  integration_branch=$(integration_field 2)
+  [ "$path" != "$REPO" ] || fail "worker checkout must be isolated from the invocation checkout"
+  [ "$path" != "$integration_path" ] || fail "worker checkout must differ from the integration checkout"
+  [ "$branch" != "$integration_branch" ] || fail "worker branch must differ from the integration branch"
   worktree_identity "$REPO" "$path" "$branch" || fail "worker path or branch identity does not match actual Git worktree"
   [ "$base" = "$(integration_field 4)" ] || fail "worker base SHA differs from current integration head"
   [ "$(git -C "$path" rev-parse HEAD)" = "$base" ] || fail "worker does not start from exact base SHA"
+  worker_count=$(awk -F "$TAB" '$1 != "" { count++ } END { print count + 0 }' "$STATE/workers.tsv")
+  [ "$worker_count" -lt 2 ] || fail "isolated execution supports at most two concurrent writable workers"
   clean_checkout "$path" || fail "worker checkout must be clean at registration"
   if git -C "$path" show-ref --verify --quiet "refs/remotes/origin/$branch"; then fail "worker branch has an unauthorized remote-tracking ref"; fi
   if [ -n "$(git -C "$path" remote get-url origin 2>/dev/null || true)" ] && \
@@ -461,6 +514,8 @@ register_worker() {
   fi
   while IFS="$TAB" read -r existing_task existing_branch existing_path existing_base existing_head existing_order existing_scopes existing_checks existing_status existing_result; do
     [ -n "${existing_task:-}" ] || continue
+    [ "$existing_branch" != "$branch" ] || fail "worker branch is already registered: $branch"
+    [ "$existing_path" != "$path" ] || fail "worker checkout is already registered: $path"
     if scopes_overlap "$existing_scopes" "$scopes"; then fail "planned writable scopes overlap: $existing_task and $task"; fi
   done <"$STATE/workers.tsv"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tready\t\t\n' \
@@ -683,6 +738,7 @@ next_run() {
   require_state
   integration=$(integration_values)
   path=$(integration_field 1); branch=$(integration_field 2); head=$(integration_field 4); order=$(integration_field 6)
+  validate_registered_worker_order "$order"
   worktree_identity "$REPO" "$path" "$branch" || fail "integration checkout identity is not proven"
   [ "$(git -C "$path" rev-parse HEAD)" = "$head" ] || fail "integration-head drift detected"
   clean_checkout "$path" || fail "integration checkout is not clean"

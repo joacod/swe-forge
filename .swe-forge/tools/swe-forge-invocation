@@ -6,23 +6,6 @@
 
 set -eu
 
-PROGRAM=${0##*/}
-SPACE=' '
-TAB=$(printf '\t')
-NEWLINE='
-'
-CARRIAGE_RETURN=$(printf '\r')
-FORM_FEED=$(printf '\f')
-VERTICAL_TAB=$(printf '\013')
-BACKSPACE=$(printf '\b')
-QUOTE='"'
-BACKSLASH='\\'
-
-fail() {
-  printf 'FAIL: %s\n' "$*" >&2
-  exit 1
-}
-
 usage() {
   cat <<'EOF'
 Usage:
@@ -40,173 +23,167 @@ wanted."
 EOF
 }
 
-is_whitespace() {
-  case "$1" in
-    "$SPACE"|"$TAB"|"$NEWLINE"|"$CARRIAGE_RETURN"|"$FORM_FEED"|"$VERTICAL_TAB") return 0 ;;
-    *) return 1 ;;
-  esac
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  exit 1
 }
 
-first_character() {
-  first_character_input=$1
-  first_character_remainder=${first_character_input#?}
-  first_character_value=${first_character_input%"$first_character_remainder"}
-}
+# Keep the raw value in one awk record. The previous character-at-a-time shell
+# implementation repeatedly copied the remaining string and became unusably
+# slow for real ticket-sized invocations. NUL is not a shell argument value;
+# using it as the record separator preserves all supported whitespace exactly.
+parse_stream() {
+  awk '
+    BEGIN {
+      RS = "\0"
+      space = " "
+      tab = sprintf("%c", 9)
+      newline = sprintf("%c", 10)
+      carriage_return = sprintf("%c", 13)
+      form_feed = sprintf("%c", 12)
+      vertical_tab = sprintf("%c", 11)
+      backspace = sprintf("%c", 8)
+      quote = sprintf("%c", 34)
+      backslash = sprintf("%c", 92)
+      raw = ""
+    }
 
-trim_leading_whitespace() {
-  trim_leading_value=$1
-  while [ -n "$trim_leading_value" ]; do
-    first_character "$trim_leading_value"
-    is_whitespace "$first_character_value" || break
-    trim_leading_value=${trim_leading_value#?}
-  done
-  trimmed_value=$trim_leading_value
-}
+    function is_whitespace(c) {
+      return c == space || c == tab || c == newline || \
+        c == carriage_return || c == form_feed || c == vertical_tab
+    }
 
-trim_trailing_whitespace() {
-  trim_trailing_value=$1
-  while [ -n "$trim_trailing_value" ]; do
-    trim_trailing_prefix=${trim_trailing_value%?}
-    trim_trailing_character=${trim_trailing_value#"$trim_trailing_prefix"}
-    is_whitespace "$trim_trailing_character" || break
-    trim_trailing_value=$trim_trailing_prefix
-  done
-  trimmed_value=$trim_trailing_value
-}
+    function trim_leading(s, i, c) {
+      i = 1
+      while (i <= length(s)) {
+        c = substr(s, i, 1)
+        if (!is_whitespace(c)) break
+        i++
+      }
+      return substr(s, i)
+    }
 
-trim_surrounding_whitespace() {
-  trim_leading_whitespace "$1"
-  trim_trailing_whitespace "$trimmed_value"
-}
+    function trim_trailing(s, i, c) {
+      i = length(s)
+      while (i > 0) {
+        c = substr(s, i, 1)
+        if (!is_whitespace(c)) break
+        i--
+      }
+      return substr(s, 1, i)
+    }
 
-take_token() {
-  token=
-  while [ -n "$token_remainder" ]; do
-    first_character "$token_remainder"
-    is_whitespace "$first_character_value" && break
-    token=$token$first_character_value
-    token_remainder=${token_remainder#?}
-  done
-}
+    function take_token(s, i, c) {
+      i = 1
+      while (i <= length(s)) {
+        c = substr(s, i, 1)
+        if (is_whitespace(c)) break
+        i++
+      }
+      token = substr(s, 1, i - 1)
+      token_remainder = substr(s, i)
+    }
 
-json_escape() {
-  json_escape_value=$1
-  json_escape_result=
-  while [ -n "$json_escape_value" ]; do
-    first_character "$json_escape_value"
-    json_escape_value=${json_escape_value#?}
-    case "$first_character_value" in
-      "$QUOTE") json_escape_result=$json_escape_result\\\" ;;
-      "$BACKSLASH") json_escape_result=$json_escape_result\\\\ ;;
-      "$TAB") json_escape_result=$json_escape_result\\t ;;
-      "$NEWLINE") json_escape_result=$json_escape_result\\n ;;
-      "$CARRIAGE_RETURN") json_escape_result=$json_escape_result\\r ;;
-      "$FORM_FEED") json_escape_result=$json_escape_result\\f ;;
-      "$BACKSPACE") json_escape_result=$json_escape_result\\b ;;
-      "$VERTICAL_TAB") json_escape_result=$json_escape_result\\u000b ;;
-      *) json_escape_result=$json_escape_result$first_character_value ;;
-    esac
-  done
-  printf '%s' "$json_escape_result"
-}
+    function json_string(s, i, c) {
+      printf "\""
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (c == quote) printf "%s", "\\\""
+        else if (c == backslash) printf "%s", "\\\\"
+        else if (c == tab) printf "%s", "\\t"
+        else if (c == newline) printf "%s", "\\n"
+        else if (c == carriage_return) printf "%s", "\\r"
+        else if (c == form_feed) printf "%s", "\\f"
+        else if (c == backspace) printf "%s", "\\b"
+        else if (c == vertical_tab) printf "%s", "\\u000b"
+        else printf "%s", c
+      }
+      printf "\""
+    }
 
-append_consumed_token() {
-  if [ "$consumed_count" -eq 0 ]; then
-    consumed_json='['
-  else
-    consumed_json=$consumed_json,
-  fi
-  consumed_json=$consumed_json\"$(json_escape "$1")\"
-  consumed_count=$((consumed_count + 1))
+    {
+      raw = raw $0
+    }
+
+    END {
+      # The caller appends a sentinel so an input-ending newline is not
+      # discarded by awk record handling.
+      raw = substr(raw, 1, length(raw) - 1)
+      requested_mode = "AUTO"
+      requested_delivery = "DEFAULT"
+      delivery_mode = "GUIDED"
+      input_status = "COMPLETE"
+      parsed_ticket = ""
+      consumed_count = 0
+
+      parse_remainder = trim_leading(raw)
+      if (parse_remainder == "") {
+        input_status = "EMPTY"
+      } else {
+        take_token(parse_remainder)
+        first_token = token
+        parse_remainder = token_remainder
+
+        if (first_token == "herdr") {
+          consumed[++consumed_count] = first_token
+          input_status = "MIGRATION_REQUIRED"
+        } else if (first_token == "solo" || first_token == "subagents" || first_token == "isolated") {
+          if (first_token == "solo") requested_mode = "SOLO"
+          else if (first_token == "subagents") requested_mode = "SUBAGENTS"
+          else requested_mode = "ISOLATED"
+          consumed[++consumed_count] = first_token
+          parse_remainder = trim_leading(parse_remainder)
+          if (parse_remainder != "") {
+            take_token(parse_remainder)
+            if (token == "guided" || token == "pr") {
+              if (token == "guided") requested_delivery = "GUIDED"
+              else requested_delivery = "PR"
+              delivery_mode = requested_delivery
+              consumed[++consumed_count] = token
+              parse_remainder = token_remainder
+            }
+          }
+          parsed_ticket = trim_trailing(trim_leading(parse_remainder))
+          if (parsed_ticket == "") input_status = "INCOMPLETE"
+        } else if (first_token == "guided" || first_token == "pr") {
+          if (first_token == "guided") requested_delivery = "GUIDED"
+          else requested_delivery = "PR"
+          delivery_mode = requested_delivery
+          consumed[++consumed_count] = first_token
+          parse_remainder = trim_leading(parse_remainder)
+          if (parse_remainder != "") {
+            take_token(parse_remainder)
+            if (token == "solo" || token == "subagents" || token == "isolated") {
+              if (token == "solo") requested_mode = "SOLO"
+              else if (token == "subagents") requested_mode = "SUBAGENTS"
+              else requested_mode = "ISOLATED"
+              consumed[++consumed_count] = token
+              parse_remainder = token_remainder
+            }
+          }
+          parsed_ticket = trim_trailing(trim_leading(parse_remainder))
+          if (parsed_ticket == "") input_status = "INCOMPLETE"
+        } else {
+          parsed_ticket = trim_trailing(trim_leading(raw))
+        }
+      }
+
+      printf "{\"raw_arguments\":"
+      json_string(raw)
+      printf ",\"parsed_ticket\":"
+      json_string(parsed_ticket)
+      printf ",\"requested_mode\":\"%s\",\"requested_delivery\":\"%s\",\"delivery_mode\":\"%s\",\"input_status\":\"%s\",\"consumed_tokens\":[", requested_mode, requested_delivery, delivery_mode, input_status
+      for (i = 1; i <= consumed_count; i++) {
+        if (i > 1) printf ","
+        json_string(consumed[i])
+      }
+      printf "]}\n"
+    }
+  '
 }
 
 parse_raw_arguments() {
-  raw_arguments=$1
-  requested_mode=AUTO
-  requested_delivery=DEFAULT
-  delivery_mode=GUIDED
-  input_status=COMPLETE
-  consumed_count=0
-  consumed_json='['
-  parsed_ticket=
-
-  trim_leading_whitespace "$raw_arguments"
-  parse_remainder=$trimmed_value
-  if [ -z "$parse_remainder" ]; then
-    input_status=EMPTY
-  else
-    token_remainder=$parse_remainder
-    take_token
-    first_token=$token
-    parse_remainder=$token_remainder
-
-    case "$first_token" in
-      herdr)
-        append_consumed_token "$first_token"
-        input_status=MIGRATION_REQUIRED
-        parse_remainder=
-        ;;
-      solo|subagents|isolated)
-        requested_mode=$(printf '%s' "$first_token" | tr '[:lower:]' '[:upper:]')
-        append_consumed_token "$first_token"
-        trim_leading_whitespace "$parse_remainder"
-        parse_remainder=$trimmed_value
-        if [ -n "$parse_remainder" ]; then
-          token_remainder=$parse_remainder
-          take_token
-          case "$token" in
-            guided|pr)
-              requested_delivery=$(printf '%s' "$token" | tr '[:lower:]' '[:upper:]')
-              delivery_mode=$requested_delivery
-              append_consumed_token "$token"
-              parse_remainder=$token_remainder
-              ;;
-          esac
-        fi
-        ;;
-      guided|pr)
-        requested_delivery=$(printf '%s' "$first_token" | tr '[:lower:]' '[:upper:]')
-        delivery_mode=$requested_delivery
-        append_consumed_token "$first_token"
-        trim_leading_whitespace "$parse_remainder"
-        parse_remainder=$trimmed_value
-        if [ -n "$parse_remainder" ]; then
-          token_remainder=$parse_remainder
-          take_token
-          case "$token" in
-            solo|subagents|isolated)
-              requested_mode=$(printf '%s' "$token" | tr '[:lower:]' '[:upper:]')
-              append_consumed_token "$token"
-              parse_remainder=$token_remainder
-              ;;
-          esac
-        fi
-        ;;
-      *)
-        parse_remainder=$raw_arguments
-        ;;
-    esac
-
-    if [ "$input_status" = COMPLETE ]; then
-      trim_surrounding_whitespace "$parse_remainder"
-      parsed_ticket=$trimmed_value
-      [ -n "$parsed_ticket" ] || {
-        if [ "$consumed_count" -gt 0 ]; then
-          input_status=INCOMPLETE
-        else
-          input_status=EMPTY
-        fi
-      }
-    fi
-  fi
-
-  [ "$consumed_count" -gt 0 ] || consumed_json='['
-  consumed_json=$consumed_json']'
-  raw_json=$(json_escape "$raw_arguments")
-  parsed_json=$(json_escape "$parsed_ticket")
-  printf '{"raw_arguments":"%s","parsed_ticket":"%s","requested_mode":"%s","requested_delivery":"%s","delivery_mode":"%s","input_status":"%s","consumed_tokens":%s}\n' \
-    "$raw_json" "$parsed_json" "$requested_mode" "$requested_delivery" \
-    "$delivery_mode" "$input_status" "$consumed_json"
+  printf '%s\001' "$1" | parse_stream
 }
 
 parse() {
@@ -218,10 +195,7 @@ parse() {
       ;;
     --stdin)
       [ "$#" -eq 1 ] || fail '--stdin does not accept additional arguments'
-      # The sentinel keeps command substitution from stripping trailing newlines.
-      stdin_with_sentinel=$(cat; printf '\001')
-      raw_stdin=${stdin_with_sentinel%?}
-      parse_raw_arguments "$raw_stdin"
+      { cat; printf '\001'; } | parse_stream
       ;;
     -h|--help)
       usage
@@ -240,9 +214,7 @@ main() {
     -h|--help)
       usage
       ;;
-    *)
-      fail "unknown command: $1"
-      ;;
+    *) fail "unknown command: $1" ;;
   esac
 }
 
