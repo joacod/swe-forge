@@ -357,8 +357,11 @@ $TMPDIR/swe-forge/<run-id>/run-state.yaml
 The canonical `swe-forge-state init` operation owns schema-v3 shell
 construction. Use `swe-forge-state set-continuation` for the bounded semantic
 continuation inputs; it generates `continuation.updated_at` and derives the
-`continuation.delivery.mode` projection from `delivery_mode`. Callers must not
-hand-construct containers, timestamps, or delivery projections in YAML. The
+`continuation.delivery.mode` projection from `delivery_mode`. Use its bounded
+`set-delivery-checkout` and `set-receipt-ref` operations for canonical delivery
+checkout and receipt-reference updates; callers supply semantic facts and do
+not structurally edit `run-state.yaml`. Callers must not hand-construct
+containers, timestamps, or delivery projections in YAML. The
 `continuation` block must remain short and deterministic: active workflow,
 phase/step, pending user action, next action, delivery/PR state, safe boundary,
 and update marker. It must not copy the original ticket or a transcript.
