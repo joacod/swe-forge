@@ -347,16 +347,27 @@ context:
   fs.writeFileSync(filePath, yaml);
 }
 
-const freshOldState = path.join(fixtureCwd, "fresh-invocation", "old", "run-state.yaml");
+const freshOldState = path.join(fixtureCwd, "fresh-invocation", "old-a", "run-state.yaml");
+const freshStalePeerState = path.join(fixtureCwd, ".swe-forge", "runs", "fresh-invocation-old-b", "run-state.yaml");
 const freshNewState = path.join(fixtureCwd, "fresh-invocation", "new", "run-state.yaml");
 writeRuntimeState(freshOldState, {
   cwd: fixtureCwd,
-  runId: "fresh-old-run",
-  phase: "stale_phase",
-  nextKind: "stale_next",
-  nextTarget: "stale evidence",
+  runId: "fresh-old-a",
+  phase: "stale_a_phase",
+  nextKind: "stale_a_next",
+  nextTarget: "stale A evidence",
   updatedAt: "2061-01-01T00:00:00Z",
   prNumber: 901,
+  prState: "OPEN",
+});
+writeRuntimeState(freshStalePeerState, {
+  cwd: fixtureCwd,
+  runId: "fresh-old-b",
+  phase: "stale_b_phase",
+  nextKind: "stale_b_next",
+  nextTarget: "stale B evidence",
+  updatedAt: "2060-01-01T00:00:00Z",
+  prNumber: 900,
   prState: "OPEN",
 });
 delete process.env.SWE_FORGE_STATE;
@@ -382,22 +393,33 @@ const freshStartPrompt = freshStart?.systemPrompt ?? "";
 for (const staleValue of [
   "SWE-FORGE ACTIVE RUN",
   "PR: #901 OPEN",
-  "phase: stale_phase",
-  "next_action: stale_next -> stale evidence",
+  "phase: stale_a_phase",
+  "next_action: stale_a_next -> stale A evidence",
+  "PR: #900 OPEN",
+  "phase: stale_b_phase",
+  "next_action: stale_b_next -> stale B evidence",
 ]) {
-  if (freshStartPrompt.includes(staleValue)) throw new Error("fresh invocation inherited the previous run");
+  if (freshStartPrompt.includes(staleValue)) throw new Error("fresh invocation inherited a stale run");
 }
 
-// The same run remains fenced when another startup or input hook rediscovers it.
-const sameOldRefresh = await freshHandlers.get("before_agent_start")({
+// Removing the previous discovery winner must not release another run that was
+// already discoverable at the same fresh-invocation boundary.
+fs.rmSync(freshOldState);
+const stalePeerRefresh = await freshHandlers.get("before_agent_start")({
   prompt: "ordinary follow-up turn",
   systemPrompt: "base",
 }, freshContext);
-if ((sameOldRefresh?.systemPrompt ?? "").includes("SWE-FORGE ACTIVE RUN")) {
-  throw new Error("fresh invocation fence did not survive rediscovery");
+const stalePeerPrompt = stalePeerRefresh?.systemPrompt ?? "";
+for (const staleValue of [
+  "SWE-FORGE ACTIVE RUN",
+  "PR: #900 OPEN",
+  "phase: stale_b_phase",
+  "next_action: stale_b_next -> stale B evidence",
+]) {
+  if (stalePeerPrompt.includes(staleValue)) throw new Error("stale peer run became authoritative");
 }
-const sameOldMerge = await freshHandlers.get("input")({ text: "merged", source: "interactive" }, freshContext);
-if (sameOldMerge) throw new Error("superseded run remained authoritative during input handling");
+const stalePeerMerge = await freshHandlers.get("input")({ text: "merged", source: "interactive" }, freshContext);
+if (stalePeerMerge) throw new Error("stale peer run remained authoritative during input handling");
 
 writeRuntimeState(freshNewState, {
   cwd: fixtureCwd,
@@ -423,6 +445,7 @@ if (
 ) {
   throw new Error("new run did not resume normal continuation behavior");
 }
+fs.rmSync(freshStalePeerState);
 
 function writeSettings(filePath, value) {
   if (value === undefined) {

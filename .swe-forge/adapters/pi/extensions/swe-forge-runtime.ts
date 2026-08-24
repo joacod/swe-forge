@@ -275,7 +275,7 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 	};
 }
 
-function resolveActiveRun(cwd: string): ActiveRun | undefined {
+function resolveActiveRuns(cwd: string): ActiveRun[] {
 	const candidates = Array.from(discoverStatePaths(cwd))
 		.map((filePath) => parseActiveRun(filePath, cwd))
 		.filter((run): run is ActiveRun => Boolean(run));
@@ -283,7 +283,7 @@ function resolveActiveRun(cwd: string): ActiveRun | undefined {
 		(left, right) =>
 			right.updatedAt - left.updatedAt || right.modifiedAt - left.modifiedAt || left.filePath.localeCompare(right.filePath),
 	);
-	return candidates[0];
+	return candidates;
 }
 
 interface SubagentToolObservation {
@@ -594,7 +594,7 @@ function compactionReason(
 export default function sweForgeRuntime(pi: any) {
 	let activeRun: ActiveRun | undefined;
 	let activeRunVersion = "none";
-	let supersededRunId: string | undefined;
+	let supersededRunIds = new Set<string>();
 	let negotiatedSubagentCapabilities: unknown;
 	let invocationActive = false;
 	let compactionInFlight = false;
@@ -602,16 +602,16 @@ export default function sweForgeRuntime(pi: any) {
 	let lastCompactionState = "";
 
 	const refresh = (cwd: string, freshInvocation = false): ActiveRun | undefined => {
-		const discovered = resolveActiveRun(cwd);
+		const discoveredRuns = resolveActiveRuns(cwd);
 		if (freshInvocation) {
-			// Fence the run present at the fresh-invocation boundary. Keep this in
-			// refresh so every startup hook ignores the same stale run until a
-			// different run_id appears.
-			supersededRunId = discovered?.stateId;
-		} else if (discovered && supersededRunId && discovered.stateId !== supersededRunId) {
-			supersededRunId = undefined;
+			// Fence every run at the fresh-invocation boundary. Keep this in refresh
+			// so every startup hook ignores those stale runs until a different run_id
+			// appears.
+			supersededRunIds = new Set(discoveredRuns.map((run) => run.stateId));
 		}
-		activeRun = discovered && discovered.stateId !== supersededRunId ? discovered : undefined;
+		const discovered = discoveredRuns.find((run) => !supersededRunIds.has(run.stateId));
+		if (discovered && supersededRunIds.size > 0) supersededRunIds.clear();
+		activeRun = discovered;
 		const nextVersion = activeRun
 			? `${activeRun.filePath}:${activeRun.stateId}:${topology(activeRun.currentTopology)}:${topology(activeRun.preferredTopology)}`
 			: "none";
