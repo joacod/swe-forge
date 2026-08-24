@@ -63,6 +63,8 @@ assert_support_tree() {
     assert_link "$support/.swe-forge/$entry_name" "$source_dir"
   done
   test ! -e "$support/.swe-forge/adapters" || fail "adapter catalog was installed"
+  test -x "$support/.swe-forge/tools/swe-forge-invocation" || \
+    fail "installed canonical invocation parser is not executable"
 }
 
 assert_projection() {

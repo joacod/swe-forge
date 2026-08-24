@@ -106,8 +106,10 @@ delivery_checkout:
 
 ### Canonical routing ownership
 
-`requested_mode` is the immutable invocation request. The nested `routing`
-mapping is the sole owner of live topology facts:
+`requested_mode` is the immutable invocation request. The shared invocation
+parser/bootstrap supplies `requested_mode`, `requested_delivery`, and
+`delivery_mode` to `swe-forge-state init`; an `input_status` other than
+`COMPLETE` must not initialize a ticket run. The nested `routing` mapping is the sole owner of live topology facts:
 
 | Field | Meaning and update rule |
 | --- | --- |

@@ -67,7 +67,7 @@ canonical files to read, not reproduce their procedure.
 Adding an adapter requires these bounded pieces, in this order:
 
 1. project the canonical workflow into the host's supported extension mechanism;
-2. translate the host's invocation syntax into the canonical ticket input;
+2. forward the host's untouched invocation arguments to the shared parser/bootstrap;
 3. declare or detect only capabilities the adapter actually demonstrates;
 4. use canonical semantics and documented fallbacks when a capability is absent;
 5. document the support tier and validation level honestly.

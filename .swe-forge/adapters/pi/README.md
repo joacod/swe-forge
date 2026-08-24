@@ -32,7 +32,8 @@ The installer creates or links:
 The prompt and extension loaders resolve canonical files under
 `~/.pi/agent/swe-forge/`, never against a project-local `.swe-forge/` tree.
 The links point to the stable SWE Forge checkout, so a reviewed source update
-updates future sessions.
+updates future sessions. The shared invocation parser lives at
+`~/.pi/agent/swe-forge/.swe-forge/tools/swe-forge-invocation`.
 
 The optional `swe_forge_subagent` package is not installed by the commands
 above. Until that package is published to npm, use the
@@ -80,16 +81,23 @@ records that preference separately.
 
 The template uses Pi's `$ARGUMENTS` expansion and is only processed when the
 user explicitly types `/swe-forge`. Ordinary prompts remain unchanged. The
-separate `/git-commit`, `/git-push`, `/git-pr`, and `/git-sync` prompts load the
-canonical delivery policy. `/git-pr draft` forwards an explicit draft request;
-plain `/git-pr` retains normal/open behavior. See [shared adapter behavior](../README.md)
-for the workflow and delivery rules.
+runtime executes the shared invocation parser once for that expanded raw
+argument string and injects its normalized JSON facts before the first agent
+turn. If the parser is unavailable, the canonical ticket bootstrap remains the
+fallback; it invokes the same executable once rather than recreating grammar in
+this adapter. The separate `/git-commit`, `/git-push`, `/git-pr`, and
+`/git-sync` prompts load the canonical delivery policy.
+`/git-pr draft` forwards an explicit draft request; plain `/git-pr` retains
+normal/open behavior. See
+[shared adapter behavior](../README.md) for the workflow and delivery rules.
 
 ## Runtime integration
 
 The extension keeps Pi-specific API knowledge here and exposes no model,
 provider, price, or reasoning-level routing. It:
 
+- executes the canonical invocation parser once at the explicit prompt
+  boundary and appends its normalized facts to the first agent system prompt;
 - reads only the compact durable continuation state;
 - appends a bounded deterministic `SWE-FORGE ACTIVE RUN` block to the current
   system prompt from `before_agent_start`, without copying the ticket or

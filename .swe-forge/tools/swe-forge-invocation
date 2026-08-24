@@ -1,0 +1,249 @@
+#!/bin/sh
+
+# Dependency-free, portable parser for the reserved SWE-Forge invocation prefix.
+# It owns command grammar only; topology selection and provider semantics remain
+# agentic decisions after the normalized invocation facts are available.
+
+set -eu
+
+PROGRAM=${0##*/}
+SPACE=' '
+TAB=$(printf '\t')
+NEWLINE='
+'
+CARRIAGE_RETURN=$(printf '\r')
+FORM_FEED=$(printf '\f')
+VERTICAL_TAB=$(printf '\013')
+BACKSPACE=$(printf '\b')
+QUOTE='"'
+BACKSLASH='\\'
+
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  swe-forge-invocation parse --raw-arguments TEXT
+  swe-forge-invocation parse --stdin
+
+`--raw-arguments` accepts the complete, unmodified argument string as one
+value. `--stdin` reads that same value without changing whitespace. The parser
+writes one deterministic JSON object with the normalized invocation facts
+(`input_status` is `COMPLETE`, `EMPTY`, `INCOMPLETE`, or
+`MIGRATION_REQUIRED`) and never chooses automatic topology or a provider.
+For `MIGRATION_REQUIRED`, use: "The `herdr` topology token was removed. Use
+`isolated` and request Herdr as an execution-provider preference if it is
+wanted."
+EOF
+}
+
+is_whitespace() {
+  case "$1" in
+    "$SPACE"|"$TAB"|"$NEWLINE"|"$CARRIAGE_RETURN"|"$FORM_FEED"|"$VERTICAL_TAB") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+first_character() {
+  first_character_input=$1
+  first_character_remainder=${first_character_input#?}
+  first_character_value=${first_character_input%"$first_character_remainder"}
+}
+
+trim_leading_whitespace() {
+  trim_leading_value=$1
+  while [ -n "$trim_leading_value" ]; do
+    first_character "$trim_leading_value"
+    is_whitespace "$first_character_value" || break
+    trim_leading_value=${trim_leading_value#?}
+  done
+  trimmed_value=$trim_leading_value
+}
+
+trim_trailing_whitespace() {
+  trim_trailing_value=$1
+  while [ -n "$trim_trailing_value" ]; do
+    trim_trailing_prefix=${trim_trailing_value%?}
+    trim_trailing_character=${trim_trailing_value#"$trim_trailing_prefix"}
+    is_whitespace "$trim_trailing_character" || break
+    trim_trailing_value=$trim_trailing_prefix
+  done
+  trimmed_value=$trim_trailing_value
+}
+
+trim_surrounding_whitespace() {
+  trim_leading_whitespace "$1"
+  trim_trailing_whitespace "$trimmed_value"
+}
+
+take_token() {
+  token=
+  while [ -n "$token_remainder" ]; do
+    first_character "$token_remainder"
+    is_whitespace "$first_character_value" && break
+    token=$token$first_character_value
+    token_remainder=${token_remainder#?}
+  done
+}
+
+json_escape() {
+  json_escape_value=$1
+  json_escape_result=
+  while [ -n "$json_escape_value" ]; do
+    first_character "$json_escape_value"
+    json_escape_value=${json_escape_value#?}
+    case "$first_character_value" in
+      "$QUOTE") json_escape_result=$json_escape_result\\\" ;;
+      "$BACKSLASH") json_escape_result=$json_escape_result\\\\ ;;
+      "$TAB") json_escape_result=$json_escape_result\\t ;;
+      "$NEWLINE") json_escape_result=$json_escape_result\\n ;;
+      "$CARRIAGE_RETURN") json_escape_result=$json_escape_result\\r ;;
+      "$FORM_FEED") json_escape_result=$json_escape_result\\f ;;
+      "$BACKSPACE") json_escape_result=$json_escape_result\\b ;;
+      "$VERTICAL_TAB") json_escape_result=$json_escape_result\\u000b ;;
+      *) json_escape_result=$json_escape_result$first_character_value ;;
+    esac
+  done
+  printf '%s' "$json_escape_result"
+}
+
+append_consumed_token() {
+  if [ "$consumed_count" -eq 0 ]; then
+    consumed_json='['
+  else
+    consumed_json=$consumed_json,
+  fi
+  consumed_json=$consumed_json\"$(json_escape "$1")\"
+  consumed_count=$((consumed_count + 1))
+}
+
+parse_raw_arguments() {
+  raw_arguments=$1
+  requested_mode=AUTO
+  requested_delivery=DEFAULT
+  delivery_mode=GUIDED
+  input_status=COMPLETE
+  consumed_count=0
+  consumed_json='['
+  parsed_ticket=
+
+  trim_leading_whitespace "$raw_arguments"
+  parse_remainder=$trimmed_value
+  if [ -z "$parse_remainder" ]; then
+    input_status=EMPTY
+  else
+    token_remainder=$parse_remainder
+    take_token
+    first_token=$token
+    parse_remainder=$token_remainder
+
+    case "$first_token" in
+      herdr)
+        append_consumed_token "$first_token"
+        input_status=MIGRATION_REQUIRED
+        parse_remainder=
+        ;;
+      solo|subagents|isolated)
+        requested_mode=$(printf '%s' "$first_token" | tr '[:lower:]' '[:upper:]')
+        append_consumed_token "$first_token"
+        trim_leading_whitespace "$parse_remainder"
+        parse_remainder=$trimmed_value
+        if [ -n "$parse_remainder" ]; then
+          token_remainder=$parse_remainder
+          take_token
+          case "$token" in
+            guided|pr)
+              requested_delivery=$(printf '%s' "$token" | tr '[:lower:]' '[:upper:]')
+              delivery_mode=$requested_delivery
+              append_consumed_token "$token"
+              parse_remainder=$token_remainder
+              ;;
+          esac
+        fi
+        ;;
+      guided|pr)
+        requested_delivery=$(printf '%s' "$first_token" | tr '[:lower:]' '[:upper:]')
+        delivery_mode=$requested_delivery
+        append_consumed_token "$first_token"
+        trim_leading_whitespace "$parse_remainder"
+        parse_remainder=$trimmed_value
+        if [ -n "$parse_remainder" ]; then
+          token_remainder=$parse_remainder
+          take_token
+          case "$token" in
+            solo|subagents|isolated)
+              requested_mode=$(printf '%s' "$token" | tr '[:lower:]' '[:upper:]')
+              append_consumed_token "$token"
+              parse_remainder=$token_remainder
+              ;;
+          esac
+        fi
+        ;;
+      *)
+        parse_remainder=$raw_arguments
+        ;;
+    esac
+
+    if [ "$input_status" = COMPLETE ]; then
+      trim_surrounding_whitespace "$parse_remainder"
+      parsed_ticket=$trimmed_value
+      [ -n "$parsed_ticket" ] || {
+        if [ "$consumed_count" -gt 0 ]; then
+          input_status=INCOMPLETE
+        else
+          input_status=EMPTY
+        fi
+      }
+    fi
+  fi
+
+  [ "$consumed_count" -gt 0 ] || consumed_json='['
+  consumed_json=$consumed_json']'
+  raw_json=$(json_escape "$raw_arguments")
+  parsed_json=$(json_escape "$parsed_ticket")
+  printf '{"raw_arguments":"%s","parsed_ticket":"%s","requested_mode":"%s","requested_delivery":"%s","delivery_mode":"%s","input_status":"%s","consumed_tokens":%s}\n' \
+    "$raw_json" "$parsed_json" "$requested_mode" "$requested_delivery" \
+    "$delivery_mode" "$input_status" "$consumed_json"
+}
+
+parse() {
+  [ "$#" -gt 0 ] || fail 'parse requires --raw-arguments or --stdin'
+  case "$1" in
+    --raw-arguments|--raw)
+      [ "$#" -eq 2 ] || fail "$1 requires exactly one value"
+      parse_raw_arguments "$2"
+      ;;
+    --stdin)
+      [ "$#" -eq 1 ] || fail '--stdin does not accept additional arguments'
+      # The sentinel keeps command substitution from stripping trailing newlines.
+      stdin_with_sentinel=$(cat; printf '\001')
+      raw_stdin=${stdin_with_sentinel%?}
+      parse_raw_arguments "$raw_stdin"
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *) fail "unknown parse option: $1" ;;
+  esac
+}
+
+main() {
+  [ "$#" -gt 0 ] || { usage >&2; exit 2; }
+  case "$1" in
+    parse)
+      shift
+      parse "$@"
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *)
+      fail "unknown command: $1"
+      ;;
+  esac
+}
+
+main "$@"

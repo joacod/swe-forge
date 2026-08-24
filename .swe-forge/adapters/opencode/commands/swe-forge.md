@@ -15,8 +15,9 @@ against a project-local `.swe-forge/` tree. Keep repository discovery rooted in
 the active project and preserve the raw invocation arguments as the original
 ticket.
 
-Pass the raw invocation arguments below unchanged to the ticket procedure; it
-owns reserved-token parsing, provider migration guidance, and delivery-mode
-handling.
+Pass the raw invocation arguments below unchanged to the ticket procedure;
+the shared parser/bootstrap supplies normalized invocation facts and the
+procedure handles their status and delivery-mode flow.
 
+Raw invocation arguments:
 $ARGUMENTS

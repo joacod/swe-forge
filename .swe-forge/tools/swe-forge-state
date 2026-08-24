@@ -23,7 +23,9 @@ Usage:
   swe-forge-state set-continuation --state FILE|DIRECTORY [options]
 
 `init` creates the current schema-v3 structural shell from explicit routing,
-delivery, and checkout facts. `set-continuation` accepts only the bounded
+delivery, checkout, and normalized invocation facts. Pass the parser's
+`requested_mode`, `requested_delivery`, and `delivery_mode` values unchanged.
+`set-continuation` accepts only the bounded
 continuation surface; it generates `updated_at` and derives the delivery
 projection. Both write operations validate a temporary result before atomic
 replacement. Obsolete or unknown state must be replaced by starting a fresh run.

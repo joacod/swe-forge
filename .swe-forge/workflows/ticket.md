@@ -44,60 +44,34 @@ invocation arguments as the immutable ticket input, including reserved command
 tokens before parsing. Record the parsed remainder separately; the remainder
 must not replace the original input.
 
-For harness commands, parse the raw arguments before ingesting the ticket:
+Before ingesting the ticket, use the canonical
+`.swe-forge/tools/swe-forge-invocation` parser/bootstrap primitive exactly
+once. A host runtime may supply its normalized result before the agent starts;
+otherwise the bootstrap path invokes the same executable with the complete raw
+argument string as one value. Do not mentally parse, re-tokenize, substring
+match, or normalize the command in workflow prose.
 
-- inspect the first token: if it is lowercase `solo`, `subagents`, or
-  `isolated`, record `requested_mode` and remove it as the explicit topology
-- inspect the first remaining token (or the original first token): if it is
-  lowercase `guided` or `pr`, record `requested_delivery` and remove it as the
-  delivery token; this supports either `solo pr <ticket>`, `isolated pr
-  <ticket>`, or `pr isolated <ticket>`
-- if a delivery token was consumed before a topology token, inspect the next
-  token for lowercase `solo`, `subagents`, or `isolated` and record it as the
-  explicit topology
-- if the first token is lowercase `herdr`, do not record a Herdr topology and
-  do not silently treat it as a ticket. Return clear migration guidance:
-  "The `herdr` topology token was removed. Use `isolated` and request Herdr as
-  an execution-provider preference if it is wanted." Ask the user to resubmit
-  the corrected invocation, while preserving the original raw arguments in run
-  state.
-- record a separate `requested_provider` when the user explicitly asks for
-  `NATIVE`, `HERDR`, or `NONE` as an execution-provider preference. Provider
-  preference is a natural-language decision (for example, "use Herdr as the
-  provider for isolated execution") rather than a topology token; a harness
-  may expose a separate provider-preference field only when it documents that
-  syntax. Provider preference never changes `requested_mode` and the word
-  `herdr` is not a topology alias
-- if no delivery token is consumed, record `requested_delivery: DEFAULT` and
-  resolve `delivery_mode: GUIDED`
-- if no topology token is consumed, record `requested_mode: AUTO`
-- preserve the non-empty remainder as the parsed ticket while retaining the
-  complete raw invocation as the original ticket reference
-- preserve any user-supplied specialist-skill names, paths, or URLs as ticket
-  input; do not treat them as permission to install or execute external code
-- a topology or delivery token without a ticket is incomplete input; ask for the
-  missing ticket
-- if the first token is not one of the reserved lowercase tokens, preserve it
-  as ticket text and record `requested_mode: AUTO`
+Consume the parser's machine-readable result as the invocation facts:
+`raw_arguments`, `parsed_ticket`, `requested_mode`, `requested_delivery`,
+`delivery_mode`, `input_status`, and `consumed_tokens`. The raw value remains
+the immutable invocation input; `parsed_ticket` is the software task to reason
+about. `COMPLETE` is the only status that proceeds as a ticket. `EMPTY` and
+`INCOMPLETE` require the missing ticket, while `MIGRATION_REQUIRED` returns the
+parser's removed-provider migration guidance and asks the user to resubmit.
+The parser does not choose automatic topology or infer a provider from ticket
+text.
 
-The lowercase topology words remain reserved only in the canonical topology
-position. The delivery shorthand is intentionally explicit: `pr` selects the
-low-touch pull-request path, while `guided` makes the default visible. Natural
-language activation without a command may state a mode or provider preference
-directly. The supported explicit isolated forms are:
+When initializing canonical run state, pass `requested_mode`,
+`requested_delivery`, and `delivery_mode` from this normalized result to
+`swe-forge-state init` unchanged. The state helper owns the schema-v3 shell and
+serialization; do not hand-write a second state representation. Provider
+preference remains a separate semantic decision after invocation facts are
+available. Human-readable public forms remain documented in the specification,
+including `/swe-forge isolated <ticket>` and `/swe-forge pr isolated <ticket>`;
+this procedure does not duplicate their grammar.
 
-```text
-/swe-forge isolated <ticket>
-/swe-forge isolated pr <ticket>
-/swe-forge pr isolated <ticket>
-```
-
-A natural-language request such as "use Herdr as the provider for this
-isolated run" records `requested_provider: HERDR` without changing the
-reserved topology grammar. Never advertise a removed provider name as an
-execution mode. Migration
-handling must point users to `isolated` and a separate Herdr provider
-preference.
+Preserve any user-supplied specialist-skill names, paths, or URLs as ticket
+input; do not treat them as permission to install or execute external code.
 
 Record the requested behavior, explicit constraints, affected users or systems,
 non-goals, and any requested validation. Preserve important wording from the

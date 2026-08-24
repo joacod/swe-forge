@@ -21,10 +21,14 @@ support files from `~/.agents/swe-forge/`. The installer does not modify
 `~/.codex/AGENTS.md`, `config.toml`, permissions, models, credentials, or other
 personal Codex configuration.
 
-Invoke it explicitly with `$swe-forge <ticket>`. For isolated execution,
-state "Use `isolated` with Herdr as the execution provider" in the ticket when
-that optional provider preference is wanted. Natural-language activation
-through the project's `AGENTS.md` remains the fallback.
+Invoke it explicitly with `$swe-forge <ticket>`. The shared skill keeps the
+raw request unchanged; because this adapter has no verified pre-agent runtime
+hook, the canonical ticket bootstrap invokes
+`~/.agents/swe-forge/.swe-forge/tools/swe-forge-invocation` once before
+reasoning about the software task. For isolated execution, state "Use
+`isolated` with Herdr as the execution provider" in the ticket when that
+optional provider preference is wanted. Natural-language activation through
+the project's `AGENTS.md` remains the fallback.
 
 See the [shared Agent Skill adapter](../shared/agent-skill/README.md) for the
 current Codex and Cursor documentation references.

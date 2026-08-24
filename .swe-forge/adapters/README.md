@@ -43,8 +43,10 @@ or reviewing a host projection:
 
 - [`SWE-FORGE.md`](../../SWE-FORGE.md) — activation, lifecycle, topology,
   delivery-mode, acceptance, and ownership/load rules
-- [`workflows/ticket.md`](../workflows/ticket.md) — ticket parsing, sequencing,
-  and conditional source loads
+- [`tools/swe-forge-invocation`](../tools/swe-forge-invocation) — the one
+  portable invocation parser/bootstrap primitive
+- [`workflows/ticket.md`](../workflows/ticket.md) — normalized-fact ingestion,
+  sequencing, and conditional source loads
 - [`policies/delegation.md`](../policies/delegation.md) and
   [`contracts/worker-brief.md`](../contracts/worker-brief.md) — bounded worker
   context and dependency handoffs

@@ -1,8 +1,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ACTIVE_MARKER = "SWE-FORGE ACTIVE RUN";
+const NORMALIZED_INVOCATION_MARKER = "[SWE-FORGE NORMALIZED INVOCATION]";
+const INVOCATION_ARGUMENTS_MARKER = "Raw invocation arguments:";
+const MAX_INVOCATION_BYTES = 256 * 1024;
 const DEFAULT_RESERVE_TOKENS = 16_384;
 const COMPACTION_COOLDOWN_MS = 30_000;
 const MAX_STATE_FILES = 64;
@@ -29,6 +33,16 @@ interface ReserveCacheEntry {
 }
 
 const reserveCache = new Map<string, ReserveCacheEntry>();
+
+interface NormalizedInvocation {
+	raw_arguments: string;
+	parsed_ticket: string;
+	requested_mode: "AUTO" | "SOLO" | "SUBAGENTS" | "ISOLATED";
+	requested_delivery: "DEFAULT" | "GUIDED" | "PR";
+	delivery_mode: "GUIDED" | "PR";
+	input_status: "COMPLETE" | "EMPTY" | "INCOMPLETE" | "MIGRATION_REQUIRED";
+	consumed_tokens: string[];
+}
 
 /**
  * Pi-specific runtime bridge for SWE Forge.
@@ -390,11 +404,92 @@ function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: stri
 	return `Canonical routing selected ${current}; use the existing SOLO/sequential fallback rather than delegation.`;
 }
 
+function extractInvocationArguments(prompt: unknown): string | undefined {
+	if (typeof prompt !== "string") return undefined;
+	const marker = prompt.indexOf(INVOCATION_ARGUMENTS_MARKER);
+	if (marker < 0) return undefined;
+	let start = marker + INVOCATION_ARGUMENTS_MARKER.length;
+	if (prompt.startsWith("\r\n", start)) start += 2;
+	else if (prompt[start] === "\n" || prompt[start] === "\r") start += 1;
+	else if (prompt[start] === " ") start += 1;
+	return prompt.slice(start);
+}
+
+function invocationParserPath(): string | undefined {
+	const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+	const candidates = [
+		path.join(os.homedir(), ".pi", "agent", "swe-forge", ".swe-forge", "tools", "swe-forge-invocation"),
+		path.join(sourceRoot, ".swe-forge", "tools", "swe-forge-invocation"),
+	];
+	for (const candidate of candidates) {
+		try {
+			if (fs.statSync(candidate).isFile()) return candidate;
+		} catch {
+			// A missing installation falls back to the canonical SOLO/bootstrap path.
+		}
+	}
+	return undefined;
+}
+
+function normalizedInvocation(value: unknown, rawArguments: string): NormalizedInvocation | undefined {
+	if (!isRecord(value) || value.raw_arguments !== rawArguments || typeof value.parsed_ticket !== "string") {
+		return undefined;
+	}
+	const requestedMode = value.requested_mode;
+	const requestedDelivery = value.requested_delivery;
+	const deliveryMode = value.delivery_mode;
+	const inputStatus = value.input_status;
+	const consumedTokens = value.consumed_tokens;
+	if (
+		(requestedMode !== "AUTO" && requestedMode !== "SOLO" && requestedMode !== "SUBAGENTS" && requestedMode !== "ISOLATED") ||
+		(requestedDelivery !== "DEFAULT" && requestedDelivery !== "GUIDED" && requestedDelivery !== "PR") ||
+		(deliveryMode !== "GUIDED" && deliveryMode !== "PR") ||
+		(inputStatus !== "COMPLETE" &&
+			inputStatus !== "EMPTY" &&
+			inputStatus !== "INCOMPLETE" &&
+			inputStatus !== "MIGRATION_REQUIRED") ||
+		!Array.isArray(consumedTokens) ||
+		!consumedTokens.every((token) => typeof token === "string")
+	) {
+		return undefined;
+	}
+	return {
+		raw_arguments: rawArguments,
+		parsed_ticket: value.parsed_ticket,
+		requested_mode: requestedMode,
+		requested_delivery: requestedDelivery,
+		delivery_mode: deliveryMode,
+		input_status: inputStatus,
+		consumed_tokens: [...consumedTokens],
+	};
+}
+
+async function parseInvocation(pi: any, rawArguments: string): Promise<NormalizedInvocation | undefined> {
+	if (Buffer.byteLength(rawArguments, "utf8") > MAX_INVOCATION_BYTES) return undefined;
+	const parser = invocationParserPath();
+	if (!parser || typeof pi.exec !== "function") return undefined;
+	try {
+		const result = await pi.exec(parser, ["parse", "--raw-arguments", rawArguments], { timeout: 5000 });
+		if (result?.code !== 0 || typeof result.stdout !== "string") return undefined;
+		return normalizedInvocation(JSON.parse(result.stdout.trim()), rawArguments);
+	} catch {
+		return undefined;
+	}
+}
+
+function invocationFactsPrompt(invocation: NormalizedInvocation): string {
+	return [
+		NORMALIZED_INVOCATION_MARKER,
+		JSON.stringify(invocation),
+		"The shared parser produced these invocation facts. Do not reinterpret command syntax; use requested_mode and requested_delivery as requests, and make automatic topology/provider decisions from the software task and canonical policy.",
+	].join("\n");
+}
+
 function isSWEForgeInvocation(prompt: unknown): boolean {
 	return (
 		typeof prompt === "string" &&
 		(prompt.includes("The user explicitly invoked SWE Forge through Pi.") ||
-			prompt.includes("Raw invocation arguments"))
+			extractInvocationArguments(prompt) !== undefined)
 	);
 }
 
@@ -597,6 +692,9 @@ export default function sweForgeRuntime(pi: any) {
 	let supersededRunIds = new Set<string>();
 	let negotiatedSubagentCapabilities: unknown;
 	let invocationActive = false;
+	let parsedInvocationPrompt: string | undefined;
+	let parsedInvocationAttempted = false;
+	let parsedInvocation: NormalizedInvocation | undefined;
 	let compactionInFlight = false;
 	let lastCompactionAt = 0;
 	let lastCompactionState = "";
@@ -635,11 +733,22 @@ export default function sweForgeRuntime(pi: any) {
 		refresh(ctx.cwd);
 	});
 
-	on("before_agent_start", (event, ctx) => {
+	on("before_agent_start", async (event, ctx) => {
 		const explicitInvocation = isSWEForgeInvocation(event.prompt);
 		const run = refresh(ctx.cwd, explicitInvocation);
 		invocationActive = Boolean(run) || explicitInvocation;
 		const blocks: string[] = [];
+		if (explicitInvocation && !event.systemPrompt?.includes(NORMALIZED_INVOCATION_MARKER)) {
+			const rawArguments = extractInvocationArguments(event.prompt);
+			if (rawArguments !== undefined) {
+				if (!parsedInvocationAttempted || parsedInvocationPrompt !== event.prompt) {
+					parsedInvocationAttempted = true;
+					parsedInvocationPrompt = event.prompt;
+					parsedInvocation = await parseInvocation(pi, rawArguments);
+				}
+				if (parsedInvocation) blocks.push(invocationFactsPrompt(parsedInvocation));
+			}
+		}
 		if (run && !event.systemPrompt?.includes(`[${ACTIVE_MARKER}]`)) blocks.push(continuityPrompt(run));
 		const subagent = observeSubagentTool(pi);
 		if (
