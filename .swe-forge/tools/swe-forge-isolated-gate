@@ -30,7 +30,8 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/swe-forge-isolated-gate init --state DIR --repo INVOCATION_CHECKOUT \
-    --run-id ID --provider NATIVE|HERDR --capabilities-ref REF
+    --run-id ID --provider NATIVE|HERDR --capabilities-ref REF \
+    [--requested-mode MODE] [--requested-provider PROVIDER]
     (the invocation checkout remains untouched; register-integration supplies
     the separate orchestrator delivery worktree)
   scripts/swe-forge-isolated-gate register-integration --state DIR \
@@ -190,133 +191,22 @@ integration_field() {
   integration_values | awk -F '\t' -v number="$field" '{ print $number; exit }'
 }
 
-write_run_state() {
-  repo=$1
-  branch=$2
-  base=$3
-  head=$4
-  delivery_path=${5:-$repo}
-  delivery_branch=${6:-$branch}
-  delivery_kind=${7:-task}
-  provider=${8:-NATIVE}
-  capabilities_ref=${9:-isolated-gate}
-  state_tmp=$STATE/run-state.yaml.tmp.$$
-  {
-    printf 'workflow: swe-forge\n'
-    printf 'workflow_version: 1\n'
-    printf 'schema_version: 3\n'
-    printf 'run_id: %s\n' "$(meta_value run_id)"
-    printf 'status: running\n'
-    printf 'requested_mode: ISOLATED\n'
-    printf 'requested_provider: AUTO\n'
-    printf 'execution_provider: %s\n' "$provider"
-    printf 'delegation_backend: %s\n' "$provider"
-    printf 'write_isolation: WORKTREE\n'
-    printf 'provider_reason: capability evidence recorded at %s\n' "$capabilities_ref"
-
-    printf 'parallel_strategy: COMPOSE\n'
-    printf 'routing:\n'
-    printf '  initial: ISOLATED\n'
-    printf '  preferred: ISOLATED\n'
-    printf '  selected: ISOLATED\n'
-    printf '  current: ISOLATED\n'
-    printf '  revisions: []\n'
-    printf '  context_value:\n'
-    printf '    projected_pressure: unknown\n'
-    printf '    context_reducibility: unknown\n'
-    printf '    delegatable_context: low\n'
-    printf '    root_context_requirement: high\n'
-    printf '    continuity_risk: unknown\n'
-    printf '    rationale: isolated evidence gate state\n'
-    printf '  runtime_profile_ref: none\n'
-    printf 'integration_strategy: CHERRY_PICK\n'
-    printf 'requested_delivery: PR\n'
-    printf 'delivery_mode: PR\n'
-    printf 'reason: bounded isolated composition\n'
-    printf 'fallback_used: no\n'
-    printf 'invocation_checkout:\n'
-    printf '  path: %s\n' "$repo"
-    printf '  branch: %s\n' "$branch"
-    printf '  head_sha: %s\n' "$head"
-    printf '  classification: writable\n'
-    printf '  mutation_allowed: false\n'
-    printf '  baseline_ref: %s\n' "$base"
-    printf 'delivery_checkout:\n'
-    printf '  path: %s\n' "$delivery_path"
-    printf '  branch: %s\n' "$delivery_branch"
-    printf '  kind: %s\n' "$delivery_kind"
-    printf '  base_sha: %s\n' "$base"
-    printf '  head_sha: %s\n' "$head"
-    printf '  checkpoint_sha: %s\n' "$head"
-    printf '  status: ready\n'
-    printf '  branch_setup: provided\n'
-    printf '  remote_default_evidence: recorded-by-orchestrator\n'
-    printf 'isolated_eligibility:\n'
-    printf '  status: eligible\n'
-    printf '  evidence_ref: isolated-gate\n'
-    printf '  blockers: []\n'
-    printf 'parallel_value:\n'
-    printf '  status: beneficial\n'
-    printf '  rationale: explicitly bounded isolated plan\n'
-    printf '  overridden_by_user: false\n'
-    printf 'provider_capabilities:\n'
-    for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
-      integration_checkout_protection structured_results central_integration; do
-      printf '  %s:\n' "$capability"
-      printf '    status: proven\n'
-      printf '    evidence_ref: %s\n' "$capabilities_ref"
-    done
-    printf '  lifecycle:\n'
-    for operation in wait inspect cancel cleanup; do
-      printf '    %s:\n' "$operation"
-      printf '      status: proven\n'
-      printf '      evidence_ref: %s\n' "$capabilities_ref"
-    done
-    printf 'continuation:\n'
-    printf '  workflow_active: true\n'
-    printf '  workflow: isolated\n'
-    printf '  phase: planning\n'
-    printf '  step: 0\n'
-    printf '  awaiting: none\n'
-    printf '  next_action:\n'
-    printf '    kind: specify\n'
-    printf '    target: isolated-plan\n'
-    printf '    acceptance: []\n'
-    printf '    expected_context_tokens: unknown\n'
-    printf '  safe_boundary: true\n'
-    printf '  updated_at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    printf '  delivery:\n'
-    printf '    mode: PR\n'
-    printf '    pr_number: none\n'
-    printf '    pr_state: none\n'
-    printf '  recovery:\n'
-    printf '    host_signal: none\n'
-    printf '    status: none\n'
-    printf 'delivery:\n'
-    printf '  authorization:\n'
-    printf '    worker_transfer_commit: PR\n'
-    printf '    commit: PR\n'
-    printf '    push: PR\n'
-    printf '    create_pull_request: PR\n'
-    printf '    publish: not-authorized\n'
-    printf '    deploy: not-authorized\n'
-    printf '    merge: not-authorized\n'
-    printf '  commit: pending\n'
-    printf '  push: pending\n'
-    printf '  create_pull_request: pending\n'
-    printf 'integration:\n'
-    printf '  source_to_integration: []\n'
-    printf 'workers: {}\n'
-  } >"$state_tmp"
-  mv "$state_tmp" "$STATE/run-state.yaml"
-}
-
 init_state() {
   state_arg=
   repo_arg=
   run_id=
   provider=
   capabilities_ref=
+  requested_mode=ISOLATED
+  requested_provider=AUTO
+  requested_delivery=PR
+  delivery_mode=PR
+  routing_initial=ISOLATED
+  routing_preferred=ISOLATED
+  routing_selected=ISOLATED
+  routing_current=ISOLATED
+  state_reason='bounded isolated composition'
+  fallback_used=no
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --state) [ "$#" -ge 2 ] || fail "--state requires a directory"; state_arg=$(state_path "$2"); shift 2 ;;
@@ -324,6 +214,16 @@ init_state() {
       --run-id) [ "$#" -ge 2 ] || fail "--run-id requires an ID"; run_id=$2; shift 2 ;;
       --provider) [ "$#" -ge 2 ] || fail "--provider requires NATIVE or HERDR"; provider=$2; shift 2 ;;
       --capabilities-ref) [ "$#" -ge 2 ] || fail "--capabilities-ref requires a reference"; capabilities_ref=$2; shift 2 ;;
+      --requested-mode) [ "$#" -ge 2 ] || fail "--requested-mode requires a topology"; requested_mode=$2; shift 2 ;;
+      --requested-provider) [ "$#" -ge 2 ] || fail "--requested-provider requires a provider"; requested_provider=$2; shift 2 ;;
+      --requested-delivery) [ "$#" -ge 2 ] || fail "--requested-delivery requires DEFAULT, GUIDED, or PR"; requested_delivery=$2; shift 2 ;;
+      --delivery-mode) [ "$#" -ge 2 ] || fail "--delivery-mode requires GUIDED or PR"; delivery_mode=$2; shift 2 ;;
+      --routing-initial) [ "$#" -ge 2 ] || fail "--routing-initial requires a topology"; routing_initial=$2; shift 2 ;;
+      --routing-preferred) [ "$#" -ge 2 ] || fail "--routing-preferred requires a topology"; routing_preferred=$2; shift 2 ;;
+      --routing-selected) [ "$#" -ge 2 ] || fail "--routing-selected requires a topology"; routing_selected=$2; shift 2 ;;
+      --routing-current) [ "$#" -ge 2 ] || fail "--routing-current requires a topology"; routing_current=$2; shift 2 ;;
+      --reason) [ "$#" -ge 2 ] || fail "--reason requires text"; state_reason=$2; shift 2 ;;
+      --fallback-used) [ "$#" -ge 2 ] || fail "--fallback-used requires text"; fallback_used=$2; shift 2 ;;
       -h|--help) usage; exit 0 ;;
       *) fail "unknown init option: $1" ;;
     esac
@@ -360,7 +260,47 @@ init_state() {
   : >"$STATE/transfers.tsv"
   : >"$STATE/conflicts.log"
   : >"$STATE/integration.tsv"
-  write_run_state "$REPO" "$branch" "$base" "$base" "$REPO" "$branch" task "$provider" "$capabilities_ref"
+  "$SCRIPT_DIR/swe-forge-state" init \
+    --state "$STATE" \
+    --checkout "$REPO" \
+    --run-id "$run_id" \
+    --baseline-ref "$base" \
+    --requested-mode "$requested_mode" \
+    --requested-provider "$requested_provider" \
+    --execution-provider "$provider" \
+    --delegation-backend "$provider" \
+    --write-isolation WORKTREE \
+    --provider-reason "capability evidence recorded at $capabilities_ref" \
+    --parallel-strategy COMPOSE \
+    --integration-strategy CHERRY_PICK \
+    --requested-delivery "$requested_delivery" \
+    --delivery-mode "$delivery_mode" \
+    --routing-initial "$routing_initial" \
+    --routing-preferred "$routing_preferred" \
+    --routing-selected "$routing_selected" \
+    --routing-current "$routing_current" \
+    --reason "$state_reason" \
+    --fallback-used "$fallback_used" \
+    --invocation-classification writable \
+    --mutation-allowed false \
+    --delivery-kind task \
+    --delivery-status ready \
+    --delivery-branch-setup provided \
+    --remote-default-evidence recorded-by-orchestrator \
+    --capabilities-ref "$capabilities_ref" \
+    --isolated-eligibility-evidence isolated-gate \
+    --parallel-value-status beneficial \
+    --parallel-value-rationale 'explicitly bounded isolated plan' >/dev/null
+  "$SCRIPT_DIR/swe-forge-state" set-continuation \
+    --state "$STATE" \
+    --workflow-active true \
+    --workflow isolated \
+    --phase planning \
+    --step 0 \
+    --awaiting none \
+    --next-action-kind specify \
+    --next-action-target isolated-plan \
+    --safe-boundary true >/dev/null
   "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
   printf 'PASS: isolated evidence state initialized at %s\n' "$STATE"
 }

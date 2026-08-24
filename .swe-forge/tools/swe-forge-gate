@@ -31,6 +31,8 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
+    [--requested-mode MODE] [--requested-provider PROVIDER]
+    [--requested-delivery DELIVERY] [--delivery-mode MODE]
   scripts/swe-forge-gate plan-check --state DIR --name NAME --requirement TYPE \
     [--condition TEXT] [--final-required true|false]
   scripts/swe-forge-gate validate --state DIR --name NAME [--final] \
@@ -198,133 +200,6 @@ assert_identity() {
   identity_safe || fail "checkout identity, branch, or protection state changed"
 }
 
-write_run_state() {
-  baseline=$1
-  branch=$2
-  remote_default=$3
-  head=$4
-  run_id=$(basename "$STATE")
-  state_tmp=$STATE/run-state.yaml.tmp.$$
-  {
-    printf 'workflow: swe-forge\n'
-    printf 'workflow_version: 1\n'
-    printf 'schema_version: 3\n'
-    printf 'run_id: %s\n' "$run_id"
-    printf 'status: running\n'
-    printf 'requested_mode: AUTO\n'
-    printf 'requested_provider: AUTO\n'
-    printf 'execution_provider: NONE\n'
-    printf 'delegation_backend: NONE\n'
-    printf 'write_isolation: SHARED\n'
-    printf 'provider_reason: non-isolated execution\n'
-    printf 'parallel_strategy: NONE\n'
-    printf 'integration_strategy: NONE\n'
-    printf 'requested_delivery: PR\n'
-    printf 'delivery_mode: PR\n'
-    printf 'reason: sequential central implementation\n'
-    printf 'fallback_used: no\n'
-    printf 'routing:\n'
-    printf '  initial: SOLO\n'
-    printf '  preferred: SOLO\n'
-    printf '  selected: SOLO\n'
-    printf '  current: SOLO\n'
-    printf '  revisions: []\n'
-    printf '  context_value:\n'
-    printf '    projected_pressure: unknown\n'
-    printf '    context_reducibility: unknown\n'
-    printf '    delegatable_context: low\n'
-    printf '    root_context_requirement: high\n'
-    printf '    continuity_risk: unknown\n'
-    printf '    rationale: no context-value assessment recorded at preflight\n'
-    printf '  runtime_profile_ref: none\n'
-    printf 'runtime_profile:\n'
-    printf '  harness: unknown\n'
-    printf '  context_usage: unknown\n'
-    printf '  context_window: unknown\n'
-    printf '  proactive_compaction: unknown\n'
-    printf '  compaction_hooks: unknown\n'
-    printf '  state_reinjection: unknown\n'
-    printf '  subagents:\n'
-    printf '    native: unknown\n'
-    printf '    external: []\n'
-    printf '  capability_precedence: observed > adapter_declared > static_default > unknown\n'
-    printf 'receipt_ref: none\n'
-    printf 'invocation_checkout:\n'
-    printf '  path: %s\n' "$CHECKOUT"
-    printf '  branch: %s\n' "$branch"
-    printf '  head_sha: %s\n' "$head"
-    printf '  classification: writable\n'
-    printf '  mutation_allowed: true\n'
-    printf '  baseline_ref: %s\n' "$baseline"
-    printf 'delivery_checkout:\n'
-    printf '  path: %s\n' "$CHECKOUT"
-    printf '  branch: %s\n' "$branch"
-    printf '  kind: task\n'
-    printf '  base_sha: %s\n' "$baseline"
-    printf '  head_sha: %s\n' "$head"
-    printf '  checkpoint_sha: %s\n' "$head"
-    printf '  status: ready\n'
-    printf '  branch_setup: reused\n'
-    printf '  remote_default_evidence: %s\n' "${remote_default:-none}"
-    printf 'isolated_eligibility:\n'
-    printf '  status: ineligible\n'
-    printf '  evidence_ref: routing-policy\n'
-    printf '  blockers: shared-canonical-surfaces\n'
-    printf 'parallel_value:\n'
-    printf '  status: marginal\n'
-    printf '  rationale: ordered shared-surface implementation\n'
-    printf '  overridden_by_user: false\n'
-    printf 'provider_capabilities:\n'
-    for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
-      integration_checkout_protection structured_results central_integration; do
-      printf '  %s:\n' "$capability"
-      printf '    status: unknown\n'
-      printf '    evidence_ref: not-applicable\n'
-    done
-    printf '  lifecycle:\n'
-    for operation in wait inspect cancel cleanup; do
-      printf '    %s:\n' "$operation"
-      printf '      status: unknown\n'
-      printf '      evidence_ref: not-applicable\n'
-    done
-    printf 'continuation:\n'
-    printf '  workflow_active: true\n'
-    printf '  workflow: ticket\n'
-    printf '  phase: planning\n'
-    printf '  step: 0\n'
-    printf '  awaiting: none\n'
-    printf '  next_action:\n'
-    printf '    kind: specify\n'
-    printf '    target: working-spec\n'
-    printf '    acceptance: []\n'
-    printf '    expected_context_tokens: unknown\n'
-    printf '  safe_boundary: true\n'
-    printf '  updated_at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    printf '  delivery:\n'
-    printf '    mode: PR\n'
-    printf '    pr_number: none\n'
-    printf '    pr_state: none\n'
-    printf '  recovery:\n'
-    printf '    host_signal: none\n'
-    printf '    status: none\n'
-    printf 'delivery:\n'
-    printf '  authorization:\n'
-    printf '    commit: PR\n'
-    printf '    push: PR\n'
-    printf '    create_pull_request: PR\n'
-    printf '    publish: not-authorized\n'
-    printf '    deploy: not-authorized\n'
-    printf '    merge: not-authorized\n'
-    printf '  commit: pending\n'
-    printf '  push: pending\n'
-    printf '  create_pull_request: pending\n'
-    printf 'integration:\n'
-    printf '  source_to_integration: []\n'
-    printf 'workers: {}\n'
-  } >"$state_tmp"
-  mv "$state_tmp" "$STATE/run-state.yaml"
-}
-
 write_meta() {
   baseline=$1
   branch=$2
@@ -404,6 +279,22 @@ update_meta_checkout() {
 preflight() {
   expected_branch=
   baseline_ref=HEAD
+  requested_mode=AUTO
+  requested_provider=AUTO
+  execution_provider=NONE
+  delegation_backend=NONE
+  write_isolation=SHARED
+  provider_reason='non-isolated execution'
+  parallel_strategy=NONE
+  integration_strategy=NONE
+  requested_delivery=PR
+  delivery_mode=PR
+  routing_initial=SOLO
+  routing_preferred=SOLO
+  routing_selected=SOLO
+  routing_current=SOLO
+  state_reason='sequential central implementation'
+  fallback_used=no
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --state)
@@ -421,6 +312,102 @@ preflight() {
         [ "$#" -ge 2 ] || fail "--base requires a Git revision"
         baseline_ref=$2
         reject_control_chars "$baseline_ref"
+        shift 2
+        ;;
+      --requested-mode)
+        [ "$#" -ge 2 ] || fail "--requested-mode requires a topology"
+        requested_mode=$2
+        reject_control_chars "$requested_mode"
+        shift 2
+        ;;
+      --requested-provider)
+        [ "$#" -ge 2 ] || fail "--requested-provider requires a provider"
+        requested_provider=$2
+        reject_control_chars "$requested_provider"
+        shift 2
+        ;;
+      --execution-provider|--provider)
+        [ "$#" -ge 2 ] || fail "$1 requires a provider"
+        execution_provider=$2
+        reject_control_chars "$execution_provider"
+        shift 2
+        ;;
+      --delegation-backend)
+        [ "$#" -ge 2 ] || fail "--delegation-backend requires a backend"
+        delegation_backend=$2
+        reject_control_chars "$delegation_backend"
+        shift 2
+        ;;
+      --write-isolation)
+        [ "$#" -ge 2 ] || fail "--write-isolation requires SHARED or WORKTREE"
+        write_isolation=$2
+        reject_control_chars "$write_isolation"
+        shift 2
+        ;;
+      --provider-reason)
+        [ "$#" -ge 2 ] || fail "--provider-reason requires text"
+        provider_reason=$2
+        reject_control_chars "$provider_reason"
+        shift 2
+        ;;
+      --parallel-strategy)
+        [ "$#" -ge 2 ] || fail "--parallel-strategy requires NONE or COMPOSE"
+        parallel_strategy=$2
+        reject_control_chars "$parallel_strategy"
+        shift 2
+        ;;
+      --integration-strategy)
+        [ "$#" -ge 2 ] || fail "--integration-strategy requires NONE or CHERRY_PICK"
+        integration_strategy=$2
+        reject_control_chars "$integration_strategy"
+        shift 2
+        ;;
+      --requested-delivery)
+        [ "$#" -ge 2 ] || fail "--requested-delivery requires DEFAULT, GUIDED, or PR"
+        requested_delivery=$2
+        reject_control_chars "$requested_delivery"
+        shift 2
+        ;;
+      --delivery-mode)
+        [ "$#" -ge 2 ] || fail "--delivery-mode requires GUIDED or PR"
+        delivery_mode=$2
+        reject_control_chars "$delivery_mode"
+        shift 2
+        ;;
+      --routing-initial)
+        [ "$#" -ge 2 ] || fail "--routing-initial requires a topology"
+        routing_initial=$2
+        reject_control_chars "$routing_initial"
+        shift 2
+        ;;
+      --routing-preferred)
+        [ "$#" -ge 2 ] || fail "--routing-preferred requires a topology"
+        routing_preferred=$2
+        reject_control_chars "$routing_preferred"
+        shift 2
+        ;;
+      --routing-selected)
+        [ "$#" -ge 2 ] || fail "--routing-selected requires a topology"
+        routing_selected=$2
+        reject_control_chars "$routing_selected"
+        shift 2
+        ;;
+      --routing-current)
+        [ "$#" -ge 2 ] || fail "--routing-current requires a topology"
+        routing_current=$2
+        reject_control_chars "$routing_current"
+        shift 2
+        ;;
+      --reason)
+        [ "$#" -ge 2 ] || fail "--reason requires text"
+        state_reason=$2
+        reject_control_chars "$state_reason"
+        shift 2
+        ;;
+      --fallback-used)
+        [ "$#" -ge 2 ] || fail "--fallback-used requires text"
+        fallback_used=$2
+        reject_control_chars "$fallback_used"
         shift 2
         ;;
       -h|--help) usage; exit 0 ;;
@@ -451,7 +438,45 @@ preflight() {
   : >"$STATE/plan.tsv"
   : >"$STATE/validations.tsv"
   : >"$STATE/checkpoints.tsv"
-  write_run_state "$base_head" "$branch" "$remote_default" "$head"
+  "$SCRIPT_DIR/swe-forge-state" init \
+    --state "$STATE" \
+    --checkout "$CHECKOUT" \
+    --run-id "$(basename "$STATE")" \
+    --baseline-ref "$base_head" \
+    --requested-mode "$requested_mode" \
+    --requested-provider "$requested_provider" \
+    --execution-provider "$execution_provider" \
+    --delegation-backend "$delegation_backend" \
+    --write-isolation "$write_isolation" \
+    --provider-reason "$provider_reason" \
+    --parallel-strategy "$parallel_strategy" \
+    --integration-strategy "$integration_strategy" \
+    --requested-delivery "$requested_delivery" \
+    --delivery-mode "$delivery_mode" \
+    --routing-initial "$routing_initial" \
+    --routing-preferred "$routing_preferred" \
+    --routing-selected "$routing_selected" \
+    --routing-current "$routing_current" \
+    --reason "$state_reason" \
+    --fallback-used "$fallback_used" \
+    --invocation-classification writable \
+    --mutation-allowed true \
+    --delivery-kind task \
+    --delivery-status ready \
+    --delivery-branch-setup reused \
+    --remote-default-evidence "${remote_default:-none}" \
+    --capabilities-ref not-applicable \
+    --isolated-eligibility-evidence routing-policy >/dev/null
+  "$SCRIPT_DIR/swe-forge-state" set-continuation \
+    --state "$STATE" \
+    --workflow-active true \
+    --workflow ticket \
+    --phase planning \
+    --step 0 \
+    --awaiting none \
+    --next-action-kind specify \
+    --next-action-target working-spec \
+    --safe-boundary true >/dev/null
   validate_run_state
   printf 'PASS: preflight baseline recorded at %s\n' "$STATE"
   printf 'BASELINE_HEAD: %s\n' "$base_head"

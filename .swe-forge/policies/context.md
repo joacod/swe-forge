@@ -71,10 +71,15 @@ workflow is terminal, whose checkout does not match the active project, or
 whose active marker is false is not eligible for reinjection. A pointer to a
 stale state must never override a newer active snapshot.
 
-Adapters may derive a bounded continuity block from this section.
-The block is a reminder, not a second workflow specification. It must be
-small, deterministic, and per-turn or otherwise non-duplicating; it must not
-reinject the ticket, transcript, or full policy.
+Use the canonical `swe-forge-state set-continuation` operation to write the
+semantic continuation fields. It generates `updated_at`, synchronizes the
+`delivery.mode` projection from `delivery_mode`, validates the complete state,
+and preserves unrelated fields. Do not hand-create continuation containers,
+generate timestamps, copy delivery fields, or edit unrelated YAML fields.
+Adapters may derive a bounded continuity block from this section. The block is
+a reminder, not a second workflow specification. It must be small,
+deterministic, and per-turn or otherwise non-duplicating; it must not reinject
+the ticket, transcript, or full policy.
 
 ## Context states
 
@@ -101,10 +106,11 @@ at the host's fully settled lifecycle event—use this sequence:
 
 1. Finish or classify the current atomic operation. Do not interrupt a write,
    commit, validation command, or provider retry.
-2. Validate the completed step and persist the short working spec/run state,
-   including exact Git `HEAD`, dirty/staged/untracked state, completed
-   acceptance items, the next action, `safe_boundary`, and any expected context
-   need.
+2. Validate the completed step and update the short working spec plus the
+   continuation through `swe-forge-state set-continuation`, supplying the
+   current phase, next action, `safe_boundary`, and expected context need. Keep
+   exact Git `HEAD`, dirty/staged/untracked state, and completed acceptance
+   items in their owning workflow/evidence records.
 3. Inspect context usage only when the active profile provides it. Prefer a
    remaining-budget signal and the next action's expected context need over a
    universal percentage. A documented host reserve may be used as a
@@ -157,9 +163,10 @@ slice, wave, review, or delivery action:
 1. Stop at the nearest safe boundary. Finish or classify the current atomic
    tool operation first; do not begin another mutation while compaction may
    run.
-2. Persist the external working spec and run state with the current phase,
-   exact Git `HEAD`, dirty/staged/untracked state, completed acceptance items,
-   validation evidence, `safe_boundary`, and one explicit next action.
+2. Update the external working spec and call `swe-forge-state
+   set-continuation` with the current phase, `safe_boundary`, and one explicit
+   next action. Keep exact Git `HEAD`, dirty/staged/untracked state, completed
+   acceptance items, and validation evidence in their owning records.
 3. Invoke the harness-native or adapter-provided compaction mechanism and wait
    for it to settle.
 4. Re-read the working spec and run state, inspect the actual checkout and

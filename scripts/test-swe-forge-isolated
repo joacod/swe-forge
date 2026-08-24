@@ -78,7 +78,19 @@ git -C "$repo" worktree add -q -b worker-b "$worker_b" "$base"
 state=$TMP_ROOT/state
 
 "$GATE" init --state "$state" --repo "$repo" --run-id fixture \
-  --provider NATIVE --capabilities-ref fixture-capabilities >/dev/null
+  --provider NATIVE --capabilities-ref fixture-capabilities \
+  --requested-mode AUTO --requested-provider HERDR \
+  --requested-delivery GUIDED --delivery-mode GUIDED \
+  --routing-initial ISOLATED --routing-preferred ISOLATED \
+  --routing-selected ISOLATED --routing-current ISOLATED >/dev/null
+"$ROOT/scripts/swe-forge-state" validate --state "$state/run-state.yaml" >/dev/null
+grep -F 'requested_mode: AUTO' "$state/run-state.yaml" >/dev/null
+grep -F 'requested_provider: HERDR' "$state/run-state.yaml" >/dev/null
+grep -F 'requested_delivery: GUIDED' "$state/run-state.yaml" >/dev/null
+grep -F 'delivery_mode: GUIDED' "$state/run-state.yaml" >/dev/null
+grep -F '  current: ISOLATED' "$state/run-state.yaml" >/dev/null
+grep -F '  workflow: isolated' "$state/run-state.yaml" >/dev/null
+grep -F '    mode: GUIDED' "$state/run-state.yaml" >/dev/null
 "$GATE" register-integration --state "$state" --path "$integration" \
   --branch integration --base-sha "$base" --worker-order A,B >/dev/null
 "$GATE" register-worker --state "$state" --task-id A --path "$worker_a" \

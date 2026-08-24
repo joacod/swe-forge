@@ -137,6 +137,65 @@ fi
 grep -F 'Final status: BLOCKED' "$TMP_ROOT/blocked-receipt.md" >/dev/null || \
   fail "blocked context receipt is missing blocked status"
 
+# Canonical state operations preserve the early shell boundary, propagate
+# semantic request values, and own continuation projections/timestamps.
+propagation_repo=$(make_repo propagation)
+propagation_state=$(clean_feature_state "$propagation_repo")
+(
+  cd "$propagation_repo"
+  "$GATE" preflight --state "$propagation_state" \
+    --requested-mode SUBAGENTS --requested-provider HERDR \
+    --requested-delivery GUIDED --delivery-mode GUIDED \
+    --routing-initial SUBAGENTS --routing-preferred SUBAGENTS \
+    --routing-selected SUBAGENTS --routing-current SUBAGENTS \
+    --reason 'requested propagation fixture' >/dev/null
+)
+grep -F 'requested_mode: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
+grep -F 'requested_provider: HERDR' "$propagation_state/run-state.yaml" >/dev/null
+grep -F 'requested_delivery: GUIDED' "$propagation_state/run-state.yaml" >/dev/null
+grep -F 'delivery_mode: GUIDED' "$propagation_state/run-state.yaml" >/dev/null
+grep -F '  current: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
+
+early_state=$TMP_ROOT/early-state
+"$ROOT/scripts/swe-forge-state" init --state "$early_state" \
+  --checkout "$propagation_repo" --run-id early-state \
+  --requested-mode SUBAGENTS --requested-provider HERDR \
+  --requested-delivery GUIDED --delivery-mode GUIDED \
+  --routing-initial SUBAGENTS --routing-preferred SUBAGENTS \
+  --routing-selected SUBAGENTS --routing-current SUBAGENTS \
+  --reason 'early shell fixture' >/dev/null
+"$ROOT/scripts/swe-forge-state" validate --state "$early_state" >/dev/null
+if grep -Eq '^continuation:' "$early_state/run-state.yaml"; then
+  fail "init unexpectedly required or created continuation data"
+fi
+invocation_head_before=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
+reason_before=$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$early_state/run-state.yaml")
+"$ROOT/scripts/swe-forge-state" set-continuation --state "$early_state" \
+  --workflow-active true --workflow ticket --phase implementation --step 1 \
+  --awaiting none --next-action-kind implement --next-action-target state-tool \
+  --next-action-acceptance 'schema valid' --safe-boundary true \
+  --expected-context-tokens 100 >/dev/null
+updated_at=$(awk '$1 == "updated_at:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
+[ -n "$updated_at" ] || fail "set-continuation did not generate updated_at"
+case "$updated_at" in *T*Z) ;; *) fail "set-continuation generated a malformed timestamp" ;; esac
+grep -F '    mode: GUIDED' "$early_state/run-state.yaml" >/dev/null
+grep -F "reason: $reason_before" "$early_state/run-state.yaml" >/dev/null
+invocation_head_after=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
+[ "$invocation_head_after" = "$invocation_head_before" ] || \
+  fail "set-continuation changed immutable invocation facts"
+
+atomic_state=$TMP_ROOT/atomic-state.yaml
+cp "$early_state/run-state.yaml" "$atomic_state"
+atomic_before=$(cksum "$atomic_state")
+sed 's/^delivery_mode: GUIDED$/delivery_mode: PR/' "$atomic_state" >"$TMP_ROOT/atomic-malformed.yaml"
+expect_failure 'continuation.delivery.mode must match delivery_mode' \
+  "$ROOT/scripts/swe-forge-state" set-continuation --state "$TMP_ROOT/atomic-malformed.yaml" \
+  --workflow-active true --workflow ticket --phase review --step 2 \
+  --awaiting none --next-action-kind review --next-action-target review \
+  --safe-boundary true
+[ "$(cksum "$atomic_state")" = "$atomic_before" ] || \
+  fail "failed continuation update corrupted the previous state"
+
 # Regression: PR mode can validate and commit multiple sequential slices in one
 # run, including a newly added file whose fingerprint is stable before and after
 # staging.
@@ -527,7 +586,7 @@ remove_nested_scalar() {
 }
 
 # The earliest generic schema-v3 snapshot keeps the required shell and the
-# writer's initial/unknown values, but has no continuation or later activity.
+# state tool's initial/unknown values, but has no continuation or later activity.
 minimal_without_continuation=$TMP_ROOT/minimal-v3-no-continuation.yaml
 strip_top_level_section continuation "$projection_modern" "$minimal_without_continuation"
 minimal_without_runtime_profile=$TMP_ROOT/minimal-v3-no-runtime-profile.yaml

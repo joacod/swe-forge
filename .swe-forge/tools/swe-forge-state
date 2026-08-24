@@ -19,9 +19,14 @@ usage() {
   cat <<'EOF'
 Usage:
   swe-forge-state validate --state FILE|DIRECTORY
+  swe-forge-state init --state DIRECTORY [--checkout PATH] [options]
+  swe-forge-state set-continuation --state FILE|DIRECTORY [options]
 
-The validator accepts only workflow_version 1 / schema_version 3 state.
-Obsolete or unknown state must be replaced by starting a fresh run.
+`init` creates the current schema-v3 structural shell from explicit routing,
+delivery, and checkout facts. `set-continuation` accepts only the bounded
+continuation surface; it generates `updated_at` and derives the delivery
+projection. Both write operations validate a temporary result before atomic
+replacement. Obsolete or unknown state must be replaced by starting a fresh run.
 EOF
 }
 
@@ -255,6 +260,762 @@ validate_state() {
   printf 'PASS: schema-v3 run state is structurally valid: %s\n' "$file"
 }
 
+require_enum_arg() {
+  enum_field=$1
+  enum_candidate=$2
+  shift 2
+  for enum_allowed do
+    [ "$enum_candidate" = "$enum_allowed" ] && return 0
+  done
+  fail "invalid $enum_field"
+}
+
+require_bool_arg() {
+  bool_field=$1
+  bool_candidate=$2
+  case "$bool_candidate" in
+    true|false) ;;
+    *) fail "invalid $bool_field" ;;
+  esac
+}
+
+require_scalar_arg() {
+  scalar_field=$1
+  scalar_candidate=$2
+  [ -n "$scalar_candidate" ] || fail "$scalar_field is required"
+  control_chars "$scalar_candidate"
+}
+
+absolute_path() {
+  absolute_candidate=$1
+  control_chars "$absolute_candidate"
+  case "$absolute_candidate" in
+    /*) printf '%s\n' "$absolute_candidate" ;;
+    *) printf '%s/%s\n' "$PWD" "$absolute_candidate" ;;
+  esac
+}
+
+state_directory_for_init() {
+  state_candidate=$(absolute_path "$1")
+  if [ -e "$state_candidate" ] || [ -L "$state_candidate" ]; then
+    [ -d "$state_candidate" ] && [ ! -L "$state_candidate" ] || \
+      fail "state path must be a real directory: $state_candidate"
+    CDPATH= cd "$state_candidate" && pwd -P
+    return
+  fi
+  state_parent=$(dirname "$state_candidate")
+  [ -d "$state_parent" ] && [ ! -L "$state_parent" ] || \
+    fail "state parent is not a real directory: $state_parent"
+  CDPATH= cd "$state_parent" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$state_candidate")"
+}
+
+checkout_root_for_init() {
+  checkout_candidate=$1
+  [ -d "$checkout_candidate" ] || fail "checkout does not exist: $checkout_candidate"
+  checkout_root=$(git -C "$checkout_candidate" rev-parse --show-toplevel 2>/dev/null) || \
+    fail "not a Git checkout: $checkout_candidate"
+  CDPATH= cd "$checkout_root" && pwd -P
+}
+
+git_branch_for_init() {
+  git symbolic-ref --quiet --short HEAD 2>/dev/null || printf '%s\n' none
+}
+
+state_tmp=
+cleanup_state_tmp() {
+  [ -z "${state_tmp:-}" ] || rm -f "$state_tmp"
+}
+trap 'status=$?; cleanup_state_tmp; exit "$status"' 0 HUP INT TERM
+
+init_state() {
+  init_state_arg=
+  init_checkout_arg=.
+  init_delivery_checkout_arg=
+  init_run_id=
+  init_baseline_ref=HEAD
+  init_delivery_base_ref=
+  init_status=running
+  init_requested_mode=AUTO
+  init_requested_provider=AUTO
+  init_execution_provider=NONE
+  init_delegation_backend=NONE
+  init_write_isolation=SHARED
+  init_provider_reason=
+  init_parallel_strategy=
+  init_integration_strategy=
+  init_requested_delivery=DEFAULT
+  init_delivery_mode=
+  init_reason=
+  init_fallback_used=no
+  init_routing_initial=
+  init_routing_preferred=
+  init_routing_selected=
+  init_routing_current=
+  init_invocation_classification=writable
+  init_mutation_allowed=true
+  init_delivery_kind=task
+  init_delivery_status=ready
+  init_delivery_branch_setup=reused
+  init_remote_default_evidence=none
+  init_capabilities_ref=
+  init_eligibility_status=
+  init_eligibility_evidence=
+  init_eligibility_blockers=
+  init_parallel_value_status=
+  init_parallel_value_rationale=
+  init_parallel_value_overridden=false
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a directory"
+        init_state_arg=$2
+        shift 2
+        ;;
+      --checkout|--invocation-checkout)
+        [ "$#" -ge 2 ] || fail "--checkout requires a path"
+        init_checkout_arg=$2
+        shift 2
+        ;;
+      --delivery-checkout|--delivery-path)
+        [ "$#" -ge 2 ] || fail "--delivery-checkout requires a path"
+        init_delivery_checkout_arg=$2
+        shift 2
+        ;;
+      --run-id)
+        [ "$#" -ge 2 ] || fail "--run-id requires an ID"
+        init_run_id=$2
+        shift 2
+        ;;
+      --baseline-ref|--base|--base-sha)
+        [ "$#" -ge 2 ] || fail "$1 requires a Git revision"
+        init_baseline_ref=$2
+        shift 2
+        ;;
+      --delivery-base|--delivery-base-sha)
+        [ "$#" -ge 2 ] || fail "$1 requires a Git revision"
+        init_delivery_base_ref=$2
+        shift 2
+        ;;
+      --status)
+        [ "$#" -ge 2 ] || fail "--status requires a lifecycle status"
+        init_status=$2
+        shift 2
+        ;;
+      --requested-mode)
+        [ "$#" -ge 2 ] || fail "--requested-mode requires a topology"
+        init_requested_mode=$2
+        shift 2
+        ;;
+      --requested-provider)
+        [ "$#" -ge 2 ] || fail "--requested-provider requires a provider"
+        init_requested_provider=$2
+        shift 2
+        ;;
+      --execution-provider|--provider)
+        [ "$#" -ge 2 ] || fail "$1 requires a provider"
+        init_execution_provider=$2
+        shift 2
+        ;;
+      --delegation-backend)
+        [ "$#" -ge 2 ] || fail "--delegation-backend requires a backend"
+        init_delegation_backend=$2
+        shift 2
+        ;;
+      --write-isolation)
+        [ "$#" -ge 2 ] || fail "--write-isolation requires SHARED or WORKTREE"
+        init_write_isolation=$2
+        shift 2
+        ;;
+      --provider-reason)
+        [ "$#" -ge 2 ] || fail "--provider-reason requires text"
+        init_provider_reason=$2
+        shift 2
+        ;;
+      --parallel-strategy)
+        [ "$#" -ge 2 ] || fail "--parallel-strategy requires NONE or COMPOSE"
+        init_parallel_strategy=$2
+        shift 2
+        ;;
+      --integration-strategy)
+        [ "$#" -ge 2 ] || fail "--integration-strategy requires NONE or CHERRY_PICK"
+        init_integration_strategy=$2
+        shift 2
+        ;;
+      --requested-delivery)
+        [ "$#" -ge 2 ] || fail "--requested-delivery requires DEFAULT, GUIDED, or PR"
+        init_requested_delivery=$2
+        shift 2
+        ;;
+      --delivery-mode)
+        [ "$#" -ge 2 ] || fail "--delivery-mode requires GUIDED or PR"
+        init_delivery_mode=$2
+        shift 2
+        ;;
+      --reason)
+        [ "$#" -ge 2 ] || fail "--reason requires text"
+        init_reason=$2
+        shift 2
+        ;;
+      --fallback-used)
+        [ "$#" -ge 2 ] || fail "--fallback-used requires text"
+        init_fallback_used=$2
+        shift 2
+        ;;
+      --routing-initial)
+        [ "$#" -ge 2 ] || fail "--routing-initial requires a topology"
+        init_routing_initial=$2
+        shift 2
+        ;;
+      --routing-preferred)
+        [ "$#" -ge 2 ] || fail "--routing-preferred requires a topology"
+        init_routing_preferred=$2
+        shift 2
+        ;;
+      --routing-selected)
+        [ "$#" -ge 2 ] || fail "--routing-selected requires a topology"
+        init_routing_selected=$2
+        shift 2
+        ;;
+      --routing-current)
+        [ "$#" -ge 2 ] || fail "--routing-current requires a topology"
+        init_routing_current=$2
+        shift 2
+        ;;
+      --invocation-classification)
+        [ "$#" -ge 2 ] || fail "--invocation-classification requires a classification"
+        init_invocation_classification=$2
+        shift 2
+        ;;
+      --mutation-allowed)
+        [ "$#" -ge 2 ] || fail "--mutation-allowed requires true or false"
+        init_mutation_allowed=$2
+        shift 2
+        ;;
+      --delivery-kind)
+        [ "$#" -ge 2 ] || fail "--delivery-kind requires task or integration"
+        init_delivery_kind=$2
+        shift 2
+        ;;
+      --delivery-status)
+        [ "$#" -ge 2 ] || fail "--delivery-status requires a checkout status"
+        init_delivery_status=$2
+        shift 2
+        ;;
+      --delivery-branch-setup)
+        [ "$#" -ge 2 ] || fail "--delivery-branch-setup requires a setup status"
+        init_delivery_branch_setup=$2
+        shift 2
+        ;;
+      --remote-default-evidence)
+        [ "$#" -ge 2 ] || fail "--remote-default-evidence requires text"
+        init_remote_default_evidence=$2
+        shift 2
+        ;;
+      --capabilities-ref)
+        [ "$#" -ge 2 ] || fail "--capabilities-ref requires a reference"
+        init_capabilities_ref=$2
+        shift 2
+        ;;
+      --isolated-eligibility-status)
+        [ "$#" -ge 2 ] || fail "--isolated-eligibility-status requires a status"
+        init_eligibility_status=$2
+        shift 2
+        ;;
+      --isolated-eligibility-evidence)
+        [ "$#" -ge 2 ] || fail "--isolated-eligibility-evidence requires a reference"
+        init_eligibility_evidence=$2
+        shift 2
+        ;;
+      --isolated-eligibility-blockers)
+        [ "$#" -ge 2 ] || fail "--isolated-eligibility-blockers requires text"
+        init_eligibility_blockers=$2
+        shift 2
+        ;;
+      --parallel-value-status)
+        [ "$#" -ge 2 ] || fail "--parallel-value-status requires a status"
+        init_parallel_value_status=$2
+        shift 2
+        ;;
+      --parallel-value-rationale)
+        [ "$#" -ge 2 ] || fail "--parallel-value-rationale requires text"
+        init_parallel_value_rationale=$2
+        shift 2
+        ;;
+      --parallel-value-overridden-by-user)
+        [ "$#" -ge 2 ] || fail "--parallel-value-overridden-by-user requires true or false"
+        init_parallel_value_overridden=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown init option: $1" ;;
+    esac
+  done
+
+  [ -n "$init_state_arg" ] || fail "--state is required"
+  init_state_dir=$(state_directory_for_init "$init_state_arg")
+  init_state_file=$init_state_dir/run-state.yaml
+  [ ! -e "$init_state_file" ] || fail "run state is already initialized: $init_state_file"
+  mkdir -p "$init_state_dir"
+
+  init_checkout_root=$(checkout_root_for_init "$init_checkout_arg")
+  if [ -z "$init_delivery_checkout_arg" ]; then
+    init_delivery_checkout_arg=$init_checkout_root
+  fi
+  init_delivery_root=$(checkout_root_for_init "$init_delivery_checkout_arg")
+  init_invocation_branch=$(CDPATH= cd "$init_checkout_root" && git_branch_for_init)
+  init_delivery_branch=$(CDPATH= cd "$init_delivery_root" && git_branch_for_init)
+  init_invocation_head=$(git -C "$init_checkout_root" rev-parse HEAD 2>/dev/null) || \
+    fail "checkout has no commit baseline"
+  init_delivery_head=$(git -C "$init_delivery_root" rev-parse HEAD 2>/dev/null) || \
+    fail "delivery checkout has no commit baseline"
+  init_baseline_sha=$(git -C "$init_checkout_root" rev-parse "$init_baseline_ref" 2>/dev/null) || \
+    fail "baseline revision does not resolve: $init_baseline_ref"
+  git -C "$init_checkout_root" merge-base --is-ancestor "$init_baseline_sha" "$init_invocation_head" || \
+    fail "baseline revision is not an ancestor of the invocation checkout: $init_baseline_ref"
+  if [ -n "$init_delivery_base_ref" ]; then
+    init_delivery_base_sha=$(git -C "$init_delivery_root" rev-parse "$init_delivery_base_ref" 2>/dev/null) || \
+      fail "delivery base revision does not resolve: $init_delivery_base_ref"
+  else
+    init_delivery_base_sha=$init_baseline_sha
+  fi
+  git -C "$init_delivery_root" merge-base --is-ancestor "$init_delivery_base_sha" "$init_delivery_head" || \
+    fail "delivery base revision is not an ancestor of the delivery checkout"
+  init_delivery_checkpoint_sha=$init_delivery_head
+
+  [ -n "$init_run_id" ] || init_run_id=$(basename "$init_state_dir")
+  require_scalar_arg run_id "$init_run_id"
+  require_enum_arg status "$init_status" planning running blocked reviewing repairing accepted failed
+  require_enum_arg requested_mode "$init_requested_mode" AUTO SOLO SUBAGENTS ISOLATED
+  require_enum_arg requested_provider "$init_requested_provider" AUTO NATIVE HERDR NONE
+  require_enum_arg execution_provider "$init_execution_provider" NATIVE HERDR NONE
+  require_enum_arg delegation_backend "$init_delegation_backend" NONE NATIVE HERDR OTHER
+  require_enum_arg write_isolation "$init_write_isolation" SHARED WORKTREE
+  if [ -z "$init_parallel_strategy" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then init_parallel_strategy=COMPOSE; else init_parallel_strategy=NONE; fi
+  fi
+  if [ -z "$init_integration_strategy" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then init_integration_strategy=CHERRY_PICK; else init_integration_strategy=NONE; fi
+  fi
+  require_enum_arg parallel_strategy "$init_parallel_strategy" NONE COMPOSE
+  require_enum_arg integration_strategy "$init_integration_strategy" NONE CHERRY_PICK
+  require_enum_arg requested_delivery "$init_requested_delivery" DEFAULT GUIDED PR
+  require_enum_arg invocation_checkout.classification "$init_invocation_classification" writable protected detached unclassifiable
+  require_bool_arg invocation_checkout.mutation_allowed "$init_mutation_allowed"
+  require_enum_arg delivery_checkout.kind "$init_delivery_kind" task integration
+  require_enum_arg delivery_checkout.status "$init_delivery_status" ready running blocked dirty complete
+  require_enum_arg delivery_checkout.branch_setup "$init_delivery_branch_setup" auto-created reused user-provided provided blocked
+
+  if [ -z "$init_delivery_mode" ]; then
+    case "$init_requested_delivery" in
+      PR) init_delivery_mode=PR ;;
+      DEFAULT|GUIDED) init_delivery_mode=GUIDED ;;
+    esac
+  fi
+  require_enum_arg delivery_mode "$init_delivery_mode" GUIDED PR
+
+  if [ -z "$init_routing_initial" ]; then
+    case "$init_requested_mode" in
+      AUTO) init_routing_initial=SOLO ;;
+      *) init_routing_initial=$init_requested_mode ;;
+    esac
+  fi
+  [ -n "$init_routing_preferred" ] || init_routing_preferred=$init_routing_initial
+  [ -n "$init_routing_selected" ] || init_routing_selected=$init_routing_preferred
+  [ -n "$init_routing_current" ] || init_routing_current=$init_routing_selected
+  for init_route_field in initial preferred selected current; do
+    case "$init_route_field" in
+      initial) init_route_value=$init_routing_initial ;;
+      preferred) init_route_value=$init_routing_preferred ;;
+      selected) init_route_value=$init_routing_selected ;;
+      current) init_route_value=$init_routing_current ;;
+    esac
+    require_enum_arg "routing.$init_route_field" "$init_route_value" SOLO SUBAGENTS ISOLATED
+  done
+
+  if [ "$init_write_isolation" = SHARED ]; then
+    [ "$init_execution_provider" = NONE ] || \
+      fail "shared run state must use execution_provider: NONE"
+    [ "$init_parallel_strategy" = NONE ] || \
+      fail "shared run state must use parallel_strategy: NONE"
+    [ "$init_integration_strategy" = NONE ] || \
+      fail "shared run state must use integration_strategy: NONE"
+  else
+    [ "$init_execution_provider" = NATIVE ] || [ "$init_execution_provider" = HERDR ] || \
+      fail "worktree run state requires an execution provider"
+    [ "$init_parallel_strategy" = COMPOSE ] || \
+      fail "worktree run state must use parallel_strategy: COMPOSE"
+    [ "$init_integration_strategy" = CHERRY_PICK ] || \
+      fail "worktree run state must use integration_strategy: CHERRY_PICK"
+  fi
+
+  if [ -z "$init_provider_reason" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then
+      init_provider_reason="capability evidence recorded at ${init_capabilities_ref:-isolated-gate}"
+    else
+      init_provider_reason='non-isolated execution'
+    fi
+  fi
+  require_scalar_arg provider_reason "$init_provider_reason"
+  [ -n "$init_reason" ] || init_reason='initial schema-v3 state'
+  require_scalar_arg reason "$init_reason"
+  require_scalar_arg fallback_used "$init_fallback_used"
+  control_chars "$init_remote_default_evidence"
+
+  if [ -z "$init_capabilities_ref" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then init_capabilities_ref=isolated-gate; else init_capabilities_ref=not-applicable; fi
+  fi
+  require_scalar_arg capabilities_ref "$init_capabilities_ref"
+  if [ -z "$init_eligibility_status" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then init_eligibility_status=eligible; else init_eligibility_status=ineligible; fi
+  fi
+  require_enum_arg isolated_eligibility.status "$init_eligibility_status" eligible ineligible
+  [ -n "$init_eligibility_evidence" ] || init_eligibility_evidence=$init_capabilities_ref
+  require_scalar_arg isolated_eligibility.evidence_ref "$init_eligibility_evidence"
+  if [ -z "$init_eligibility_blockers" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then init_eligibility_blockers='[]'; else init_eligibility_blockers=shared-canonical-surfaces; fi
+  fi
+  require_scalar_arg isolated_eligibility.blockers "$init_eligibility_blockers"
+
+  if [ -z "$init_parallel_value_status" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then init_parallel_value_status=beneficial; else init_parallel_value_status=marginal; fi
+  fi
+  require_enum_arg parallel_value.status "$init_parallel_value_status" beneficial marginal unknown
+  if [ -z "$init_parallel_value_rationale" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then init_parallel_value_rationale='bounded isolated composition'; else init_parallel_value_rationale='ordered shared-surface implementation'; fi
+  fi
+  require_scalar_arg parallel_value.rationale "$init_parallel_value_rationale"
+  require_bool_arg parallel_value.overridden_by_user "$init_parallel_value_overridden"
+
+  if [ "$init_write_isolation" = WORKTREE ]; then
+    init_capability_status=proven
+  else
+    init_capability_status=unknown
+  fi
+  if [ "$init_delivery_mode" = PR ]; then
+    init_delivery_authorization=PR
+    init_delivery_status_value=pending
+  else
+    init_delivery_authorization=not-authorized
+    init_delivery_status_value=not-authorized
+  fi
+  if [ "$init_write_isolation" = WORKTREE ] && [ "$init_delivery_authorization" = PR ]; then
+    init_worker_authorization=PR
+  else
+    init_worker_authorization=not-authorized
+  fi
+  state_tmp=$init_state_dir/run-state.yaml.tmp.$$
+  umask 077
+  {
+    printf 'workflow: swe-forge\n'
+    printf 'workflow_version: 1\n'
+    printf 'schema_version: 3\n'
+    printf 'run_id: %s\n' "$init_run_id"
+    printf 'status: %s\n' "$init_status"
+    printf 'requested_mode: %s\n' "$init_requested_mode"
+    printf 'requested_provider: %s\n' "$init_requested_provider"
+    printf 'execution_provider: %s\n' "$init_execution_provider"
+    printf 'delegation_backend: %s\n' "$init_delegation_backend"
+    printf 'write_isolation: %s\n' "$init_write_isolation"
+    printf 'provider_reason: %s\n' "$init_provider_reason"
+    printf 'parallel_strategy: %s\n' "$init_parallel_strategy"
+    printf 'integration_strategy: %s\n' "$init_integration_strategy"
+    printf 'requested_delivery: %s\n' "$init_requested_delivery"
+    printf 'delivery_mode: %s\n' "$init_delivery_mode"
+    printf 'reason: %s\n' "$init_reason"
+    printf 'fallback_used: %s\n' "$init_fallback_used"
+    printf 'routing:\n'
+    printf '  initial: %s\n' "$init_routing_initial"
+    printf '  preferred: %s\n' "$init_routing_preferred"
+    printf '  selected: %s\n' "$init_routing_selected"
+    printf '  current: %s\n' "$init_routing_current"
+    printf '  revisions: []\n'
+    printf '  context_value:\n'
+    printf '    projected_pressure: unknown\n'
+    printf '    context_reducibility: unknown\n'
+    printf '    delegatable_context: low\n'
+    printf '    root_context_requirement: high\n'
+    printf '    continuity_risk: unknown\n'
+    printf '    rationale: initialization facts only\n'
+    printf '  runtime_profile_ref: none\n'
+    printf 'runtime_profile:\n'
+    printf '  harness: unknown\n'
+    printf '  context_usage: unknown\n'
+    printf '  context_window: unknown\n'
+    printf '  proactive_compaction: unknown\n'
+    printf '  compaction_hooks: unknown\n'
+    printf '  state_reinjection: unknown\n'
+    printf '  subagents:\n'
+    printf '    native: unknown\n'
+    printf '    external: []\n'
+    printf '  capability_precedence: observed > adapter_declared > static_default > unknown\n'
+    printf 'receipt_ref: none\n'
+    printf 'invocation_checkout:\n'
+    printf '  path: %s\n' "$init_checkout_root"
+    printf '  branch: %s\n' "$init_invocation_branch"
+    printf '  head_sha: %s\n' "$init_invocation_head"
+    printf '  classification: %s\n' "$init_invocation_classification"
+    printf '  mutation_allowed: %s\n' "$init_mutation_allowed"
+    printf '  baseline_ref: %s\n' "$init_baseline_sha"
+    printf 'delivery_checkout:\n'
+    printf '  path: %s\n' "$init_delivery_root"
+    printf '  branch: %s\n' "$init_delivery_branch"
+    printf '  kind: %s\n' "$init_delivery_kind"
+    printf '  base_sha: %s\n' "$init_delivery_base_sha"
+    printf '  head_sha: %s\n' "$init_delivery_head"
+    printf '  checkpoint_sha: %s\n' "$init_delivery_checkpoint_sha"
+    printf '  status: %s\n' "$init_delivery_status"
+    printf '  branch_setup: %s\n' "$init_delivery_branch_setup"
+    printf '  remote_default_evidence: %s\n' "$init_remote_default_evidence"
+    printf 'isolated_eligibility:\n'
+    printf '  status: %s\n' "$init_eligibility_status"
+    printf '  evidence_ref: %s\n' "$init_eligibility_evidence"
+    printf '  blockers: %s\n' "$init_eligibility_blockers"
+    printf 'parallel_value:\n'
+    printf '  status: %s\n' "$init_parallel_value_status"
+    printf '  rationale: %s\n' "$init_parallel_value_rationale"
+    printf '  overridden_by_user: %s\n' "$init_parallel_value_overridden"
+    printf 'provider_capabilities:\n'
+    for init_capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
+      integration_checkout_protection structured_results central_integration; do
+      printf '  %s:\n' "$init_capability"
+      printf '    status: %s\n' "$init_capability_status"
+      printf '    evidence_ref: %s\n' "$init_capabilities_ref"
+    done
+    printf '  lifecycle:\n'
+    for init_operation in wait inspect cancel cleanup; do
+      printf '    %s:\n' "$init_operation"
+      printf '      status: %s\n' "$init_capability_status"
+      printf '      evidence_ref: %s\n' "$init_capabilities_ref"
+    done
+    printf 'delivery:\n'
+    printf '  authorization:\n'
+    printf '    worker_setup: %s\n' "$init_worker_authorization"
+    printf '    worker_transfer_commit: %s\n' "$init_worker_authorization"
+    printf '    commit: %s\n' "$init_delivery_authorization"
+    printf '    push: %s\n' "$init_delivery_authorization"
+    printf '    create_pull_request: %s\n' "$init_delivery_authorization"
+    printf '    publish: not-authorized\n'
+    printf '    deploy: not-authorized\n'
+    printf '    merge: not-authorized\n'
+    printf '  commit: %s\n' "$init_delivery_status_value"
+    printf '  push: %s\n' "$init_delivery_status_value"
+    printf '  create_pull_request: %s\n' "$init_delivery_status_value"
+    printf 'integration:\n'
+    printf '  source_to_integration: []\n'
+    printf 'workers: {}\n'
+  } >"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$init_state_file"
+  state_tmp=
+  printf 'PASS: schema-v3 run state initialized: %s\n' "$init_state_file"
+}
+
+set_continuation() {
+  continuation_state_arg=
+  continuation_workflow_active=
+  continuation_workflow=
+  continuation_phase=
+  continuation_step=
+  continuation_awaiting=
+  continuation_next_kind=
+  continuation_next_target=
+  continuation_acceptance=
+  continuation_expected_context_tokens=unknown
+  continuation_safe_boundary=
+  continuation_pr_number=none
+  continuation_pr_state=none
+  continuation_recovery_host_signal=none
+  continuation_recovery_status=none
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail "--state requires a file or directory"
+        continuation_state_arg=$2
+        shift 2
+        ;;
+      --workflow-active)
+        [ "$#" -ge 2 ] || fail "--workflow-active requires true or false"
+        continuation_workflow_active=$2
+        shift 2
+        ;;
+      --workflow)
+        [ "$#" -ge 2 ] || fail "--workflow requires a workflow name"
+        continuation_workflow=$2
+        shift 2
+        ;;
+      --phase)
+        [ "$#" -ge 2 ] || fail "--phase requires a phase"
+        continuation_phase=$2
+        shift 2
+        ;;
+      --step)
+        [ "$#" -ge 2 ] || fail "--step requires a step"
+        continuation_step=$2
+        shift 2
+        ;;
+      --awaiting)
+        [ "$#" -ge 2 ] || fail "--awaiting requires a value"
+        continuation_awaiting=$2
+        shift 2
+        ;;
+      --next-action-kind)
+        [ "$#" -ge 2 ] || fail "--next-action-kind requires a kind"
+        continuation_next_kind=$2
+        shift 2
+        ;;
+      --next-action-target)
+        [ "$#" -ge 2 ] || fail "--next-action-target requires a target"
+        continuation_next_target=$2
+        shift 2
+        ;;
+      --next-action-acceptance|--acceptance)
+        [ "$#" -ge 2 ] || fail "$1 requires a check"
+        control_chars "$2"
+        if [ -n "$continuation_acceptance" ]; then
+          continuation_acceptance="$continuation_acceptance$NEWLINE$2"
+        else
+          continuation_acceptance=$2
+        fi
+        shift 2
+        ;;
+      --expected-context-tokens)
+        [ "$#" -ge 2 ] || fail "--expected-context-tokens requires a value"
+        continuation_expected_context_tokens=$2
+        shift 2
+        ;;
+      --safe-boundary)
+        [ "$#" -ge 2 ] || fail "--safe-boundary requires true or false"
+        continuation_safe_boundary=$2
+        shift 2
+        ;;
+      --pr-number)
+        [ "$#" -ge 2 ] || fail "--pr-number requires a number or none"
+        continuation_pr_number=$2
+        shift 2
+        ;;
+      --pr-state)
+        [ "$#" -ge 2 ] || fail "--pr-state requires a state or none"
+        continuation_pr_state=$2
+        shift 2
+        ;;
+      --recovery-host-signal)
+        [ "$#" -ge 2 ] || fail "--recovery-host-signal requires a signal"
+        continuation_recovery_host_signal=$2
+        shift 2
+        ;;
+      --recovery-status)
+        [ "$#" -ge 2 ] || fail "--recovery-status requires a status"
+        continuation_recovery_status=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown set-continuation option: $1" ;;
+    esac
+  done
+
+  [ -n "$continuation_state_arg" ] || fail "--state is required"
+  [ -n "$continuation_workflow_active" ] || fail "--workflow-active is required"
+  [ -n "$continuation_workflow" ] || fail "--workflow is required"
+  [ -n "$continuation_phase" ] || fail "--phase is required"
+  [ -n "$continuation_step" ] || fail "--step is required"
+  [ -n "$continuation_awaiting" ] || fail "--awaiting is required"
+  [ -n "$continuation_next_kind" ] || fail "--next-action-kind is required"
+  [ -n "$continuation_next_target" ] || fail "--next-action-target is required"
+  [ -n "$continuation_safe_boundary" ] || fail "--safe-boundary is required"
+  control_chars "$continuation_workflow"
+  control_chars "$continuation_phase"
+  control_chars "$continuation_step"
+  control_chars "$continuation_awaiting"
+  control_chars "$continuation_next_kind"
+  control_chars "$continuation_next_target"
+  control_chars "$continuation_expected_context_tokens"
+  control_chars "$continuation_pr_number"
+  control_chars "$continuation_pr_state"
+  control_chars "$continuation_recovery_host_signal"
+  control_chars "$continuation_recovery_status"
+
+  continuation_file=$(state_file "$continuation_state_arg")
+  validate_state "$continuation_file" >/dev/null
+  continuation_delivery_mode=$(required_scalar delivery_mode "$continuation_file")
+  require_bool_arg continuation.workflow_active "$continuation_workflow_active"
+  require_enum_arg continuation.workflow "$continuation_workflow" ticket isolated delivery other
+  require_enum_arg continuation.phase "$continuation_phase" planning discovery implementation review delivery awaiting_merge recovery complete
+  case "$continuation_step" in
+    none|*[!0-9]*) [ "$continuation_step" = none ] || fail "invalid continuation.step" ;;
+  esac
+  require_enum_arg continuation.awaiting "$continuation_awaiting" none user_merge user_decision recovery
+  require_enum_arg continuation.next_action.kind "$continuation_next_kind" specify discover implement validate review verify_and_sync_merge recover none
+  require_bool_arg continuation.safe_boundary "$continuation_safe_boundary"
+  case "$continuation_expected_context_tokens" in
+    unknown|none) ;;
+    ''|*[!0-9]*) fail "invalid continuation.next_action.expected_context_tokens" ;;
+  esac
+  case "$continuation_pr_number" in
+    none|''|*[!0-9]*) [ "$continuation_pr_number" = none ] || fail "invalid continuation.delivery.pr_number" ;;
+  esac
+  require_enum_arg continuation.delivery.pr_state "$continuation_pr_state" DRAFT OPEN MERGED CLOSED none
+  require_enum_arg continuation.recovery.host_signal "$continuation_recovery_host_signal" none near-limit overflow compaction
+  require_enum_arg continuation.recovery.status "$continuation_recovery_status" none pending recovered blocked
+
+  state_tmp=$continuation_file.tmp.$$
+  awk '
+    BEGIN { skip=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      if (section == "continuation") {
+        skip=1
+        next
+      }
+      skip=0
+    }
+    skip { next }
+    { print }
+  ' "$continuation_file" >"$state_tmp"
+  {
+    printf 'continuation:\n'
+    printf '  workflow_active: %s\n' "$continuation_workflow_active"
+    printf '  workflow: %s\n' "$continuation_workflow"
+    printf '  phase: %s\n' "$continuation_phase"
+    printf '  step: %s\n' "$continuation_step"
+    printf '  awaiting: %s\n' "$continuation_awaiting"
+    printf '  next_action:\n'
+    printf '    kind: %s\n' "$continuation_next_kind"
+    printf '    target: %s\n' "$continuation_next_target"
+    if [ -n "$continuation_acceptance" ]; then
+      printf '    acceptance:\n'
+      printf '%s\n' "$continuation_acceptance" | while IFS= read -r continuation_check; do
+        [ -n "$continuation_check" ] || continue
+        printf '      - %s\n' "$continuation_check"
+      done
+    else
+      printf '    acceptance: []\n'
+    fi
+    printf '    expected_context_tokens: %s\n' "$continuation_expected_context_tokens"
+    printf '  safe_boundary: %s\n' "$continuation_safe_boundary"
+    printf '  updated_at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf '  delivery:\n'
+    printf '    mode: %s\n' "$continuation_delivery_mode"
+    printf '    pr_number: %s\n' "$continuation_pr_number"
+    printf '    pr_state: %s\n' "$continuation_pr_state"
+    printf '  recovery:\n'
+    printf '    host_signal: %s\n' "$continuation_recovery_host_signal"
+    printf '    status: %s\n' "$continuation_recovery_status"
+  } >>"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$continuation_file"
+  state_tmp=
+  printf 'PASS: continuation updated: %s\n' "$continuation_file"
+}
+
 main() {
   [ "$#" -gt 0 ] || { usage >&2; exit 2; }
   command=$1
@@ -275,6 +1036,12 @@ main() {
       done
       [ -n "$state" ] || fail "--state is required"
       validate_state "$state"
+      ;;
+    init)
+      init_state "$@"
+      ;;
+    set-continuation)
+      set_continuation "$@"
       ;;
     -h|--help) usage ;;
     *) fail "unknown command: $command" ;;

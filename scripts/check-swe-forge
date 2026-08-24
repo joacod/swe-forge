@@ -208,6 +208,12 @@ require_text 'delivery_checkout:' .swe-forge/contracts/working-spec.md
 require_text 'delivery_checkout:' .swe-forge/contracts/review.md
 require_text 'evidence state is stale or unsupported' .swe-forge/tools/swe-forge-gate
 require_text 'stale/unsupported run state' .swe-forge/tools/swe-forge-state
+require_text 'swe-forge-state init' .swe-forge/tools/swe-forge-state
+require_text 'swe-forge-state set-continuation' .swe-forge/tools/swe-forge-state
+reject_text 'write_run_state' .swe-forge/tools/swe-forge-gate
+reject_text 'write_run_state' .swe-forge/tools/swe-forge-isolated-gate
+require_text 'swe-forge-state init' SWE-FORGE.md
+require_text 'swe-forge-state set-continuation' .swe-forge/policies/context.md
 require_text 'result-bundle.md' .swe-forge/contracts/result.md
 require_text 'swe-forge-isolated-gate' .swe-forge/policies/evidence.md
 require_text 'result-bundle.md' .swe-forge/workflows/isolated-execution.md
