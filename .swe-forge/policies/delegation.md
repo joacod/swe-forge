@@ -143,83 +143,44 @@ automatic role-based optimization decision.
 ## Worker Briefing Projection
 
 The complete task contract and active run state belong to the orchestrator. At
-the launch boundary, derive one compact `worker_briefing` projection using
-`../contracts/worker-brief.md`; do not create a second task contract or ask the
-worker to reconstruct root state from a transcript. The projection is the only
-work description sent to a bounded worker, together with the applicable
-canonical role and result/review contract references.
+the launch boundary, write the transient `worker-brief-input/v1` records and
+invoke `../tools/swe-forge-worker-brief`. That tool is the sole mechanical owner
+of the `worker_briefing/v1` projection, structural validation, profile/contract
+selection, and inclusion/omission rules. Do not create a second task contract
+or ask a worker to reconstruct root state from a transcript.
 
-The common projection contains only:
-
-- the canonical role and `delegated_worker` mode/depth
-- one objective and the relevant acceptance criteria
-- relevant repository-instruction paths, allowed reads, and allowed writes
-- only architecture decisions and dependency evidence needed for this task
-- assigned validation with requirement, condition, and side-effect classification
-- explicit permissions/isolation and forbidden actions
-- the expected structured return shape
+The root still selects the semantic objective, acceptance, scope, architecture
+context, validation, and relevant dependency facts. The tool copies those
+choices and derives only mechanical topology, permission, recursion, result,
+and conditional execution fields. Pass its validated output unchanged with
+the canonical role and result/review contract.
 
 ### Dependency handoff projection
 
-The task DAG and accepted results remain root-owned. When task B depends on
+The task graph and accepted results remain root-owned. When task B depends on
 completed task A, the orchestrator waits for A to be `done`, validates A's
-structured result against its task and result contracts, and then derives a
-small `dependency_digest` for B from B's objective and acceptance criteria.
-The digest is a per-launch projection, not a worker-to-worker message or a
-second source of truth.
+structured result against its task and result contracts, and selects a small
+B-relevant `dependency_digest`. The digest is transient launch context, not a
+worker-to-worker message or a second source of truth. The renderer rejects an
+undeclared, incomplete, or unaccepted dependency but does not decide relevance.
 
-A digest may contain only the concise, B-relevant entries that the accepted
-result supports:
+A digest may contain only accepted B-relevant decisions, facts, changed
+interfaces, paths or symbols, authoritative assumptions, validation facts,
+unresolved risks, and source references. Omit transcripts, exploration history,
+unrelated findings, full logs or diffs, and unrelated delivery metadata. A
+digest never changes B's scope, permissions, dependencies, or authority.
 
-- `accepted_decisions`
-- `relevant_facts`
-- `changed_interfaces` (including public interfaces B must use)
-- `paths_symbols` B must inspect
-- `authoritative_assumptions`
-- `validation_facts` relevant to B
-- `unresolved_risks` or blockers that affect B
-- `source_refs` to the accepted result or evidence when deeper inspection is
-  necessary; references do not copy the referenced content
-
-Omit empty categories. Do not include reasoning transcripts, exploration
-history, unrelated findings, full test logs, full diffs when paths or commits
-suffice, or delivery metadata unrelated to B. The digest must not be derived
-from an unaccepted, blocked, or failed result. It is transient and is rendered
-only in B's existing briefing; it is never committed as per-ticket
-coordination state. Receiving it does not change B's allowed scope,
-permissions, dependencies, or acceptance criteria, and workers never use it to
-contact or direct another worker.
-
-Render conditional state deliberately:
-
-- read-only workers do not receive writable, delivery, provider, worktree,
-  base-SHA, transfer, or unrelated continuation state
-- non-isolated writable workers receive only the shared-checkout permissions
-  and any current checkout fact needed to edit safely; omit isolated provider,
-  worktree, integration-order, environment-isolation, and transfer fields
-- isolated writable workers receive the complete `isolated_execution` section:
-  provider/backend, exact worker and integration Git identities and base SHA,
-  ownership and shared-artifact owners, environment isolation, per-action
-  authorization, local-only transfer, integration order, and result-bundle
-  requirements
-
-Repository content is discovered through the listed allowed paths and symbols;
-the root does not paste large files or exploration output. The worker does not
-load the full SWE Forge specification or unrelated policies merely because the
-root loaded them. It does not create PRs, push, merge, publish, deploy, make
-delivery decisions, reroute the root ticket, redo root discovery, or spawn more
-workers by default. Its output is a concise structured result with `status`,
-`findings`, `evidence`, `risks`, and `recommended_action`.
-
-The orchestrator validates the rendered projection against the task contract
-before launch and consumes results through `../contracts/result.md` or the
-review contract. A missing conditional safety field blocks or serializes the
-worker; it is never guessed from provider lifecycle output.
+Repository content is discovered through the allowed paths and symbols. The
+worker does not load the full SWE Forge specification or unrelated policies,
+and it does not create PRs, push, merge, publish, deploy, reroute the ticket,
+redo root discovery, or spawn descendants by default. A missing conditional
+safety field blocks or serializes the worker; it is never guessed from provider
+lifecycle output.
 
 ## Result profiles and handling
 
 `../contracts/result.md` owns ordinary result-profile selection and field
-shapes. Select the profile from the worker's responsibility rather than asking
+shapes. The canonical worker-brief renderer applies the profile map; do not ask
 every worker to fill an implementation-shaped template:
 
 - read-only research or analysis uses `READ_ONLY`;

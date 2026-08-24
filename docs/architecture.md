@@ -155,12 +155,14 @@ agents, controls Herdr, pushes, creates PRs, publishes, deploys, merges, or
 force-cleans.
 
 Dependent workers use the same hub-and-spoke boundary. After the root accepts a
-completed structured result, it derives a transient `dependency_digest` for a
-downstream briefing by filtering only the facts that downstream objective and
-acceptance need. The digest can reference the original result/evidence without
-copying it; transcripts, exploration, unrelated findings, full logs/diffs, and
-unrelated delivery metadata stay root-owned. The projection cannot expand task
-scope and is not a committed coordination artifact.
+completed structured result, it selects a transient B-relevant
+`dependency_digest`, then the canonical `swe-forge-worker-brief` tool renders
+that digest with the task and current execution facts. The digest can reference
+the original result/evidence without copying it; transcripts, exploration,
+unrelated findings, full logs/diffs, and unrelated delivery metadata stay
+root-owned. The projection cannot expand task scope and is not a committed
+coordination artifact. Adapters and providers receive the rendered output
+unchanged.
 
 ## Delivery and evidence
 

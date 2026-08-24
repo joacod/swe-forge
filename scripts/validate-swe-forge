@@ -105,6 +105,7 @@ run_check 'shell syntax' syntax sh -n \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-invocation" \
+  "$ROOT/.swe-forge/tools/swe-forge-worker-brief" \
   "$ROOT/scripts/swe-forge-invocation"
 if ! report_check 'shell syntax' syntax; then
   exit 1

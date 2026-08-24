@@ -110,18 +110,13 @@ herdr agent start <worker-name> --kind <harness-kind> --pane <pane-id>
 ```
 
 Start a concurrent writer in its dedicated worker worktree. Immediately
-before launch, derive the compact `worker_briefing` projection from the
-canonical task and run state using the resolved
-`<canonical-root>/.swe-forge/contracts/worker-brief.md` schema. If the task has
-completed dependencies, derive only the B-relevant accepted
-`dependency_digest` entries before launch; never forward a complete prior
-result or create a peer message. Send only that projection, the assigned
-canonical role path, relevant repository-instruction references, and the
-applicable result contract. For an isolated writable worker, the projection
-must retain the complete provider/backend, worker and integration Git identity,
-exact base/checkpoint SHA, ownership, environment-isolation, authorization,
-local-transfer, integration-order, and result-bundle fields; do not shorten
-that safety section.
+before launch, write the transient `worker-brief-input/v1` records and invoke
+the resolved `<canonical-root>/.swe-forge/tools/swe-forge-worker-brief`.
+Validate the generated projection, including the complete isolated safety
+section, then pass it unchanged with the assigned canonical role path and
+applicable result contract. The root still selects only B-relevant accepted
+dependency digest entries; never forward a complete prior result or create a
+peer message. The renderer, not Herdr, owns the briefing grammar.
 
 Require the worker to load the role and result contract before acting:
 

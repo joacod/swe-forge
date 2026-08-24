@@ -3,7 +3,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
-BRIEF=$ROOT/.swe-forge/contracts/worker-brief.md
+TOOL=$ROOT/.swe-forge/tools/swe-forge-worker-brief
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-briefing.XXXXXX")
 
 cleanup() {
@@ -12,339 +12,302 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 fail() {
-  printf 'briefing test failure: %s\n' "$*" >&2
+  printf 'worker briefing test failure: %s\n' "$*" >&2
   exit 1
 }
 
-require_text() {
+assert_text() {
   needle=$1
   file=$2
-  grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1 ||
-    fail "$file does not contain required briefing rule: $needle"
+  grep -F -- "$needle" "$file" >/dev/null 2>&1 || fail "$file is missing: $needle"
 }
 
-require_temp_text() {
-  needle=$1
-  file=$2
-  grep -F -- "$needle" "$file" >/dev/null 2>&1 ||
-    fail "$file is missing focused handoff evidence: $needle"
-}
-
-reject_temp_text() {
+assert_absent() {
   needle=$1
   file=$2
   if grep -F -- "$needle" "$file" >/dev/null 2>&1; then
-    fail "$file forwarded forbidden dependency material: $needle"
+    fail "$file unexpectedly contains: $needle"
   fi
 }
 
-[ -f "$BRIEF" ] || fail 'missing worker briefing projection schema'
-
-# The projection is explicit, derived, and bounded rather than another task
-# contract. These assertions protect the fields that a launch renderer must
-# carry or omit.
-require_text 'not a second task' .swe-forge/contracts/worker-brief.md
-require_text 'canonical task contract and active run state remain' .swe-forge/contracts/worker-brief.md
-require_text 'worker_briefing:' .swe-forge/contracts/worker-brief.md
-require_text 'schema: worker-brief/v1' .swe-forge/contracts/worker-brief.md
-require_text 'repository:' .swe-forge/contracts/worker-brief.md
-require_text 'instructions:' .swe-forge/contracts/worker-brief.md
-require_text 'allowed_reads:' .swe-forge/contracts/worker-brief.md
-require_text 'allowed_writes:' .swe-forge/contracts/worker-brief.md
-require_text 'architecture_decisions:' .swe-forge/contracts/worker-brief.md
-require_text 'dependencies:' .swe-forge/contracts/worker-brief.md
-require_text 'dependency_digest:' .swe-forge/contracts/worker-brief.md
-require_text 'accepted_decisions:' .swe-forge/contracts/worker-brief.md
-require_text 'relevant_facts:' .swe-forge/contracts/worker-brief.md
-require_text 'changed_interfaces:' .swe-forge/contracts/worker-brief.md
-require_text 'paths_symbols:' .swe-forge/contracts/worker-brief.md
-require_text 'authoritative_assumptions:' .swe-forge/contracts/worker-brief.md
-require_text 'validation_facts:' .swe-forge/contracts/worker-brief.md
-require_text 'unresolved_risks:' .swe-forge/contracts/worker-brief.md
-require_text 'source_refs:' .swe-forge/contracts/worker-brief.md
-require_text 'validation:' .swe-forge/contracts/worker-brief.md
-require_text 'permissions:' .swe-forge/contracts/worker-brief.md
-require_text 'return:' .swe-forge/contracts/worker-brief.md
-require_text 'profile:' .swe-forge/contracts/worker-brief.md
-require_text 'isolated_execution:' .swe-forge/contracts/worker-brief.md
-require_text 'base_sha:' .swe-forge/contracts/worker-brief.md
-require_text 'wave:' .swe-forge/contracts/worker-brief.md
-require_text 'environment_isolation:' .swe-forge/contracts/worker-brief.md
-require_text 'create_branch:' .swe-forge/contracts/worker-brief.md
-require_text 'authorization:' .swe-forge/contracts/worker-brief.md
-require_text 'local_only: true' .swe-forge/contracts/worker-brief.md
-require_text 'source_commits:' .swe-forge/contracts/worker-brief.md
-require_text 'source_to_integration_mapping: required' .swe-forge/contracts/worker-brief.md
-
-# The common projection is intentionally not a serialized run state. Keep the
-# check narrow: isolated-only safety data is allowed below the conditional
-# section, while root ticket/continuation/provider fields must not become
-# required common worker context.
-common_projection=$(awk '
-  /^worker_briefing:/ { in_projection = 1 }
-  /^  # Include this section only/ { in_projection = 0 }
-  in_projection { print }
-' "$BRIEF")
-for forbidden in ticket_ref continuation routing provider_capabilities 'delivery:'; do
-  printf '%s\n' "$common_projection" | grep -F -- "$forbidden" >/dev/null 2>&1 &&
-    fail "common worker briefing unexpectedly requires root field: $forbidden"
-done
-
-# Rendered read-only and shared-checkout briefs must stay reduced projections,
-# not serialized task/run state. These fixtures exercise the inclusion matrix
-# without requiring a second briefing renderer or a worker process.
-read_only_brief=$TMP_ROOT/read-only.brief
-cat >"$read_only_brief" <<'EOF_READ_ONLY_BRIEF'
-worker_briefing:
-  schema: worker-brief/v1
-  objective: Inspect the parser boundary.
-  repository:
-    allowed_reads: [src/parser.ts#parseRecord]
-    allowed_writes: [none]
-  validation:
-    - command: scripts/test-parser
-  permissions:
-    write_access: read-only
-    topology: SUBAGENTS
-    write_isolation: SHARED
-    forbidden_actions: [peer communication, expand scope]
-  return:
-    profile: READ_ONLY
-    contract: .swe-forge/contracts/result.md
-EOF_READ_ONLY_BRIEF
-for required in 'worker_briefing:' 'schema: worker-brief/v1' \
-  'allowed_reads:' 'validation:' 'write_access: read-only' \
-  'profile: READ_ONLY'; do
-  require_temp_text "$required" "$read_only_brief"
-done
-for forbidden in 'root transcript' 'ticket history' 'full specification' \
-  'policies/' 'provider:' 'worktree:' 'base_sha:' 'continuation' \
-  'routing:' 'isolated_execution:' 'peer message'; do
-  reject_temp_text "$forbidden" "$read_only_brief"
-done
-
-shared_brief=$TMP_ROOT/shared-writable.brief
-cat >"$shared_brief" <<'EOF_SHARED_BRIEF'
-worker_briefing:
-  schema: worker-brief/v1
-  repository:
-    allowed_reads: [src/parser.ts]
-    allowed_writes: [src/parser.ts]
-  permissions:
-    write_access: read-write
-    topology: SUBAGENTS
-    write_isolation: SHARED
-  return:
-    profile: WRITABLE
-    contract: .swe-forge/contracts/result.md
-EOF_SHARED_BRIEF
-for required in 'allowed_writes:' 'write_access: read-write' \
-  'write_isolation: SHARED' 'profile: WRITABLE'; do
-  require_temp_text "$required" "$shared_brief"
-done
-for forbidden in 'isolated_execution:' 'base_sha:' 'integration_order:' \
-  'environment_isolation:' 'source_commits:' 'create_worktree:' \
-  'provider:' 'worktree:'; do
-  reject_temp_text "$forbidden" "$shared_brief"
-done
-
-# An isolated writable launch is the exception: its conditional safety section
-# is all-or-nothing and must carry every field needed for Git, authorization,
-# validation, resource isolation, and central transfer.
-isolated_projection=$(awk '
-  /^  isolated_execution:/ { in_section = 1 }
-  in_section { print }
-' "$BRIEF")
-for required in \
-  'provider: NATIVE | HERDR' 'delegation_backend: NATIVE | HERDR' \
-  'path: <absolute worker worktree>' 'branch: <local-only worker branch>' \
-  'integration_path:' 'integration_branch:' 'base_sha:' \
-  'integration_checkpoint_sha:' 'wave:' 'integration_order:' \
-  'allowed_scope:' 'forbidden_scope:' 'shared_artifacts:' \
-  'environment_isolation:' 'setup_commands:' 'copied_ignored_files:' \
-  'ports:' 'databases:' 'docker_projects:' 'temporary_directories:' \
-  'external_resources:' 'cleanup_commands:' 'authorization:' \
-  'create_branch: not-authorized' 'create_worktree: not-authorized' \
-  'worker_setup: not-authorized | PR | continue' \
-  'worker_transfer_commit: not-authorized | PR | continue' \
-  'commit: not-authorized' 'push: not-authorized' \
-  'create_pull_request: not-authorized' 'publish: not-authorized' \
-  'deploy: not-authorized' 'merge: not-authorized' 'transfer:' \
-  'local_only: true' 'integration_strategy: CHERRY_PICK' \
-  'result_bundle:' 'required_deliverable_commits: true' 'source_commits:' \
-  'source_to_integration_mapping: required'; do
-  printf '%s\n' "$isolated_projection" | grep -F -- "$required" >/dev/null 2>&1 ||
-    fail "isolated worker briefing safety field is missing: $required"
-done
-
-# Workers stay hub-and-spoke and cannot silently turn a digest into scope,
-# permissions, peer communication, or a new workflow.
-require_text 'recursive_delegation: false' .swe-forge/contracts/worker-brief.md
-require_text 'request a contract revision before' .swe-forge/contracts/worker-brief.md
-require_text 'contact A' .swe-forge/contracts/worker-brief.md
-require_text 'unrelated policies' .swe-forge/policies/delegation.md
-require_text 'unrelated run continuation' .swe-forge/contracts/worker-brief.md
-require_text 'create_pull_request: not-authorized' .swe-forge/contracts/worker-brief.md
-require_text 'source_to_integration_mapping: required' .swe-forge/contracts/worker-brief.md
-
-# Irrelevant root context is explicitly outside each reduced projection. The
-# inclusion matrix is the focused regression oracle for read-only and shared
-# writable launches; isolated writable launches are checked for the complete
-# safety section instead of being allowed to drop fields.
-require_text 'Read-only |' .swe-forge/contracts/worker-brief.md
-require_text 'writable scope/actions' .swe-forge/contracts/worker-brief.md
-require_text 'delivery authorization' .swe-forge/contracts/worker-brief.md
-require_text 'provider state' .swe-forge/contracts/worker-brief.md
-require_text 'worktree/base/transfer state' .swe-forge/contracts/worker-brief.md
-require_text 'Non-isolated read-write |' .swe-forge/contracts/worker-brief.md
-require_text 'isolated provider, worktree, integration-order, environment-isolation, and transfer fields' .swe-forge/contracts/worker-brief.md
-require_text 'Isolated read-write |' .swe-forge/contracts/worker-brief.md
-require_text 'complete `isolated_execution` section' .swe-forge/contracts/worker-brief.md
-require_text 'root transcript' .swe-forge/contracts/worker-brief.md
-require_text 'large file contents' .swe-forge/contracts/worker-brief.md
-
-# The canonical model and every known launch boundary must name the
-# projection. This catches regressions where a launcher silently falls back to
-# forwarding the full task/run state.
-for file in \
-  .swe-forge/policies/delegation.md \
-  .swe-forge/contracts/task.md \
-  .swe-forge/workflows/ticket.md \
-  .swe-forge/workflows/isolated-execution.md \
-  .swe-forge/adapters/opencode/README.md \
-  .swe-forge/adapters/claude-code/README.md \
-  .swe-forge/adapters/pi/README.md \
-  .swe-forge/providers/native/README.md \
-  .swe-forge/providers/herdr/runbook.md; do
-  require_text 'worker_brief' "$file"
-done
-
-require_text 'projection described by' .swe-forge/adapters/pi/README.md
-require_text 'inclusion and dependency' .swe-forge/adapters/pi/README.md
-require_text 'resolved-canonical-role-path' .swe-forge/providers/herdr/runbook.md
-require_text 'bounded worker briefing projection' .swe-forge/providers/herdr/runbook.md
-# A worker is allowed to discover implementation details, so the projection
-# carries pointers rather than file bodies and the launch rules forbid root
-# transcript/history/spec leakage.
-require_text 'Workers discover details inside' .swe-forge/providers/herdr/runbook.md
-require_text 'root transcript' .swe-forge/providers/herdr/runbook.md
-require_text 'unrelated ticket history' .swe-forge/providers/herdr/runbook.md
-require_text 'full SWE Forge' .swe-forge/providers/herdr/runbook.md
-require_text 'dependency_digest' .swe-forge/policies/delegation.md
-require_text 'accepted_result_ref' .swe-forge/contracts/run-state.md
-require_text 'Dependency handoff eligibility' .swe-forge/contracts/result.md
-require_text 'worker-to-worker messages' .swe-forge/contracts/working-spec.md
-
-# A small accepted A -> B fixture exercises the allowlisted projection. The
-# tagged lines stand in for structured result fields; only entries explicitly
-# relevant to B are rendered, while the complete A result stays root-owned.
-a_result=$TMP_ROOT/task-a.result
-b_brief=$TMP_ROOT/task-b.brief
-cat >"$a_result" <<'EOF_DEPENDENCY_RESULT'
-RESULT_PROFILE: READ_ONLY
-STATUS: DONE
-TASK_ID: task-a
-
-FINDINGS:
-- [decision-for-b] Use the stable parser interface.
-- [fact-for-b] Parser returns normalized records.
-- [interface-for-b] parseRecord(input)
-- [path-for-b] src/parser.ts#parseRecord
-- [assumption-for-b] Upstream validation remains authoritative.
-- [unrelated] A different subsystem also needs cleanup.
-
-EVIDENCE:
-- [validation-for-b] scripts/test-parser passed.
-- [source-for-b] task-a.result#EVIDENCE
-- [full-log] full test log is intentionally not a handoff
-- [full-diff] full diff is intentionally not a handoff
-
-RISKS:
-- [risk-for-b] Parser fixture coverage is narrow.
-- [unrelated-risk] Delivery branch naming is unrelated to B.
-
-RECOMMENDED_ACTION:
-- [reasoning-transcript] The exploration considered several alternatives.
-- [exploration-history] Search history is intentionally not a handoff.
-- [delivery-metadata] Push status is unrelated to B.
-EOF_DEPENDENCY_RESULT
-
-render_dependency_digest() {
-  source=$1
-  destination=$2
-  {
-    cat <<'EOF_DEPENDENCY_BRIEF'
-worker_briefing:
-  task_id: task-b
-  dependencies:
-    completed:
-      - task_id: task-a
-        dependency_digest:
-          accepted_decisions:
-EOF_DEPENDENCY_BRIEF
-    awk '
-      /^- \[decision-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-    printf '%s\n' '          relevant_facts:'
-    awk '
-      /^- \[fact-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-    printf '%s\n' '          changed_interfaces:'
-    awk '
-      /^- \[interface-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-    printf '%s\n' '          paths_symbols:'
-    awk '
-      /^- \[path-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-    printf '%s\n' '          authoritative_assumptions:'
-    awk '
-      /^- \[assumption-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-    printf '%s\n' '          validation_facts:'
-    awk '
-      /^- \[validation-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-    printf '%s\n' '          unresolved_risks:'
-    awk '
-      /^- \[risk-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-    printf '%s\n' '          source_refs:'
-    awk '
-      /^- \[source-for-b\] / { sub(/^- \[[^]]+\] /, ""); print "            - " $0 }
-    ' "$source"
-  } >"$destination"
+expect_failure() {
+  label=$1
+  shift
+  if "$@" >"$TMP_ROOT/failure.out" 2>&1; then
+    fail "$label unexpectedly passed"
+  fi
 }
 
-render_dependency_digest "$a_result" "$b_brief"
-for required in \
-  'Use the stable parser interface.' \
-  'Parser returns normalized records.' \
-  'parseRecord(input)' \
-  'src/parser.ts#parseRecord' \
-  'Upstream validation remains authoritative.' \
-  'scripts/test-parser passed.' \
-  'Parser fixture coverage is narrow.' \
-  'task-a.result#EVIDENCE'; do
-  require_temp_text "$required" "$b_brief"
-done
-for forbidden in \
-  'RESULT_PROFILE: READ_ONLY' \
-  'STATUS: DONE' \
-  'FINDINGS:' \
-  'EVIDENCE:' \
-  'RECOMMENDED_ACTION:' \
-  'A different subsystem also needs cleanup.' \
-  'full test log is intentionally not a handoff' \
-  'full diff is intentionally not a handoff' \
-  'Delivery branch naming is unrelated to B.' \
-  'The exploration considered several alternatives.' \
-  'Search history is intentionally not a handoff.' \
-  'Push status is unrelated to B.'; do
-  reject_temp_text "$forbidden" "$b_brief"
-done
-if cmp -s "$a_result" "$b_brief"; then
-  fail 'dependent briefing unexpectedly contains the complete A result'
-fi
+record() {
+  printf '%s\n' "$*"
+}
 
-printf '%s\n' 'PASS: worker briefing projection fixture'
+record3() {
+  printf '%s\t%s\t%s\n' "$1" "$2" "$3"
+}
+
+record4() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"
+}
+
+record_validation() {
+  printf 'task\tvalidation\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"
+}
+
+shared_state() {
+  record3 state routing.current SUBAGENTS
+  record3 state write_isolation SHARED
+  record3 state execution_provider NONE
+  record3 state delegation_backend NATIVE
+  record3 state parallel_strategy NONE
+  record3 state integration_strategy NONE
+}
+
+read_input() {
+  file=$1
+  id=$2
+  role=$3
+  {
+    record worker-brief-input/v1
+    record3 task id "$id"
+    record3 task owner_role "$role"
+    record3 task depth 1
+    record3 task objective 'Inspect the bounded worker boundary.'
+    record3 task write_access read-only
+    record3 task acceptance 'The bounded worker returns only accepted evidence.'
+    record3 task instruction AGENTS.md
+    record3 task allowed_read 'src/parser.ts#parseRecord'
+    record3 task architecture_decision 'Use the canonical parser interface.'
+    record3 task expected_output 'FINDINGS and EVIDENCE'
+    record_validation scripts/test-parser required always local-only
+    shared_state
+  } >"$file"
+}
+
+shared_input() {
+  file=$1
+  {
+    record worker-brief-input/v1
+    record3 task id shared-writer
+    record3 task owner_role implementer
+    record3 task depth 1
+    record3 task objective 'Implement the bounded shared-checkout change.'
+    record3 task write_access read-write
+    record3 task acceptance 'The implementation remains within its declared scope.'
+    record3 task instruction AGENTS.md
+    record3 task allowed_read src/brief.ts
+    record3 task allowed_write src/brief.ts
+    record3 task expected_output 'FILES_CHANGED and VALIDATION'
+    record_validation scripts/test-brief required always local-only
+    shared_state
+  } >"$file"
+}
+
+review_input() {
+  file=$1
+  {
+    record worker-brief-input/v1
+    record3 task id review-worker
+    record3 task owner_role reviewer
+    record3 task depth 1
+    record3 task objective 'Review the bounded worker change.'
+    record3 task write_access read-only
+    record3 task acceptance 'The review checks the stated acceptance criteria.'
+    record3 task allowed_read src/brief.ts
+    record3 task expected_output 'PASS or CHANGES_REQUIRED'
+    record_validation scripts/test-brief required always local-only
+    shared_state
+  } >"$file"
+}
+
+isolated_input() {
+  file=$1
+  base_sha=1111111111111111111111111111111111111111
+  checkpoint_sha=2222222222222222222222222222222222222222
+  {
+    record worker-brief-input/v1
+    record3 task id isolated-writer
+    record3 task owner_role implementer
+    record3 task depth 1
+    record3 task objective 'Implement the bounded isolated change.'
+    record3 task write_access read-write
+    record3 task acceptance 'The isolated implementation remains within its ownership.'
+    record3 task instruction AGENTS.md
+    record3 task allowed_read src/brief.ts
+    record3 task allowed_write src/brief.ts
+    record3 task forbidden_scope 'src/other/**'
+    printf 'task\tshared_artifact\tgenerated/index\torchestrator\n'
+    record3 task expected_output 'FILES_CHANGED and VALIDATION'
+    record_validation scripts/test-brief required always local-only
+    record3 state routing.current ISOLATED
+    record3 state write_isolation WORKTREE
+    record3 state execution_provider NATIVE
+    record3 state delegation_backend NATIVE
+    record3 state parallel_strategy COMPOSE
+    record3 state integration_strategy CHERRY_PICK
+    record3 execution provider NATIVE
+    record3 execution delegation_backend NATIVE
+    record3 execution checkout.path /tmp/worker-brief
+    record3 execution checkout.branch worker/isolated-writer
+    record3 execution checkout.worktree_role worker
+    record3 execution checkout.worktree_kind worker
+    record3 execution checkout.integration_path /tmp/integration
+    record3 execution checkout.integration_branch feat/isolated-worker-brief
+    record3 execution git.base_sha "$base_sha"
+    record3 execution git.integration_checkpoint_sha "$checkpoint_sha"
+    record3 execution git.wave 1
+    record3 execution git.integration_order 1
+    record3 execution ownership.allowed_scope src/brief.ts
+    record3 execution ownership.forbidden_scope 'src/other/**'
+    printf 'execution\tshared_artifact\tgenerated/index\torchestrator\n'
+    record3 execution environment.setup_commands ./setup-worker
+    record3 execution authorization.create_branch not-authorized
+    record3 execution authorization.create_worktree not-authorized
+    record3 execution authorization.worker_setup PR
+    record3 execution authorization.worker_transfer_commit PR
+    record3 execution authorization.commit not-authorized
+    record3 execution authorization.push not-authorized
+    record3 execution authorization.create_pull_request not-authorized
+    record3 execution authorization.publish not-authorized
+    record3 execution authorization.deploy not-authorized
+    record3 execution authorization.merge not-authorized
+    record3 execution transfer.local_only true
+    record3 execution transfer.integration_strategy CHERRY_PICK
+    record3 execution transfer.result_bundle .swe-forge/contracts/result-bundle.md
+    record3 execution transfer.required_deliverable_commits true
+    record3 execution transfer.source_to_integration_mapping required
+  } >"$file"
+}
+
+dependency_input() {
+  file=$1
+  status=$2
+  accepted_ref=$3
+  {
+    record worker-brief-input/v1
+    record3 task id dependent-worker
+    record3 task owner_role implementer
+    record3 task depth 1
+    record3 task objective 'Use only the accepted dependency facts relevant to this task.'
+    record3 task write_access read-write
+    record3 task acceptance 'The dependent implementation uses the accepted interface.'
+    record3 task allowed_read src/parser.ts
+    record3 task allowed_write src/consumer.ts
+    record3 task dependency parser-task
+    record3 task expected_output FILES_CHANGED
+    record_validation scripts/test-consumer required always local-only
+    shared_state
+    printf 'state\tdependency\tparser-task\t%s\t%s\n' "$status" "$accepted_ref"
+    if [ "$status" = done ]; then
+      record4 digest parser-task accepted_decisions 'Use parseRecord(input).'
+      record4 digest parser-task relevant_facts 'Parser returns normalized records.'
+      record4 digest parser-task changed_interfaces 'parseRecord(input)'
+      record4 digest parser-task paths_symbols src/parser.ts#parseRecord
+      record4 digest parser-task validation_facts 'scripts/test-parser passed.'
+      record4 digest parser-task source_refs "$accepted_ref"
+    fi
+  } >"$file"
+}
+
+[ -x "$TOOL" ] || fail 'canonical worker-brief tool is not executable'
+assert_text 'worker_briefing:' "$ROOT/.swe-forge/contracts/worker-brief.md"
+assert_text 'worker-brief/v1' "$ROOT/.swe-forge/contracts/worker-brief.md"
+assert_text 'render --input' "$TOOL"
+assert_text 'validate --brief' "$TOOL"
+
+# READ_ONLY: the real renderer owns the common projection and omits isolated
+# provider/worktree data.
+read_input "$TMP_ROOT/read.input" reader-check researcher
+"$TOOL" render --input "$TMP_ROOT/read.input" >"$TMP_ROOT/read.brief"
+"$TOOL" validate --brief "$TMP_ROOT/read.brief" --input "$TMP_ROOT/read.input" >/dev/null
+for required in \
+  'schema: worker-brief/v1' "task_id: 'reader-check'" \
+  'mode: delegated_worker' 'recursive_delegation: false' \
+  'write_access: read-only' 'topology: SUBAGENTS' \
+  'write_isolation: SHARED' 'profile: READ_ONLY' \
+  'contract: .swe-forge/contracts/result.md' \
+  'allowed_writes:' "- none"; do
+  assert_text "$required" "$TMP_ROOT/read.brief"
+done
+for forbidden in isolated_execution: 'provider: NATIVE' 'base_sha:' 'worktree:' \
+  'source_commits:' 'create_pull_request:'; do
+  assert_absent "$forbidden" "$TMP_ROOT/read.brief"
+done
+
+# Repeated rendering is byte-for-byte deterministic.
+"$TOOL" render --input "$TMP_ROOT/read.input" >"$TMP_ROOT/read-again.brief"
+cmp -s "$TMP_ROOT/read.brief" "$TMP_ROOT/read-again.brief" || fail 'repeated rendering changed the briefing'
+
+# Structural failures are rejected by the same executable validator.
+sed '/^  objective:/d' "$TMP_ROOT/read.brief" >"$TMP_ROOT/missing-objective.brief"
+expect_failure 'missing required objective' "$TOOL" validate --brief "$TMP_ROOT/missing-objective.brief"
+sed 's/write_access: read-only/write_access: read-write/' "$TMP_ROOT/read.brief" >"$TMP_ROOT/illegal-permission.brief"
+expect_failure 'read-only worker with writable permission' "$TOOL" validate --brief "$TMP_ROOT/illegal-permission.brief"
+sed 's/^state\twrite_isolation\tSHARED$/state\twrite_isolation\tWORKTREE/' "$TMP_ROOT/read.input" >"$TMP_ROOT/bad-state.input"
+expect_failure 'inconsistent topology execution facts' "$TOOL" render --input "$TMP_ROOT/bad-state.input"
+
+# Shared WRITABLE: writable scope and edit permission are present, but no
+# isolated safety section is emitted.
+shared_input "$TMP_ROOT/shared.input"
+"$TOOL" render --input "$TMP_ROOT/shared.input" >"$TMP_ROOT/shared.brief"
+"$TOOL" validate --brief "$TMP_ROOT/shared.brief" --input "$TMP_ROOT/shared.input" >/dev/null
+for required in 'write_access: read-write' 'allowed_writes:' "- 'src/brief.ts'" \
+  'allowed_actions:' '      - edit' 'profile: WRITABLE'; do
+  assert_text "$required" "$TMP_ROOT/shared.brief"
+done
+assert_absent isolated_execution: "$TMP_ROOT/shared.brief"
+sed "s#- 'src/brief.ts'#- 'src/expanded.ts'#" "$TMP_ROOT/shared.brief" >"$TMP_ROOT/expanded-scope.brief"
+expect_failure 'scope expansion beyond canonical task' "$TOOL" validate --brief "$TMP_ROOT/expanded-scope.brief" --input "$TMP_ROOT/shared.input"
+sed 's/SHARED/WORKTREE/' "$TMP_ROOT/shared.brief" >"$TMP_ROOT/illegal-shared-isolation.brief"
+expect_failure 'shared writable worker with isolation permission' "$TOOL" validate --brief "$TMP_ROOT/illegal-shared-isolation.brief"
+
+# REVIEW: the existing review result profile gets the review contract and
+# remains read-only.
+review_input "$TMP_ROOT/review.input"
+"$TOOL" render --input "$TMP_ROOT/review.input" >"$TMP_ROOT/review.brief"
+"$TOOL" validate --brief "$TMP_ROOT/review.brief" --input "$TMP_ROOT/review.input" >/dev/null
+assert_text 'role: '\''reviewer' "$TMP_ROOT/review.brief"
+assert_text 'profile: REVIEW' "$TMP_ROOT/review.brief"
+assert_text 'contract: .swe-forge/contracts/review.md' "$TMP_ROOT/review.brief"
+assert_absent '      - edit' "$TMP_ROOT/review.brief"
+
+# ISOLATED writable: the complete safety section travels together.
+isolated_input "$TMP_ROOT/isolated.input"
+"$TOOL" render --input "$TMP_ROOT/isolated.input" >"$TMP_ROOT/isolated.brief"
+"$TOOL" validate --brief "$TMP_ROOT/isolated.brief" --input "$TMP_ROOT/isolated.input" >/dev/null
+for required in \
+  'topology: ISOLATED' 'write_isolation: WORKTREE' \
+  'profile: ISOLATED_WRITABLE' \
+  'contract: .swe-forge/contracts/result-bundle.md' \
+  'isolated_execution:' 'provider: NATIVE' 'delegation_backend: NATIVE' \
+  'integration_checkpoint_sha:' 'environment_isolation:' \
+  'authorization:' 'local_only: true' \
+  'source_to_integration_mapping: required'; do
+  assert_text "$required" "$TMP_ROOT/isolated.brief"
+done
+sed '/integration_checkpoint_sha:/d' "$TMP_ROOT/isolated.brief" >"$TMP_ROOT/missing-isolated-field.brief"
+expect_failure 'isolated writer missing safety field' "$TOOL" validate --brief "$TMP_ROOT/missing-isolated-field.brief"
+sed '/git.base_sha/d' "$TMP_ROOT/isolated.input" >"$TMP_ROOT/missing-isolated-input.input"
+# The line-oriented input deliberately remains invalid if a required isolated
+# execution fact is absent; the renderer must not invent it.
+expect_failure 'isolated input missing execution data' "$TOOL" render --input "$TMP_ROOT/missing-isolated-input.input"
+
+# Dependency handoff: only the selected digest categories are projected, and
+# completion requires accepted result evidence in canonical state.
+dependency_input "$TMP_ROOT/dependency.input" done result/parser.result
+"$TOOL" render --input "$TMP_ROOT/dependency.input" >"$TMP_ROOT/dependency.brief"
+"$TOOL" validate --brief "$TMP_ROOT/dependency.brief" --input "$TMP_ROOT/dependency.input" >/dev/null
+for required in 'dependencies:' 'completed:' 'dependency_digest:' \
+  'Use parseRecord(input).' 'Parser returns normalized records.' \
+  'src/parser.ts#parseRecord' 'result/parser.result'; do
+  assert_text "$required" "$TMP_ROOT/dependency.brief"
+done
+assert_absent 'RESULT_PROFILE: READ_ONLY' "$TMP_ROOT/dependency.brief"
+assert_absent 'full test log' "$TMP_ROOT/dependency.brief"
+dependency_input "$TMP_ROOT/unaccepted.input" running none
+record4 digest parser-task accepted_decisions 'This digest is not yet accepted.' >>"$TMP_ROOT/unaccepted.input"
+expect_failure 'unaccepted dependency digest' "$TOOL" render --input "$TMP_ROOT/unaccepted.input"
+dependency_input "$TMP_ROOT/missing-evidence.input" done none
+expect_failure 'completed dependency without accepted result evidence' "$TOOL" render --input "$TMP_ROOT/missing-evidence.input"
+
+printf '%s\n' 'PASS: deterministic worker briefing renderer and validator'

@@ -62,10 +62,11 @@ for `/swe-forge` or the delivery actions.
 ## Native Subagents
 
 OpenCode provides native primary and subagent modes. Use them when the routing
-policy selects `SUBAGENTS`. Before launch, pass the compact `worker_briefing`
-projection from `../../contracts/worker-brief.md` with the relevant canonical
-role and result/review contract; its inclusion and dependency rules remain
-canonical. If OpenCode can demonstrably create concurrent writable workers in
+policy selects `SUBAGENTS`. Before launch, invoke
+`../../tools/swe-forge-worker-brief render` with the root-produced structured
+input and pass its validated output unchanged with the relevant canonical role
+and result/review contract. The renderer owns inclusion and dependency rules;
+this adapter does not construct briefing fields. If OpenCode can demonstrably create concurrent writable workers in
 dedicated worktrees from one exact integration SHA, those workers satisfy the
 `NATIVE` provider contract and the topology is `ISOLATED`; otherwise keep
 writable subagents sequential in one checkout.

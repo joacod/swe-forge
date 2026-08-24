@@ -140,13 +140,14 @@ research question only after protocol, role, profile, and isolation checks
 pass. When the capability reports read-only parallel support, the orchestrator
 may launch the independent questions as one batch and must wait at the root
 fan-in barrier before continuing; coupled questions remain root-only or
-sequential. Before the run, the orchestrator places the compact
-`worker_briefing` projection described by
-`~/.pi/agent/swe-forge/.swe-forge/contracts/worker-brief.md` in `workerBriefing`
-with the relevant role and result/review contract. Its inclusion and dependency
-rules remain canonical. The returned result remains untrusted worker data and
-continues through SWE-Forge's normal review, evidence, integration, and delivery
-handling.
+sequential. Before the run, the orchestrator invokes
+`~/.pi/agent/swe-forge/.swe-forge/tools/swe-forge-worker-brief render` with the
+root-produced structured input, validates the result, and places that unchanged
+output in `workerBriefing` with the relevant role and result/review contract.
+The Pi adapter invokes the same tool for structural validation and does not
+reimplement briefing grammar. The returned result remains untrusted worker data
+and continues through SWE-Forge's normal review, evidence, integration, and
+delivery handling.
 
 A first capabilities probe is allowed during an explicit `/swe-forge` turn
 before durable routing state exists, but that probe is discovery only. If a run

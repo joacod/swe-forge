@@ -80,7 +80,8 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
-  "$ROOT/.swe-forge/tools/swe-forge-invocation" "$ROOT/scripts/swe-forge-invocation" \
+  "$ROOT/.swe-forge/tools/swe-forge-invocation" "$ROOT/.swe-forge/tools/swe-forge-worker-brief" \
+  "$ROOT/scripts/swe-forge-invocation" \
   "$ROOT/scripts/swe-forge-state" \
   "$ROOT/scripts/swe-forge-isolated-gate" \
   "$ROOT/scripts/check-release"
@@ -96,6 +97,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/test-swe-forge-pi" ] || fail "Pi runtime fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-invocation" ] || fail "invocation parser fixture is not executable"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-invocation" ] || fail "invocation parser is not executable"
+[ -x "$ROOT/.swe-forge/tools/swe-forge-worker-brief" ] || fail "worker briefing renderer is not executable"
 [ -x "$ROOT/scripts/swe-forge-invocation" ] || fail "invocation parser wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-briefing" ] || fail "worker briefing fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-results" ] || fail "worker result profile fixture is not executable"
@@ -174,9 +176,16 @@ require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
 require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
 require_text 'Worker Briefing Projection' .swe-forge/policies/delegation.md
 require_text 'Dependency handoff projection' .swe-forge/policies/delegation.md
-require_text 'worker_briefing' .swe-forge/contracts/task.md
-require_text 'dependency_digest' .swe-forge/contracts/task.md
+require_text 'worker-brief-input/v1' .swe-forge/contracts/task.md
+require_text 'worker-brief renderer' .swe-forge/contracts/task.md
 require_text 'worker-brief.md' .swe-forge/contracts/task.md
+require_text 'worker-brief-input/v1' .swe-forge/tools/swe-forge-worker-brief
+require_text 'render --input' .swe-forge/tools/swe-forge-worker-brief
+require_text 'validate --brief' .swe-forge/tools/swe-forge-worker-brief
+require_text 'renderer owns this inclusion matrix' .swe-forge/contracts/worker-brief.md
+reject_text 'render the compact `worker_briefing` projection' .swe-forge/workflows/ticket.md
+reject_text 'Render conditional state deliberately' .swe-forge/policies/delegation.md
+reject_text 'derive the compact `worker_briefing` projection' .swe-forge/providers/herdr/runbook.md
 require_text 'accepted_result_ref' .swe-forge/contracts/run-state.md
 require_text 'Dependency handoff eligibility' .swe-forge/contracts/result.md
 require_text 'worker_briefing:' .swe-forge/contracts/worker-brief.md
@@ -310,7 +319,8 @@ require_text 'Context-heavy transition' .swe-forge/conformance/scenarios.md
 require_text 'PR survives compaction' .swe-forge/conformance/scenarios.md
 require_text 'Herdr read-only backend' .swe-forge/conformance/scenarios.md
 require_text 'Bounded worker' .swe-forge/conformance/scenarios.md
-require_text 'worker_briefing` projection' .swe-forge/workflows/ticket.md
+require_text 'worker-brief-input/v1' .swe-forge/workflows/ticket.md
+require_text 'swe-forge-worker-brief render' .swe-forge/workflows/ticket.md
 require_text 'isolated_execution' .swe-forge/workflows/isolated-execution.md
 require_text 'Stale state pointer' .swe-forge/conformance/scenarios.md
 require_text 'Reliable near-limit signal' .swe-forge/conformance/scenarios.md
@@ -480,7 +490,7 @@ require_text 'worker result profile fixture' scripts/validate-swe-forge
 require_text 'canonical boundary fixture' scripts/validate-swe-forge
 require_text 'discoverable-old' scripts/test-swe-forge-pi
 require_text 'project-overrides-global' scripts/test-swe-forge-pi
-require_text 'task_id: reader-check' scripts/test-swe-forge-pi
+require_text 'taskId: "reader-check"' scripts/test-swe-forge-pi
 require_text 'workerBriefing' scripts/test-swe-forge-pi
 require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
 require_text 'runtime_status=near-limit' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts

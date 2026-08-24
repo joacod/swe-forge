@@ -69,7 +69,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check shell syntax
-        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/validate-swe-forge scripts/test-swe-forge-gate scripts/test-swe-forge-isolated scripts/test-swe-forge-invocation scripts/swe-forge-gate scripts/swe-forge-state scripts/swe-forge-isolated-gate scripts/swe-forge-invocation scripts/check-swe-forge-boundary scripts/test-swe-forge-boundary scripts/test-swe-forge-pi scripts/test-swe-forge-briefing scripts/test-swe-forge-results .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-isolated-gate .swe-forge/tools/swe-forge-invocation
+        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/validate-swe-forge scripts/test-swe-forge-gate scripts/test-swe-forge-isolated scripts/test-swe-forge-invocation scripts/swe-forge-gate scripts/swe-forge-state scripts/swe-forge-isolated-gate scripts/swe-forge-invocation scripts/check-swe-forge-boundary scripts/test-swe-forge-boundary scripts/test-swe-forge-pi scripts/test-swe-forge-briefing scripts/test-swe-forge-results .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-isolated-gate .swe-forge/tools/swe-forge-invocation .swe-forge/tools/swe-forge-worker-brief
 
       - name: Run structural checks
         run: ./scripts/check-swe-forge
