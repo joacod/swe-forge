@@ -232,6 +232,7 @@ validate_routing_invariants() {
 validate_capability_fields() {
   file=$1
   current=$2
+  provider=$3
   for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
     integration_checkout_protection structured_results central_integration; do
     validate_enum "provider_capabilities.$capability.status" "$file" proven unavailable unknown
@@ -242,6 +243,8 @@ validate_capability_fields() {
     required_scalar "provider_capabilities.lifecycle.$lifecycle.evidence_ref" "$file" >/dev/null
   done
   if [ "$current" = ISOLATED ]; then
+    capability_proof_ref=$(required_scalar provider_capabilities.concurrent_writable_workers.evidence_ref "$file")
+    validate_capability_proof "$capability_proof_ref" "$provider"
     for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
       integration_checkout_protection structured_results central_integration; do
       [ "$(required_scalar "provider_capabilities.$capability.status" "$file")" = proven ] || \
@@ -329,7 +332,9 @@ validate_state() {
       fail "provider_capabilities.lifecycle is missing $key"
   done
 
-  validate_capability_fields "$file" "$(required_scalar routing.current "$file")"
+  validate_capability_fields "$file" \
+    "$(required_scalar routing.current "$file")" \
+    "$(required_scalar execution_provider "$file")"
 
   # Continuation is stage-dependent. Once a current-schema producer writes it,
   # its durable control fields and self-contained delivery projection are

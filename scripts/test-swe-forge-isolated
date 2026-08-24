@@ -118,6 +118,11 @@ sed 's/^    status: proven$/    status: unknown/' \
   "$state/run-state.yaml" >"$missing_proven"
 expect_failure 'ISOLATED state requires proven capability' "$ROOT/scripts/swe-forge-state" \
   validate --state "$missing_proven"
+missing_proof_ref=$TMP_ROOT/missing-proof-ref.yaml
+sed 's|^    evidence_ref:.*$|    evidence_ref: missing-capability-proof|' \
+  "$state/run-state.yaml" >"$missing_proof_ref"
+expect_failure 'capability proof must be a regular file' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$missing_proof_ref"
 "$GATE" register-integration --state "$state" --path "$integration" \
   --branch integration --base-sha "$base" --worker-order A,B >/dev/null
 expect_failure 'central integration checkout is already registered' "$GATE" register-integration \
