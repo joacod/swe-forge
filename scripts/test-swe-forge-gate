@@ -633,6 +633,36 @@ replace_nested_scalar routing current BOGUS \
 expect_failure 'invalid routing.current' \
   "$ROOT/scripts/swe-forge-state" validate --state "$invalid_current"
 
+impossible_provider=$TMP_ROOT/impossible-provider.yaml
+replace_top_level_scalar execution_provider NATIVE \
+  "$projection_modern" "$impossible_provider"
+expect_failure 'routing.current SOLO requires execution_provider: NONE' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_provider"
+
+impossible_strategy=$TMP_ROOT/impossible-strategy.yaml
+replace_top_level_scalar parallel_strategy COMPOSE \
+  "$projection_modern" "$impossible_strategy"
+expect_failure 'routing.current SOLO requires parallel_strategy: NONE' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_strategy"
+
+impossible_backend=$TMP_ROOT/impossible-backend.yaml
+replace_top_level_scalar delegation_backend HERDR \
+  "$projection_modern" "$impossible_backend"
+expect_failure 'routing.current SOLO requires delegation_backend: NONE' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_backend"
+
+impossible_requested_mode=$TMP_ROOT/impossible-requested-mode.yaml
+replace_top_level_scalar requested_mode SUBAGENTS \
+  "$projection_modern" "$impossible_requested_mode"
+expect_failure 'routing.initial must match explicit requested_mode: SUBAGENTS' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_requested_mode"
+
+impossible_requested_delivery=$TMP_ROOT/impossible-requested-delivery.yaml
+replace_top_level_scalar requested_delivery GUIDED \
+  "$projection_modern" "$impossible_requested_delivery"
+expect_failure 'delivery_mode must match requested_delivery: GUIDED requires GUIDED' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_requested_delivery"
+
 mismatch_delivery=$TMP_ROOT/mismatch-delivery.yaml
 sed 's/^    mode: PR$/    mode: GUIDED/' "$projection_modern" >"$mismatch_delivery"
 expect_failure 'continuation.delivery.mode must match delivery_mode' \

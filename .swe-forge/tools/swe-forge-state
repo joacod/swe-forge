@@ -148,6 +148,115 @@ validate_delivery_projection() {
     fail "continuation.delivery.mode must match delivery_mode"
 }
 
+validate_routing_invariants() {
+  invariant_requested_mode=$1
+  invariant_initial=$2
+  invariant_current=$3
+  invariant_execution_provider=$4
+  invariant_delegation_backend=$5
+  invariant_write_isolation=$6
+  invariant_parallel_strategy=$7
+  invariant_integration_strategy=$8
+  invariant_requested_delivery=$9
+  invariant_delivery_mode=${10}
+  invariant_eligibility_status=${11}
+  invariant_mutation_allowed=${12}
+
+  case "$invariant_requested_mode" in
+    AUTO) ;;
+    *)
+      [ "$invariant_initial" = "$invariant_requested_mode" ] || \
+        fail "routing.initial must match explicit requested_mode: $invariant_requested_mode" ;;
+  esac
+
+  case "$invariant_requested_delivery" in
+    DEFAULT|GUIDED) invariant_expected_delivery=GUIDED ;;
+    PR) invariant_expected_delivery=PR ;;
+    *) fail "invalid requested_delivery" ;;
+  esac
+  [ "$invariant_delivery_mode" = "$invariant_expected_delivery" ] || \
+    fail "delivery_mode must match requested_delivery: $invariant_requested_delivery requires $invariant_expected_delivery"
+
+  case "$invariant_current" in
+    SOLO)
+      [ "$invariant_write_isolation" = SHARED ] || \
+        fail "routing.current SOLO requires write_isolation: SHARED"
+      [ "$invariant_execution_provider" = NONE ] || \
+        fail "routing.current SOLO requires execution_provider: NONE"
+      [ "$invariant_delegation_backend" = NONE ] || \
+        fail "routing.current SOLO requires delegation_backend: NONE"
+      [ "$invariant_parallel_strategy" = NONE ] || \
+        fail "routing.current SOLO requires parallel_strategy: NONE"
+      [ "$invariant_integration_strategy" = NONE ] || \
+        fail "routing.current SOLO requires integration_strategy: NONE"
+      ;;
+    SUBAGENTS)
+      [ "$invariant_write_isolation" = SHARED ] || \
+        fail "routing.current SUBAGENTS requires write_isolation: SHARED"
+      [ "$invariant_execution_provider" = NONE ] || \
+        fail "routing.current SUBAGENTS requires execution_provider: NONE"
+      case "$invariant_delegation_backend" in
+        NONE|NATIVE|HERDR|OTHER) ;;
+        *) fail "routing.current SUBAGENTS has an invalid delegation_backend" ;;
+      esac
+      [ "$invariant_parallel_strategy" = NONE ] || \
+        fail "routing.current SUBAGENTS requires parallel_strategy: NONE"
+      [ "$invariant_integration_strategy" = NONE ] || \
+        fail "routing.current SUBAGENTS requires integration_strategy: NONE"
+      ;;
+    ISOLATED)
+      [ "$invariant_write_isolation" = WORKTREE ] || \
+        fail "routing.current ISOLATED requires write_isolation: WORKTREE"
+      case "$invariant_execution_provider" in
+        NATIVE|HERDR) ;;
+        *) fail "routing.current ISOLATED requires execution_provider: NATIVE or HERDR" ;;
+      esac
+      case "$invariant_delegation_backend" in
+        NATIVE|HERDR) ;;
+        *) fail "routing.current ISOLATED requires delegation_backend: NATIVE or HERDR" ;;
+      esac
+      [ "$invariant_parallel_strategy" = COMPOSE ] || \
+        fail "routing.current ISOLATED requires parallel_strategy: COMPOSE"
+      [ "$invariant_integration_strategy" = CHERRY_PICK ] || \
+        fail "routing.current ISOLATED requires integration_strategy: CHERRY_PICK"
+      [ "$invariant_eligibility_status" = eligible ] || \
+        fail "routing.current ISOLATED requires isolated_eligibility.status: eligible"
+      [ "$invariant_mutation_allowed" = false ] || \
+        fail "routing.current ISOLATED requires invocation_checkout.mutation_allowed: false"
+      ;;
+    *)
+      fail "invalid routing.current: $invariant_current" ;;
+  esac
+}
+
+validate_capability_fields() {
+  file=$1
+  current=$2
+  provider=$3
+  for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
+    integration_checkout_protection structured_results central_integration; do
+    validate_enum "provider_capabilities.$capability.status" "$file" proven unavailable unknown
+    required_scalar "provider_capabilities.$capability.evidence_ref" "$file" >/dev/null
+  done
+  for lifecycle in wait inspect cancel cleanup; do
+    validate_enum "provider_capabilities.lifecycle.$lifecycle.status" "$file" proven unavailable unknown
+    required_scalar "provider_capabilities.lifecycle.$lifecycle.evidence_ref" "$file" >/dev/null
+  done
+  if [ "$current" = ISOLATED ]; then
+    capability_proof_ref=$(required_scalar provider_capabilities.concurrent_writable_workers.evidence_ref "$file")
+    validate_capability_proof "$capability_proof_ref" "$provider"
+    for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
+      integration_checkout_protection structured_results central_integration; do
+      [ "$(required_scalar "provider_capabilities.$capability.status" "$file")" = proven ] || \
+        fail "ISOLATED state requires proven capability: $capability"
+    done
+    for lifecycle in wait inspect cancel cleanup; do
+      [ "$(required_scalar "provider_capabilities.lifecycle.$lifecycle.status" "$file")" = proven ] || \
+        fail "ISOLATED state requires proven lifecycle capability: $lifecycle"
+    done
+  fi
+}
+
 validate_sha_field() {
   field=$1
   value=$2
@@ -223,6 +332,10 @@ validate_state() {
       fail "provider_capabilities.lifecycle is missing $key"
   done
 
+  validate_capability_fields "$file" \
+    "$(required_scalar routing.current "$file")" \
+    "$(required_scalar execution_provider "$file")"
+
   # Continuation is stage-dependent. Once a current-schema producer writes it,
   # its durable control fields and self-contained delivery projection are
   # required; a pre-continuation state may omit the whole section.
@@ -237,6 +350,20 @@ validate_state() {
     validate_enum continuation.delivery.mode "$file" GUIDED PR
     validate_delivery_projection "$file"
   fi
+
+  validate_routing_invariants \
+    "$(required_scalar requested_mode "$file")" \
+    "$(required_scalar routing.initial "$file")" \
+    "$(required_scalar routing.current "$file")" \
+    "$(required_scalar execution_provider "$file")" \
+    "$(required_scalar delegation_backend "$file")" \
+    "$(required_scalar write_isolation "$file")" \
+    "$(required_scalar parallel_strategy "$file")" \
+    "$(required_scalar integration_strategy "$file")" \
+    "$(required_scalar requested_delivery "$file")" \
+    "$(required_scalar delivery_mode "$file")" \
+    "$(required_scalar isolated_eligibility.status "$file")" \
+    "$(required_scalar invocation_checkout.mutation_allowed "$file")"
 
   for field in invocation_checkout_head_sha delivery_checkout_base_sha \
     delivery_checkout_head_sha delivery_checkout_checkpoint_sha; do
@@ -295,6 +422,48 @@ absolute_path() {
     /*) printf '%s\n' "$absolute_candidate" ;;
     *) printf '%s/%s\n' "$PWD" "$absolute_candidate" ;;
   esac
+}
+
+validate_capability_proof() {
+  proof_ref=$1
+  expected_provider=$2
+  proof_file=$(absolute_path "$proof_ref")
+  [ -f "$proof_file" ] || \
+    fail "capability proof must be a regular file: $proof_ref"
+  awk -F "$TAB" -v expected_provider="$expected_provider" '
+    BEGIN {
+      required["concurrent_writable_workers"] = 1
+      required["dedicated_worktrees"] = 1
+      required["exact_base_sha"] = 1
+      required["integration_checkout_protection"] = 1
+      required["structured_results"] = 1
+      required["wait"] = 1
+      required["inspect"] = 1
+      required["cancel"] = 1
+      required["cleanup"] = 1
+      required["central_integration"] = 1
+    }
+    {
+      if ($1 == "" || seen[$1]++) exit 1
+      if ($1 == "schema_version") {
+        if (NF != 2 || $2 != "1") exit 1
+        schema = 1
+      } else if ($1 == "provider") {
+        if (NF != 2 || $2 != expected_provider) exit 1
+        provider = 1
+      } else if (required[$1]) {
+        if (NF != 3 || $2 != "proven" || $3 == "" || $3 == "none" || $3 == "not-applicable") exit 1
+        found[$1] = 1
+      } else {
+        exit 1
+      }
+    }
+    END {
+      if (!schema || !provider) exit 1
+      for (key in required) if (!found[key]) exit 1
+    }
+  ' "$proof_file" || \
+    fail "capability proof must contain every required proven capability for $expected_provider: $proof_ref"
 }
 
 state_directory_for_init() {
@@ -654,9 +823,20 @@ init_state() {
       fail "worktree run state must use integration_strategy: CHERRY_PICK"
   fi
 
+  if [ -z "$init_capabilities_ref" ]; then
+    if [ "$init_write_isolation" = WORKTREE ]; then
+      fail "worktree run state requires --capabilities-ref with machine-readable proof"
+    else
+      init_capabilities_ref=not-applicable
+    fi
+  elif [ "$init_write_isolation" = WORKTREE ]; then
+    init_capabilities_ref=$(absolute_path "$init_capabilities_ref")
+  fi
+  require_scalar_arg capabilities_ref "$init_capabilities_ref"
+
   if [ -z "$init_provider_reason" ]; then
     if [ "$init_write_isolation" = WORKTREE ]; then
-      init_provider_reason="capability evidence recorded at ${init_capabilities_ref:-isolated-gate}"
+      init_provider_reason="capability evidence recorded at $init_capabilities_ref"
     else
       init_provider_reason='non-isolated execution'
     fi
@@ -666,11 +846,6 @@ init_state() {
   require_scalar_arg reason "$init_reason"
   require_scalar_arg fallback_used "$init_fallback_used"
   control_chars "$init_remote_default_evidence"
-
-  if [ -z "$init_capabilities_ref" ]; then
-    if [ "$init_write_isolation" = WORKTREE ]; then init_capabilities_ref=isolated-gate; else init_capabilities_ref=not-applicable; fi
-  fi
-  require_scalar_arg capabilities_ref "$init_capabilities_ref"
   if [ -z "$init_eligibility_status" ]; then
     if [ "$init_write_isolation" = WORKTREE ]; then init_eligibility_status=eligible; else init_eligibility_status=ineligible; fi
   fi
@@ -693,10 +868,26 @@ init_state() {
   require_bool_arg parallel_value.overridden_by_user "$init_parallel_value_overridden"
 
   if [ "$init_write_isolation" = WORKTREE ]; then
+    validate_capability_proof "$init_capabilities_ref" "$init_execution_provider"
     init_capability_status=proven
   else
     init_capability_status=unknown
   fi
+
+  validate_routing_invariants \
+    "$init_requested_mode" \
+    "$init_routing_initial" \
+    "$init_routing_current" \
+    "$init_execution_provider" \
+    "$init_delegation_backend" \
+    "$init_write_isolation" \
+    "$init_parallel_strategy" \
+    "$init_integration_strategy" \
+    "$init_requested_delivery" \
+    "$init_delivery_mode" \
+    "$init_eligibility_status" \
+    "$init_mutation_allowed"
+
   if [ "$init_delivery_mode" = PR ]; then
     init_delivery_authorization=PR
     init_delivery_status_value=pending

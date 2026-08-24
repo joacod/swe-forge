@@ -69,6 +69,28 @@ make_bundle() {
 
 repo=$(make_repo)
 base=$(git -C "$repo" rev-parse HEAD)
+capabilities=$TMP_ROOT/capabilities.tsv
+{
+  printf 'schema_version\t1\nprovider\tNATIVE\n'
+  for capability in concurrent_writable_workers dedicated_worktrees exact_base_sha \
+    integration_checkout_protection structured_results wait inspect cancel cleanup \
+    central_integration; do
+    printf '%s\tproven\tfixture-capability-check\n' "$capability"
+  done
+} >"$capabilities"
+
+expect_failure 'capability proof must be a regular file' "$GATE" init \
+  --state "$TMP_ROOT/missing-capabilities-state" --repo "$repo" --run-id missing-capabilities \
+  --provider NATIVE --capabilities-ref missing-capabilities
+incomplete_capabilities=$TMP_ROOT/incomplete-capabilities.tsv
+{
+  printf 'schema_version\t1\nprovider\tNATIVE\n'
+  printf 'concurrent_writable_workers\tunknown\tfixture-capability-check\n'
+} >"$incomplete_capabilities"
+expect_failure 'capability proof must contain every required proven capability' "$GATE" init \
+  --state "$TMP_ROOT/incomplete-capabilities-state" --repo "$repo" --run-id incomplete-capabilities \
+  --provider NATIVE --capabilities-ref "$incomplete_capabilities"
+
 integration=$TMP_ROOT/integration
 worker_a=$TMP_ROOT/worker-a
 worker_b=$TMP_ROOT/worker-b
@@ -78,7 +100,7 @@ git -C "$repo" worktree add -q -b worker-b "$worker_b" "$base"
 state=$TMP_ROOT/state
 
 "$GATE" init --state "$state" --repo "$repo" --run-id fixture \
-  --provider NATIVE --capabilities-ref fixture-capabilities \
+  --provider NATIVE --capabilities-ref "$capabilities" \
   --requested-mode AUTO --requested-provider HERDR \
   --requested-delivery GUIDED --delivery-mode GUIDED \
   --routing-initial ISOLATED --routing-preferred ISOLATED \
@@ -91,8 +113,21 @@ grep -F 'delivery_mode: GUIDED' "$state/run-state.yaml" >/dev/null
 grep -F '  current: ISOLATED' "$state/run-state.yaml" >/dev/null
 grep -F '  workflow: isolated' "$state/run-state.yaml" >/dev/null
 grep -F '    mode: GUIDED' "$state/run-state.yaml" >/dev/null
+missing_proven=$TMP_ROOT/missing-proven-capability.yaml
+sed 's/^    status: proven$/    status: unknown/' \
+  "$state/run-state.yaml" >"$missing_proven"
+expect_failure 'ISOLATED state requires proven capability' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$missing_proven"
+missing_proof_ref=$TMP_ROOT/missing-proof-ref.yaml
+sed 's|^    evidence_ref:.*$|    evidence_ref: missing-capability-proof|' \
+  "$state/run-state.yaml" >"$missing_proof_ref"
+expect_failure 'capability proof must be a regular file' "$ROOT/scripts/swe-forge-state" \
+  validate --state "$missing_proof_ref"
 "$GATE" register-integration --state "$state" --path "$integration" \
   --branch integration --base-sha "$base" --worker-order A,B >/dev/null
+expect_failure 'central integration checkout is already registered' "$GATE" register-integration \
+  --state "$state" --path "$integration" --branch integration --base-sha "$base" \
+  --worker-order A,B
 "$GATE" register-worker --state "$state" --task-id A --path "$worker_a" \
   --branch worker-a --base-sha "$base" --integration-order 1 \
   --scope a.txt --check worker-smoke >/dev/null
