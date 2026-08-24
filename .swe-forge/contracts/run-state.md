@@ -124,10 +124,11 @@ than inferring it from another representation.
 
 `delivery_mode` owns the active delivery-domain decision.
 `continuation.delivery.mode`, when present, is a compact recovery projection of
-that decision rather than an independent owner. Current writers derive it from
-`delivery_mode`, and validation rejects a contradictory projection. The
-projection is retained because it keeps continuation state self-contained after
-context compaction; it is not a legacy state alias.
+that decision rather than an independent owner. `swe-forge-state` derives it
+from `delivery_mode` during initialization or continuation update, and
+validation rejects a contradictory projection. The projection is retained
+because it keeps continuation state self-contained after context compaction;
+it is not a legacy state alias.
 
 `invocation_checkout` identifies the checkout that started the run. In a
 normal run it may be the same path as `delivery_checkout`. In an isolated run
@@ -143,8 +144,10 @@ to integration mappings belong to `integration`.
 ## Required structure and lifecycle
 
 The schema example describes the available state vocabulary; it is not a claim
-that every lifecycle field is populated in the first snapshot. A valid
-schema-v3 snapshot starts with this stable structural shell:
+that every lifecycle field is populated in the first snapshot. The canonical
+`swe-forge-state init` operation writes this shell from semantic routing and
+actual checkout facts; callers do not manually serialize it. A valid schema-v3
+snapshot starts with this stable structural shell:
 
 - **Always-present top-level structure:** `workflow`, `workflow_version`,
   `schema_version`, `run_id`, `status`, `requested_mode`,
@@ -383,14 +386,17 @@ does not change the generic schema-v3 minimum.
 ## Rules and transitions
 
 - State is updated only from actual Git/provider/evidence facts or an explicit
-  orchestrator decision.
+  orchestrator decision. Use `swe-forge-state set-continuation` for bounded
+  continuation updates; the operation owns the update timestamp and derived
+  delivery projection while preserving unrelated state.
 - A resumed run inspects real checkout, branch, worktree, provider, and process
   state before trusting this snapshot.
 - `continuation` is the authoritative workflow-control snapshot; conversation
   summaries and adapter reminders are recovery aids only.
-- Update `continuation.updated_at`, `safe_boundary`, and `next_action` together
-  before a planned compaction or topology revision. Do not copy the original
-  ticket into the continuation block.
+- Supply `safe_boundary` and `next_action` together through
+  `swe-forge-state set-continuation` before a planned compaction or topology
+  revision. The operation generates `continuation.updated_at`; do not copy the
+  original ticket into the continuation block.
 - Context state is updated before a planned compaction and after recovery; the
   snapshot never replaces actual Git or host evidence.
 - After compaction or overflow recovery, re-read the working spec and run state,

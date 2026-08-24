@@ -248,9 +248,12 @@ adapter or provider carries the rendered `worker_briefing/v1` projection, not
 the complete root task/run state. A capability probe may occur before a
 run-state snapshot exists, but that probe only discovers the backend and does
 not select a topology. Before any worker launch, load
-`.swe-forge/contracts/run-state.md` and persist a complete active schema-v3
-snapshot in a discoverable location, with `workflow: swe-forge`, a non-terminal
-status, matching `invocation_checkout.path`/`delivery_checkout.path`,
+`.swe-forge/contracts/run-state.md` and use `swe-forge-state init` with the
+semantic routing/provider inputs and actual matching checkout facts. Supply the
+bounded continuation values through `swe-forge-state set-continuation`, so the
+helper owns schema structure, `updated_at`, validation, and the delivery
+projection. The resulting discoverable state must have `workflow: swe-forge`, a
+non-terminal status, matching `invocation_checkout.path`/`delivery_checkout.path`,
 `continuation.workflow_active: true`, and `routing.current: SUBAGENTS`. Then
 repeat backend capability negotiation so it is bound to the new run. A worker
 briefing or prompt is not a substitute for canonical persisted routing state;
@@ -287,9 +290,10 @@ signal, durable-state reference, recovery status, safe boundary, expected next
 action headroom, and Git/evidence recheck in the transient state. The
 run-state `continuation` block is authoritative after compaction; do not rely
 on a generated conversation summary to recover PR phase or user shorthand.
-At `agent_settled` or an equivalent host boundary, persist state before
-requesting proactive compaction and re-read it after `session_compact` or host
-recovery. Ordinary tickets do not load this lazy policy and report
+At `agent_settled` or an equivalent host boundary, update continuation through
+`swe-forge-state set-continuation` before requesting proactive compaction and
+re-read it after `session_compact` or host recovery. Ordinary tickets do not
+load this lazy policy and report
 `not-observed` when no context limit is reached.
 
 ### 8. Implement
@@ -304,10 +308,11 @@ that needs it; PR template retrieval occurs immediately before composition.
 
 Implement only the bounded dependency waves selected by the architecture and
 working spec. In `PR`, validate and commit each planned step before beginning
-the next; at each step boundary persist continuation state and deliberately
-reconsider context value/topology without constant churn. In `GUIDED`, stop at
-the declared checkpoint. Keep task ownership, scope, and delivery
-authorization explicit and stop on a blocking gate.
+the next; at each step boundary call `swe-forge-state set-continuation` with the
+semantic continuation values and deliberately reconsider context
+value/topology without constant churn. In `GUIDED`, stop at the declared
+checkpoint. Keep task ownership, scope, and delivery authorization explicit
+and stop on a blocking gate.
 
 Keep concurrent writable work out of one checkout. If routing selects
 `ISOLATED`, follow the loaded isolated workflow and provider contracts; otherwise
