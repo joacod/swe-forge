@@ -347,6 +347,83 @@ context:
   fs.writeFileSync(filePath, yaml);
 }
 
+const freshOldState = path.join(fixtureCwd, "fresh-invocation", "old", "run-state.yaml");
+const freshNewState = path.join(fixtureCwd, "fresh-invocation", "new", "run-state.yaml");
+writeRuntimeState(freshOldState, {
+  cwd: fixtureCwd,
+  runId: "fresh-old-run",
+  phase: "stale_phase",
+  nextKind: "stale_next",
+  nextTarget: "stale evidence",
+  updatedAt: "2061-01-01T00:00:00Z",
+  prNumber: 901,
+  prState: "OPEN",
+});
+delete process.env.SWE_FORGE_STATE;
+process.env.SWE_FORGE_RUN_STATE = freshOldState;
+const freshHandlers = new Map();
+const freshPi = {
+  on(name, handler) {
+    freshHandlers.set(name, handler);
+  },
+  appendEntry() {},
+};
+extension(freshPi);
+const freshContext = {
+  cwd: fixtureCwd,
+  isProjectTrusted: () => true,
+  hasPendingMessages: () => false,
+};
+const freshStart = await freshHandlers.get("before_agent_start")({
+  prompt: "The user explicitly invoked SWE Forge through Pi.\nRaw invocation arguments: pr fresh task",
+  systemPrompt: "base",
+}, freshContext);
+const freshStartPrompt = freshStart?.systemPrompt ?? "";
+for (const staleValue of [
+  "SWE-FORGE ACTIVE RUN",
+  "PR: #901 OPEN",
+  "phase: stale_phase",
+  "next_action: stale_next -> stale evidence",
+]) {
+  if (freshStartPrompt.includes(staleValue)) throw new Error("fresh invocation inherited the previous run");
+}
+
+// The same run remains fenced when another startup or input hook rediscovers it.
+const sameOldRefresh = await freshHandlers.get("before_agent_start")({
+  prompt: "ordinary follow-up turn",
+  systemPrompt: "base",
+}, freshContext);
+if ((sameOldRefresh?.systemPrompt ?? "").includes("SWE-FORGE ACTIVE RUN")) {
+  throw new Error("fresh invocation fence did not survive rediscovery");
+}
+const sameOldMerge = await freshHandlers.get("input")({ text: "merged", source: "interactive" }, freshContext);
+if (sameOldMerge) throw new Error("superseded run remained authoritative during input handling");
+
+writeRuntimeState(freshNewState, {
+  cwd: fixtureCwd,
+  runId: "fresh-new-run",
+  phase: "fresh_phase",
+  nextKind: "fresh_next",
+  nextTarget: "fresh evidence",
+  updatedAt: "2062-01-01T00:00:00Z",
+  prNumber: 902,
+  prState: "OPEN",
+});
+process.env.SWE_FORGE_RUN_STATE = freshNewState;
+const resumedStart = await freshHandlers.get("before_agent_start")({
+  prompt: "ordinary follow-up turn",
+  systemPrompt: "base",
+}, freshContext);
+const resumedPrompt = resumedStart?.systemPrompt ?? "";
+if (
+  !resumedPrompt.includes("SWE-FORGE ACTIVE RUN") ||
+  !resumedPrompt.includes("PR: #902 OPEN") ||
+  !resumedPrompt.includes("phase: fresh_phase") ||
+  !resumedPrompt.includes("next_action: fresh_next -> fresh evidence")
+) {
+  throw new Error("new run did not resume normal continuation behavior");
+}
+
 function writeSettings(filePath, value) {
   if (value === undefined) {
     fs.rmSync(filePath, { force: true });
@@ -511,7 +588,7 @@ const subagentContext = {
   hasPendingMessages: () => false,
 };
 const subagentPrompt = await subagentHandlers.get("before_agent_start")({
-  prompt: "The user explicitly invoked SWE Forge through Pi.",
+  prompt: "ordinary continuation turn",
   systemPrompt: "base",
 }, subagentContext);
 if (!subagentPrompt?.systemPrompt.includes("swe_forge_subagent tool observed by the Pi adapter: available")) {
@@ -703,7 +780,7 @@ writeRuntimeState(subagentState, {
   updatedAt: "2050-01-01T00:00:00Z",
 });
 const soloPrompt = await subagentHandlers.get("before_agent_start")({
-  prompt: "The user explicitly invoked SWE Forge through Pi.",
+  prompt: "ordinary continuation turn",
   systemPrompt: "base",
 }, subagentContext);
 if (soloPrompt?.systemPrompt.includes("swe_forge_subagent")) {

@@ -51,7 +51,12 @@ feature-detect the tool before a run-state snapshot exists. It looks first at
 temporary-state locations. It chooses the newest active snapshot by
 `continuation.updated_at` and file mtime; terminal or stale state is ignored.
 An operator can therefore use an explicit state path without allowing an old
-pointer to override a newer run.
+pointer to override a newer run. On normal turns, an active matching snapshot
+is automatically used for continuation and recovery. An explicit new
+`/swe-forge ...` invocation is a fresh-run boundary: it fences the previously
+active `run_id` instead of injecting or trusting it during startup, and normal
+continuation resumes once the new invocation persists its own run-state with a
+different `run_id`.
 
 ## Invocation
 
