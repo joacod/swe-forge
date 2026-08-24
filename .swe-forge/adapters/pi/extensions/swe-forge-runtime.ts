@@ -594,14 +594,24 @@ function compactionReason(
 export default function sweForgeRuntime(pi: any) {
 	let activeRun: ActiveRun | undefined;
 	let activeRunVersion = "none";
+	let supersededRunId: string | undefined;
 	let negotiatedSubagentCapabilities: unknown;
 	let invocationActive = false;
 	let compactionInFlight = false;
 	let lastCompactionAt = 0;
 	let lastCompactionState = "";
 
-	const refresh = (cwd: string): ActiveRun | undefined => {
-		activeRun = resolveActiveRun(cwd);
+	const refresh = (cwd: string, freshInvocation = false): ActiveRun | undefined => {
+		const discovered = resolveActiveRun(cwd);
+		if (freshInvocation) {
+			// Fence the run present at the fresh-invocation boundary. Keep this in
+			// refresh so every startup hook ignores the same stale run until a
+			// different run_id appears.
+			supersededRunId = discovered?.stateId;
+		} else if (discovered && supersededRunId && discovered.stateId !== supersededRunId) {
+			supersededRunId = undefined;
+		}
+		activeRun = discovered && discovered.stateId !== supersededRunId ? discovered : undefined;
 		const nextVersion = activeRun
 			? `${activeRun.filePath}:${activeRun.stateId}:${topology(activeRun.currentTopology)}:${topology(activeRun.preferredTopology)}`
 			: "none";
@@ -626,8 +636,9 @@ export default function sweForgeRuntime(pi: any) {
 	});
 
 	on("before_agent_start", (event, ctx) => {
-		const run = refresh(ctx.cwd);
-		invocationActive = Boolean(run) || isSWEForgeInvocation(event.prompt);
+		const explicitInvocation = isSWEForgeInvocation(event.prompt);
+		const run = refresh(ctx.cwd, explicitInvocation);
+		invocationActive = Boolean(run) || explicitInvocation;
 		const blocks: string[] = [];
 		if (run && !event.systemPrompt?.includes(`[${ACTIVE_MARKER}]`)) blocks.push(continuityPrompt(run));
 		const subagent = observeSubagentTool(pi);
