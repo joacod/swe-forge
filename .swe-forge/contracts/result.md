@@ -5,6 +5,22 @@ its next safe decision. The task briefing and run state remain the source of
 scope, acceptance, topology, authorization, and delivery truth; a result
 reports only the evidence produced by the worker.
 
+## Executable contract surface
+
+The dependency-free `.swe-forge/tools/swe-forge-worker-result` tool exposes
+this contract without coupling it to a host runtime. `schema` emits the
+machine-readable `worker-result/v1` profile map. `validate` accepts an ordinary
+`READ_ONLY` or `WRITABLE` result, checks its profile-specific fields and
+validation records, and exits non-zero for malformed or incompatible input.
+Successful validation returns a compact machine-readable confirmation; the
+returned result remains untrusted evidence until the normal workflow consumes
+it.
+
+The tool's ordinary validator is intentionally narrow. `REVIEW` uses
+`review.md` and its blocking matrix, while `ISOLATED_WRITABLE` uses the fixed
+`result-bundle.md` and isolated gate. The `reviewer` role therefore cannot be
+validated as an ordinary result profile.
+
 ## Profile selection
 
 The profile is selected from the worker's role, write access, and execution
@@ -24,8 +40,10 @@ machine-valid source of truth for isolated work.
 
 ## Ordinary result rules
 
-`READ_ONLY` and `WRITABLE` are ordinary human-readable result profiles. They
-share only the fields needed to correlate and consume evidence:
+`READ_ONLY` and `WRITABLE` are ordinary line-oriented result profiles. They
+share only the fields needed to correlate and consume evidence. The executable
+validator accepts the field shape below and rejects unknown or profile-
+irrelevant fields:
 
 ```text
 RESULT_PROFILE: READ_ONLY | WRITABLE

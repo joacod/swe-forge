@@ -191,7 +191,11 @@ every worker to fill an implementation-shaped template:
   result profile.
 
 The worker briefing may carry the selected profile reference, but it must not
-redefine the profile or turn omitted fields into required empty sections.
+redefine the profile or turn omitted fields into required empty sections. For
+ordinary `READ_ONLY` and `WRITABLE` results, the accountable consumer may use
+`.swe-forge/tools/swe-forge-worker-result validate` to enforce that profile
+independently of the worker mechanism. `REVIEW` and `ISOLATED_WRITABLE` retain
+their dedicated contract and gate owners.
 
 Consume every worker result using the selected canonical contract. For
 `READ_ONLY`, check status/task identity, concise findings, precise evidence,

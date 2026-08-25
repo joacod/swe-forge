@@ -81,6 +81,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/.swe-forge/tools/swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-state" \
   "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-invocation" "$ROOT/.swe-forge/tools/swe-forge-worker-brief" \
+  "$ROOT/.swe-forge/tools/swe-forge-worker-result" \
   "$ROOT/scripts/swe-forge-invocation" \
   "$ROOT/scripts/swe-forge-state" \
   "$ROOT/scripts/swe-forge-isolated-gate" \
@@ -98,6 +99,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/test-swe-forge-invocation" ] || fail "invocation parser fixture is not executable"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-invocation" ] || fail "invocation parser is not executable"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-worker-brief" ] || fail "worker briefing renderer is not executable"
+[ -x "$ROOT/.swe-forge/tools/swe-forge-worker-result" ] || fail "worker result validator is not executable"
 [ -x "$ROOT/scripts/swe-forge-invocation" ] || fail "invocation parser wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-briefing" ] || fail "worker briefing fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-results" ] || fail "worker result profile fixture is not executable"
@@ -184,6 +186,10 @@ require_text 'worker-brief.md' .swe-forge/contracts/task.md
 require_text 'worker-brief-input/v1' .swe-forge/tools/swe-forge-worker-brief
 require_text 'render --input' .swe-forge/tools/swe-forge-worker-brief
 require_text 'validate --brief' .swe-forge/tools/swe-forge-worker-brief
+require_text 'worker-result/v1' .swe-forge/tools/swe-forge-worker-result
+require_text 'schema' .swe-forge/tools/swe-forge-worker-result
+require_text 'validate' .swe-forge/tools/swe-forge-worker-result
+require_text 'swe-forge-worker-result' .swe-forge/contracts/result.md
 require_text 'renderer owns this inclusion matrix' .swe-forge/contracts/worker-brief.md
 reject_text 'render the compact `worker_briefing` projection' .swe-forge/workflows/ticket.md
 reject_text 'Render conditional state deliberately' .swe-forge/policies/delegation.md
@@ -506,6 +512,7 @@ require_text 'test-swe-forge-briefing' CONTRIBUTING.md
 require_text 'worker briefing fixture' scripts/validate-swe-forge
 require_text 'worker result profile fixture' scripts/validate-swe-forge
 require_text 'canonical boundary fixture' scripts/validate-swe-forge
+require_text 'worker-result/v1' scripts/test-swe-forge-results
 require_text 'discoverable-old' scripts/test-swe-forge-pi
 require_text 'project-overrides-global' scripts/test-swe-forge-pi
 require_text 'taskId: "reader-check"' scripts/test-swe-forge-pi

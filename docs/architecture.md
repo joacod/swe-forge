@@ -81,10 +81,15 @@ Adapters may:
 
 Canonical workflow and policy sources own routing and topology semantics,
 contracts, evidence requirements, delivery semantics, and documented fallback
-behavior. When an adapter capability is absent, canonical execution uses the
-safe fallback where one exists. Do not add a heavyweight `Harness` class or
-plugin framework merely to model asymmetric support; the capability boundary
-is the intended abstraction.
+behavior. The canonical worker-result contract and its
+`.swe-forge/tools/swe-forge-worker-result` schema/validator are the reusable
+semantic surface for ordinary worker results: a host may translate the profile
+into its native worker output, while the accountable workflow validates the
+returned evidence independently. Review results and isolated bundles retain
+their existing dedicated owners. When an adapter capability is absent,
+canonical execution uses the safe fallback where one exists. Do not add a
+heavyweight `Harness` class or plugin framework merely to model asymmetric
+support; the capability boundary is the intended abstraction.
 
 ## Routing boundary
 
