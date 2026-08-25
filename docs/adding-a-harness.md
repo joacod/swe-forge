@@ -165,4 +165,6 @@ In particular, a successful installer or generated skill fixture does not mean
 that the maintainer has behaviorally validated the harness. Update the adapter
 when official harness behavior changes, but do not change the canonical
 architecture to match one vendor's terminology or require feature parity with
-Pi.
+other harnesses. Capability asymmetry is valid: one harness must not define the
+requirements for another, and future adapters should implement only the semantic
+capabilities they can genuinely support.
