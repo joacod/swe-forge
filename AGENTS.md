@@ -39,16 +39,25 @@ When changing this repository itself:
   frameworks, telemetry, benchmarks, speculative abstractions, or unneeded
   compatibility machinery. Detailed contracts and policies remain canonical
   in `SWE-FORGE.md` and `.swe-forge/`.
-- SWE Forge is Pi-first, not Pi-only: Pi is the first-class/reference harness;
-  OpenCode is compatible/secondary; Claude Code, Codex, and Cursor are
-  experimental. These tiers describe current maintenance and testing
-  commitment, not a parity guarantee.
-- Keep the canonical workflow portable and branch on semantic capabilities,
-  not harness identity. Harness-specific APIs and lifecycle behavior belong in
-  adapters, and missing optional capabilities use the documented fallback.
-- New Pi functionality does not require parity implementations elsewhere. Do
-  not add abstractions solely for hypothetical parity or delete an adapter
-  because its support is experimental; tiers may change with real validation.
+- Before changing canonical workflow behavior, contracts, policies, routing,
+  providers, delegation semantics, or harness integration boundaries, read
+  `docs/architecture.md`. For adapter work, also read
+  `docs/adding-a-harness.md`, `.swe-forge/adapters/README.md`, and the target
+  adapter README.
+- Keep the canonical workflow harness-agnostic. Canonical routing selects
+  topology; adapters demonstrate and realize capabilities but do not choose a
+  topology because a host exposes a native primitive.
+- Keep harness-native APIs, paths, lifecycle hooks, approval models,
+  task/subagent mechanisms, configuration, and host syntax inside adapters.
+  Before changing canonical code for a host feature, map it to an existing
+  semantic capability first; adapter-only translation is the default.
+- If a core change is genuinely required, add the smallest harness-neutral
+  semantic contract that is useful without the requesting harness. Do not
+  introduce harness-name conditionals into canonical workflow semantics or
+  user-facing Forge behavior solely to expose one host primitive.
+- Capability asymmetry is valid and does not require parity work elsewhere.
+  Adding a harness must not change existing harness behavior unless an
+  independently justified canonical contract changes.
 
 ## Installation Requests
 

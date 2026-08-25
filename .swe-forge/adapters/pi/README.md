@@ -1,8 +1,8 @@
 # Pi Adapter
 
 This adapter exposes SWE Forge through Pi's prompt-template convention plus
-one small optional runtime extension. Pi is the first-class/reference harness
-for SWE Forge, and this adapter may provide richer capabilities than other
+one optional runtime extension. Pi has the strongest current validation
+confidence, and this adapter may provide richer capabilities than other
 adapters without making them canonical requirements. Canonical workflow
 behavior remains in the support tree; the extension translates Pi lifecycle
 capabilities into the generic context and continuation contracts and

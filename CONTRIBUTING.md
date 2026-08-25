@@ -1,15 +1,18 @@
 # Contributing to SWE Forge
 
-Thanks for helping improve SWE Forge. The project is a Pi-first coding
+Thanks for helping improve SWE Forge. The project is a harness-agnostic coding
 workflow with a portable canonical core, so changes should preserve the
 separation between the canonical workflow and asymmetric harness projections.
-Pi is the reference harness; new Pi capabilities do not require parity work in
-experimental adapters.
+Support tiers describe current maintenance and validation confidence; they do
+not establish semantic priority or require parity work.
 
 ## Before changing files
 
-- Read `AGENTS.md` and the relevant canonical workflow, policy, contract, or
-  provider files.
+- Read `AGENTS.md` and, for substantive canonical or boundary changes, read
+  `docs/architecture.md` before the relevant workflow, policy, contract, or
+  provider files. For adapter work, also read
+  `docs/adding-a-harness.md`, `.swe-forge/adapters/README.md`, and the target
+  adapter README.
 - Keep the original behavior and scope of the change explicit.
 - Update canonical sources before adapters or documentation projections.
 - Do not commit temporary run state, transcripts, credentials, or generated

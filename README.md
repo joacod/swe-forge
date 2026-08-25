@@ -6,9 +6,9 @@ SWE Forge turns explicit coding tickets into bounded, evidence-backed changes.
 It sits above your coding harness: it helps inspect, plan, implement, verify,
 review, and report without replacing the harness itself.
 
-SWE Forge is Pi-first, with a portable canonical workflow and asymmetric
-harness adapters. It is opt-in, so ordinary harness prompts remain ordinary
-prompts.
+SWE Forge is a harness-agnostic, explicitly invoked workflow with a portable
+canonical process and adapters for different coding harnesses. It is opt-in,
+so ordinary harness prompts remain ordinary prompts.
 
 ## What it does
 
@@ -31,8 +31,8 @@ them safely. The [workflow specification](SWE-FORGE.md) and
 
 | Harness | Tier |
 | --- | --- |
-| [Pi](.swe-forge/adapters/pi/README.md) | First-class / reference |
-| [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible / secondary |
+| [Pi](.swe-forge/adapters/pi/README.md) | First-class |
+| [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible |
 | [OMP](.swe-forge/adapters/omp/README.md) | Experimental |
 | [Claude Code](.swe-forge/adapters/claude-code/README.md) | Experimental |
 | [Codex](.swe-forge/adapters/codex/README.md) | Experimental |
@@ -52,11 +52,13 @@ the harness projection as links:
 ```bash
 git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
-scripts/swe-forge install pi
-scripts/swe-forge verify pi
+HARNESS=opencode  # choose any supported harness adapter
+scripts/swe-forge install "$HARNESS"
+scripts/swe-forge verify "$HARNESS"
 ```
 
-Replace `pi` with `opencode`, `omp`, `claude`, `codex`, or `cursor` as needed. See the
+Set `HARNESS` to `pi`, `opencode`, `omp`, `claude`, `codex`, or `cursor` as
+needed. See the
 [installation guide](docs/installation.md) for the supported link locations
 and optional capabilities.
 
