@@ -651,7 +651,12 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 			return { block: true, reason: `OMP native delegation capability is incompatible: ${observation.reason}. Use SOLO/sequential fallback.` };
 		}
 		const inspected = await inspectActiveRun(pi, ctx.cwd, run.filePath);
-		if (!inspected || inspected.stateId !== run.stateId || !inspected.delegationAuthorized) {
+		if (
+			!inspected ||
+			inspected.stateId !== run.stateId ||
+			!inspected.delegationAuthorized ||
+			inspected.currentTopology !== "SUBAGENTS"
+		) {
 			return { block: true, reason: "Canonical run-state inspection no longer authorizes delegation. Use SOLO/sequential fallback." };
 		}
 		const input = isRecord(event.input) ? event.input : {};

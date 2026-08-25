@@ -546,8 +546,8 @@ encode_json_input() {
     }
     function hex_digit(value) {
       if (value >= "0" && value <= "9") return value + 0
-      if (value >= "a" && value <= "f") return 10 + index("abcdef", value)
-      if (value >= "A" && value <= "F") return 10 + index("ABCDEF", value)
+      if (value >= "a" && value <= "f") return 9 + index("abcdef", value)
+      if (value >= "A" && value <= "F") return 9 + index("ABCDEF", value)
       return -1
     }
     function utf8(code,    first, second, third) {
