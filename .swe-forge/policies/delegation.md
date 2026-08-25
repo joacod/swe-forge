@@ -112,10 +112,9 @@ make the workflow look more complex.
 
 ## Worker Runtime
 
-Workers inherit the active root harness/runtime, model, and reasoning
-configuration by default. Explicit user or project worker-routing configuration
-may override that inheritance. Automatic role-based optimization is not enabled
-by default.
+Worker execution uses the effective runtime chosen by the active harness or
+orchestration environment. SWE Forge does not require workers to inherit the
+root execution.
 
 ## Worker Briefing Projection
 

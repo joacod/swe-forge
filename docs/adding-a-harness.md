@@ -1,8 +1,8 @@
 # Adding a Harness
 
 Add a harness adapter only when the harness provides a feature that improves
-discovery, explicit invocation, delegation, permissions, isolation, or model
-routing. Natural-language activation through `AGENTS.md` is always the
+discovery, explicit invocation, delegation, permissions, isolation, or runtime
+integration. Natural-language activation through `AGENTS.md` is always the
 fallback.
 
 SWE Forge is harness-agnostic: the canonical workflow owns semantics and an
@@ -21,7 +21,7 @@ for:
 - skills or reusable instruction support
 - native subagents, background workers, or teams
 - permission and tool restrictions
-- model selection and capability mapping
+- runtime configuration and capability mapping
 - worktree or session isolation
 - how external orchestration can launch the harness
 
@@ -57,7 +57,7 @@ An adapter may still contain:
 - an explicit command, skill, or prompt loader
 - optional native role or runtime bridges
 - capability detection and worker-profile mapping
-- permission and model mapping guidance
+- permission and runtime configuration guidance
 - isolation and fallback notes
 - validation steps
 
@@ -143,7 +143,7 @@ When native role registration is useful:
 - point the native prompt at one file under `.swe-forge/agents/`
 - set read-only permissions for research and review roles
 - grant write tools only to bounded implementation tasks
-- leave model selection configurable
+- leave runtime selection to the harness
 - require the portable result or review contract in the output
 
 Do not copy portable role instructions into native definitions.
@@ -161,7 +161,7 @@ Test an adapter in a temporary fake home or controlled fixture:
 3. native command or skill loads only when explicitly invoked
 4. role bridges resolve the canonical files
 5. permissions match the role's intended access
-6. model mappings contain no hardcoded private configuration
+6. runtime configuration contains no hardcoded private configuration
 7. unavailable optional tooling falls back cleanly
 8. the repository installer can install and verify the adapter in a temporary
    home without overwriting collisions

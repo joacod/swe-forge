@@ -74,14 +74,13 @@ Choose permissions for each role deliberately. Read-only researchers and
 reviewers should not receive edit access. Writable implementers need explicit
 scope from a task contract.
 
-## Models and Permissions
+## Runtime and Permissions
 
-OpenCode model and permission mappings are configuration choices. Keep them in
+OpenCode runtime and permission mappings are configuration choices. Keep them in
 the target project's OpenCode configuration or user configuration, never in
-canonical role files. Map capability classes in
-`../../policies/model-routing.md` to user-selected models.
+canonical role files.
 
-The adapter does not require a particular model ID, permission mode, or MCP
+The adapter does not require a particular runtime, permission mode, or MCP
 server.
 
 ## Skills

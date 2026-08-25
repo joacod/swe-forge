@@ -10,7 +10,7 @@ The workflow accepts:
 - the original ticket or problem description;
 - explicit user constraints;
 - repository instructions and available tooling; and
-- optional harness, model, or native subagent preferences.
+- optional harness or native subagent preferences.
 
 The original ticket remains authoritative. Do not silently replace it with a
 worker's interpretation.
@@ -80,7 +80,7 @@ evidence and materially reduce root-context growth. This is an early research
 strategy, not the final topology decision or durable routing state.
 
 For `DELEGATED_RESEARCH`, load `policies/delegation.md`, the bounded researcher
-role, the task/result contracts, and model-routing before assigning a worker.
+role, and the task/result contracts before assigning a worker.
 Give each worker one bounded question, a small allowed read scope, an evidence
 budget, and a structured result contract. Workers do not write, make delivery
 or topology decisions, pass along full ticket/history, recurse, or orchestrate
@@ -129,8 +129,6 @@ the ticket and repository evidence justify it.
 
 When delegation or independent review is useful, first load
 `policies/delegation.md`, the relevant task/result/review contracts, and the
-relevant role files. Load `policies/model-routing.md` before assigning a model
-capability class.
 
 Create bounded tasks only where the loaded delegation policy and contracts
 provide useful independence. Keep each task's ownership and validation

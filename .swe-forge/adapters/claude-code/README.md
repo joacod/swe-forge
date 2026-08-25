@@ -54,9 +54,11 @@ dependency rules; this adapter does not construct briefing fields.
 
 Use read-only tool lists for researchers, architects, reviewers, security
 reviewers, and performance reviewers. Give write tools only to a bounded task
-whose contract authorizes them. Omit model fields unless the user explicitly
-chooses a model mapping. Writable native subagents in one checkout run
-sequentially; the root orchestrator retains final integration and delivery.
+whose contract authorizes them. Keep runtime selection in Claude Code or user
+configuration; native worker assignments carry the canonical role, scope,
+permissions, and result contract only. Writable native subagents in one
+checkout run sequentially; the root orchestrator retains final integration and
+delivery.
 
 ## Installed projection
 

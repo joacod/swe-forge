@@ -37,10 +37,9 @@ justify.
 
 ## Reuse Canonical Contracts and Policies
 
-Reuse `.swe-forge/contracts/` for tasks, results, reviews, and run state. Reuse
-`.swe-forge/policies/` for routing, delegation, model capabilities,
-verification, and recovery unless the new workflow has a concrete reason to
-override one of them.
+Reuse `.swe-forge/contracts/` for tasks, results, reviews, and run state.
+Reuse `.swe-forge/policies/` for routing, delegation, verification, and
+recovery unless the new workflow has a concrete reason to override one of them.
 
 If a policy must change for one workflow, document the narrower scope and keep
 general ticket behavior unchanged.
