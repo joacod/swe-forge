@@ -96,5 +96,5 @@ The adapter follows the current OMP documentation checked on 2026-08-25:
 The observed local OMP CLI is `18.0.4`. This adapter has installer and
 projection fixture coverage, and a read-only real-harness smoke test through
 OMP passed for explicit prompt activation and installation checks. Lifecycle
-integration remains unvalidated; see the compatibility snapshot for the
-evidence boundary.
+integration remains unvalidated; see the [compatibility evidence
+record](../../../docs/compatibility.md) for the recorded evidence and limits.
