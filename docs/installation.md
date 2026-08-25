@@ -67,7 +67,7 @@ at its normal user-level location:
 | Harness | Entry points | Canonical support link |
 | --- | --- | --- |
 | OpenCode | `~/.config/opencode/commands/` | `~/.config/opencode/swe-forge/` |
-| OMP | `~/.omp/agent/prompts/` | `~/.omp/agent/swe-forge/` |
+| OMP | `~/.omp/agent/prompts/`, `~/.omp/agent/extensions/`, `~/.omp/agent/agents/` | `~/.omp/agent/swe-forge/` |
 | Claude Code | `~/.claude/skills/swe-forge/` | `~/.claude/swe-forge/` |
 | Codex | `~/.agents/skills/swe-forge/` | `~/.agents/swe-forge/` |
 | Cursor | `~/.agents/skills/swe-forge/` | `~/.agents/swe-forge/` |
@@ -75,6 +75,26 @@ at its normal user-level location:
 
 Codex and Cursor intentionally share the Agent Skill projection. Install each
 harness only when it is needed; there is no multi-harness install command.
+
+### OMP native SUBAGENTS bridge
+
+The OMP adapter installs a source-linked runtime extension and three confined
+user-level agent profiles in addition to the `/swe-forge` prompt. The extension
+uses OMP's native `task` tool, per-task `outputSchema`/strict structured output,
+and `task.batch`; it does not install an OMP clone of the Pi
+`swe_forge_subagent` package.
+
+Read-only native workers may batch when canonical routing permits it. Writable
+workers in the shared checkout remain sequential. OMP task isolation is not
+advertised as SWE Forge `ISOLATED`; that requires the canonical isolated
+provider proof. Missing or incompatible runtime capabilities use the visible
+SOLO/sequential fallback. OMP delegated sessions are headless, so profile
+confinement and canonical root-owned delivery authorization—not an interactive
+approval prompt—are the safety boundary.
+
+The adapter does not modify OMP settings, providers, models, credentials,
+permissions, or project configuration. See the [OMP adapter reference](../.swe-forge/adapters/omp/README.md)
+for the current API boundary and lifecycle limitations.
 
 ### Optional Pi SUBAGENTS backend
 

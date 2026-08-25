@@ -36,7 +36,7 @@ It does **not** establish that the target harness has been used successfully.
 | --- | --- | --- |
 | Pi | 0.84.2 | Installer, prompt projection, and runtime extension syntax/fixture validated locally |
 | OpenCode | 1.18.16 | Installer and command projection validated locally |
-| OMP | 18.0.4 | Installer and prompt projection validated locally |
+| OMP | 18.0.4 | Installer, prompt/runtime projection, confined profiles, and adapter fixtures validated locally |
 | Claude Code | 2.1.37 | Installer and skill projection validated locally; no behavioral claim follows |
 | Codex | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
 | Cursor | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
@@ -72,7 +72,7 @@ capabilities, not canonical requirements:
 | --- | --- | --- |
 | Pi 0.84.2 | `getContextUsage()`, `compact()`, lifecycle hooks, state reinjection, and optional subagent negotiation are implemented by the Pi adapter | Pi can provide proactive compaction, lifecycle recovery, and the optional `swe_forge_subagent` backend; missing or incompatible negotiation falls back to canonical SOLO/sequential behavior. |
 | OpenCode 1.18.16 | Not measured by the current adapter integration | Do not claim proactive detection; use documented host behavior or manual checkpoint/resume until revalidated. |
-| OMP 18.0.4 | Not measured by the current adapter integration | Native sessions, compaction, and task features are documented, but this adapter has no SWE Forge lifecycle bridge; use canonical durable-checkpoint/manual fallback. |
+| OMP 18.0.4 | Native task/profile/strict-output observations are adapter-level; context lifecycle is not measured | The adapter can bridge native shared-checkout `SUBAGENTS` when the active task surface, confined profiles, canonical validators, and matching run state are observed. OMP context telemetry, state reinjection, and proactive compaction remain unavailable/unknown; native task isolation is not SWE Forge `ISOLATED` proof. |
 | Claude Code 2.1.37 | Not measured by the current adapter integration | Do not claim proactive detection or behavioral support from projection checks. |
 | Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
 | Cursor | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |

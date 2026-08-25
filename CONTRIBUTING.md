@@ -41,7 +41,8 @@ During an implementation loop, use only the focused suite affected by the
 current slice and run the batch once on the final candidate. Focused changes may
 run the directly affected suite, such as
 `scripts/test-swe-forge-gate`, `scripts/test-swe-forge-isolated`,
-`scripts/test-swe-forge-pi`, `scripts/test-swe-forge-invocation`,
+`scripts/test-swe-forge-pi`, `scripts/test-swe-forge-omp`,
+`scripts/test-swe-forge-invocation`,
 `scripts/test-swe-forge-briefing`, `scripts/test-swe-forge-results`, or
 `scripts/test-swe-forge-boundary`, before the
 final batch. The local Pi fixture may

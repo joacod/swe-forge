@@ -74,7 +74,8 @@ validate_registry() {
 sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
   "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
-  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-invocation" \
+  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-omp" \
+  "$ROOT/scripts/test-swe-forge-invocation" \
   "$ROOT/scripts/test-swe-forge-briefing" "$ROOT/scripts/test-swe-forge-results" \
   "$ROOT/scripts/check-swe-forge-boundary" "$ROOT/scripts/test-swe-forge-boundary" \
   "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
@@ -96,6 +97,7 @@ sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
 [ -x "$ROOT/scripts/swe-forge-isolated-gate" ] || fail "isolated gate wrapper is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-pi" ] || fail "Pi runtime fixture is not executable"
+[ -x "$ROOT/scripts/test-swe-forge-omp" ] || fail "OMP runtime fixture is not executable"
 [ -x "$ROOT/scripts/test-swe-forge-invocation" ] || fail "invocation parser fixture is not executable"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-invocation" ] || fail "invocation parser is not executable"
 [ -x "$ROOT/.swe-forge/tools/swe-forge-worker-brief" ] || fail "worker briefing renderer is not executable"
@@ -111,9 +113,12 @@ require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
 require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
 require_text './scripts/validate-swe-forge' .github/workflows/ci.yml
 require_text 'pi-runtime:' .github/workflows/ci.yml
+require_text 'omp-runtime:' .github/workflows/ci.yml
 require_text 'uses: actions/setup-node@' .github/workflows/ci.yml
 require_text 'node-version: 22.19.0' .github/workflows/ci.yml
 require_text 'SWE_FORGE_PI_CI: "1"' .github/workflows/ci.yml
+require_text 'SWE_FORGE_OMP_CI: "1"' .github/workflows/ci.yml
+require_text 'scripts/test-swe-forge-omp' .github/workflows/ci.yml
 require_text 'scripts/test-swe-forge-briefing' .github/workflows/ci.yml
 require_text 'scripts/test-swe-forge-results' .github/workflows/ci.yml
 require_text 'Validation cadence and batching' .swe-forge/policies/verification.md
@@ -488,6 +493,10 @@ require_text 'ADAPTER_REGISTRY' scripts/swe-forge
 require_text 'opencode|file|opencode/commands/git-push.md' .swe-forge/adapters/registry.tsv
 require_text 'opencode|file|opencode/commands/git-pr.md' .swe-forge/adapters/registry.tsv
 require_text 'omp|file|omp/prompts/swe-forge.md' .swe-forge/adapters/registry.tsv
+require_text 'omp|file|omp/extensions/swe-forge-runtime.ts' .swe-forge/adapters/registry.tsv
+require_text 'omp|file|omp/agents/swe-forge-read-only.md' .swe-forge/adapters/registry.tsv
+require_text 'omp|file|omp/agents/swe-forge-writable.md' .swe-forge/adapters/registry.tsv
+require_text 'omp|file|omp/agents/swe-forge-reviewer.md' .swe-forge/adapters/registry.tsv
 require_text 'pi|file|pi/prompts/git-sync.md' .swe-forge/adapters/registry.tsv
 require_text 'pi|file|pi/extensions/swe-forge-runtime.ts' .swe-forge/adapters/registry.tsv
 require_text 'codex|tree|shared/agent-skill/swe-forge' .swe-forge/adapters/registry.tsv
@@ -503,10 +512,23 @@ require_text 'shared adapter behavior' .swe-forge/adapters/claude-code/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/opencode/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/pi/README.md
 require_text 'https://omp.sh/docs/prompt-templates' .swe-forge/adapters/omp/README.md
+require_text 'native `task` tool' .swe-forge/adapters/omp/README.md
+require_text 'schemaMode: strict' .swe-forge/adapters/omp/README.md
+require_text 'Native OMP `ISOLATED` remains unsupported' .swe-forge/adapters/omp/README.md
+require_text 'OMP native SUBAGENTS bridge' docs/installation.md
+require_text 'Native task/profile/strict-output observations' docs/compatibility.md
 require_text '### Context management' .swe-forge/adapters/pi/README.md
 require_text 'agent_settled' .swe-forge/adapters/pi/README.md
 require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
+require_text 'ExtensionAPI' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
+require_text 'outputSchema' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
+require_text 'schemaMode' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
+require_text 'SWE Forge ISOLATED' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
+require_text 'swe-forge-read-only' .swe-forge/adapters/omp/agents/swe-forge-read-only.md
+require_text 'spawns: []' .swe-forge/adapters/omp/agents/swe-forge-read-only.md
+require_text 'blocking: true' .swe-forge/adapters/omp/agents/swe-forge-writable.md
 require_text 'test-swe-forge-pi' CONTRIBUTING.md
+require_text 'test-swe-forge-omp' CONTRIBUTING.md
 require_text 'test-swe-forge-invocation' CONTRIBUTING.md
 require_text 'test-swe-forge-briefing' CONTRIBUTING.md
 require_text 'worker briefing fixture' scripts/validate-swe-forge

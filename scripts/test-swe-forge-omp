@@ -1,0 +1,282 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+
+skip_or_fail() {
+  message=$1
+  if [ "${SWE_FORGE_OMP_CI:-}" = 1 ]; then
+    printf 'FAIL: %s\n' "$message" >&2
+    exit 1
+  fi
+  printf 'SKIP: %s\n' "$message"
+  exit 0
+}
+
+command -v node >/dev/null 2>&1 || skip_or_fail 'OMP runtime fixture (Node.js is unavailable)'
+if ! node --experimental-strip-types --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
+  skip_or_fail 'OMP runtime fixture (Node.js has no native TypeScript loader)'
+fi
+
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/omp-runtime-fixture.XXXXXX")
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+trap cleanup EXIT HUP INT TERM
+
+cd "$ROOT"
+node --experimental-strip-types --input-type=module - "$ROOT" "$TMP_ROOT" <<'NODE'
+import * as fs from "node:fs";
+import { execFileSync } from "node:child_process";
+import * as path from "node:path";
+import { pathToFileURL } from "node:url";
+
+const root = process.argv[2];
+const tmp = process.argv[3];
+const modulePath = path.join(root, ".swe-forge", "adapters", "omp", "extensions", "swe-forge-runtime.ts");
+const briefTool = path.join(root, ".swe-forge", "tools", "swe-forge-worker-brief");
+const stateTool = path.join(root, ".swe-forge", "tools", "swe-forge-state");
+const profileSource = path.join(root, ".swe-forge", "adapters", "omp", "agents");
+const checkout = root;
+const { default: extension } = await import(pathToFileURL(modulePath).href);
+
+function fail(message) {
+  throw new Error(message);
+}
+function assert(condition, message) {
+  if (!condition) fail(message);
+}
+function run(command, args) {
+  return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
+function makeAgentDir(name, mutateProfile = false) {
+  const agentDir = path.join(tmp, name, "agent");
+  fs.mkdirSync(path.join(agentDir, "agents"), { recursive: true });
+  fs.symlinkSync(root, path.join(agentDir, "swe-forge"), "dir");
+  for (const profile of ["swe-forge-read-only.md", "swe-forge-writable.md", "swe-forge-reviewer.md"]) {
+    const destination = path.join(agentDir, "agents", profile);
+    if (mutateProfile && profile === "swe-forge-writable.md") {
+      fs.copyFileSync(path.join(profileSource, profile), destination);
+      fs.writeFileSync(destination, fs.readFileSync(destination, "utf8").replace("blocking: true", "blocking: false"));
+    } else {
+      fs.symlinkSync(path.join(profileSource, profile), destination);
+    }
+  }
+  return agentDir;
+}
+function makeState(name, current = "SUBAGENTS", runId = name) {
+  const stateDir = path.join(tmp, name);
+  fs.mkdirSync(stateDir, { recursive: true });
+  const args = [
+    "init", "--state", stateDir, "--checkout", checkout, "--run-id", runId,
+    "--baseline-ref", "HEAD", "--status", "running", "--requested-mode", "AUTO",
+    "--requested-provider", "AUTO", "--execution-provider", "NONE",
+    "--delegation-backend", current === "SUBAGENTS" ? "NATIVE" : "NONE",
+    "--write-isolation", "SHARED", "--provider-reason", "fixture non-isolated state",
+    "--parallel-strategy", "NONE", "--integration-strategy", "NONE",
+    "--requested-delivery", "PR", "--delivery-mode", "PR", "--reason", "fixture state",
+    "--fallback-used", "no", "--routing-initial", current, "--routing-preferred", current,
+    "--routing-selected", current, "--routing-current", current,
+    "--invocation-classification", "writable", "--mutation-allowed", "true",
+    "--delivery-kind", "task", "--delivery-status", "ready", "--delivery-branch-setup", "reused",
+    "--remote-default-evidence", "fixture", "--parallel-value-status", "marginal",
+    "--parallel-value-rationale", "fixture",
+  ];
+  run(stateTool, args);
+  run(stateTool, [
+    "set-continuation", "--state", path.join(stateDir, "run-state.yaml"),
+    "--workflow-active", "true", "--workflow", "ticket", "--phase", "implementation",
+    "--step", "1", "--awaiting", "none", "--next-action-kind", "implement",
+    "--next-action-target", "fixture", "--safe-boundary", "true", "--expected-context-tokens", "unknown",
+    "--pr-number", "none", "--pr-state", "none", "--recovery-host-signal", "none", "--recovery-status", "none",
+  ]);
+  return path.join(stateDir, "run-state.yaml");
+}
+function renderBrief(taskId, role, writeAccess = "read-only", allowedWrite) {
+  const input = path.join(tmp, `${taskId}.input`);
+  const records = [
+    "worker-brief-input/v1",
+    `task\tid\t${taskId}`,
+    `task\towner_role\t${role}`,
+    "task\tdepth\t1",
+    `task\tobjective\tBounded ${taskId} objective.`,
+    `task\twrite_access\t${writeAccess}`,
+    "task\tacceptance\tThe worker stays within the generated briefing scope.",
+    "task\tinstruction\tAGENTS.md",
+    "task\tallowed_read\tscripts/test-swe-forge-omp",
+    ...(allowedWrite ? [`task\tallowed_write\t${allowedWrite}`] : []),
+    "task\texpected_output\tstructured result evidence",
+    "task\tvalidation\tscripts/test-swe-forge-omp\trequired\talways\tlocal-only",
+    "state\trouting.current\tSUBAGENTS",
+    "state\twrite_isolation\tSHARED",
+    "state\texecution_provider\tNONE",
+    "state\tdelegation_backend\tNATIVE",
+    "state\tparallel_strategy\tNONE",
+    "state\tintegration_strategy\tNONE",
+  ];
+  fs.writeFileSync(input, `${records.join("\n")}\n`);
+  return run(briefTool, ["render", "--input", input]);
+}
+function validReadOnlyResult(taskId) {
+  return {
+    RESULT_PROFILE: "READ_ONLY",
+    STATUS: "DONE",
+    TASK_ID: taskId,
+    FINDINGS: ["The native bridge returned the bounded finding."],
+    EVIDENCE: [".swe-forge/adapters/omp/extensions/swe-forge-runtime.ts"],
+    RISKS: null,
+    RECOMMENDED_ACTION: null,
+  };
+}
+function makePi(agentDir, taskDescription = "Native task supports context tasks outputSchema schemaMode.", tools = ["task"]) {
+  const handlers = new Map();
+  const entries = [];
+  const pi = {
+    pi: { getAgentDir: () => agentDir },
+    on(name, handler) { handlers.set(name, handler); },
+    getAllTools() {
+      return tools.includes("task")
+        ? [{ name: "task", description: taskDescription, sourceInfo: { source: "builtin" } }]
+        : [];
+    },
+    getActiveTools() { return tools; },
+    appendEntry(type, data) { entries.push({ type, data }); },
+    async exec(command, args, options) {
+      try {
+        return { code: 0, stdout: run(command, args), stderr: "" };
+      } catch (error) {
+        return { code: error?.status ?? 1, stdout: error?.stdout?.toString?.() ?? "", stderr: error?.stderr?.toString?.() ?? error?.message ?? String(error) };
+      }
+    },
+  };
+  extension(pi);
+  return { pi, handlers, entries };
+}
+let nextCallId = 0;
+function explicitEvent() {
+  return {
+    prompt: `${"The user explicitly invoked SWE Forge through omp."}\nRaw invocation arguments:\npr fixture`,
+    systemPrompt: ["base"],
+  };
+}
+function ordinaryEvent() {
+  return { prompt: "ordinary OMP prompt", systemPrompt: ["base"] };
+}
+async function prepare(piBundle, statePath, input, promptEvent = explicitEvent(), cwd = checkout) {
+  process.env.PI_CODING_AGENT_DIR = piBundle.pi.pi.getAgentDir();
+  if (statePath) process.env.SWE_FORGE_RUN_STATE = statePath;
+  else delete process.env.SWE_FORGE_RUN_STATE;
+  delete process.env.SWE_FORGE_STATE;
+  const before = await piBundle.handlers.get("before_agent_start")(promptEvent, { cwd });
+  const toolCallId = `call-${++nextCallId}`;
+  const call = await piBundle.handlers.get("tool_call")({ toolName: "task", toolCallId, input }, { cwd });
+  return { before, call, toolCallId };
+}
+
+const agentDir = makeAgentDir("valid-home");
+const initial = makePi(agentDir);
+const inert = await initial.handlers.get("before_agent_start")(ordinaryEvent(), { cwd: checkout });
+assert(inert === undefined, "ordinary OMP prompts activated the SWE Forge runtime");
+
+// Explicit discovery is allowed before a run-state exists, but it is not launch authority.
+const discovery = await prepare(initial, undefined, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
+assert(discovery.before?.systemPrompt?.[1]?.includes("native task capability: available"), "native OMP capability was not advertised at explicit discovery");
+assert(discovery.before.systemPrompt[1].includes("discovery only"), "pre-state capability probe did not remain discovery-only");
+assert(discovery.call?.block && discovery.call.reason.includes("no active"), "missing run-state did not preserve safe fallback");
+
+const statePath = makeState("valid-state");
+const brief = renderBrief("reader-check", "researcher");
+const validInput = {
+  context: "root transcript must not reach the child",
+  tasks: [{ name: "reader-check", agent: "swe-forge-read-only", task: brief }],
+};
+// State is created after the fresh discovery boundary, so this is a valid new run.
+const valid = await prepare(initial, statePath, validInput, ordinaryEvent());
+assert(!valid.call?.block, `valid SUBAGENTS task was blocked: ${valid.call?.reason}`);
+assert(valid.call.input.context.includes("SWE Forge delegated task execution"), "adapter did not replace unbounded native batch context");
+assert(valid.call.input.tasks[0].task === brief, "canonical worker brief was reconstructed or changed");
+assert(valid.call.input.tasks[0].schemaMode === "strict", "native task did not receive strict schema mode");
+assert(valid.call.input.tasks[0].outputSchema.properties.TASK_ID.const === "reader-check", "canonical task id was not bound in output schema");
+const validResult = await initial.handlers.get("tool_result")({
+  toolName: "task", toolCallId: valid.toolCallId, input: valid.call.input, isError: false, content: [{ type: "text", text: "done" }],
+  details: { results: [{ exitCode: 0, structuredOutput: { status: "valid", mode: "strict", data: validReadOnlyResult("reader-check") } }] },
+}, { cwd: checkout });
+assert(!validResult?.isError, "valid canonical worker result was rejected");
+assert(validResult?.details?.sweForge?.status === "valid", "canonical result validation evidence was not returned");
+
+// Independent read-only workers may use one native batch.
+const briefTwo = renderBrief("reader-two", "researcher");
+const batched = await prepare(initial, statePath, {
+  context: "discard this root transcript",
+  tasks: [
+    { name: "reader-check", agent: "swe-forge-read-only", task: brief },
+    { name: "reader-two", agent: "swe-forge-read-only", task: briefTwo },
+  ],
+}, ordinaryEvent());
+assert(!batched.call?.block, `read-only native batch was blocked: ${batched.call?.reason}`);
+assert(batched.call.input.tasks.length === 2, "read-only batch was not forwarded to native task");
+
+// Writable shared-checkout workers are always sequential.
+const writeBrief = renderBrief("writer-one", "implementer", "read-write", ".swe-forge/adapters/omp/extensions/swe-forge-runtime.ts");
+const writeBriefTwo = renderBrief("writer-two", "implementer", "read-write", ".swe-forge/adapters/omp/agents");
+const writableBatch = await prepare(initial, statePath, {
+  context: "bounded",
+  tasks: [
+    { name: "writer-one", agent: "swe-forge-writable", task: writeBrief },
+    { name: "writer-two", agent: "swe-forge-writable", task: writeBriefTwo },
+  ],
+}, ordinaryEvent());
+assert(writableBatch.call?.block && writableBatch.call.reason.includes("sequentially"), "writable shared-checkout workers were concurrently launchable");
+const writableSingle = await prepare(initial, statePath, {
+  name: "writer-single", agent: "swe-forge-writable", task: writeBrief,
+}, ordinaryEvent());
+assert(!writableSingle.call?.block, `single writable worker was blocked: ${writableSingle.call?.reason}`);
+const concurrentWritable = await prepare(initial, statePath, {
+  name: "writer-concurrent", agent: "swe-forge-writable", task: writeBriefTwo,
+}, ordinaryEvent());
+assert(concurrentWritable.call?.block && concurrentWritable.call.reason.includes("already running"), "separate writable task calls were concurrently launchable");
+await initial.handlers.get("tool_result")({ toolName: "task", toolCallId: writableSingle.toolCallId, input: writableSingle.call.input, isError: true, content: [], details: {} }, { cwd: checkout });
+
+const isolatedAttempt = await prepare(initial, statePath, {
+  name: "isolated-worker", agent: "swe-forge-read-only", task: brief, isolated: true,
+}, ordinaryEvent());
+assert(isolatedAttempt.call?.block && isolatedAttempt.call.reason.includes("not SWE Forge ISOLATED"), "native task isolation silently established SWE Forge ISOLATED");
+
+const malformed = await prepare(initial, statePath, validInput, ordinaryEvent());
+const malformedResult = await initial.handlers.get("tool_result")({
+  toolName: "task", toolCallId: malformed.toolCallId, input: malformed.call.input, isError: false, content: [{ type: "text", text: "bad" }],
+  details: { results: [{ exitCode: 0, structuredOutput: { status: "valid", mode: "strict", data: { ...validReadOnlyResult("reader-check"), EVIDENCE: [] } } }] },
+}, { cwd: checkout });
+assert(malformedResult?.isError, "malformed canonical worker result was accepted");
+assert(malformedResult.details.sweForge.status === "invalid", "malformed result did not expose invalid delegation evidence");
+
+// Missing and malformed native capability surfaces preserve fallback.
+const absent = makePi(agentDir, "Native task supports context tasks outputSchema schemaMode", []);
+const absentProbe = await prepare(absent, undefined, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
+assert(absentProbe.before?.systemPrompt?.[1]?.includes("native task capability: unavailable"), "absent task capability was not reported");
+assert(absentProbe.call?.block && absentProbe.call.reason.includes("no active"), "absent task capability did not preserve fallback");
+const incompatible = makePi(agentDir, "Native task supports context tasks only");
+const incompatibleProbe = await prepare(incompatible, undefined, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
+assert(incompatibleProbe.before?.systemPrompt?.[1]?.includes("unavailable"), "incompatible task schema was advertised");
+const badProfiles = makePi(makeAgentDir("bad-profile-home", true));
+const badProfileProbe = await prepare(badProfiles, undefined, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
+assert(badProfileProbe.before?.systemPrompt?.[1]?.includes("unavailable"), "malformed confined profile was advertised");
+
+// Obsolete, wrong-checkout, and fresh-invocation-fenced state cannot authorize.
+const obsoleteDir = path.join(tmp, "obsolete");
+fs.mkdirSync(obsoleteDir, { recursive: true });
+const obsolete = path.join(obsoleteDir, "run-state.yaml");
+fs.writeFileSync(obsolete, "workflow: swe-forge\nschema_version: 2\nstatus: running\n");
+const stale = makePi(agentDir);
+const staleAttempt = await prepare(stale, obsolete, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
+assert(staleAttempt.call?.block && staleAttempt.call.reason.includes("no active"), "obsolete run state authorized delegation");
+const wrongCheckout = makePi(agentDir);
+const wrongAttempt = await prepare(wrongCheckout, statePath, { task: "no brief", name: "probe", agent: "swe-forge-read-only" }, explicitEvent(), path.join(tmp, "other-checkout"));
+assert(wrongAttempt.call?.block && wrongAttempt.call.reason.includes("no active"), "wrong-checkout run state authorized delegation");
+const fenced = makePi(agentDir);
+const fencedProbe = await prepare(fenced, statePath, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
+assert(fencedProbe.call?.block && fencedProbe.call.reason.includes("no active"), "fresh invocation reused a fenced run state");
+
+console.log("PASS: OMP native task runtime fixture");
+NODE

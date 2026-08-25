@@ -89,6 +89,12 @@ assert_projection() {
       projection_support=$projection_home/.omp/agent/swe-forge
       assert_link "$projection_home/.omp/agent/prompts/swe-forge.md" \
         "$ROOT/.swe-forge/adapters/omp/prompts/swe-forge.md"
+      assert_link "$projection_home/.omp/agent/extensions/swe-forge-runtime.ts" \
+        "$ROOT/.swe-forge/adapters/omp/extensions/swe-forge-runtime.ts"
+      for profile in swe-forge-read-only swe-forge-writable swe-forge-reviewer; do
+        assert_link "$projection_home/.omp/agent/agents/$profile.md" \
+          "$ROOT/.swe-forge/adapters/omp/agents/$profile.md"
+      done
       ;;
     codex|cursor)
       projection_support=$projection_home/.agents/swe-forge

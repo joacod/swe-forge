@@ -5,6 +5,10 @@ opencode|file|opencode/commands/git-push.md|.config/opencode/commands/git-push.m
 opencode|file|opencode/commands/git-pr.md|.config/opencode/commands/git-pr.md|.config/opencode/swe-forge
 opencode|file|opencode/commands/git-sync.md|.config/opencode/commands/git-sync.md|.config/opencode/swe-forge
 omp|file|omp/prompts/swe-forge.md|.omp/agent/prompts/swe-forge.md|.omp/agent/swe-forge
+omp|file|omp/extensions/swe-forge-runtime.ts|.omp/agent/extensions/swe-forge-runtime.ts|.omp/agent/swe-forge
+omp|file|omp/agents/swe-forge-read-only.md|.omp/agent/agents/swe-forge-read-only.md|.omp/agent/swe-forge
+omp|file|omp/agents/swe-forge-writable.md|.omp/agent/agents/swe-forge-writable.md|.omp/agent/swe-forge
+omp|file|omp/agents/swe-forge-reviewer.md|.omp/agent/agents/swe-forge-reviewer.md|.omp/agent/swe-forge
 claude|tree|claude-code/skills/swe-forge|.claude/skills/swe-forge|.claude/swe-forge
 codex|tree|shared/agent-skill/swe-forge|.agents/skills/swe-forge|.agents/swe-forge
 cursor|tree|shared/agent-skill/swe-forge|.agents/skills/swe-forge|.agents/swe-forge
