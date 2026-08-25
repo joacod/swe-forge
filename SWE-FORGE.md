@@ -48,13 +48,16 @@ The source of truth is deliberately separated:
 - `.swe-forge/agents/` defines harness-neutral role responsibilities;
 - `.swe-forge/contracts/` defines structured task, result, review, receipt, and
   state formats;
-- `.swe-forge/policies/` defines routing, delegation, model, specification,
+- `.swe-forge/policies/` defines routing, delegation, specification,
   delivery, verification, evidence, recovery, and optional specialist-skill
   rules; and
 - `.swe-forge/adapters/` exposes those definitions through harness-native
   features without redefining them.
 
 No adapter, skill, command, or vendor-specific instruction is canonical.
+
+The active harness or orchestration environment owns model, provider, reasoning,
+and runtime selection; SWE Forge never chooses models.
 
 ## Operating Principles
 
@@ -180,14 +183,6 @@ The atomic `git-commit`, `git-push`, `git-pr`, and `git-sync` actions load and
 follow `.swe-forge/policies/delivery.md` separately. Pushing never creates a PR
 as a side effect, and post-merge sync verifies the PR state first.
 
-## Model Routing
-
-Delegated workers inherit the active root harness/runtime, model, and reasoning
-configuration by default. Explicit user or project worker-routing configuration
-may override that inheritance. Harness adapters must not introduce
-model-specific routing logic for workflow topology; model selection remains
-an independent harness configuration concern.
-
 ## Ticket Lifecycle
 
 Follow the detailed procedure in `.swe-forge/workflows/ticket.md`. The lifecycle
@@ -223,7 +218,6 @@ ticket procedure -> workflows/ticket.md
 specification and clarification -> policies/specification.md
 execution routing and capability -> policies/execution-routing.md
 delegation boundaries -> policies/delegation.md
-model assignment -> policies/model-routing.md
 verification strategy and quality gates -> policies/verification.md
 evidence semantics and receipts -> policies/evidence.md
 delivery and local-resource authorization -> policies/delivery.md
