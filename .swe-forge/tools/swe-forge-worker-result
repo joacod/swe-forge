@@ -1,0 +1,475 @@
+#!/bin/sh
+
+# Dependency-free schema and validator for ordinary canonical worker results.
+# The result contract is harness-neutral; this tool owns only its executable
+# profile boundary and leaves review and isolated-bundle validation to their
+# existing canonical owners.
+
+set -eu
+
+PROGRAM=${0##*/}
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-worker-result.XXXXXX")
+
+cleanup() {
+  rm -rf "$TMP_ROOT"
+}
+trap cleanup EXIT HUP INT TERM
+
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  swe-forge-worker-result schema [--profile PROFILE] [--role ROLE]
+  swe-forge-worker-result validate --profile PROFILE [--role ROLE] \
+    [--task-id ID] --result FILE|-
+
+`schema` writes the machine-readable worker-result/v1 profile map. Without a
+profile it describes ordinary, review, and isolated result ownership. With a
+profile it writes only that profile. `--role reviewer` selects the REVIEW
+profile and cannot be combined with an ordinary result profile.
+
+`validate` accepts the ordinary READ_ONLY or WRITABLE result profiles and
+returns a non-zero status for malformed, profile-mismatched, or role-
+incompatible results. Review results use contracts/review.md and isolated
+writable results use result-bundle.md plus the isolated gate.
+EOF
+}
+
+schema_all() {
+  cat <<'EOF'
+{
+  "schema": "worker-result/v1",
+  "format": "line-oriented-text",
+  "profiles": {
+    "READ_ONLY": {
+      "contract": ".swe-forge/contracts/result.md",
+      "validation": "swe-forge-worker-result validate --profile READ_ONLY",
+      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
+      "required_sections": ["FINDINGS", "EVIDENCE"],
+      "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
+      "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+      "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
+    },
+    "WRITABLE": {
+      "contract": ".swe-forge/contracts/result.md",
+      "validation": "swe-forge-worker-result validate --profile WRITABLE",
+      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+      "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
+      "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
+      "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
+    },
+    "ISOLATED_WRITABLE": {
+      "contract": ".swe-forge/contracts/result-bundle.md",
+      "validation": ".swe-forge/tools/swe-forge-isolated-gate validate-result",
+      "representation": "fixed result directory bundle"
+    },
+    "REVIEW": {
+      "contract": ".swe-forge/contracts/review.md",
+      "validation": "review contract acceptance and blocking matrix",
+      "representation": "review result"
+    }
+  },
+  "role_rules": {
+    "reviewer": {
+      "profile": "REVIEW",
+      "contract": ".swe-forge/contracts/review.md"
+    }
+  }
+}
+EOF
+}
+
+schema_profile() {
+  case "$1" in
+    READ_ONLY)
+      cat <<'EOF'
+{
+  "schema": "worker-result/v1",
+  "format": "line-oriented-text",
+  "profile": "READ_ONLY",
+  "contract": ".swe-forge/contracts/result.md",
+  "validation": "swe-forge-worker-result validate --profile READ_ONLY",
+  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
+  "required_sections": ["FINDINGS", "EVIDENCE"],
+  "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
+  "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+  "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
+}
+EOF
+      ;;
+    WRITABLE)
+      cat <<'EOF'
+{
+  "schema": "worker-result/v1",
+  "format": "line-oriented-text",
+  "profile": "WRITABLE",
+  "contract": ".swe-forge/contracts/result.md",
+  "validation": "swe-forge-worker-result validate --profile WRITABLE",
+  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+  "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
+  "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
+  "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
+}
+EOF
+      ;;
+    ISOLATED_WRITABLE)
+      cat <<'EOF'
+{
+  "schema": "worker-result/v1",
+  "format": "fixed-directory-bundle",
+  "profile": "ISOLATED_WRITABLE",
+  "contract": ".swe-forge/contracts/result-bundle.md",
+  "validation": ".swe-forge/tools/swe-forge-isolated-gate validate-result",
+  "representation": "fixed result directory bundle"
+}
+EOF
+      ;;
+    REVIEW)
+      cat <<'EOF'
+{
+  "schema": "worker-result/v1",
+  "format": "review-result",
+  "profile": "REVIEW",
+  "contract": ".swe-forge/contracts/review.md",
+  "validation": "review contract acceptance and blocking matrix",
+  "representation": "review result"
+}
+EOF
+      ;;
+    *) fail "unknown result profile: $1" ;;
+  esac
+}
+
+validate_result_file() {
+  expected_profile=$1
+  expected_role=$2
+  expected_task=$3
+  result_file=$4
+  summary=$TMP_ROOT/summary
+
+  if ! awk -v expected_profile="$expected_profile" \
+    -v expected_role="$expected_role" -v expected_task="$expected_task" '
+    function fail(message) {
+      failed = 1
+      print "FAIL: " message > "/dev/stderr"
+      exit 1
+    }
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function require_scalar(name, label) {
+      if (!(name in scalar)) fail("missing " label)
+    }
+    function start_section(name) {
+      if (!(name in allowed_sections)) fail("unknown result section: " name)
+      if (name in seen_section) fail("duplicate result section: " name)
+      seen_section[name] = 1
+      section = name
+    }
+    function add_list_item(value) {
+      value = trim(value)
+      if (value == "") fail("empty item in " section)
+      list_count[section]++
+      list_value[section, list_count[section]] = value
+    }
+    function add_validation_command(value,    field) {
+      value = trim(value)
+      sub(/^command:[[:space:]]*/, "", value)
+      value = trim(value)
+      if (value == "") fail("validation command may not be empty")
+      validation_count++
+      field = "command"
+      validation_value[validation_count, field] = value
+      validation_seen[validation_count, field] = 1
+    }
+    function add_validation_field(line,    field, value) {
+      if (validation_count == 0) fail("validation fields require a command item")
+      field = line
+      sub(/:.*/, "", field)
+      value = line
+      sub(/^[^:]*:[[:space:]]*/, "", value)
+      value = trim(value)
+      if (field != "requirement" && field != "condition" && field != "applies" && field != "result" && field != "evidence") {
+        fail("unknown validation field: " field)
+      }
+      if (value == "") fail("validation field may not be empty: " field)
+      if (validation_seen[validation_count, field]) fail("duplicate validation field: " field)
+      validation_seen[validation_count, field] = 1
+      validation_value[validation_count, field] = value
+    }
+    function valid_sha(value, label) {
+      if (value !~ /^[0-9A-Fa-f]+$/ || length(value) != 40) fail(label " must be a full 40-character SHA")
+    }
+    function validate_validation_record(record_index,    field, requirement, applies, result) {
+      for (field_name in required_validation_fields) {
+        if (!validation_seen[record_index, field_name]) fail("validation record is missing " field_name)
+      }
+      requirement = validation_value[record_index, "requirement"]
+      applies = validation_value[record_index, "applies"]
+      result = validation_value[record_index, "result"]
+      if (requirement != "required" && requirement != "conditional" && requirement != "informational") {
+        fail("invalid validation requirement: " requirement)
+      }
+      if (applies != "true" && applies != "false") fail("invalid validation applies value: " applies)
+      if (result != "passed" && result != "failed" && result != "unavailable" && result != "not-applicable") {
+        fail("invalid validation result: " result)
+      }
+      if (requirement == "required" && applies != "true") fail("required validation must apply")
+      if (requirement == "conditional" && applies == "false" && result != "not-applicable") {
+        fail("conditional validation that does not apply must be not-applicable")
+      }
+      if (status == "DONE" && requirement == "required" && result != "passed") {
+        fail("DONE result has a non-passing required validation: " validation_value[record_index, "command"])
+      }
+      if (status == "DONE" && requirement == "conditional" && applies == "true" && result != "passed") {
+        fail("DONE result has a non-passing applicable validation: " validation_value[record_index, "command"])
+      }
+    }
+    BEGIN {
+      allowed_scalar_names["RESULT_PROFILE"] = 1
+      allowed_scalar_names["STATUS"] = 1
+      allowed_scalar_names["TASK_ID"] = 1
+      allowed_scalar_names["BASE_SHA"] = 1
+      allowed_scalar_names["HEAD_SHA"] = 1
+      allowed_scalar_names["BRANCH"] = 1
+      allowed_scalar_names["WORKTREE"] = 1
+      allowed_section_names[1] = "FINDINGS"
+      allowed_section_names[2] = "EVIDENCE"
+      allowed_section_names[3] = "RISKS"
+      allowed_section_names[4] = "RECOMMENDED_ACTION"
+      allowed_section_names[5] = "FILES_CHANGED"
+      allowed_section_names[6] = "GIT_STATE"
+      allowed_section_names[7] = "DELIVERABLE_COMMITS"
+      allowed_section_names[8] = "VALIDATION"
+      allowed_section_names[9] = "SCOPE_EXCEPTIONS"
+      for (i = 1; i <= 9; i++) allowed_sections[allowed_section_names[i]] = 1
+      required_validation_fields["command"] = 1
+      required_validation_fields["requirement"] = 1
+      required_validation_fields["condition"] = 1
+      required_validation_fields["applies"] = 1
+      required_validation_fields["result"] = 1
+      required_validation_fields["evidence"] = 1
+    }
+    {
+      line = $0
+      if (index(line, "\r")) fail("result contains a carriage return")
+      if (index(line, sprintf("%c", 9))) fail("result values may not contain tabs")
+      sub(/^[[:space:]]+/, "", line)
+      sub(/[[:space:]]+$/, "", line)
+      if (line == "") next
+
+      if (section == "VALIDATION" && line !~ /^-[[:space:]]+/ && line ~ /^[a-z_]+:/) {
+        add_validation_field(line)
+        next
+      }
+      if (line ~ /^-[[:space:]]+/) {
+        item = line
+        sub(/^-[[:space:]]+/, "", item)
+        if (section == "") fail("list item is outside a result section")
+        if (section == "VALIDATION") {
+          if (item !~ /^command:[[:space:]]*/) fail("validation items must begin with command")
+          add_validation_command(item)
+        } else add_list_item(item)
+        next
+      }
+      if (line !~ /^[A-Z_]+:/) fail("malformed result line: " line)
+      name = line
+      sub(/:.*/, "", name)
+      value = line
+      sub(/^[^:]*:[[:space:]]*/, "", value)
+      value = trim(value)
+      if (value == "") {
+        start_section(name)
+        next
+      }
+      if (!(name in allowed_scalar_names)) fail("unknown result field: " name)
+      if (name in scalar) fail("duplicate result field: " name)
+      scalar[name] = value
+      section = ""
+    }
+    END {
+      if (failed) exit 1
+      require_scalar("RESULT_PROFILE", "RESULT_PROFILE")
+      require_scalar("STATUS", "STATUS")
+      require_scalar("TASK_ID", "TASK_ID")
+      profile = scalar["RESULT_PROFILE"]
+      status = scalar["STATUS"]
+      task_id = scalar["TASK_ID"]
+      if (profile != "READ_ONLY" && profile != "WRITABLE") fail("ordinary validator does not support profile: " profile)
+      if (profile != expected_profile) fail("result profile does not match expected profile: " profile)
+      if (expected_role == "reviewer") fail("reviewer results require the REVIEW profile and contracts/review.md")
+      if (task_id !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/) fail("TASK_ID contains unsupported characters")
+      if (expected_task != "" && task_id != expected_task) fail("TASK_ID does not match the requested task")
+      if (status != "DONE" && status != "BLOCKED" && status != "FAILED") fail("invalid STATUS: " status)
+      if (!seen_section["FINDINGS"] || list_count["FINDINGS"] == 0) fail("FINDINGS must contain at least one item")
+      if (!seen_section["EVIDENCE"] || list_count["EVIDENCE"] == 0) fail("EVIDENCE must contain at least one item")
+      for (section_name in seen_section) {
+        if (section_name != "VALIDATION" && list_count[section_name] == 0) fail(section_name " must contain at least one item")
+      }
+      if ((status == "BLOCKED" || status == "FAILED") && (!seen_section["RECOMMENDED_ACTION"] || list_count["RECOMMENDED_ACTION"] == 0)) {
+        fail(status " result must include RECOMMENDED_ACTION")
+      }
+
+      if (profile == "READ_ONLY") {
+        for (scalar_name in scalar) {
+          if (scalar_name == "BASE_SHA" || scalar_name == "HEAD_SHA" || scalar_name == "BRANCH" || scalar_name == "WORKTREE") {
+            fail("READ_ONLY result contains implementation field: " scalar_name)
+          }
+        }
+        for (section_name in seen_section) {
+          if (section_name == "FILES_CHANGED" || section_name == "GIT_STATE" || section_name == "DELIVERABLE_COMMITS" || section_name == "VALIDATION" || section_name == "SCOPE_EXCEPTIONS") {
+            fail("READ_ONLY result contains implementation section: " section_name)
+          }
+        }
+      } else {
+        require_scalar("BASE_SHA", "BASE_SHA")
+        require_scalar("HEAD_SHA", "HEAD_SHA")
+        require_scalar("BRANCH", "BRANCH")
+        require_scalar("WORKTREE", "WORKTREE")
+        valid_sha(scalar["BASE_SHA"], "BASE_SHA")
+        if (scalar["HEAD_SHA"] != "none") valid_sha(scalar["HEAD_SHA"], "HEAD_SHA")
+        if (!seen_section["FILES_CHANGED"] || list_count["FILES_CHANGED"] == 0) fail("FILES_CHANGED must contain at least one item")
+        if (!seen_section["GIT_STATE"] || list_count["GIT_STATE"] == 0) fail("GIT_STATE must contain at least one item")
+        if (!seen_section["VALIDATION"] || validation_count == 0) fail("VALIDATION must contain at least one record")
+        for (i = 1; i <= list_count["FILES_CHANGED"]; i++) {
+          path = list_value["FILES_CHANGED", i]
+          if (path == "none" && status == "DONE") fail("DONE WRITABLE result cannot report no changed files")
+          if (path != "none" && path ~ /^\//) fail("FILES_CHANGED paths must be repository-relative")
+          if (path != "none" && (path == ".." || path ~ /^\.\.\// || path ~ /\/\.\.\//)) fail("FILES_CHANGED paths may not escape the repository")
+        }
+        for (i = 1; i <= validation_count; i++) validate_validation_record(i)
+      }
+      printf "%s\t%s\t%s\n", profile, status, task_id
+    }
+  ' "$result_file" >"$summary"; then
+    exit 1
+  fi
+
+  IFS=$(printf '\t') read -r result_profile result_status result_task <"$summary"
+  printf '{"schema":"worker-result/v1","valid":true,"profile":"%s","status":"%s","task_id":"%s"}\n' \
+    "$result_profile" "$result_status" "$result_task"
+}
+
+schema_command() {
+  profile=
+  role=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --profile)
+        [ "$#" -ge 2 ] || fail '--profile requires a value'
+        profile=$2
+        shift 2
+        ;;
+      --role)
+        [ "$#" -ge 2 ] || fail '--role requires a value'
+        role=$2
+        shift 2
+        ;;
+      --format)
+        [ "$#" -ge 2 ] || fail '--format requires a value'
+        [ "$2" = json ] || fail 'schema format must be json'
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown schema option: $1" ;;
+    esac
+  done
+  case "$role" in
+    '') ;;
+    reviewer)
+      [ -z "$profile" ] || [ "$profile" = REVIEW ] || fail 'reviewer requires the REVIEW profile'
+      profile=REVIEW
+      ;;
+    *)
+      case "$role" in *[!A-Za-z0-9_-]*) fail 'role contains unsupported characters' ;; esac
+      ;;
+  esac
+  if [ -n "$profile" ]; then schema_profile "$profile"; else schema_all; fi
+}
+
+validate_command() {
+  profile=
+  role=
+  task_id=
+  result_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --profile)
+        [ "$#" -ge 2 ] || fail '--profile requires a value'
+        profile=$2
+        shift 2
+        ;;
+      --role)
+        [ "$#" -ge 2 ] || fail '--role requires a value'
+        role=$2
+        shift 2
+        ;;
+      --task-id|--task)
+        [ "$#" -ge 2 ] || fail '--task-id requires a value'
+        task_id=$2
+        shift 2
+        ;;
+      --result|--input)
+        [ "$#" -ge 2 ] || fail '--result requires a file or -'
+        [ -z "$result_arg" ] || fail 'result input was specified more than once'
+        result_arg=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      -*) fail "unknown validate option: $1" ;;
+      *)
+        [ -z "$result_arg" ] || fail 'result input was specified more than once'
+        result_arg=$1
+        shift
+        ;;
+    esac
+  done
+  [ -n "$profile" ] || fail 'validate requires --profile'
+  case "$profile" in
+    READ_ONLY|WRITABLE) ;;
+    REVIEW) fail 'REVIEW results use contracts/review.md and its acceptance contract' ;;
+    ISOLATED_WRITABLE) fail 'ISOLATED_WRITABLE results use result-bundle.md and the isolated gate' ;;
+    *) fail "unknown result profile: $profile" ;;
+  esac
+  case "$role" in
+    '') ;;
+    reviewer) fail 'reviewer results require the REVIEW profile and contracts/review.md' ;;
+    *[!A-Za-z0-9_-]*) fail 'role contains unsupported characters' ;;
+  esac
+  case "$task_id" in
+    '') ;;
+    *[!A-Za-z0-9._-]*) fail 'task ID contains unsupported characters' ;;
+  esac
+  [ -n "$result_arg" ] || fail 'validate requires --result FILE|-'
+
+  result_file=$TMP_ROOT/result
+  if [ "$result_arg" = "-" ]; then
+    cat >"$result_file"
+  else
+    [ -f "$result_arg" ] || fail "result file does not exist: $result_arg"
+    cp "$result_arg" "$result_file"
+  fi
+  validate_result_file "$profile" "$role" "$task_id" "$result_file"
+}
+
+[ "$#" -gt 0 ] || { usage >&2; exit 2; }
+command=$1
+shift
+case "$command" in
+  schema) schema_command "$@" ;;
+  validate) validate_command "$@" ;;
+  -h|--help) usage ;;
+  *) fail "unknown operation: $command" ;;
+esac

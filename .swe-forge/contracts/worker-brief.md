@@ -34,8 +34,12 @@ objective is good, whether acceptance is sufficient, whether a dependency fact
 is relevant, or whether delegation is appropriate.
 
 Pass the validated output unchanged with the canonical role and applicable
-result/review contract. Do not pass the root transcript, unrelated ticket
-history, complete run state, or large pasted repository files.
+result/review contract. After an ordinary worker returns, the accountable
+consumer may invoke `.swe-forge/tools/swe-forge-worker-result validate` with
+the selected profile, role, and task identity. That validation is independent
+of the host mechanism that produced the result. Do not pass the root
+transcript, unrelated ticket history, complete run state, or large pasted
+repository files.
 
 ## Projection schema
 
