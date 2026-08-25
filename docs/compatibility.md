@@ -35,7 +35,7 @@ It does **not** establish that the target harness has been used successfully.
 | --- | --- | --- |
 | Pi | 0.84.2 | Installer, prompt projection, and runtime extension syntax/fixture validated locally |
 | OpenCode | 1.18.16 | Installer and command projection validated locally |
-| OMP | 18.0.4 | Installer and prompt projection validated locally; target harness not exercised |
+| OMP | 18.0.4 | Installer and prompt projection validated locally |
 | Claude Code | 2.1.37 | Installer and skill projection validated locally; no behavioral claim follows |
 | Codex | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
 | Cursor | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
@@ -53,7 +53,7 @@ home. The evidence currently recorded is:
 | --- | --- | --- |
 | Pi | Yes | Pi is the reference harness actively used to develop SWE Forge; 0.84.2 is the observed version. |
 | OpenCode | Yes | OpenCode has prior successful maintainer usage; 1.18.16 is the observed version. It is secondary and does not impose parity requirements on Pi development. |
-| OMP | No | OMP 18.0.4 is installed in the validation environment, but SWE Forge has not been behaviorally exercised through it. |
+| OMP | Yes | OMP 18.0.4 was exercised through an explicit `/swe-forge` invocation; the read-only smoke test loaded the prompt and passed installation, status, and version checks. It does not demonstrate lifecycle integration or feature parity. |
 | Claude Code | No | The maintainer has not actively exercised Claude Code. Projection/fixture validation must not be described as behavioral validation. |
 | Codex | No | Not installed or exercised in the validation environment. |
 | Cursor | No | Not installed or exercised in the validation environment. |
