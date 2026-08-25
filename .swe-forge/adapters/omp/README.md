@@ -75,17 +75,18 @@ are not trusted as durable authorization.
 
 When canonical routing has persisted `routing.current: SUBAGENTS`, the bridge:
 
-1. validates the active schema-v4, checkout-matching run state with the
-   canonical state tool;
+1. resolves active state candidates through the canonical
+   `swe-forge-state resolve-active` port;
 2. re-observes the native capability at the delegation boundary;
-3. validates each `worker_briefing/v1` projection with
-   `swe-forge-worker-brief`;
+3. inspects each `worker_briefing/v1` projection with
+   `swe-forge-worker-brief inspect` and checks its canonical task ID;
 4. passes the exact rendered projection as the native OMP task assignment;
-5. selects the adapter-owned `swe-forge-*` host profile;
-6. supplies the translated canonical result JSON Schema with `schemaMode:
-   strict`; and
-7. validates returned ordinary results with `swe-forge-worker-result` before
-   marking delegation successful.
+5. maps the inspected profile and write-access facts to the adapter-owned
+   `swe-forge-*` host profile;
+6. requests the canonical worker-result JSON Schema with `schemaMode: strict`;
+   and
+7. passes ordinary structured output through canonical `encode` and
+   `validate` before marking delegation successful.
 
 The extension uses OMP's `tool_call` input-revision and `tool_result` middleware
 around the native task tool. It does not implement child sessions, background
@@ -107,16 +108,16 @@ profile, no recursion, sequential writable execution, and root-owned delivery
 authorization.
 
 ### Structured results
-
-The bridge translates canonical `READ_ONLY` and `WRITABLE` result fields to
-per-task JSON Schema and always requests `schemaMode: strict`. The native
-`structuredOutput` must be a strict valid result. The adapter serializes its
-semantic fields to the canonical line-oriented result representation and runs
-the canonical validator. Invalid, missing, non-strict, or incompatible worker
+The bridge requests the canonical `READ_ONLY` and `WRITABLE` JSON-Schema
+projections and always requests `schemaMode: strict`. The native
+`structuredOutput` must be a strict valid result. The adapter writes that JSON
+to a temporary input and invokes canonical `encode`, then the existing
+canonical validator. It does not reconstruct the schema or line-oriented
+representation locally. Invalid, missing, non-strict, or incompatible worker
 data remains untrusted.
 
-Reviewers receive a strict structured shape for the canonical review contract;
-the root still owns the complete review contract and blocking matrix.
+Reviewers receive the canonical REVIEW transport schema; the root still owns
+the complete review contract, semantic acceptance, and blocking matrix.
 
 ## Shared-checkout safety and fallback
 

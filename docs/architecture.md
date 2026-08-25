@@ -113,6 +113,16 @@ native worker output, while the accountable workflow validates returned
 evidence independently. When an adapter capability is absent, canonical
 execution uses the safe root-owned fallback.
 
+Canonical tools expose small machine-readable semantic ports for adapter
+realization. `swe-forge-state inspect`/`resolve-active` own run-state
+validation, eligibility, and ordering; `swe-forge-worker-brief inspect` owns
+brief identity, result profile, and write-access projection; and
+`swe-forge-worker-result` owns structured result schemas plus ordinary-result
+encoding. Pi and OMP consume these projections rather than parsing or
+reconstructing canonical YAML, schemas, or line-oriented results. Host task
+execution, profiles, permissions, lifecycle, and review acceptance remain
+adapter/root responsibilities.
+
 ## Routing boundary
 
 Automatic routing does not use prompt length alone. Before broad discovery, the

@@ -38,6 +38,7 @@ mkdir -p "$fixture/.swe-forge" \
   "$fixture/.swe-forge/tools" \
   "$fixture/.swe-forge/workflows" \
   "$fixture/.swe-forge/adapters/pi" \
+  "$fixture/.swe-forge/adapters/pi/extensions" \
   "$fixture/docs"
 cp "$ROOT/AGENTS.md" "$fixture/AGENTS.md"
 cp "$ROOT/SWE-FORGE.md" "$fixture/SWE-FORGE.md"
@@ -52,8 +53,18 @@ expect_failure 'branch on semantic capabilities, not harness identity' \
   "$CHECK" "$fixture"
 
 rm "$fixture/.swe-forge/policies/identity-branch.md"
+printf '%s\n' 'if harness == "omp": route' \
+  >"$fixture/.swe-forge/policies/omp-identity-branch.md"
+expect_failure 'branch on semantic capabilities, not harness identity' \
+  "$CHECK" "$fixture"
+rm "$fixture/.swe-forge/policies/omp-identity-branch.md"
 printf '%s\n' 'if proactive_compaction is available: use it' \
   >"$fixture/.swe-forge/policies/capability-branch.md"
+printf '%s\n' 'function parseScalarYaml() {}' \
+  >"$fixture/.swe-forge/adapters/pi/extensions/swe-forge-runtime.ts"
+expect_failure 'Adapter runtimes must consume canonical semantic ports' \
+  "$CHECK" "$fixture"
+rm "$fixture/.swe-forge/adapters/pi/extensions/swe-forge-runtime.ts"
 "$CHECK" "$fixture" >/dev/null
 
 printf '%s\n' 'PASS: canonical capability-boundary fixture'

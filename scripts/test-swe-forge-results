@@ -71,11 +71,41 @@ for host in Pi OMP OpenCode Claude Codex Cursor Harness; do
 done
 review_schema=$TMP_ROOT/review-schema.json
 "$result_tool" schema --role reviewer >"$review_schema"
+read_only_json_schema=$TMP_ROOT/read-only.json-schema
+"$result_tool" schema --profile READ_ONLY --task-id researcher-result-profile --format json-schema >"$read_only_json_schema"
+require_text '"type": "object"' "$read_only_json_schema"
+require_text '"const": "researcher-result-profile"' "$read_only_json_schema"
+require_text '"required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION"]' "$read_only_json_schema"
+writable_json_schema=$TMP_ROOT/writable.json-schema
+"$result_tool" schema --profile WRITABLE --task-id writable-result-profile --format json-schema >"$writable_json_schema"
+require_text '"pattern": "^[0-9A-Fa-f]{40}$"' "$writable_json_schema"
+require_text '"VALIDATION"' "$writable_json_schema"
+review_transport_schema=$TMP_ROOT/review-transport.json-schema
+"$result_tool" schema --profile REVIEW --format json-schema >"$review_transport_schema"
+require_text '"status": {"type": "string", "enum": ["PASS", "CHANGES_REQUIRED"]}' "$review_transport_schema"
+require_text '"deferred_followups"' "$review_transport_schema"
+expect_failure 'review schema task binding' \
+  "$result_tool" schema --profile REVIEW --task-id review-result --format json-schema
 require_text '"profile": "REVIEW"' "$review_schema"
 expect_failure 'reviewer ordinary result' \
   "$result_tool" validate --profile READ_ONLY --role reviewer --result "$read_only"
 "$result_tool" validate --profile READ_ONLY --task-id researcher-result-profile \
   --result "$read_only" >"$TMP_ROOT/read-only.validation"
+read_only_structured=$TMP_ROOT/read-only.json
+cat >"$read_only_structured" <<'EOF_READ_ONLY_JSON'
+{"RESULT_PROFILE":"READ_ONLY","STATUS":"DONE","TASK_ID":"researcher-result-profile","FINDINGS":["The structured bridge returned the bounded finding."],"EVIDENCE":["focused structured-result fixture"],"RISKS":null,"RECOMMENDED_ACTION":null}
+EOF_READ_ONLY_JSON
+"$result_tool" encode --profile READ_ONLY --task-id researcher-result-profile \
+  --input "$read_only_structured" >"$TMP_ROOT/read-only.encoded"
+"$result_tool" validate --profile READ_ONLY --task-id researcher-result-profile \
+  --result "$TMP_ROOT/read-only.encoded" >"$TMP_ROOT/read-only.encoded.validation"
+require_text 'FINDINGS:' "$TMP_ROOT/read-only.encoded"
+require_text 'The structured bridge returned the bounded finding.' "$TMP_ROOT/read-only.encoded"
+require_text '"valid":true' "$TMP_ROOT/read-only.encoded.validation"
+sed 's/"EVIDENCE":\[[^]]*\]/"EVIDENCE":[]/' "$read_only_structured" >"$TMP_ROOT/malformed-structured.json"
+expect_failure 'malformed structured read-only result' \
+  "$result_tool" encode --profile READ_ONLY --task-id researcher-result-profile \
+  --input "$TMP_ROOT/malformed-structured.json"
 missing_evidence=$TMP_ROOT/missing-evidence.result
 sed '/^EVIDENCE:/d' "$read_only" >"$missing_evidence"
 expect_failure 'read-only result without evidence' \
@@ -115,6 +145,16 @@ EOF_WRITABLE
 "$result_tool" validate --profile WRITABLE --task-id writable-result-profile \
   --result "$writable" >"$TMP_ROOT/writable.validation"
 require_text '"profile":"WRITABLE"' "$TMP_ROOT/writable.validation"
+writable_structured=$TMP_ROOT/writable.json
+cat >"$writable_structured" <<'EOF_WRITABLE_JSON'
+{"RESULT_PROFILE":"WRITABLE","STATUS":"DONE","TASK_ID":"writable-result-profile","BASE_SHA":"1111111111111111111111111111111111111111","HEAD_SHA":"2222222222222222222222222222222222222222","BRANCH":"refactor/result-profiles","CHECKOUT":"/tmp/result-profiles","FILES_CHANGED":[".swe-forge/contracts/result.md"],"GIT_STATE":["clean"],"DELIVERABLE_COMMITS":null,"VALIDATION":[{"command":"scripts/test-swe-forge-results","requirement":"required","condition":"always","applies":true,"result":"passed","evidence":"focused profile fixture"}],"SCOPE_EXCEPTIONS":null,"FINDINGS":["The writable structured bridge returned the changed path."],"EVIDENCE":["focused structured-result fixture"],"RISKS":null,"RECOMMENDED_ACTION":null}
+EOF_WRITABLE_JSON
+"$result_tool" encode --profile WRITABLE --task-id writable-result-profile \
+  --input "$writable_structured" >"$TMP_ROOT/writable.encoded"
+"$result_tool" validate --profile WRITABLE --task-id writable-result-profile \
+  --result "$TMP_ROOT/writable.encoded" >"$TMP_ROOT/writable.encoded.validation"
+require_text 'VALIDATION:' "$TMP_ROOT/writable.encoded"
+require_text '"valid":true' "$TMP_ROOT/writable.encoded.validation"
 sed 's/result: passed/result: failed/' "$writable" >"$TMP_ROOT/failed-validation.result"
 expect_failure 'DONE result with failed required validation' \
   "$result_tool" validate --profile WRITABLE --result "$TMP_ROOT/failed-validation.result"

@@ -40,6 +40,7 @@ const root = process.argv[2];
 const fixtureCwd = process.argv[3];
 const modulePath = path.join(root, ".swe-forge", "adapters", "pi", "extensions", "swe-forge-runtime.ts");
 const workerBriefTool = path.join(root, ".swe-forge", "tools", "swe-forge-worker-brief");
+const stateTool = path.join(root, ".swe-forge", "tools", "swe-forge-state");
 const { default: extension } = await import(pathToFileURL(modulePath).href);
 
 function renderWorkerBriefing({ taskId, role, writeAccess, allowedRead, allowedWrite }) {
@@ -72,7 +73,7 @@ function writeRuntimeState(filePath, options = {}) {
 workflow_version: 1
 schema_version: 4
 run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
-status: running
+status: ${options.status ?? "running"}
 requested_mode: AUTO
 requested_delivery: PR
 delivery_mode: PR
@@ -90,8 +91,22 @@ delivery_checkout:
 routing:
   preferred: ${preferred}
   current: ${current}
+receipt_ref: none
+delivery:
+  authorization:
+    commit: PR
+    push: PR
+    create_pull_request: PR
+    publish: not-authorized
+    deploy: not-authorized
+    merge: not-authorized
+  commit: pending
+  push: pending
+  create_pull_request: pending
+  sync: not-authorized
+  pull_request_ref: none
 continuation:
-  workflow_active: true
+  workflow_active: ${options.workflowActive ?? "true"}
   workflow: ticket
   phase: ${options.phase ?? "implementation"}
   step: 1
@@ -111,6 +126,7 @@ continuation:
     status: none
 context:
   status: ${options.contextStatus ?? "healthy"}
+tasks: {}
 `;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, yaml);
@@ -141,6 +157,22 @@ writeRuntimeState(newState, {
   prNumber: 184,
   prState: "OPEN",
 });
+const terminalState = path.join(fixtureCwd, "states", "terminal", "run-state.yaml");
+writeRuntimeState(terminalState, { runId: "terminal-run", status: "accepted", updatedAt: "2060-01-01T00:00:00Z" });
+const inactiveState = path.join(fixtureCwd, "states", "inactive", "run-state.yaml");
+writeRuntimeState(inactiveState, { runId: "inactive-run", workflowActive: "false", updatedAt: "2070-01-01T00:00:00Z" });
+const mismatchState = path.join(fixtureCwd, "states", "mismatch", "run-state.yaml");
+writeRuntimeState(mismatchState, { runId: "mismatch-run", cwd: path.join(fixtureCwd, "other"), updatedAt: "2080-01-01T00:00:00Z" });
+const resolvedStates = JSON.parse(execFileSync(stateTool, [
+  "resolve-active", "--checkout", fixtureCwd, "--candidate", oldState, "--candidate", newState,
+  "--candidate", terminalState, "--candidate", inactiveState, "--candidate", mismatchState, "--all",
+], { encoding: "utf8" }));
+if (resolvedStates.states.length !== 2 || resolvedStates.states[0].run_id !== "new-run") throw new Error("canonical state resolution did not exclude stale states or choose newest");
+const terminalInspection = JSON.parse(execFileSync(stateTool, ["inspect", "--state", terminalState, "--checkout", fixtureCwd], { encoding: "utf8" }));
+if (terminalInspection.active !== false) throw new Error("terminal state became active");
+const mismatchInspection = JSON.parse(execFileSync(stateTool, ["inspect", "--state", mismatchState, "--checkout", fixtureCwd], { encoding: "utf8" }));
+if (mismatchInspection.active !== false || mismatchInspection.reason !== "checkout mismatch") throw new Error("mismatching state became active");
+
 
 process.env.HOME = path.join(fixtureCwd, "home");
 fs.mkdirSync(path.join(process.env.HOME, ".pi", "agent"), { recursive: true });
@@ -150,6 +182,10 @@ const entries = [];
 const pi = {
   on(name, handler) { handlers.set(name, handler); },
   appendEntry(type, data) { entries.push({ type, data }); },
+  exec(command, args) {
+    try { return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), stderr: "" }; }
+    catch (error) { return { code: error?.status ?? 1, stdout: "", stderr: error?.message ?? String(error) }; }
+  },
 };
 extension(pi);
 const ctx = {
@@ -168,8 +204,8 @@ const boundedState = path.join(fixtureCwd, "states", "bounded", "run-state.yaml"
 const boundedMarker = "bounded-tail-marker";
 const oversized = `prefix-${"x".repeat(5000)}-${boundedMarker}`;
 writeRuntimeState(boundedState, {
-  runId: oversized,
-  phase: oversized,
+  runId: "bounded-run",
+  phase: "implementation",
   nextTarget: oversized,
   updatedAt: "2060-01-01T00:00:00Z",
 });

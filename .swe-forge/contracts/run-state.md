@@ -11,6 +11,25 @@ SWE Forge does not automatically migrate obsolete run-state schemas. A schema
 change updates all first-party producers, readers, validation, adapters, and
 fixtures together.
 
+## Executable semantic inspection
+
+Adapters do not parse this YAML representation. The canonical
+`.swe-forge/tools/swe-forge-state` tool exposes the bounded machine port:
+
+```text
+swe-forge-state inspect --state FILE|DIRECTORY --checkout PATH
+swe-forge-state resolve-active --checkout PATH \
+  [--candidate FILE|DIRECTORY ...] [--all]
+```
+
+`inspect` structurally validates one snapshot and reports its stable run
+identity, checkout match, lifecycle eligibility, routing, delivery, and compact
+continuation facts as deterministic JSON. `resolve-active` applies the same
+validation and eligibility rules to caller-supplied candidates and owns newest
+`updated_at`, mtime fallback, and deterministic path tie-breaking order.
+Terminal, inactive, stale, obsolete, unsupported, and wrong-checkout snapshots
+are never returned as active candidates.
+
 ## Schema v4
 
 The only current state identity is:

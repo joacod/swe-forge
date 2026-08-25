@@ -140,6 +140,10 @@ assert_text 'validate --brief' "$TOOL"
 read_input "$TMP_ROOT/read.input" reader-check researcher
 "$TOOL" render --input "$TMP_ROOT/read.input" >"$TMP_ROOT/read.brief"
 "$TOOL" validate --brief "$TMP_ROOT/read.brief" --input "$TMP_ROOT/read.input" >/dev/null
+"$TOOL" inspect --brief "$TMP_ROOT/read.brief" >"$TMP_ROOT/read.inspect"
+for required in '"schema":"worker-brief/v1"' '"valid":true' '"task_id":"reader-check"' '"profile":"READ_ONLY"' '"write_access":"read-only"'; do
+  assert_text "$required" "$TMP_ROOT/read.inspect"
+done
 for required in \
   'schema: worker-brief/v1' "task_id: 'reader-check'" \
   'mode: delegated_worker' 'recursive_delegation: false' \
@@ -156,6 +160,7 @@ done
 cmp -s "$TMP_ROOT/read.brief" "$TMP_ROOT/read-again.brief" || fail 'repeated rendering changed the briefing'
 sed '/^  objective:/d' "$TMP_ROOT/read.brief" >"$TMP_ROOT/missing-objective.brief"
 expect_failure 'missing required objective' "$TOOL" validate --brief "$TMP_ROOT/missing-objective.brief"
+expect_failure 'inspect malformed brief' "$TOOL" inspect --brief "$TMP_ROOT/missing-objective.brief"
 sed "s/^  objective: 'Inspect the bounded worker boundary\.'$/  objective: ''/" "$TMP_ROOT/read.brief" >"$TMP_ROOT/empty-objective.brief"
 expect_failure 'empty required objective' "$TOOL" validate --brief "$TMP_ROOT/empty-objective.brief"
 sed 's/write_access: read-only/write_access: read-write/' "$TMP_ROOT/read.brief" >"$TMP_ROOT/illegal-permission.brief"
@@ -166,6 +171,10 @@ expect_failure 'invalid delegated topology' "$TOOL" render --input "$TMP_ROOT/ba
 shared_input "$TMP_ROOT/shared.input"
 "$TOOL" render --input "$TMP_ROOT/shared.input" >"$TMP_ROOT/shared.brief"
 "$TOOL" validate --brief "$TMP_ROOT/shared.brief" --input "$TMP_ROOT/shared.input" >/dev/null
+"$TOOL" inspect --brief "$TMP_ROOT/shared.brief" >"$TMP_ROOT/shared.inspect"
+for required in '"task_id":"shared-writer"' '"profile":"WRITABLE"' '"write_access":"read-write"'; do
+  assert_text "$required" "$TMP_ROOT/shared.inspect"
+done
 for required in 'write_access: read-write' 'allowed_writes:' "- 'src/brief.ts'" \
   'allowed_actions:' '      - edit' 'profile: WRITABLE'; do
   assert_text "$required" "$TMP_ROOT/shared.brief"
@@ -176,6 +185,10 @@ expect_failure 'scope expansion beyond canonical task' "$TOOL" validate --brief 
 review_input "$TMP_ROOT/review.input"
 "$TOOL" render --input "$TMP_ROOT/review.input" >"$TMP_ROOT/review.brief"
 "$TOOL" validate --brief "$TMP_ROOT/review.brief" --input "$TMP_ROOT/review.input" >/dev/null
+"$TOOL" inspect --brief "$TMP_ROOT/review.brief" >"$TMP_ROOT/review.inspect"
+for required in '"task_id":"review-worker"' '"profile":"REVIEW"' '"write_access":"read-only"'; do
+  assert_text "$required" "$TMP_ROOT/review.inspect"
+done
 assert_text "role: 'reviewer'" "$TMP_ROOT/review.brief"
 assert_text 'profile: REVIEW' "$TMP_ROOT/review.brief"
 assert_text 'contract: .swe-forge/contracts/review.md' "$TMP_ROOT/review.brief"

@@ -40,14 +40,16 @@ above. Until that package is published to npm, use the
 from the main repository. The package is optional: without it, `SUBAGENTS`
 falls back to `SOLO`/sequential execution.
 
-Continuation and compaction behavior is inert unless the extension finds an
-active, checkout-matching schema-v4 `run-state.yaml` with
-`workflow_active: true`. Capability observation also activates for an explicit
-`/swe-forge` prompt so the first routing turn can feature-detect the tool before
-a run-state snapshot exists. It chooses the newest active snapshot by
-`continuation.updated_at` and file mtime; terminal or stale state is ignored.
-An explicit new `/swe-forge ...` invocation fences run IDs already active and
-discoverable for the checkout instead of injecting them during startup.
+Continuation and compaction behavior is inert unless the extension receives an
+active semantic projection from the canonical
+`swe-forge-state inspect`/`resolve-active` port for a checkout-matching
+schema-v4 run. The canonical tool owns schema, obsolete-field, lifecycle,
+timestamp, checkout, and newest-state ordering semantics; Pi only consumes the
+bounded continuation facts. Capability observation still activates for an
+explicit `/swe-forge` prompt so the first routing turn can feature-detect the
+optional tool before a run-state snapshot exists. An explicit new
+`/swe-forge ...` invocation fences all previously visible active run IDs and
+keeps that lifecycle boundary adapter-local.
 
 ## Invocation
 

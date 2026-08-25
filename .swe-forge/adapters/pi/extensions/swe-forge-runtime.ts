@@ -10,10 +10,7 @@ const MAX_INVOCATION_BYTES = 256 * 1024;
 const DEFAULT_RESERVE_TOKENS = 16_384;
 const COMPACTION_COOLDOWN_MS = 30_000;
 const MAX_STATE_FILES = 64;
-const MAX_STATE_BYTES = 256 * 1024;
 const MAX_FIELD_LENGTH = 160;
-const ACTIVE_STATUSES: Record<string, true> = { planning: true, running: true, reviewing: true, repairing: true, blocked: true };
-const TERMINAL_STATUSES: Record<string, true> = { accepted: true, failed: true };
 const RUN_STATE_ENV_VARS = ["SWE_FORGE_RUN_STATE", "SWE_FORGE_STATE"];
 const SUBAGENT_TOOL_NAME = "swe_forge_subagent";
 const SUBAGENT_PROTOCOL_VERSION = 1;
@@ -71,42 +68,7 @@ function readJson(filePath: string): Record<string, any> | undefined {
 	}
 }
 
-function unquote(value: string): string {
-	let result = value.trim();
-	const comment = result.search(/\s+#/);
-	if (comment >= 0) result = result.slice(0, comment).trim();
-	if ((result.startsWith("\"") && result.endsWith("\"")) || (result.startsWith("'") && result.endsWith("'"))) {
-		result = result.slice(1, -1);
-	}
-	return result;
-}
 
-/**
- * Parse only scalar dotted paths from the deliberately simple run-state YAML.
- * This is not a general YAML parser: rejecting complex or malformed values is
- * safer than guessing workflow state in a continuity hook.
- */
-function parseScalarYaml(text: string): Map<string, string> {
-	const values = new Map<string, string>();
-	const stack: Array<{ indent: number; key: string }> = [];
-
-	for (const line of text.split(/\r?\n/)) {
-		if (!line.trim() || line.trimStart().startsWith("#") || /^\s*-/.test(line)) continue;
-		const match = line.match(/^(\s*)([A-Za-z0-9_-]+):(?:\s*(.*))?$/);
-		if (!match) continue;
-		const indent = match[1].replace(/\t/g, "  ").length;
-		const key = match[2];
-		while (stack.length > 0 && stack[stack.length - 1].indent >= indent) stack.pop();
-		const dotted = [...stack.map((entry) => entry.key), key].join(".");
-		const rawValue = match[3];
-		if (rawValue === undefined || rawValue.trim() === "") {
-			stack.push({ indent, key });
-		} else {
-			values.set(dotted, unquote(rawValue));
-		}
-	}
-	return values;
-}
 
 function stateFile(input: string): string | undefined {
 	const candidate = input.trim();
@@ -187,28 +149,6 @@ function discoverStatePaths(cwd: string): Set<string> {
 	return paths;
 }
 
-function displayValue(values: Map<string, string>, key: string, fallback: string): string {
-	const value = values.get(key)?.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
-	return value ? value.slice(0, MAX_FIELD_LENGTH) : fallback;
-}
-
-function numberOrUndefined(value: string | undefined): number | undefined {
-	if (!value || value === "unknown" || value === "none") return undefined;
-	const parsed = Number(value);
-	return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
-}
-
-function boolValue(value: string | undefined): boolean | undefined {
-	if (value === "true") return true;
-	if (value === "false") return false;
-	return undefined;
-}
-
-function stateMatchesCwd(values: Map<string, string>, cwd: string): boolean {
-	const project = canonicalPath(cwd);
-	const delivery = values.get("delivery_checkout.path");
-	return Boolean(delivery && canonicalPath(delivery) === project);
-}
 
 interface ActiveRun {
 	filePath: string;
@@ -217,6 +157,7 @@ interface ActiveRun {
 	modifiedAt: number;
 	status: string;
 	workflowActive: boolean;
+	delegationAuthorized: boolean;
 	preferredTopology: string;
 	currentTopology: string;
 	deliveryMode: string;
@@ -232,69 +173,117 @@ interface ActiveRun {
 	prState: string;
 }
 
-function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
+function stateToolPath(): string | undefined {
+	const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+	const candidates = [
+		path.join(os.homedir(), ".pi", "agent", "swe-forge", ".swe-forge", "tools", "swe-forge-state"),
+		path.join(sourceRoot, ".swe-forge", "tools", "swe-forge-state"),
+	];
+	for (const candidate of candidates) {
+		try {
+			if (fs.statSync(candidate).isFile()) return candidate;
+		} catch {
+			// A missing installation preserves the canonical fallback.
+		}
+	}
+	return undefined;
+}
+
+interface CanonicalExecResult {
+	code?: unknown;
+	stdout?: unknown;
+}
+
+interface CanonicalExecutor {
+	exec(
+		command: string,
+		args: readonly string[],
+		options: { timeout: number },
+	): Promise<CanonicalExecResult> | CanonicalExecResult;
+}
+
+function hasCanonicalExecutor(value: unknown): value is CanonicalExecutor {
+	return isRecord(value) && typeof value.exec === "function";
+}
+
+async function canonicalJson(pi: unknown, command: string, args: string[]): Promise<unknown> {
+	if (!hasCanonicalExecutor(pi)) return undefined;
 	try {
-		if (fs.statSync(filePath).size > MAX_STATE_BYTES) return undefined;
+		const result = await pi.exec(command, args, { timeout: 5000 });
+		if (result?.code !== 0 || typeof result.stdout !== "string") return undefined;
+		return JSON.parse(result.stdout.trim());
 	} catch {
 		return undefined;
 	}
-	const text = readText(filePath);
-	if (!text) return undefined;
-	const values = parseScalarYaml(text);
-	if (values.get("workflow") !== "swe-forge" || !stateMatchesCwd(values, cwd)) return undefined;
-	if (currentStateError(values)) return undefined;
+}
 
-	const status = values.get("status") ?? "unknown";
-	if (!ACTIVE_STATUSES[status] && !TERMINAL_STATUSES[status]) return undefined;
-	const workflowActive = boolValue(values.get("continuation.workflow_active"));
-	if (workflowActive !== true || TERMINAL_STATUSES[status]) return undefined;
+function projectionString(value: unknown, fallback: string): string {
+	return typeof value === "string" && value.length > 0 ? value : fallback;
+}
 
-	const recordedTime = values.get("continuation.updated_at");
-	if (!recordedTime) return undefined;
-	const updatedAt = Date.parse(recordedTime);
-	if (!Number.isFinite(updatedAt)) return undefined;
-
-	let modifiedAt: number;
-	try {
-		modifiedAt = fs.statSync(filePath).mtimeMs;
-	} catch {
+function activeRunProjection(value: unknown): ActiveRun | undefined {
+	if (!isRecord(value) || value.active !== true) return undefined;
+	const routing = isRecord(value.routing) ? value.routing : undefined;
+	const continuation = isRecord(value.continuation) ? value.continuation : undefined;
+	const nextAction = continuation && isRecord(continuation.next_action) ? continuation.next_action : undefined;
+	const delivery = continuation && isRecord(continuation.delivery) ? continuation.delivery : undefined;
+	const context = isRecord(value.context) ? value.context : undefined;
+	const updatedAt = value.updated_at_ms;
+	const modifiedAt = value.modified_at_ms;
+	if (
+		typeof value.state_file !== "string" ||
+		typeof value.run_id !== "string" ||
+		typeof value.status !== "string" ||
+		typeof value.delivery_mode !== "string" ||
+		!routing ||
+		typeof routing.preferred !== "string" ||
+		typeof routing.current !== "string" ||
+		!continuation ||
+		typeof continuation.workflow_active !== "boolean" ||
+		typeof updatedAt !== "number" ||
+		!Number.isFinite(updatedAt) ||
+		typeof modifiedAt !== "number" ||
+		!Number.isFinite(modifiedAt)
+	) {
 		return undefined;
 	}
-
-	const stateId = displayValue(values, "run_id", path.basename(path.dirname(filePath)));
 	return {
-		filePath,
-		stateId,
+		filePath: value.state_file,
+		stateId: value.run_id,
 		updatedAt,
 		modifiedAt,
-		status,
-		workflowActive,
-		preferredTopology: displayValue(values, "routing.preferred", "unknown"),
-		currentTopology: displayValue(values, "routing.current", "unknown"),
-		deliveryMode: displayValue(values, "delivery_mode", "unknown"),
-		phase: displayValue(values, "continuation.phase", "unknown"),
-		step: displayValue(values, "continuation.step", "none"),
-		awaiting: displayValue(values, "continuation.awaiting", "none"),
-		nextActionKind: displayValue(values, "continuation.next_action.kind", "none"),
-		nextActionTarget: displayValue(values, "continuation.next_action.target", "none"),
-		expectedContextTokens: numberOrUndefined(values.get("continuation.next_action.expected_context_tokens")),
-		safeBoundary: boolValue(values.get("continuation.safe_boundary")) ?? false,
-		contextStatus: displayValue(values, "context.status", "unknown"),
-		prNumber: displayValue(values, "continuation.delivery.pr_number", "none"),
-		prState: displayValue(values, "continuation.delivery.pr_state", "none"),
+		status: value.status,
+		workflowActive: continuation.workflow_active,
+		delegationAuthorized: value.delegation_authorized === true,
+		preferredTopology: routing.preferred,
+		currentTopology: routing.current,
+		deliveryMode: value.delivery_mode,
+		phase: projectionString(continuation.phase, "none"),
+		step: projectionString(continuation.step, "none"),
+		awaiting: projectionString(continuation.awaiting, "none"),
+		nextActionKind: projectionString(nextAction?.kind, "none"),
+		nextActionTarget: projectionString(nextAction?.target, "none"),
+		expectedContextTokens:
+			typeof nextAction?.expected_context_tokens === "number" && Number.isFinite(nextAction.expected_context_tokens)
+				? nextAction.expected_context_tokens
+				: undefined,
+		safeBoundary: continuation.safe_boundary === true,
+		contextStatus: projectionString(context?.status, "unknown"),
+		prNumber: projectionString(delivery?.pr_number, "none"),
+		prState: projectionString(delivery?.pr_state, "none"),
 	};
 }
 
-function resolveActiveRuns(cwd: string): ActiveRun[] {
-	const candidates = Array.from(discoverStatePaths(cwd))
-		.map((filePath) => parseActiveRun(filePath, cwd))
-		.filter((run): run is ActiveRun => Boolean(run));
-	candidates.sort(
-		(left, right) =>
-			right.updatedAt - left.updatedAt || right.modifiedAt - left.modifiedAt || left.filePath.localeCompare(right.filePath),
-	);
-	return candidates;
+async function resolveActiveRuns(pi: any, cwd: string): Promise<ActiveRun[]> {
+	const tool = stateToolPath();
+	if (!tool) return [];
+	const args = ["resolve-active", "--checkout", cwd, "--all"];
+	for (const candidate of discoverStatePaths(cwd)) args.push("--candidate", candidate);
+	const value = await canonicalJson(pi, tool, args);
+	if (!isRecord(value) || !Array.isArray(value.states)) return [];
+	return value.states.map(activeRunProjection).filter((run): run is ActiveRun => Boolean(run));
 }
+
 
 interface SubagentToolObservation {
 	available: boolean;
@@ -355,39 +344,6 @@ function topology(value: string): string {
 	return value.trim().toUpperCase();
 }
 
-function currentStateError(values: Map<string, string>): string | undefined {
-	if (values.get("schema_version") !== "4") return "unsupported run-state schema";
-	for (const field of [
-		"routing.initial",
-		"routing.selected",
-		"routing.revisions",
-		"routing.context_value",
-		"routing.runtime_profile_ref",
-		"runtime_profile",
-		"discovery_strategy",
-	]) {
-		if (values.has(field)) return `obsolete run-state field: ${field}`;
-	}
-	for (const field of ["routing.preferred", "routing.current"]) {
-		const value = values.get(field);
-		if (!value || (topology(value) !== "SOLO" && topology(value) !== "SUBAGENTS")) {
-			return `missing or malformed ${field}`;
-		}
-	}
-	const deliveryMode = values.get("delivery_mode");
-	if (!deliveryMode || !["GUIDED", "PR"].includes(deliveryMode)) return "missing or malformed delivery_mode";
-	const workflowActive = boolValue(values.get("continuation.workflow_active"));
-	if (workflowActive === undefined) return "missing or malformed continuation.workflow_active";
-	if (boolValue(values.get("continuation.safe_boundary")) === undefined) return "missing or malformed continuation.safe_boundary";
-	if (!values.get("continuation.updated_at") || !Number.isFinite(Date.parse(values.get("continuation.updated_at")!))) {
-		return "missing or malformed continuation.updated_at";
-	}
-	const projection = values.get("continuation.delivery.mode");
-	if (projection === undefined || projection !== deliveryMode) {
-		return "continuation.delivery.mode does not match delivery_mode";
-	}
-	return undefined;
-}
 
 function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: string): string {
 	if (!run) {
@@ -744,8 +700,8 @@ export default function sweForgeRuntime(pi: any) {
 	let lastCompactionAt = 0;
 	let lastCompactionState = "";
 
-	const refresh = (cwd: string, freshInvocation = false): ActiveRun | undefined => {
-		const discoveredRuns = resolveActiveRuns(cwd);
+	const refresh = async (cwd: string, freshInvocation = false): Promise<ActiveRun | undefined> => {
+		const discoveredRuns = await resolveActiveRuns(pi, cwd);
 		if (freshInvocation) {
 			// Fence every run at the fresh-invocation boundary. Keep this in refresh
 			// so every startup hook ignores those stale runs until a different run_id
@@ -774,13 +730,13 @@ export default function sweForgeRuntime(pi: any) {
 		}
 	};
 
-	on("session_start", (_event, ctx) => {
-		refresh(ctx.cwd);
+	on("session_start", async (_event, ctx) => {
+		await refresh(ctx.cwd);
 	});
 
 	on("before_agent_start", async (event, ctx) => {
 		const explicitInvocation = isSWEForgeInvocation(event.prompt);
-		const run = refresh(ctx.cwd, explicitInvocation);
+		const run = await refresh(ctx.cwd, explicitInvocation);
 		invocationActive = Boolean(run) || explicitInvocation;
 		const blocks: string[] = [];
 		if (explicitInvocation && !event.systemPrompt?.includes(NORMALIZED_INVOCATION_MARKER)) {
@@ -811,7 +767,7 @@ export default function sweForgeRuntime(pi: any) {
 
 	on("tool_call", async (event, ctx) => {
 		if (event.toolName !== SUBAGENT_TOOL_NAME) return undefined;
-		const run = refresh(ctx.cwd);
+		const run = await refresh(ctx.cwd);
 		const input = isRecord(event.input) ? event.input : {};
 		const action = input.action;
 		const observation = observeSubagentTool(pi);
@@ -874,9 +830,9 @@ export default function sweForgeRuntime(pi: any) {
 		return undefined;
 	});
 
-	on("tool_result", (event, ctx) => {
+	on("tool_result", async (event, ctx) => {
 		if (event.toolName !== SUBAGENT_TOOL_NAME || !isRecord(event.input)) return undefined;
-		const run = refresh(ctx.cwd);
+		const run = await refresh(ctx.cwd);
 		if (event.input.action === "capabilities") {
 			const error = event.isError ? "capability tool returned an error" : validateCapabilities(event.details);
 			negotiatedSubagentCapabilities = error ? undefined : event.details;
@@ -901,15 +857,15 @@ export default function sweForgeRuntime(pi: any) {
 
 	on("input", async (event, ctx) => {
 		if (event.source === "extension" || event.text?.trim().toLowerCase() !== "merged") return undefined;
-		const run = refresh(ctx.cwd);
+		const run = await refresh(ctx.cwd);
 		if (!run || run.deliveryMode !== "PR") return undefined;
 		const awaitingMerge = run.awaiting === "user_merge" || run.nextActionKind === "verify_and_sync_merge";
 		if (!awaitingMerge) return undefined;
 		return { action: "transform", text: "/git-sync merged" };
 	});
 
-	on("session_before_compact", (event, ctx) => {
-		activeRun = refresh(ctx.cwd);
+	on("session_before_compact", async (event, ctx) => {
+		activeRun = await refresh(ctx.cwd);
 		compactionInFlight = true;
 		if (activeRun) {
 			lastCompactionAt = Date.now();
@@ -921,17 +877,17 @@ export default function sweForgeRuntime(pi: any) {
 		});
 	});
 
-	on("session_compact", (event, ctx) => {
+	on("session_compact", async (event, ctx) => {
 		compactionInFlight = false;
-		activeRun = refresh(ctx.cwd);
+		activeRun = await refresh(ctx.cwd);
 		appendRuntimeEntry(pi, "compaction_completed", activeRun, {
 			reason: event?.reason ?? "unknown",
 			willRetry: event?.willRetry ?? false,
 		});
 	});
 
-	on("agent_settled", (_event, ctx) => {
-		const run = refresh(ctx.cwd);
+	on("agent_settled", async (_event, ctx) => {
+		const run = await refresh(ctx.cwd);
 		if (!run || compactionInFlight || ctx.hasPendingMessages?.()) return;
 		if (typeof ctx.getContextUsage !== "function" || typeof ctx.compact !== "function") return;
 		const usage = ctx.getContextUsage();

@@ -23,14 +23,23 @@ fail() {
 usage() {
   cat <<'EOF'
 Usage:
-  swe-forge-worker-result schema [--profile PROFILE] [--role ROLE]
+  swe-forge-worker-result schema [--profile PROFILE] [--role ROLE] \
+    [--task-id ID] [--format json|json-schema]
+  swe-forge-worker-result encode --profile PROFILE --task-id ID \
+    --input FILE|-
   swe-forge-worker-result validate --profile PROFILE [--role ROLE] \
     [--task-id ID] --result FILE|-
 
 `schema` writes the machine-readable worker-result/v1 profile map. Without a
 profile it describes ordinary and review result ownership. With a profile it
-writes only that profile. `--role reviewer` selects the REVIEW profile and
-cannot be combined with an ordinary result profile.
+writes only that profile. `--format json-schema` projects the strict
+structured-output object shape for a profile and binds ordinary results to the
+supplied task ID. `--role reviewer` selects the REVIEW profile and cannot be
+combined with an ordinary result profile.
+
+`encode` accepts one strict structured JSON ordinary result and writes the
+canonical line-oriented worker-result/v1 representation. It rejects malformed,
+unsafe, profile-mismatched, or task-mismatched input.
 
 `validate` accepts the ordinary READ_ONLY or WRITABLE result profiles and
 returns a non-zero status for malformed, profile-mismatched, or role-
@@ -123,6 +132,94 @@ EOF
 EOF
       ;;
     *) fail "unknown result profile: $1" ;;
+  esac
+}
+
+schema_json_schema() {
+  profile=$1
+  task_id=$2
+  case "$profile" in READ_ONLY|WRITABLE|REVIEW) ;; *) fail "unknown result profile: $profile" ;; esac
+  if [ "$profile" != REVIEW ]; then
+    case "$task_id" in ''|*[!A-Za-z0-9._-]*) fail 'json-schema task ID contains unsupported characters' ;; esac
+  fi
+  case "$profile" in
+    READ_ONLY)
+      cat <<EOF
+{
+  "type": "object",
+  "properties": {
+    "RESULT_PROFILE": {"type": "string", "enum": ["READ_ONLY"]},
+    "STATUS": {"type": "string", "enum": ["DONE", "BLOCKED", "FAILED"]},
+    "TASK_ID": {"type": "string", "const": "$task_id"},
+    "FINDINGS": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "EVIDENCE": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "RISKS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
+    "RECOMMENDED_ACTION": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
+  },
+  "required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION"],
+  "additionalProperties": false
+}
+EOF
+      ;;
+    WRITABLE)
+      cat <<EOF
+{
+  "type": "object",
+  "properties": {
+    "RESULT_PROFILE": {"type": "string", "enum": ["WRITABLE"]},
+    "STATUS": {"type": "string", "enum": ["DONE", "BLOCKED", "FAILED"]},
+    "TASK_ID": {"type": "string", "const": "$task_id"},
+    "FINDINGS": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "EVIDENCE": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "RISKS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
+    "RECOMMENDED_ACTION": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
+    "BASE_SHA": {"type": "string", "pattern": "^[0-9A-Fa-f]{40}$"},
+    "HEAD_SHA": {"anyOf": [{"type": "string", "pattern": "^[0-9A-Fa-f]{40}$"}, {"type": "string", "const": "none"}]},
+    "BRANCH": {"type": "string", "minLength": 1},
+    "CHECKOUT": {"type": "string", "minLength": 1},
+    "FILES_CHANGED": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "GIT_STATE": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "DELIVERABLE_COMMITS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
+    "VALIDATION": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "minLength": 1},
+          "requirement": {"type": "string", "enum": ["required", "conditional", "informational"]},
+          "condition": {"type": "string", "minLength": 1},
+          "applies": {"type": "boolean"},
+          "result": {"type": "string", "enum": ["passed", "failed", "unavailable", "not-applicable"]},
+          "evidence": {"type": "string", "minLength": 1}
+        },
+        "required": ["command", "requirement", "condition", "applies", "result", "evidence"],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "SCOPE_EXCEPTIONS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
+  },
+  "required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION", "BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT", "FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"],
+  "additionalProperties": false
+}
+EOF
+      ;;
+    REVIEW)
+      cat <<'EOF'
+{
+  "type": "object",
+  "properties": {
+    "status": {"type": "string", "enum": ["PASS", "CHANGES_REQUIRED"]},
+    "scope": {"type": "object", "additionalProperties": true},
+    "review_focus": {"type": "object", "additionalProperties": true},
+    "findings": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "deferred_followups": {"type": "array", "items": {"type": "object", "additionalProperties": true}}
+  },
+  "required": ["status", "scope", "review_focus", "findings", "deferred_followups"],
+  "additionalProperties": false
+}
+EOF
+      ;;
   esac
 }
 
@@ -341,6 +438,8 @@ validate_result_file() {
 schema_command() {
   profile=
   role=
+  task_id=
+  format=json
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --profile)
@@ -353,9 +452,14 @@ schema_command() {
         role=$2
         shift 2
         ;;
+      --task-id|--task)
+        [ "$#" -ge 2 ] || fail '--task-id requires a value'
+        task_id=$2
+        shift 2
+        ;;
       --format)
         [ "$#" -ge 2 ] || fail '--format requires a value'
-        [ "$2" = json ] || fail 'schema format must be json'
+        case "$2" in json|json-schema) format=$2 ;; *) fail 'schema format must be json or json-schema' ;; esac
         shift 2
         ;;
       -h|--help)
@@ -375,7 +479,468 @@ schema_command() {
       case "$role" in *[!A-Za-z0-9_-]*) fail 'role contains unsupported characters' ;; esac
       ;;
   esac
-  if [ -n "$profile" ]; then schema_profile "$profile"; else schema_all; fi
+  if [ "$format" = json-schema ]; then
+    [ -n "$profile" ] || fail 'json-schema format requires --profile'
+    if [ "$profile" = REVIEW ]; then
+      [ -z "$task_id" ] || fail 'REVIEW json-schema does not accept --task-id'
+    else
+      [ -n "$task_id" ] || fail 'ordinary json-schema requires --task-id'
+    fi
+    schema_json_schema "$profile" "$task_id"
+  elif [ -n "$profile" ]; then
+    schema_profile "$profile"
+  else
+    schema_all
+  fi
+}
+
+encode_json_input() {
+  expected_profile=$1
+  expected_task=$2
+  source=$3
+  input_file=$TMP_ROOT/structured-input
+  if [ "$source" = - ]; then
+    cat >"$input_file"
+  else
+    [ -f "$source" ] || fail "structured input file does not exist: $source"
+    cp "$source" "$input_file"
+  fi
+  input_size=$(wc -c <"$input_file")
+  input_size=$(printf '%s' "$input_size" | tr -d '[:space:]')
+  case "$input_size" in ''|*[!0-9]*) fail 'structured input size is invalid' ;; esac
+  [ "$input_size" -le 262144 ] || fail 'structured input exceeds the canonical size limit'
+
+  LC_ALL=C awk -v expected_profile="$expected_profile" -v expected_task="$expected_task" '
+    function fail(message) {
+      print "FAIL: " message > "/dev/stderr"
+      failed = 1
+      exit 1
+    }
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function is_control(value,    i, c) {
+      if (value == tab || value == newline || value == carriage_return ||
+          value == backspace || value == form_feed || value == delete_char) return 1
+      for (i = 1; i < 32; i++) {
+        c = sprintf("%c", i)
+        if (value == c) return 1
+      }
+      return 0
+    }
+    function require_text(value, label) {
+      if (value == "" || trim(value) == "" || is_control(value)) fail(label " must be a non-empty safe string")
+    }
+    function skip_ws() {
+      while (pos <= length(json) && (substr(json, pos, 1) == " " ||
+          substr(json, pos, 1) == tab || substr(json, pos, 1) == newline ||
+          substr(json, pos, 1) == carriage_return)) pos++
+    }
+    function expect_char(expected, label,    actual) {
+      skip_ws()
+      actual = substr(json, pos, 1)
+      if (actual != expected) fail("expected " label)
+      pos++
+    }
+    function hex_digit(value) {
+      if (value >= "0" && value <= "9") return value + 0
+      if (value >= "a" && value <= "f") return 9 + index("abcdef", value)
+      if (value >= "A" && value <= "F") return 9 + index("ABCDEF", value)
+      return -1
+    }
+    function utf8(code,    first, second, third) {
+      if (code < 128) return sprintf("%c", code)
+      if (code < 2048) {
+        first = 192 + int(code / 64)
+        second = 128 + (code % 64)
+        return sprintf("%c%c", first, second)
+      }
+      if (code < 65536) {
+        first = 224 + int(code / 4096)
+        second = 128 + (int(code / 64) % 64)
+        third = 128 + (code % 64)
+        return sprintf("%c%c%c", first, second, third)
+      }
+      first = 240 + int(code / 262144)
+      second = 128 + (int(code / 4096) % 64)
+      third = 128 + (int(code / 64) % 64)
+      return sprintf("%c%c%c%c", first, second, third, 128 + (code % 64))
+    }
+    function parse_unicode(    i, digit, code, c) {
+      code = 0
+      for (i = 1; i <= 4; i++) {
+        c = substr(json, pos, 1)
+        digit = hex_digit(c)
+        if (digit < 0) fail("invalid unicode escape")
+        code = code * 16 + digit
+        pos++
+      }
+      if (code < 32 || code == 127) fail("structured result contains a control character")
+      if (code >= 55296 && code <= 57343) fail("surrogate unicode escapes are unsupported")
+      parsed_string = parsed_string utf8(code)
+    }
+    function parse_string(    c, esc) {
+      skip_ws()
+      if (substr(json, pos, 1) != quote) fail("expected JSON string")
+      pos++
+      parsed_string = ""
+      while (pos <= length(json)) {
+        c = substr(json, pos, 1)
+        if (c == quote) {
+          pos++
+          return
+        }
+        if (c == newline || c == carriage_return || is_control(c)) {
+          fail("structured result string contains a control character")
+        }
+        if (c == backslash) {
+          pos++
+          esc = substr(json, pos, 1)
+          if (esc == quote || esc == backslash || esc == slash) {
+            parsed_string = parsed_string esc
+            pos++
+          } else if (esc == "u") {
+            pos++
+            parse_unicode()
+          } else {
+            fail("unsupported or unsafe JSON string escape")
+          }
+        } else {
+          parsed_string = parsed_string c
+          pos++
+        }
+      }
+      fail("unterminated JSON string")
+    }
+    function parse_boolean() {
+      skip_ws()
+      if (substr(json, pos, 4) == "true") {
+        parsed_boolean = "true"
+        pos += 4
+      } else if (substr(json, pos, 5) == "false") {
+        parsed_boolean = "false"
+        pos += 5
+      } else {
+        fail("expected JSON boolean")
+      }
+    }
+    function parse_literal(value) {
+      skip_ws()
+      if (substr(json, pos, length(value)) != value) fail("invalid JSON literal")
+      pos += length(value)
+    }
+    function parse_string_field(name) {
+      parse_string()
+      scalar[name] = parsed_string
+    }
+    function parse_string_array(name, allow_null,    c, count) {
+      skip_ws()
+      if (substr(json, pos, 4) == "null") {
+        if (!allow_null) fail(name " may not be null")
+        pos += 4
+        array_state[name] = "null"
+        array_count[name] = 0
+        return
+      }
+      expect_char("[", name " array")
+      array_state[name] = "array"
+      array_count[name] = 0
+      skip_ws()
+      if (substr(json, pos, 1) == "]") {
+        pos++
+        return
+      }
+      while (1) {
+        parse_string()
+        require_text(parsed_string, name " item")
+        count = ++array_count[name]
+        array_value[name, count] = parsed_string
+        skip_ws()
+        c = substr(json, pos, 1)
+        if (c == ",") {
+          pos++
+          continue
+        }
+        if (c == "]") {
+          pos++
+          return
+        }
+        fail("malformed " name " array")
+      }
+    }
+    function parse_validation_object(record_number,    c, key) {
+      expect_char("{", "validation object")
+      skip_ws()
+      if (substr(json, pos, 1) == "}") fail("validation object may not be empty")
+      while (1) {
+        parse_string()
+        key = parsed_string
+        if (validation_seen[record_number, key]) fail("duplicate validation field: " key)
+        validation_seen[record_number, key] = 1
+        expect_char(":", "validation field separator")
+        if (key == "applies") {
+          parse_boolean()
+          validation_value[record_number, key] = parsed_boolean
+        } else if (key == "command" || key == "requirement" || key == "condition" ||
+                   key == "result" || key == "evidence") {
+          parse_string()
+          require_text(parsed_string, "validation " key)
+          validation_value[record_number, key] = parsed_string
+        } else {
+          fail("unknown validation field: " key)
+        }
+        skip_ws()
+        c = substr(json, pos, 1)
+        if (c == ",") {
+          pos++
+          continue
+        }
+        if (c == "}") {
+          pos++
+          break
+        }
+        fail("malformed validation object")
+      }
+      for (key in required_validation_fields) {
+        if (!validation_seen[record_number, key]) fail("validation record is missing " key)
+      }
+    }
+    function parse_validation_array(    c, record_number) {
+      expect_char("[", "VALIDATION array")
+      array_state["VALIDATION"] = "array"
+      validation_count = 0
+      skip_ws()
+      if (substr(json, pos, 1) == "]") {
+        pos++
+        return
+      }
+      while (1) {
+        record_number = ++validation_count
+        parse_validation_object(record_number)
+        skip_ws()
+        c = substr(json, pos, 1)
+        if (c == ",") {
+          pos++
+          continue
+        }
+        if (c == "]") {
+          pos++
+          return
+        }
+        fail("malformed VALIDATION array")
+      }
+    }
+    function parse_root(    c, key) {
+      expect_char("{", "structured result object")
+      skip_ws()
+      if (substr(json, pos, 1) == "}") fail("structured result object is empty")
+      while (1) {
+        parse_string()
+        key = parsed_string
+        if (root_seen[key]) fail("duplicate result field: " key)
+        root_seen[key] = 1
+        expect_char(":", "result field separator")
+        if (key in scalar_fields) {
+          parse_string_field(key)
+        } else if (key in array_fields) {
+          parse_string_array(key, 1)
+        } else if (key == "FINDINGS" || key == "EVIDENCE") {
+          parse_string_array(key, 0)
+        } else if (key == "VALIDATION" && expected_profile == "WRITABLE") {
+          parse_validation_array()
+        } else {
+          fail("unknown or profile-incompatible result field: " key)
+        }
+        skip_ws()
+        c = substr(json, pos, 1)
+        if (c == ",") {
+          pos++
+          continue
+        }
+        if (c == "}") {
+          pos++
+          return
+        }
+        fail("malformed structured result object")
+      }
+    }
+    function require_field(name) {
+      if (!root_seen[name]) fail("missing structured result field: " name)
+    }
+    function require_array(name) {
+      require_field(name)
+      if (array_state[name] != "array" || array_count[name] == 0) fail(name " must contain at least one item")
+    }
+    function optional_array(name) {
+      require_field(name)
+      if (array_state[name] != "array" && array_state[name] != "null") fail(name " must be an array or null")
+    }
+    function valid_sha(value, label) {
+      if (value !~ /^[0-9A-Fa-f]{40}$/) fail(label " must be a full 40-character SHA")
+    }
+    function validate_result(    i, item, requirement, applies, result, name) {
+      require_field("RESULT_PROFILE")
+      require_field("STATUS")
+      require_field("TASK_ID")
+      require_text(scalar["RESULT_PROFILE"], "RESULT_PROFILE")
+      require_text(scalar["STATUS"], "STATUS")
+      require_text(scalar["TASK_ID"], "TASK_ID")
+      if (scalar["RESULT_PROFILE"] != expected_profile) fail("result profile does not match expected profile")
+      if (scalar["TASK_ID"] !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/) fail("TASK_ID contains unsupported characters")
+      if (scalar["TASK_ID"] != expected_task) fail("TASK_ID does not match the requested task")
+      if (scalar["STATUS"] != "DONE" && scalar["STATUS"] != "BLOCKED" && scalar["STATUS"] != "FAILED") fail("invalid STATUS")
+      require_array("FINDINGS")
+      require_array("EVIDENCE")
+      optional_array("RISKS")
+      optional_array("RECOMMENDED_ACTION")
+      if (scalar["STATUS"] == "BLOCKED" || scalar["STATUS"] == "FAILED") {
+        if (array_state["RECOMMENDED_ACTION"] != "array" || array_count["RECOMMENDED_ACTION"] == 0) {
+          fail(scalar["STATUS"] " result must include RECOMMENDED_ACTION")
+        }
+      }
+      if (expected_profile == "WRITABLE") {
+        require_field("BASE_SHA")
+        require_field("HEAD_SHA")
+        require_field("BRANCH")
+        require_field("CHECKOUT")
+        require_text(scalar["BASE_SHA"], "BASE_SHA")
+        require_text(scalar["HEAD_SHA"], "HEAD_SHA")
+        require_text(scalar["BRANCH"], "BRANCH")
+        require_text(scalar["CHECKOUT"], "CHECKOUT")
+        valid_sha(scalar["BASE_SHA"], "BASE_SHA")
+        if (scalar["HEAD_SHA"] != "none") valid_sha(scalar["HEAD_SHA"], "HEAD_SHA")
+        require_array("FILES_CHANGED")
+        require_array("GIT_STATE")
+        require_field("VALIDATION")
+        if (array_state["VALIDATION"] != "array" || validation_count == 0) fail("VALIDATION must contain at least one record")
+        require_field("DELIVERABLE_COMMITS")
+        require_field("SCOPE_EXCEPTIONS")
+        optional_array("DELIVERABLE_COMMITS")
+        optional_array("SCOPE_EXCEPTIONS")
+        for (i = 1; i <= array_count["FILES_CHANGED"]; i++) {
+          item = array_value["FILES_CHANGED", i]
+          if (item == "none" && scalar["STATUS"] == "DONE") fail("DONE WRITABLE result cannot report no changed files")
+          if (item != "none" && item ~ /^\//) fail("FILES_CHANGED paths must be repository-relative")
+          if (item != "none" && (item == ".." || item ~ /^\.\.\// || item ~ /\/\.\.\//)) fail("FILES_CHANGED paths may not escape the repository")
+        }
+        for (i = 1; i <= validation_count; i++) {
+          requirement = validation_value[i, "requirement"]
+          applies = validation_value[i, "applies"]
+          result = validation_value[i, "result"]
+          if (requirement != "required" && requirement != "conditional" && requirement != "informational") fail("invalid validation requirement")
+          if (applies != "true" && applies != "false") fail("invalid validation applies value")
+          if (result != "passed" && result != "failed" && result != "unavailable" && result != "not-applicable") fail("invalid validation result")
+          if (requirement == "required" && applies != "true") fail("required validation must apply")
+          if (requirement == "conditional" && applies == "false" && result != "not-applicable") fail("non-applicable conditional validation must be not-applicable")
+          if (scalar["STATUS"] == "DONE" && requirement == "required" && result != "passed") fail("DONE result has a non-passing required validation")
+          if (scalar["STATUS"] == "DONE" && requirement == "conditional" && applies == "true" && result != "passed") fail("DONE result has a non-passing applicable validation")
+        }
+      }
+    }
+    function emit_scalar(name) {
+      print name ": " scalar[name]
+    }
+    function emit_array(name,    i) {
+      if (array_state[name] != "array" || array_count[name] == 0) return
+      print name ":"
+      for (i = 1; i <= array_count[name]; i++) print "- " array_value[name, i]
+    }
+    function emit_validation(    i) {
+      print "VALIDATION:"
+      for (i = 1; i <= validation_count; i++) {
+        print "- command: " validation_value[i, "command"]
+        print "  requirement: " validation_value[i, "requirement"]
+        print "  condition: " validation_value[i, "condition"]
+        print "  applies: " validation_value[i, "applies"]
+        print "  result: " validation_value[i, "result"]
+        print "  evidence: " validation_value[i, "evidence"]
+      }
+    }
+    function emit_result() {
+      emit_scalar("RESULT_PROFILE")
+      emit_scalar("STATUS")
+      emit_scalar("TASK_ID")
+      if (expected_profile == "WRITABLE") {
+        emit_scalar("BASE_SHA")
+        emit_scalar("HEAD_SHA")
+        emit_scalar("BRANCH")
+        emit_scalar("CHECKOUT")
+        emit_array("FILES_CHANGED")
+        emit_array("GIT_STATE")
+        emit_validation()
+        emit_array("DELIVERABLE_COMMITS")
+        emit_array("SCOPE_EXCEPTIONS")
+      }
+      emit_array("FINDINGS")
+      emit_array("EVIDENCE")
+      emit_array("RISKS")
+      emit_array("RECOMMENDED_ACTION")
+    }
+    BEGIN {
+      pos = 1
+      failed = 0
+      quote = sprintf("%c", 34)
+      backslash = sprintf("%c", 92)
+      slash = sprintf("%c", 47)
+      tab = sprintf("%c", 9)
+      newline = sprintf("%c", 10)
+      carriage_return = sprintf("%c", 13)
+      form_feed = sprintf("%c", 12)
+      backspace = sprintf("%c", 8)
+      delete_char = sprintf("%c", 127)
+      scalar_fields["RESULT_PROFILE"] = 1
+      scalar_fields["STATUS"] = 1
+      scalar_fields["TASK_ID"] = 1
+      array_fields["RISKS"] = 1
+      array_fields["RECOMMENDED_ACTION"] = 1
+      if (expected_profile == "WRITABLE") {
+        scalar_fields["BASE_SHA"] = 1
+        scalar_fields["HEAD_SHA"] = 1
+        scalar_fields["BRANCH"] = 1
+        scalar_fields["CHECKOUT"] = 1
+        array_fields["FILES_CHANGED"] = 1
+        array_fields["GIT_STATE"] = 1
+        array_fields["DELIVERABLE_COMMITS"] = 1
+        array_fields["SCOPE_EXCEPTIONS"] = 1
+        required_validation_fields["command"] = 1
+        required_validation_fields["requirement"] = 1
+        required_validation_fields["condition"] = 1
+        required_validation_fields["applies"] = 1
+        required_validation_fields["result"] = 1
+        required_validation_fields["evidence"] = 1
+      }
+    }
+    { json = json $0 newline }
+    END {
+      if (failed) exit 1
+      parse_root()
+      skip_ws()
+      if (pos <= length(json)) fail("trailing data after structured result object")
+      validate_result()
+      emit_result()
+    }
+  ' "$input_file"
+}
+
+encode_command() {
+  profile=
+  task_id=
+  input_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --profile) [ "$#" -ge 2 ] || fail '--profile requires a value'; profile=$2; shift 2 ;;
+      --task-id|--task) [ "$#" -ge 2 ] || fail '--task-id requires a value'; task_id=$2; shift 2 ;;
+      --input) [ "$#" -ge 2 ] || fail '--input requires a file or -'; input_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown encode option: $1" ;;
+    esac
+  done
+  case "$profile" in READ_ONLY|WRITABLE) ;; REVIEW) fail 'REVIEW results do not use ordinary encoding' ;; *) fail 'encode requires READ_ONLY or WRITABLE profile' ;; esac
+  case "$task_id" in ''|*[!A-Za-z0-9._-]*) fail 'task ID contains unsupported characters' ;; esac
+  [ -n "$input_arg" ] || fail 'encode requires --input FILE|-'
+  encode_json_input "$profile" "$task_id" "$input_arg"
 }
 
 validate_command() {
@@ -450,6 +1015,7 @@ command=$1
 shift
 case "$command" in
   schema) schema_command "$@" ;;
+  encode) encode_command "$@" ;;
   validate) validate_command "$@" ;;
   -h|--help) usage ;;
   *) fail "unknown operation: $command" ;;

@@ -21,12 +21,14 @@ usage() {
 Usage:
   swe-forge-worker-brief render --input FILE|- [--output FILE]
   swe-forge-worker-brief validate --brief FILE|- [--input FILE|-]
+  swe-forge-worker-brief inspect --brief FILE|-
 
 `render` accepts one transient worker-brief-input/v1 record set and writes a
 canonical YAML worker_briefing projection to stdout or --output. `validate`
 checks a generated projection structurally. When --input is supplied, it also
 re-renders the input and rejects any non-canonical, scope-expanding, or
-permission-changing projection.
+permission-changing projection. `inspect` structurally validates a projection
+and emits the small semantic port needed by a host adapter.
 
 Input records are tab-separated and use these forms:
   worker-brief-input/v1
@@ -431,6 +433,74 @@ structural_validate() {
   ' "$brief"
 }
 
+json_quote() {
+  awk -v value="$1" '
+    BEGIN {
+      quote = sprintf("%c", 34)
+      backslash = sprintf("%c", 92)
+      tab = sprintf("%c", 9)
+      newline = sprintf("%c", 10)
+      carriage_return = sprintf("%c", 13)
+      form_feed = sprintf("%c", 12)
+      backspace = sprintf("%c", 8)
+      printf "%s", quote
+      for (i = 1; i <= length(value); i++) {
+        c = substr(value, i, 1)
+        if (c == quote) printf "%s", backslash quote
+        else if (c == backslash) printf "%s", backslash backslash
+        else if (c == tab) printf "%s", backslash "t"
+        else if (c == newline) printf "%s", backslash "n"
+        else if (c == carriage_return) printf "%s", backslash "r"
+        else if (c == form_feed) printf "%s", backslash "f"
+        else if (c == backspace) printf "%s", backslash "b"
+        else printf "%s", c
+      }
+      printf "%s\n", quote
+    }
+  '
+}
+
+brief_scalar() {
+  awk -v pattern="$1" '
+    function unquote(value) {
+      if (value ~ /^\047/ && value ~ /\047$/) {
+        sub(/^\047/, "", value)
+        sub(/\047$/, "", value)
+        gsub(/\047\047/, "\047", value)
+      }
+      return value
+    }
+    $0 ~ pattern {
+      value = $0
+      sub(/^[^:]*:[[:space:]]*/, "", value)
+      print unquote(value)
+      exit
+    }
+  ' "$2"
+}
+
+inspect_command() {
+  brief_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --brief) [ "$#" -ge 2 ] || fail '--brief requires a file or -'; brief_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown inspect option: $1" ;;
+    esac
+  done
+  [ -n "$brief_arg" ] || fail 'inspect requires --brief'
+  brief_file=$TMP_ROOT/inspect-brief
+  copy_input "$brief_arg" "$brief_file"
+  structural_validate "$brief_file" >/dev/null || fail 'worker briefing failed structural validation'
+  task_id=$(brief_scalar '^  task_id:[[:space:]]' "$brief_file")
+  profile=$(brief_scalar '^    profile:[[:space:]]' "$brief_file")
+  write_access=$(brief_scalar '^    write_access:[[:space:]]' "$brief_file")
+  case "$profile" in READ_ONLY|WRITABLE|REVIEW) ;; *) fail 'worker briefing has an invalid result profile' ;; esac
+  case "$write_access" in read-only|read-write) ;; *) fail 'worker briefing has an invalid write access value' ;; esac
+  printf '{"schema":"worker-brief/v1","valid":true,"task_id":%s,"profile":%s,"write_access":%s}\n' \
+    "$(json_quote "$task_id")" "$(json_quote "$profile")" "$(json_quote "$write_access")"
+}
+
 render_command() {
   input_arg=
   output_arg=-
@@ -482,6 +552,7 @@ shift
 case "$command" in
   render) render_command "$@" ;;
   validate) validate_command "$@" ;;
+  inspect) inspect_command "$@" ;;
   -h|--help) usage ;;
   *) fail "unknown operation: $command" ;;
 esac

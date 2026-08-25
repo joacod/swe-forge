@@ -15,6 +15,17 @@ swe-forge-worker-brief render --input FILE|- [--output FILE]
 swe-forge-worker-brief validate --brief FILE|- [--input FILE|-]
 ```
 
+Host adapters that need to realize a validated projection may use the
+machine-readable inspection port:
+
+```text
+swe-forge-worker-brief inspect --brief FILE|-
+```
+
+It returns deterministic JSON containing the canonical `task_id`, `profile`,
+and `write_access`. The adapter maps those semantic facts to native profiles
+and permissions; it does not parse the YAML projection.
+
 The transient `worker-brief-input/v1` record set supplies the semantic task,
 current routing facts, and the root-selected dependency digest. The tool emits
 the canonical YAML `worker_briefing` projection. `validate --brief` checks a

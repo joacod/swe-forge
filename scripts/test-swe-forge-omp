@@ -30,6 +30,7 @@ node --experimental-strip-types --input-type=module - "$ROOT" "$TMP_ROOT" <<'NOD
 import * as fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
+import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 
 const root = process.argv[2];
@@ -192,6 +193,17 @@ const validResult = await initial.handlers.get("tool_result")({
 }, { cwd: checkout });
 assert(!validResult?.isError, "valid canonical worker result was rejected");
 assert(validResult?.details?.sweForge?.status === "valid", "canonical result validation evidence was not returned");
+const reviewBrief = renderBrief("review-check", "reviewer");
+const reviewPrepared = await prepare(initial, statePath, {
+  name: "review-check", agent: "swe-forge-reviewer", task: reviewBrief,
+}, ordinaryEvent());
+assert(!reviewPrepared.call?.block, `review native task was blocked: ${reviewPrepared.call?.reason}`);
+assert(reviewPrepared.call.input.outputSchema.properties.status.enum.includes("PASS"), "canonical REVIEW schema was not supplied");
+const reviewResult = await initial.handlers.get("tool_result")({
+  toolName: "task", toolCallId: reviewPrepared.toolCallId, input: reviewPrepared.call.input, isError: false, content: [{ type: "text", text: "pass" }],
+  details: { results: [{ exitCode: 0, structuredOutput: { status: "valid", mode: "strict", data: { status: "PASS", scope: {}, review_focus: {}, findings: [], deferred_followups: [] } } }] },
+}, { cwd: checkout });
+assert(reviewResult?.details?.sweForge?.status === "valid", "strict REVIEW transport was not accepted");
 
 // Independent read-only workers may use one native batch.
 const briefTwo = renderBrief("reader-two", "researcher");
@@ -217,11 +229,11 @@ const writableBatch = await prepare(initial, statePath, {
 }, ordinaryEvent());
 assert(writableBatch.call?.block && writableBatch.call.reason.includes("sequentially"), "writable shared-checkout workers were concurrently launchable");
 const writableSingle = await prepare(initial, statePath, {
-  name: "writer-single", agent: "swe-forge-writable", task: writeBrief,
+  name: "writer-one", agent: "swe-forge-writable", task: writeBrief,
 }, ordinaryEvent());
 assert(!writableSingle.call?.block, `single writable worker was blocked: ${writableSingle.call?.reason}`);
 const concurrentWritable = await prepare(initial, statePath, {
-  name: "writer-concurrent", agent: "swe-forge-writable", task: writeBriefTwo,
+  name: "writer-two", agent: "swe-forge-writable", task: writeBriefTwo,
 }, ordinaryEvent());
 assert(concurrentWritable.call?.block && concurrentWritable.call.reason.includes("already running"), "separate writable task calls were concurrently launchable");
 await initial.handlers.get("tool_result")({ toolName: "task", toolCallId: writableSingle.toolCallId, input: writableSingle.call.input, isError: true, content: [], details: {} }, { cwd: checkout });
@@ -273,6 +285,23 @@ assert(wrongAttempt.call?.block && wrongAttempt.call.reason.includes("no active"
 const fenced = makePi(agentDir);
 const fencedProbe = await prepare(fenced, statePath, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
 assert(fencedProbe.call?.block && fencedProbe.call.reason.includes("no active"), "fresh invocation reused a fenced run state");
+
+const fenceOldSource = makeState("fence-old-source", "SUBAGENTS", "fence-old-run");
+const fenceNewSource = makeState("fence-new-source", "SUBAGENTS", "fence-new-run");
+const externalStateRoot = path.join(os.tmpdir(), "swe-forge");
+const fenceOldDir = path.join(externalStateRoot, `omp-fence-old-${process.pid}`);
+const fenceNewDir = path.join(externalStateRoot, `omp-fence-new-${process.pid}`);
+fs.mkdirSync(externalStateRoot, { recursive: true });
+fs.mkdirSync(fenceOldDir, { recursive: true });
+fs.mkdirSync(fenceNewDir, { recursive: true });
+const fenceOldPath = path.join(fenceOldDir, "run-state.yaml");
+const fenceNewPath = path.join(fenceNewDir, "run-state.yaml");
+fs.copyFileSync(fenceOldSource, fenceOldPath);
+fs.copyFileSync(fenceNewSource, fenceNewPath);
+const fencedMany = await prepare(makePi(agentDir), fenceOldPath, { task: "no brief", name: "probe", agent: "swe-forge-read-only" }, explicitEvent());
+assert(fencedMany.call?.block && fencedMany.call.reason.includes("no active"), "fresh invocation did not fence every visible active run");
+fs.rmSync(fenceOldDir, { recursive: true, force: true });
+fs.rmSync(fenceNewDir, { recursive: true, force: true });
 
 console.log("PASS: OMP native task runtime fixture");
 NODE

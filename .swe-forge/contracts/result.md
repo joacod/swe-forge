@@ -16,6 +16,21 @@ Successful validation returns a compact machine-readable confirmation; the
 returned result remains untrusted evidence until the normal workflow consumes
 it.
 
+The same tool supplies host-neutral structured transport ports without moving
+host API mechanics into the canonical layer:
+
+```text
+swe-forge-worker-result schema --profile READ_ONLY --task-id ID --format json-schema
+swe-forge-worker-result schema --profile WRITABLE --task-id ID --format json-schema
+swe-forge-worker-result schema --profile REVIEW --format json-schema
+swe-forge-worker-result encode --profile READ_ONLY|WRITABLE --task-id ID --input FILE|-
+```
+
+The JSON-Schema projections bind ordinary results to their canonical task ID.
+`encode` validates the structured ordinary result, rejects unsafe values, and
+emits the existing line-oriented representation. Review semantics and the
+blocking matrix remain owned by `review.md` and the accountable root workflow.
+
 `REVIEW` uses `review.md` and its blocking matrix. Reviewers therefore return
 the dedicated review shape rather than an implementation result profile.
 
