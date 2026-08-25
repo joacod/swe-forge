@@ -81,8 +81,8 @@ harness only when it is needed; there is no multi-harness install command.
 The OMP adapter installs a source-linked runtime extension and three confined
 user-level agent profiles in addition to the `/swe-forge` prompt. The extension
 uses OMP's native `task` tool, per-task `outputSchema`/strict structured output,
-and `task.batch`; it does not install an OMP clone of the Pi
-`swe_forge_subagent` package.
+and `task.batch`; it does not require a separate SWE Forge subagent executor
+package.
 
 Read-only native workers may batch when canonical routing permits it. Writable
 workers in the shared checkout remain sequential. OMP task isolation is not
