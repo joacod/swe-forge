@@ -44,7 +44,7 @@ When changing this repository itself:
   compatibility machinery. Detailed contracts and policies remain canonical
   in `SWE-FORGE.md` and `.swe-forge/`.
 - Before changing canonical workflow behavior, contracts, policies, routing,
-  providers, delegation semantics, or harness integration boundaries, read
+  delegation semantics, or harness integration boundaries, read
   `docs/architecture.md`. For adapter work, also read
   `docs/adding-a-harness.md`, `.swe-forge/adapters/README.md`, and the target
   adapter README.
