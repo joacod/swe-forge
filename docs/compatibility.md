@@ -3,9 +3,10 @@
 SWE Forge is preparing its first alpha release, `v0.1.0-alpha.1`. It is a
 Pi-first coding workflow with a portable canonical core and optional harness
 adapters.
-The snapshot below separates the maintenance tier from two different kinds of
-validation. It is evidence for the current adapters, not a promise that future
-harness releases remain compatible without review.
+The repository-maintained compatibility record below separates the maintenance
+tier from two different kinds of validation. It records the evidence currently
+available, not a promise that future harness releases remain compatible without
+review.
 
 ## Support tiers
 
@@ -35,7 +36,7 @@ It does **not** establish that the target harness has been used successfully.
 | --- | --- | --- |
 | Pi | 0.84.2 | Installer, prompt projection, and runtime extension syntax/fixture validated locally |
 | OpenCode | 1.18.16 | Installer and command projection validated locally |
-| OMP | 18.0.4 | Installer and prompt projection validated locally; target harness not exercised |
+| OMP | 18.0.4 | Installer and prompt projection validated locally |
 | Claude Code | 2.1.37 | Installer and skill projection validated locally; no behavioral claim follows |
 | Codex | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
 | Cursor | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
@@ -53,13 +54,14 @@ home. The evidence currently recorded is:
 | --- | --- | --- |
 | Pi | Yes | Pi is the reference harness actively used to develop SWE Forge; 0.84.2 is the observed version. |
 | OpenCode | Yes | OpenCode has prior successful maintainer usage; 1.18.16 is the observed version. It is secondary and does not impose parity requirements on Pi development. |
-| OMP | No | OMP 18.0.4 is installed in the validation environment, but SWE Forge has not been behaviorally exercised through it. |
+| OMP | Yes | OMP 18.0.4 was exercised through an explicit `/swe-forge` invocation; the read-only smoke test loaded the prompt and passed installation, status, and version checks. It does not demonstrate lifecycle integration or feature parity. |
 | Claude Code | No | The maintainer has not actively exercised Claude Code. Projection/fixture validation must not be described as behavioral validation. |
 | Codex | No | Not installed or exercised in the validation environment. |
 | Cursor | No | Not installed or exercised in the validation environment. |
 
-Observed CLI versions are included only to identify the snapshot; they do not
-turn an adapter into an actively maintained behavioral support target.
+Observed CLI versions identify the environment for this compatibility record;
+they do not turn an adapter into an actively maintained behavioral support
+target.
 
 ## Context and optional capabilities
 
@@ -69,9 +71,9 @@ capabilities, not canonical requirements:
 | Harness | Observed context capability | Adapter consequence |
 | --- | --- | --- |
 | Pi 0.84.2 | `getContextUsage()`, `compact()`, lifecycle hooks, state reinjection, and optional subagent negotiation are implemented by the Pi adapter | Pi can provide proactive compaction, lifecycle recovery, and the optional `swe_forge_subagent` backend; missing or incompatible negotiation falls back to canonical SOLO/sequential behavior. |
-| OpenCode 1.18.16 | Not measured by the current adapter snapshot | Do not claim proactive detection; use documented host behavior or manual checkpoint/resume until revalidated. |
-| OMP 18.0.4 | Not measured by the current adapter snapshot | Native sessions, compaction, and task features are documented, but this adapter has no SWE Forge lifecycle bridge; use canonical durable-checkpoint/manual fallback. |
-| Claude Code 2.1.37 | Not measured by the current adapter snapshot | Do not claim proactive detection or behavioral support from projection checks. |
+| OpenCode 1.18.16 | Not measured by the current adapter integration | Do not claim proactive detection; use documented host behavior or manual checkpoint/resume until revalidated. |
+| OMP 18.0.4 | Not measured by the current adapter integration | Native sessions, compaction, and task features are documented, but this adapter has no SWE Forge lifecycle bridge; use canonical durable-checkpoint/manual fallback. |
+| Claude Code 2.1.37 | Not measured by the current adapter integration | Do not claim proactive detection or behavioral support from projection checks. |
 | Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
 | Cursor | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
 
