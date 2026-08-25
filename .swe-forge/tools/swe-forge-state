@@ -11,6 +11,7 @@ TAB=$(printf '\t')
 NEWLINE='
 '
 
+MAX_PROJECTION_LENGTH=160
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
@@ -20,6 +21,9 @@ usage() {
   cat <<'EOF'
 Usage:
   swe-forge-state validate --state FILE|DIRECTORY
+  swe-forge-state inspect --state FILE|DIRECTORY --checkout PATH
+  swe-forge-state resolve-active --checkout PATH \
+    [--candidate FILE|DIRECTORY ...] [--all]
   swe-forge-state init --state DIRECTORY [--checkout PATH] [options]
   swe-forge-state set-routing --state FILE|DIRECTORY \
     --preferred TOPOLOGY --current TOPOLOGY --reason TEXT \
@@ -31,6 +35,10 @@ Usage:
     --path PATH --branch BRANCH --base-sha SHA \
     --head-sha SHA --checkpoint-sha SHA
   swe-forge-state set-receipt-ref --state FILE|DIRECTORY --receipt-ref REF
+
+`inspect` and `resolve-active` expose the validated semantic run-state
+projection as deterministic JSON. Candidate discovery remains the caller's
+responsibility; this helper owns validation, eligibility, and ordering.
 
 `init` creates the current schema-v4 structural shell from explicit routing,
 delivery, checkout, and normalized invocation facts. Pass the parser's
@@ -60,6 +68,79 @@ state_file() {
   fi
   [ -f "$value" ] || fail "run-state file does not exist: $value"
   printf '%s\n' "$value"
+}
+
+canonical_path() {
+  value=$1
+  control_chars "$value"
+  case "$value" in
+    /*) candidate=$value ;;
+    *) candidate=$PWD/$value ;;
+  esac
+  if [ -d "$candidate" ]; then
+    CDPATH= cd -P "$candidate" && pwd -P
+    return
+  fi
+  if [ -f "$candidate" ]; then
+    directory=$(dirname "$candidate")
+    base=$(basename "$candidate")
+    CDPATH= cd -P "$directory" && printf '%s/%s\n' "$(pwd -P)" "$base"
+    return
+  fi
+  printf '%s\n' "$candidate"
+}
+
+file_mtime_seconds() {
+  file=$1
+  if value=$(stat -f '%m' "$file" 2>/dev/null); then
+    printf '%s\n' "$value"
+    return
+  fi
+  if value=$(stat -c '%Y' "$file" 2>/dev/null); then
+    printf '%s\n' "$value"
+    return
+  fi
+  return 1
+}
+
+timestamp_epoch() {
+  value=$1
+  if parsed=$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$value" '+%s' 2>/dev/null); then
+    printf '%s\n' "$parsed"
+    return
+  fi
+  if parsed=$(date -u -d "$value" '+%s' 2>/dev/null); then
+    printf '%s\n' "$parsed"
+    return
+  fi
+  return 1
+}
+
+json_quote() {
+  awk -v value="$1" '
+    BEGIN {
+      quote = sprintf("%c", 34)
+      backslash = sprintf("%c", 92)
+      tab = sprintf("%c", 9)
+      newline = sprintf("%c", 10)
+      carriage_return = sprintf("%c", 13)
+      form_feed = sprintf("%c", 12)
+      backspace = sprintf("%c", 8)
+      printf "%s", quote
+      for (i = 1; i <= length(value); i++) {
+        c = substr(value, i, 1)
+        if (c == quote) printf "%s", backslash quote
+        else if (c == backslash) printf "%s", backslash backslash
+        else if (c == tab) printf "%s", backslash "t"
+        else if (c == newline) printf "%s", backslash "n"
+        else if (c == carriage_return) printf "%s", backslash "r"
+        else if (c == form_feed) printf "%s", backslash "f"
+        else if (c == backspace) printf "%s", backslash "b"
+        else printf "%s", c
+      }
+      printf "%s\n", quote
+    }
+  '
 }
 
 top_level() {
@@ -315,6 +396,288 @@ validate_state() {
   printf 'PASS: schema-v4 run state is structurally valid: %s\n' "$file"
 }
 
+inspection_valid=false
+inspection_active=false
+inspection_delegation_authorized=false
+inspection_reason=
+inspection_state_file=
+inspection_checkout=
+inspection_recorded_checkout=
+inspection_run_id=
+inspection_status=
+inspection_workflow_active_json=false
+inspection_updated_at=
+  inspection_updated_epoch=
+  inspection_updated_at_ms=0
+  inspection_modified_epoch=
+  inspection_modified_at_ms=0
+inspection_preferred=
+inspection_current=
+inspection_delivery_mode=
+inspection_phase=
+inspection_step=
+inspection_awaiting=
+inspection_next_kind=
+inspection_next_target=
+inspection_expected_context_tokens_json=null
+inspection_safe_boundary_json=false
+inspection_context_status=
+inspection_pr_number=
+inspection_pr_state=
+
+inspection_scalar() {
+  scalar_value "$1" "$2" 2>/dev/null || true
+}
+
+inspection_defaults() {
+  inspection_valid=false
+  inspection_active=false
+  inspection_delegation_authorized=false
+  inspection_reason='invalid or unsupported run state'
+  inspection_state_file=
+  inspection_checkout=
+  inspection_recorded_checkout=
+  inspection_run_id=
+  inspection_status=
+  inspection_workflow_active_json=false
+  inspection_updated_at=
+  inspection_updated_epoch=
+  inspection_updated_at_ms=0
+  inspection_modified_epoch=
+  inspection_modified_at_ms=0
+  inspection_preferred=
+  inspection_current=
+  inspection_delivery_mode=
+  inspection_phase=none
+  inspection_step=none
+  inspection_awaiting=none
+  inspection_next_kind=none
+  inspection_next_target=none
+  inspection_expected_context_tokens_json=null
+  inspection_safe_boundary_json=false
+  inspection_context_status=unknown
+  inspection_pr_number=none
+  inspection_pr_state=none
+}
+
+inspect_state_data() {
+  state_arg=$1
+  checkout_arg=$2
+  inspection_defaults
+  inspection_state_file=$(state_file "$state_arg")
+  inspection_state_file=$(canonical_path "$inspection_state_file")
+  inspection_checkout=$(canonical_path "$checkout_arg")
+
+  if ! "$0" validate --state "$inspection_state_file" >/dev/null 2>/dev/null; then
+    return 0
+  fi
+
+  inspection_valid=true
+  inspection_run_id=$(required_scalar run_id "$inspection_state_file")
+  inspection_status=$(required_scalar status "$inspection_state_file")
+  inspection_recorded_checkout=$(canonical_path "$(required_scalar delivery_checkout.path "$inspection_state_file")")
+  inspection_preferred=$(required_scalar routing.preferred "$inspection_state_file")
+  inspection_current=$(required_scalar routing.current "$inspection_state_file")
+  inspection_delivery_mode=$(required_scalar delivery_mode "$inspection_state_file")
+  inspection_workflow_active=$(inspection_scalar continuation.workflow_active "$inspection_state_file")
+  inspection_updated_at=$(inspection_scalar continuation.updated_at "$inspection_state_file")
+  inspection_phase=$(inspection_scalar continuation.phase "$inspection_state_file")
+  inspection_step=$(inspection_scalar continuation.step "$inspection_state_file")
+  inspection_awaiting=$(inspection_scalar continuation.awaiting "$inspection_state_file")
+  inspection_next_kind=$(inspection_scalar continuation.next_action.kind "$inspection_state_file")
+  inspection_next_target=$(inspection_scalar continuation.next_action.target "$inspection_state_file")
+  inspection_expected_context_tokens=$(inspection_scalar continuation.next_action.expected_context_tokens "$inspection_state_file")
+  inspection_safe_boundary=$(inspection_scalar continuation.safe_boundary "$inspection_state_file")
+  inspection_context_status=$(inspection_scalar context.status "$inspection_state_file")
+  inspection_pr_number=$(inspection_scalar continuation.delivery.pr_number "$inspection_state_file")
+  inspection_pr_state=$(inspection_scalar continuation.delivery.pr_state "$inspection_state_file")
+
+  [ -n "$inspection_phase" ] || inspection_phase=none
+  [ -n "$inspection_step" ] || inspection_step=none
+  [ -n "$inspection_awaiting" ] || inspection_awaiting=none
+  [ -n "$inspection_next_kind" ] || inspection_next_kind=none
+  [ -n "$inspection_next_target" ] || inspection_next_target=none
+  [ -n "$inspection_context_status" ] || inspection_context_status=unknown
+  [ -n "$inspection_pr_number" ] || inspection_pr_number=none
+  [ -n "$inspection_pr_state" ] || inspection_pr_state=none
+  inspection_phase=$(projection_value "$inspection_phase")
+  inspection_step=$(projection_value "$inspection_step")
+  inspection_awaiting=$(projection_value "$inspection_awaiting")
+  inspection_next_kind=$(projection_value "$inspection_next_kind")
+  inspection_next_target=$(projection_value "$inspection_next_target")
+  inspection_context_status=$(projection_value "$inspection_context_status")
+  inspection_pr_number=$(projection_value "$inspection_pr_number")
+  inspection_pr_state=$(projection_value "$inspection_pr_state")
+
+  case "$inspection_workflow_active" in
+    true) inspection_workflow_active_json=true ;;
+    false|'') inspection_workflow_active_json=false ;;
+    *) inspection_reason='invalid continuation activity marker'; return 0 ;;
+  esac
+  case "$inspection_safe_boundary" in
+    true) inspection_safe_boundary_json=true ;;
+    false|'') inspection_safe_boundary_json=false ;;
+    *) inspection_reason='invalid continuation boundary marker'; return 0 ;;
+  esac
+  case "$inspection_expected_context_tokens" in
+    ''|unknown|none) inspection_expected_context_tokens_json=null ;;
+    *[!0-9]*) inspection_reason='invalid expected context token count'; return 0 ;;
+    *) inspection_expected_context_tokens_json=$inspection_expected_context_tokens ;;
+  esac
+  if [ "$inspection_workflow_active_json" != true ]; then
+    inspection_reason='inactive workflow continuation'
+    return 0
+  fi
+
+  if [ "$inspection_recorded_checkout" != "$inspection_checkout" ]; then
+    inspection_reason='checkout mismatch'
+    return 0
+  fi
+  if ! inspection_updated_epoch=$(timestamp_epoch "$inspection_updated_at" 2>/dev/null); then
+    inspection_reason='stale or malformed continuation timestamp'
+    return 0
+  fi
+  inspection_updated_at_ms=$((inspection_updated_epoch * 1000))
+  if ! inspection_modified_epoch=$(file_mtime_seconds "$inspection_state_file" 2>/dev/null); then
+    inspection_reason='state file modification time is unavailable'
+    return 0
+  fi
+  inspection_modified_at_ms=$((inspection_modified_epoch * 1000))
+
+  case "$inspection_status" in
+    planning|running|blocked|reviewing|repairing)
+      inspection_active=true
+      ;;
+    accepted|failed)
+      inspection_reason='terminal or inactive run state'
+      return 0
+      ;;
+    *)
+      inspection_reason='unsupported run-state status'
+      return 0
+      ;;
+  esac
+  case "$inspection_status" in
+    planning|running|reviewing|repairing) inspection_delegation_authorized=true ;;
+    blocked) inspection_delegation_authorized=false ;;
+  esac
+  if [ "$inspection_delegation_authorized" = true ]; then
+    inspection_reason=eligible
+  else
+    inspection_reason='active continuation without delegation authorization'
+  fi
+}
+
+emit_state_json() {
+  printf '{"schema":"swe-forge-state/v1","valid":%s,"active":%s,"delegation_authorized":%s,"reason":%s' \
+    "$inspection_valid" "$inspection_active" "$inspection_delegation_authorized" \
+    "$(json_quote "$inspection_reason")"
+  printf ',"state_file":%s,"run_id":%s,"status":%s,"checkout":%s' \
+    "$(json_quote "$inspection_state_file")" "$(json_quote "$inspection_run_id")" \
+    "$(json_quote "$inspection_status")" "$(json_quote "$inspection_recorded_checkout")"
+  printf ',"updated_at":%s,"updated_at_ms":%s,"modified_at_ms":%s' \
+    "$(json_quote "$inspection_updated_at")" \
+    "$inspection_updated_at_ms" "$inspection_modified_at_ms"
+  printf ',"routing":{"preferred":%s,"current":%s},"delivery_mode":%s' \
+    "$(json_quote "$inspection_preferred")" "$(json_quote "$inspection_current")" \
+    "$(json_quote "$inspection_delivery_mode")"
+  printf ',"continuation":{"workflow_active":%s,"phase":%s,"step":%s,"awaiting":%s' \
+    "$inspection_workflow_active_json" "$(json_quote "$inspection_phase")" \
+    "$(json_quote "$inspection_step")" "$(json_quote "$inspection_awaiting")"
+  printf ',"next_action":{"kind":%s,"target":%s,"expected_context_tokens":%s},"safe_boundary":%s' \
+    "$(json_quote "$inspection_next_kind")" "$(json_quote "$inspection_next_target")" \
+    "$inspection_expected_context_tokens_json" "$inspection_safe_boundary_json"
+  printf ',"delivery":{"mode":%s,"pr_number":%s,"pr_state":%s}}' \
+    "$(json_quote "$inspection_delivery_mode")" "$(json_quote "$inspection_pr_number")" \
+    "$(json_quote "$inspection_pr_state")"
+  printf ',"context":{"status":%s}}\n' "$(json_quote "$inspection_context_status")"
+}
+projection_value() {
+  awk -v value="$1" -v maximum="$MAX_PROJECTION_LENGTH" '
+    BEGIN {
+      gsub(sprintf("%c", 0), "", value)
+      print substr(value, 1, maximum)
+    }
+  '
+}
+
+inspect_command() {
+  inspect_state_arg=
+  inspect_checkout_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; inspect_state_arg=$2; shift 2 ;;
+      --checkout) [ "$#" -ge 2 ] || fail '--checkout requires a path'; inspect_checkout_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown inspect option: $1" ;;
+    esac
+  done
+  [ -n "$inspect_state_arg" ] || fail 'inspect requires --state'
+  [ -n "$inspect_checkout_arg" ] || fail 'inspect requires --checkout'
+  inspect_state_data "$inspect_state_arg" "$inspect_checkout_arg"
+  emit_state_json
+}
+
+resolve_active_command() {
+  resolve_checkout_arg=
+  resolve_all=false
+  resolve_candidates=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --checkout) [ "$#" -ge 2 ] || fail '--checkout requires a path'; resolve_checkout_arg=$2; shift 2 ;;
+      --candidate)
+        [ "$#" -ge 2 ] || fail '--candidate requires a file or directory'
+        control_chars "$2"
+        if [ -z "$resolve_candidates" ]; then resolve_candidates=$2; else resolve_candidates="$resolve_candidates$NEWLINE$2"; fi
+        shift 2
+        ;;
+      --all) resolve_all=true; shift ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown resolve-active option: $1" ;;
+    esac
+  done
+  [ -n "$resolve_checkout_arg" ] || fail 'resolve-active requires --checkout'
+  resolve_checkout=$(canonical_path "$resolve_checkout_arg")
+  inspect_tmp=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-state.XXXXXX")
+  candidate_file=$inspect_tmp/candidates
+  records_file=$inspect_tmp/records
+  seen_file=$inspect_tmp/seen
+  sorted_file=$inspect_tmp/sorted
+  : >"$candidate_file"
+  : >"$records_file"
+  : >"$seen_file"
+  if [ -n "$resolve_candidates" ]; then printf '%s\n' "$resolve_candidates" >"$candidate_file"; fi
+
+  index=0
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    [ -e "$candidate" ] || continue
+    inspect_state_data "$candidate" "$resolve_checkout"
+    [ "$inspection_active" = true ] || continue
+    if awk -v value="$inspection_state_file" '$0 == value { found = 1 } END { exit(found ? 0 : 1) }' "$seen_file"; then
+      continue
+    fi
+    printf '%s\n' "$inspection_state_file" >>"$seen_file"
+    index=$((index + 1))
+    json_file=$inspect_tmp/state.$index.json
+    emit_state_json >"$json_file"
+    printf '%s\t%s\t%s\t%s\n' "$inspection_state_file" "$inspection_updated_epoch" \
+      "$inspection_modified_epoch" "$json_file" >>"$records_file"
+  done <"$candidate_file"
+
+  LC_ALL=C sort -t "$TAB" -k2,2nr -k3,3nr -k1,1 "$records_file" >"$sorted_file"
+  printf '{"schema":"swe-forge-state/v1","checkout":%s,"states":[' "$(json_quote "$resolve_checkout")"
+  selected=0
+  while IFS="$TAB" read -r _state _updated _modified json_file; do
+    [ -n "$json_file" ] || continue
+    if [ "$resolve_all" != true ] && [ "$selected" -gt 0 ]; then break; fi
+    [ "$selected" -eq 0 ] || printf ','
+    cat "$json_file"
+    selected=$((selected + 1))
+  done <"$sorted_file"
+  printf ']}\n'
+}
+
 checkout_root_for_init() {
   candidate=$1
   [ -d "$candidate" ] || fail "checkout does not exist: $candidate"
@@ -342,10 +705,14 @@ state_directory_for_init() {
 }
 
 state_tmp=
+inspect_tmp=
 cleanup_state_tmp() {
   [ -z "${state_tmp:-}" ] || rm -f "$state_tmp"
 }
-trap 'status=$?; cleanup_state_tmp; exit "$status"' 0 HUP INT TERM
+cleanup_inspect_tmp() {
+  [ -z "${inspect_tmp:-}" ] || rm -rf "$inspect_tmp"
+}
+trap 'status=$?; cleanup_state_tmp; cleanup_inspect_tmp; exit "$status"' 0 HUP INT TERM
 
 init_state() {
   init_state_arg=
@@ -928,6 +1295,8 @@ main() {
       [ -n "$state" ] || fail '--state is required'
       validate_state "$state"
       ;;
+    inspect) inspect_command "$@" ;;
+    resolve-active) resolve_active_command "$@" ;;
     init) init_state "$@" ;;
     set-routing) set_routing "$@" ;;
     set-continuation) set_continuation "$@" ;;

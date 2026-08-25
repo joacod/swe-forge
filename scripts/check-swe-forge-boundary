@@ -1,7 +1,8 @@
 #!/bin/sh
 
-# Narrow structural guard for canonical workflow semantics. It intentionally
-# scans only canonical sources, not adapters or compatibility/installation docs.
+# Narrow structural guard for canonical workflow semantics and the two runtime
+# ports that must not duplicate canonical representations. It intentionally
+# avoids general architecture linting.
 
 set -eu
 
@@ -22,7 +23,7 @@ scan_file() {
   matches=$(awk '
     {
       line = tolower($0)
-      has_host = line ~ /(^|[^[:alnum:]_])(pi|opencode|claude([[:space:]_-]+code)?|codex|cursor)([^[:alnum:]_]|$)/
+      has_host = line ~ /(^|[^[:alnum:]_])(pi|omp|opencode|claude([[:space:]_-]+code)?|codex|cursor)([^[:alnum:]_]|$)/
       has_branch = line ~ /(^|[^[:alnum:]_])(if|elif|case)([^[:alnum:]_]|$)/
       if (has_host && has_branch) {
         print FNR ":" $0
@@ -34,6 +35,23 @@ scan_file() {
       printf 'canonical boundary check failure: %s:%s\n' "$file" "$match" >&2
     done
     printf '%s\n' 'Canonical workflow sources must branch on semantic capabilities, not harness identity; move host-specific behavior to an adapter/runtime integration.' >&2
+    return 1
+  fi
+}
+
+scan_adapter_runtime() {
+  file=$1
+  [ -f "$file" ] || return 0
+  matches=$(awk '
+    /parseScalarYaml|parseActiveRun|currentStateError|stateMatchesCheckout|briefContract|serializeOrdinaryResult|reviewShapeIsValid/ {
+      print FNR ":" $0
+    }
+  ' "$file")
+  if [ -n "$matches" ]; then
+    printf '%s\n' "$matches" | while IFS= read -r match; do
+      printf 'adapter representation-boundary check failure: %s:%s\n' "$file" "$match" >&2
+    done
+    printf '%s\n' 'Adapter runtimes must consume canonical semantic ports instead of parsing or reconstructing canonical representations.' >&2
     return 1
   fi
 }
@@ -63,5 +81,11 @@ while IFS= read -r file; do
 done <<EOF_FILES
 $canonical_files
 EOF_FILES
+
+for runtime in \
+  "$ROOT/.swe-forge/adapters/pi/extensions/swe-forge-runtime.ts" \
+  "$ROOT/.swe-forge/adapters/omp/extensions/swe-forge-runtime.ts"; do
+  scan_adapter_runtime "$runtime"
+done
 
 printf '%s\n' 'PASS: canonical capability-boundary structural check'

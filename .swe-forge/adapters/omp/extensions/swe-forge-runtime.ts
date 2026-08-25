@@ -8,9 +8,6 @@ const RAW_ARGUMENTS_MARKER = "Raw invocation arguments:";
 const CAPABILITY_MARKER = "[SWE-FORGE OMP NATIVE SUBAGENT CAPABILITY]";
 const WORKER_CONTEXT =
 	"SWE Forge delegated task execution. The task assignment is the canonical worker_briefing/v1 projection. Do not infer routing, scope, permissions, or delivery authority from this context.";
-const ACTIVE_STATUSES: Record<string, true> = { planning: true, running: true, reviewing: true, repairing: true };
-const TOPOLOGIES: Record<string, true> = { SOLO: true, SUBAGENTS: true };
-const TERMINAL_STATUSES: Record<string, true> = { accepted: true, failed: true };
 const PROFILE_TO_RESULT = {
 	"swe-forge-read-only": "READ_ONLY",
 	"swe-forge-writable": "WRITABLE",
@@ -23,9 +20,7 @@ const PROFILE_EXPECTATIONS = {
 	"swe-forge-reviewer": { tools: ["read", "grep", "glob"], result: "REVIEW" },
 } as const;
 const TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const SHA_PATTERN = "^[0-9A-Fa-f]{40}$";
 const MAX_STATE_FILES = 64;
-const MAX_STATE_BYTES = 256 * 1024;
 const MAX_RESULT_BYTES = 256 * 1024;
 
 type ResultProfile = "READ_ONLY" | "WRITABLE" | "REVIEW";
@@ -38,6 +33,7 @@ interface ActiveRun {
 	updatedAt: number;
 	modifiedAt: number;
 	status: string;
+	delegationAuthorized: boolean;
 	currentTopology: string;
 	preferredTopology: string;
 	deliveryMode: string;
@@ -79,9 +75,6 @@ function canonicalPath(value: string): string {
 	}
 }
 
-function samePath(left: string, right: string): boolean {
-	return canonicalPath(left) === canonicalPath(right);
-}
 
 function safeScalar(value: unknown): string | undefined {
 	if (typeof value === "string") return value;
@@ -94,37 +87,6 @@ function cleanReason(value: unknown, fallback: string): string {
 	return text ? text.slice(0, 240) : fallback;
 }
 
-function unquote(value: string): string {
-	let result = value.trim();
-	const comment = result.search(/\s+#/);
-	if (comment >= 0) result = result.slice(0, comment).trim();
-	if ((result.startsWith("\"") && result.endsWith("\"")) || (result.startsWith("'") && result.endsWith("'"))) {
-		result = result.slice(1, -1);
-	}
-	return result;
-}
-
-/**
- * This is only the scalar lookup needed to identify canonical state. It is not
- * a worker-brief parser and does not replace the canonical state validator.
- */
-function parseScalarYaml(text: string): Map<string, string> {
-	const values = new Map<string, string>();
-	const stack: Array<{ indent: number; key: string }> = [];
-	for (const line of text.split(/\r?\n/)) {
-		if (!line.trim() || line.trimStart().startsWith("#") || /^\s*-/.test(line)) continue;
-		const match = line.match(/^(\s*)([A-Za-z0-9_-]+):(?:\s*(.*))?$/);
-		if (!match) continue;
-		const indent = match[1].replace(/\t/g, "  ").length;
-		const key = match[2];
-		while (stack.length > 0 && stack[stack.length - 1].indent >= indent) stack.pop();
-		const dotted = [...stack.map(entry => entry.key), key].join(".");
-		const rawValue = match[3];
-		if (rawValue === undefined || rawValue.trim() === "") stack.push({ indent, key });
-		else values.set(dotted, unquote(rawValue));
-	}
-	return values;
-}
 
 function readFile(filePath: string): string | undefined {
 	try {
@@ -209,69 +171,67 @@ function discoverStatePaths(cwd: string): Set<string> {
 	}
 	return candidates;
 }
-
-function stateMatchesCheckout(values: Map<string, string>, cwd: string): boolean {
-	const delivery = values.get("delivery_checkout.path");
-	return Boolean(delivery && samePath(delivery, cwd));
+function projectionString(value: unknown, fallback: string): string {
+	return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
-	try {
-		if (fs.statSync(filePath).size > MAX_STATE_BYTES) return undefined;
-	} catch {
-		return undefined;
-	}
-	const text = readFile(filePath);
-	if (!text) return undefined;
-	const values = parseScalarYaml(text);
-	if (values.get("workflow") !== "swe-forge" || values.get("schema_version") !== "4") return undefined;
-	for (const field of [
-		"routing.initial",
-		"routing.selected",
-		"routing.revisions",
-		"routing.context_value",
-		"routing.runtime_profile_ref",
-		"runtime_profile",
-		"discovery_strategy",
-	]) {
-		if (values.has(field)) return undefined;
-	}
-	if (!stateMatchesCheckout(values, cwd)) return undefined;
-	const status = values.get("status") ?? "unknown";
-	if (!ACTIVE_STATUSES[status] || TERMINAL_STATUSES[status]) return undefined;
-	if (values.get("continuation.workflow_active") !== "true") return undefined;
-	const updatedAt = Date.parse(values.get("continuation.updated_at") ?? "");
-	if (!Number.isFinite(updatedAt)) return undefined;
-	const currentTopology = values.get("routing.current")?.trim().toUpperCase() ?? "";
-	const preferredTopology = values.get("routing.preferred")?.trim().toUpperCase() ?? "";
-	if (!TOPOLOGIES[currentTopology] || !TOPOLOGIES[preferredTopology]) return undefined;
-	const deliveryMode = values.get("delivery_mode") ?? "";
-	if ((deliveryMode !== "GUIDED" && deliveryMode !== "PR") || values.get("continuation.delivery.mode") !== deliveryMode) {
-		return undefined;
-	}
-	let modifiedAt = 0;
-	try {
-		modifiedAt = fs.statSync(filePath).mtimeMs;
-	} catch {
+function activeRunProjection(value: unknown): ActiveRun | undefined {
+	if (!isRecord(value) || value.active !== true) return undefined;
+	const routing = isRecord(value.routing) ? value.routing : undefined;
+	if (
+		typeof value.state_file !== "string" ||
+		typeof value.run_id !== "string" ||
+		typeof value.status !== "string" ||
+		typeof value.delivery_mode !== "string" ||
+		!routing ||
+		typeof routing.current !== "string" ||
+		typeof routing.preferred !== "string" ||
+		typeof value.updated_at_ms !== "number" ||
+		!Number.isFinite(value.updated_at_ms) ||
+		typeof value.modified_at_ms !== "number" ||
+		!Number.isFinite(value.modified_at_ms)
+	) {
 		return undefined;
 	}
 	return {
-		filePath,
-		stateId: values.get("run_id") ?? path.basename(path.dirname(filePath)),
-		updatedAt,
-		modifiedAt,
-		status,
-		currentTopology,
-		preferredTopology,
-		deliveryMode,
+		filePath: value.state_file,
+		stateId: value.run_id,
+		updatedAt: value.updated_at_ms,
+		modifiedAt: value.modified_at_ms,
+		status: value.status,
+		delegationAuthorized: value.delegation_authorized === true,
+		currentTopology: routing.current,
+		preferredTopology: routing.preferred,
+		deliveryMode: value.delivery_mode,
 	};
 }
 
-function discoverActiveRuns(cwd: string): ActiveRun[] {
-	return [...discoverStatePaths(cwd)]
-		.map(filePath => parseActiveRun(filePath, cwd))
-		.filter((run): run is ActiveRun => Boolean(run))
-		.sort((left, right) => right.updatedAt - left.updatedAt || right.modifiedAt - left.modifiedAt);
+async function discoverActiveRuns(pi: ExtensionAPI, cwd: string): Promise<ActiveRun[]> {
+	const args = ["resolve-active", "--checkout", cwd, "--all"];
+	for (const candidate of discoverStatePaths(cwd)) args.push("--candidate", candidate);
+	const result = await executeCanonicalJson(pi, canonicalToolPath(pi, "swe-forge-state"), args);
+	if (!result.ok || !isRecord(result.value) || !Array.isArray(result.value.states)) return [];
+	return result.value.states.map(activeRunProjection).filter((run): run is ActiveRun => Boolean(run));
+}
+
+async function inspectActiveRun(pi: ExtensionAPI, cwd: string, filePath: string): Promise<ActiveRun | undefined> {
+	const result = await executeCanonicalJson(pi, canonicalToolPath(pi, "swe-forge-state"), [
+		"inspect",
+		"--state",
+		filePath,
+		"--checkout",
+		cwd,
+	]);
+	return result.ok ? activeRunProjection(result.value) : undefined;
+}
+function unquote(value: string): string {
+	let result = value.trim();
+	const comment = result.search(/\s+#/);
+	if (comment >= 0) result = result.slice(0, comment).trim();
+	if ((result.startsWith("\"") && result.endsWith("\"")) || (result.startsWith("'") && result.endsWith("'"))) {
+		result = result.slice(1, -1);
+	}
+	return result;
 }
 
 function parseFrontmatter(text: string): Map<string, string> {
@@ -417,64 +377,6 @@ function capabilityPrompt(observation: CapabilityObservation, run: ActiveRun | u
 	return lines.join("\n");
 }
 
-function outputSchemaFor(profile: ResultProfile, taskId: string): Record<string, unknown> {
-	const nullableArray = (items: Record<string, unknown>): Record<string, unknown> => ({
-		anyOf: [{ type: "array", items }, { type: "null" }],
-	});
-	const stringArray = { type: "array", items: { type: "string" }, minItems: 1 };
-	const common: Record<string, Record<string, unknown>> = {
-		RESULT_PROFILE: { type: "string", enum: [profile] },
-		STATUS: { type: "string", enum: ["DONE", "BLOCKED", "FAILED"] },
-		TASK_ID: { type: "string", const: taskId },
-		FINDINGS: stringArray,
-		EVIDENCE: stringArray,
-		RISKS: nullableArray({ type: "string" }),
-		RECOMMENDED_ACTION: nullableArray({ type: "string" }),
-	};
-	if (profile === "READ_ONLY") {
-		return { type: "object", properties: common, required: Object.keys(common), additionalProperties: false };
-	}
-	if (profile === "WRITABLE") {
-		const validationItem = {
-			type: "object",
-			properties: {
-				command: { type: "string", minLength: 1 },
-				requirement: { type: "string", enum: ["required", "conditional", "informational"] },
-				condition: { type: "string", minLength: 1 },
-				applies: { type: "boolean" },
-				result: { type: "string", enum: ["passed", "failed", "unavailable", "not-applicable"] },
-				evidence: { type: "string", minLength: 1 },
-			},
-			required: ["command", "requirement", "condition", "applies", "result", "evidence"],
-			additionalProperties: false,
-		};
-		const writable = {
-			...common,
-			BASE_SHA: { type: "string", pattern: SHA_PATTERN },
-			HEAD_SHA: { anyOf: [{ type: "string", pattern: SHA_PATTERN }, { type: "string", const: "none" }] },
-			BRANCH: { type: "string", minLength: 1 },
-			CHECKOUT: { type: "string", minLength: 1 },
-			FILES_CHANGED: stringArray,
-			GIT_STATE: stringArray,
-			DELIVERABLE_COMMITS: nullableArray({ type: "string" }),
-			VALIDATION: { type: "array", items: validationItem, minItems: 1 },
-			SCOPE_EXCEPTIONS: nullableArray({ type: "string" }),
-		};
-		return { type: "object", properties: writable, required: Object.keys(writable), additionalProperties: false };
-	}
-	return {
-		type: "object",
-		properties: {
-			status: { type: "string", enum: ["PASS", "CHANGES_REQUIRED"] },
-			scope: { type: "object", additionalProperties: true },
-			review_focus: { type: "object", additionalProperties: true },
-			findings: { type: "array", items: { type: "object", additionalProperties: true } },
-			deferred_followups: { type: "array", items: { type: "object", additionalProperties: true } },
-		},
-		required: ["status", "scope", "review_focus", "findings", "deferred_followups"],
-		additionalProperties: false,
-	};
-}
 
 function profileForAgent(agent: unknown): ResultProfile | undefined {
 	return typeof agent === "string" && Object.hasOwn(PROFILE_TO_RESULT, agent)
@@ -482,145 +384,130 @@ function profileForAgent(agent: unknown): ResultProfile | undefined {
 		: undefined;
 }
 
-function textHasUnsafeCharacters(value: string): boolean {
-	return /[\r\n\t\u0000-\u001f\u007f]/.test(value);
+
+interface CanonicalCommandResult {
+	ok: boolean;
+	detail: string;
+	stdout: string;
 }
 
-function appendScalar(lines: string[], name: string, value: unknown): boolean {
-	const text = safeScalar(value);
-	if (text === undefined || textHasUnsafeCharacters(text) || text.length === 0) return false;
-	lines.push(`${name}: ${text}`);
-	return true;
+interface CanonicalExecutor {
+	exec(
+		command: string,
+		args: readonly string[],
+		options: { timeout: number },
+	): Promise<{ code?: unknown; stdout?: unknown; stderr?: unknown }> | { code?: unknown; stdout?: unknown; stderr?: unknown };
 }
 
-function appendList(lines: string[], name: string, value: unknown, required: boolean): boolean {
-	if (value === null || value === undefined) return !required;
-	if (!Array.isArray(value)) return false;
-	if (value.length === 0) return !required;
-	if (!value.every(item => typeof item === "string" && !textHasUnsafeCharacters(item) && item.length > 0)) return false;
-	lines.push(`${name}:`);
-	for (const item of value) lines.push(`- ${item}`);
-	return true;
+function hasCanonicalExecutor(value: unknown): value is CanonicalExecutor {
+	return isRecord(value) && typeof value.exec === "function";
 }
 
-function appendValidation(lines: string[], value: unknown): boolean {
-	if (!Array.isArray(value) || value.length === 0) return false;
-	lines.push("VALIDATION:");
-	for (const item of value) {
-		if (!isRecord(item)) return false;
-		const command = safeScalar(item.command);
-		const requirement = safeScalar(item.requirement);
-		const condition = safeScalar(item.condition);
-		const result = safeScalar(item.result);
-		const evidence = safeScalar(item.evidence);
-		if (
-			![command, requirement, condition, result, evidence].every(
-				field => field !== undefined && field.length > 0 && !textHasUnsafeCharacters(field),
-			) ||
-			(typeof item.applies !== "boolean" && item.applies !== "true" && item.applies !== "false")
-		) {
-			return false;
-		}
-		lines.push(`- command: ${command}`);
-		lines.push(`  requirement: ${requirement}`);
-		lines.push(`  condition: ${condition}`);
-		lines.push(`  applies: ${String(item.applies)}`);
-		lines.push(`  result: ${result}`);
-		lines.push(`  evidence: ${evidence}`);
+async function executeCanonical(pi: unknown, command: string, args: string[], timeout = 5000): Promise<CanonicalCommandResult> {
+	if (!hasCanonicalExecutor(pi)) {
+		return { ok: false, detail: "canonical command could not be executed", stdout: "" };
 	}
-	return true;
-}
-
-function serializeOrdinaryResult(data: unknown, profile: "READ_ONLY" | "WRITABLE", taskId: string): string | undefined {
-	if (!isRecord(data) || data.RESULT_PROFILE !== profile || data.TASK_ID !== taskId) return undefined;
-	const lines: string[] = [];
-	if (!appendScalar(lines, "RESULT_PROFILE", data.RESULT_PROFILE)) return undefined;
-	if (!appendScalar(lines, "STATUS", data.STATUS)) return undefined;
-	if (!appendScalar(lines, "TASK_ID", data.TASK_ID)) return undefined;
-	if (profile === "WRITABLE") {
-		for (const name of ["BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"]) {
-			if (!appendScalar(lines, name, data[name])) return undefined;
-		}
-		if (!appendList(lines, "FILES_CHANGED", data.FILES_CHANGED, true)) return undefined;
-		if (!appendList(lines, "GIT_STATE", data.GIT_STATE, true)) return undefined;
-		if (!appendValidation(lines, data.VALIDATION)) return undefined;
-		if (!appendList(lines, "DELIVERABLE_COMMITS", data.DELIVERABLE_COMMITS, false)) return undefined;
-		if (!appendList(lines, "SCOPE_EXCEPTIONS", data.SCOPE_EXCEPTIONS, false)) return undefined;
-	}
-	if (!appendList(lines, "FINDINGS", data.FINDINGS, true)) return undefined;
-	if (!appendList(lines, "EVIDENCE", data.EVIDENCE, true)) return undefined;
-	if (!appendList(lines, "RISKS", data.RISKS, false)) return undefined;
-	if (!appendList(lines, "RECOMMENDED_ACTION", data.RECOMMENDED_ACTION, false)) return undefined;
-	return `${lines.join("\n")}\n`;
-}
-
-function reviewShapeIsValid(data: unknown): boolean {
-	return (
-		isRecord(data) &&
-		(data.status === "PASS" || data.status === "CHANGES_REQUIRED") &&
-		isRecord(data.scope) &&
-		isRecord(data.review_focus) &&
-		Array.isArray(data.findings) &&
-		Array.isArray(data.deferred_followups)
-	);
-}
-
-async function executeCanonical(pi: any, command: string, args: string[], timeout = 5000): Promise<{ ok: boolean; detail: string }> {
 	try {
 		const result = await pi.exec(command, args, { timeout });
-		const detail = cleanReason(result?.stderr || result?.stdout, "canonical command failed");
-		return { ok: result?.code === 0, detail };
+		const stdout = typeof result.stdout === "string" ? result.stdout : "";
+		const stderr = typeof result.stderr === "string" ? result.stderr : "";
+		return {
+			ok: result.code === 0,
+			detail: cleanReason(stderr || stdout, "canonical command failed"),
+			stdout,
+		};
 	} catch (error) {
-		return { ok: false, detail: cleanReason(error, "canonical command could not be executed") };
+		return { ok: false, detail: cleanReason(error, "canonical command could not be executed"), stdout: "" };
 	}
 }
 
-async function validateBrief(pi: any, briefing: string): Promise<{ ok: boolean; detail: string }> {
-	const validator = canonicalToolPath(pi, "swe-forge-worker-brief");
+async function executeCanonicalJson(pi: unknown, command: string, args: string[], timeout = 5000): Promise<{
+	ok: boolean;
+	detail: string;
+	value?: unknown;
+}> {
+	const result = await executeCanonical(pi, command, args, timeout);
+	if (!result.ok) return result;
+	try {
+		return { ...result, value: JSON.parse(result.stdout.trim()) };
+	} catch {
+		return { ok: false, detail: "canonical command returned malformed JSON", stdout: result.stdout };
+	}
+}
+
+async function inspectBrief(
+	pi: ExtensionAPI,
+	briefing: string,
+): Promise<{ ok: boolean; detail: string; value?: Record<string, unknown> }> {
+	const inspector = canonicalToolPath(pi, "swe-forge-worker-brief");
 	let directory: string | undefined;
 	try {
 		directory = fs.mkdtempSync(path.join(os.tmpdir(), "swe-forge-omp-brief-"));
 		const filePath = path.join(directory, "worker-brief.yaml");
 		fs.writeFileSync(filePath, briefing, { encoding: "utf8", mode: 0o600 });
-		return await executeCanonical(pi, validator, ["validate", "--brief", filePath]);
+		const result = await executeCanonicalJson(pi, inspector, ["inspect", "--brief", filePath]);
+		if (!result.ok || !isRecord(result.value)) return { ok: false, detail: result.detail };
+		return { ok: true, detail: "canonical worker briefing inspected", value: result.value };
 	} catch (error) {
-		return { ok: false, detail: cleanReason(error, "canonical worker brief validator failed") };
+		return { ok: false, detail: cleanReason(error, "canonical worker brief inspector failed") };
 	} finally {
 		if (directory) {
 			try {
 				fs.rmSync(directory, { recursive: true, force: true });
 			} catch {
-				// Temporary validation material is best-effort cleanup only.
+				// Temporary inspection material is best-effort cleanup only.
 			}
 		}
 	}
 }
 
 async function validateResult(
-	pi: any,
+	pi: ExtensionAPI,
 	data: unknown,
 	profile: "READ_ONLY" | "WRITABLE",
 	taskId: string,
 ): Promise<{ ok: boolean; detail: string }> {
-	const serialized = serializeOrdinaryResult(data, profile, taskId);
-	if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > MAX_RESULT_BYTES) {
-		return { ok: false, detail: "native structured data does not map to the canonical result contract" };
-	}
-	const validator = canonicalToolPath(pi, "swe-forge-worker-result");
+	const structured = JSON.stringify(data);
+	if (structured === undefined) return { ok: false, detail: "native structured data is not JSON-serializable" };
+	const encoder = canonicalToolPath(pi, "swe-forge-worker-result");
 	let directory: string | undefined;
 	try {
 		directory = fs.mkdtempSync(path.join(os.tmpdir(), "swe-forge-omp-result-"));
-		const filePath = path.join(directory, "worker-result.txt");
-		fs.writeFileSync(filePath, serialized, { encoding: "utf8", mode: 0o600 });
-		return await executeCanonical(pi, validator, ["validate", "--profile", profile, "--task-id", taskId, "--result", filePath]);
+		const inputPath = path.join(directory, "structured-result.json");
+		fs.writeFileSync(inputPath, structured, { encoding: "utf8", mode: 0o600 });
+		const encoded = await executeCanonical(pi, encoder, [
+			"encode",
+			"--profile",
+			profile,
+			"--task-id",
+			taskId,
+			"--input",
+			inputPath,
+		]);
+		if (!encoded.ok) return { ok: false, detail: encoded.detail };
+		if (Buffer.byteLength(encoded.stdout, "utf8") > MAX_RESULT_BYTES) {
+			return { ok: false, detail: "canonical worker result exceeded the adapter result limit" };
+		}
+		const resultPath = path.join(directory, "worker-result.txt");
+		fs.writeFileSync(resultPath, encoded.stdout, { encoding: "utf8", mode: 0o600 });
+		const validation = await executeCanonical(pi, encoder, [
+			"validate",
+			"--profile",
+			profile,
+			"--task-id",
+			taskId,
+			"--result",
+			resultPath,
+		]);
+		return { ok: validation.ok, detail: validation.detail };
 	} catch (error) {
-		return { ok: false, detail: cleanReason(error, "canonical worker result validator failed") };
+		return { ok: false, detail: cleanReason(error, "canonical worker result encoder failed") };
 	} finally {
 		if (directory) {
 			try {
 				fs.rmSync(directory, { recursive: true, force: true });
 			} catch {
-				// Temporary validation material is best-effort cleanup only.
+				// Temporary result material is best-effort cleanup only.
 			}
 		}
 	}
@@ -636,17 +523,21 @@ function nativeItems(input: Record<string, unknown>): { batch: boolean; items: A
 	return { error: "native task input has no task assignment" };
 }
 
-function briefContract(briefing: string): { profile: ResultProfile; writeAccess: "read-only" | "read-write" } | undefined {
-	const profile = briefing.match(/\n\s{4}profile:\s*['"]?(READ_ONLY|WRITABLE|REVIEW)['"]?\s*\n/)?.[1] as ResultProfile | undefined;
-	const writeAccess = briefing.match(/\n\s{4}write_access:\s*['"]?(read-only|read-write)['"]?\s*\n/)?.[1] as
-		| "read-only"
-		| "read-write"
-		| undefined;
-	return profile && writeAccess ? { profile, writeAccess } : undefined;
+
+async function structuredSchemaFor(
+	pi: ExtensionAPI,
+	profile: ResultProfile,
+	taskId: string,
+): Promise<Record<string, unknown> | undefined> {
+	const args = ["schema", "--profile", profile, "--format", "json-schema"];
+	if (profile !== "REVIEW") args.push("--task-id", taskId);
+	const result = await executeCanonicalJson(pi, canonicalToolPath(pi, "swe-forge-worker-result"), args);
+	if (!result.ok || !isRecord(result.value)) return undefined;
+	return result.value;
 }
 
 async function prepareTaskInput(
-	pi: any,
+	pi: ExtensionAPI,
 	cwd: string,
 	input: Record<string, unknown>,
 ): Promise<{ ok: true; input: Record<string, unknown>; items: PlannedItem[] } | { ok: false; reason: string }> {
@@ -664,15 +555,25 @@ async function prepareTaskInput(
 		}
 		const task = item.task;
 		if (typeof task !== "string" || task.trim().length === 0) return { ok: false, reason: `native task item ${name} has no assignment` };
-		const brief = await validateBrief(pi, task);
-		if (!brief.ok) return { ok: false, reason: `canonical worker briefing validation failed for ${name}: ${brief.detail}` };
-		const contract = briefContract(task);
-		const expectedWriteAccess = profile === "WRITABLE" ? "read-write" : "read-only";
-		if (!contract || contract.profile !== profile || contract.writeAccess !== expectedWriteAccess) {
-			return { ok: false, reason: `canonical worker briefing profile does not match confined OMP profile ${agent}` };
+		const brief = await inspectBrief(pi, task);
+		if (!brief.ok || !brief.value || brief.value.valid !== true) {
+			return { ok: false, reason: `canonical worker briefing inspection failed for ${name}: ${brief.detail}` };
 		}
+		const canonicalTaskId = brief.value.task_id;
+		const canonicalProfile = brief.value.profile;
+		const canonicalWriteAccess = brief.value.write_access;
+		const expectedWriteAccess = profile === "WRITABLE" ? "read-write" : "read-only";
+		if (
+			canonicalTaskId !== name ||
+			canonicalProfile !== profile ||
+			canonicalWriteAccess !== expectedWriteAccess
+		) {
+			return { ok: false, reason: `canonical worker briefing does not match confined OMP profile or task name ${name}` };
+		}
+		const outputSchema = await structuredSchemaFor(pi, profile, name);
+		if (!outputSchema) return { ok: false, reason: `canonical ${profile} result schema was unavailable for ${name}` };
 		planned.push({ index, name, profile, agent: agent as ProfileName, task });
-		nextItems.push({ ...item, outputSchema: outputSchemaFor(profile, name), schemaMode: "strict" });
+		nextItems.push({ ...item, outputSchema, schemaMode: "strict" });
 	}
 	const hasWritable = planned.some(item => item.profile === "WRITABLE");
 	if (shape.batch && planned.length > 1 && hasWritable) {
@@ -711,20 +612,20 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 	let pending = new Map<string, PendingTaskCall>();
 	let writableInFlight = false;
 
-	const refresh = (cwd: string, freshInvocation = false): ActiveRun | undefined => {
-		const runs = discoverActiveRuns(cwd);
+	const refresh = async (cwd: string, freshInvocation = false): Promise<ActiveRun | undefined> => {
+		const runs = await discoverActiveRuns(pi, cwd);
 		if (freshInvocation) fencedRunIds = new Set(runs.map(run => run.stateId));
-		const selected = runs.find(run => !fencedRunIds.has(run.stateId));
+		const selected = runs.find(run => run.delegationAuthorized && !fencedRunIds.has(run.stateId));
 		if (selected && fencedRunIds.size > 0) fencedRunIds.clear();
 		activeRun = selected;
 		return selected;
 	};
 
-	pi.on("before_agent_start", (event, ctx) => {
+	pi.on("before_agent_start", async (event, ctx) => {
 		const explicit = event.prompt.includes(INVOCATION_MARKER) || event.prompt.includes(RAW_ARGUMENTS_MARKER);
 		if (!explicit) return;
 		invocationActive = true;
-		const run = refresh(ctx.cwd, true);
+		const run = await refresh(ctx.cwd, true);
 		const observation = observeCapability(pi, ctx.cwd);
 		if (event.systemPrompt.some(part => part.includes(CAPABILITY_MARKER))) return;
 		return { systemPrompt: [...event.systemPrompt, capabilityPrompt(observation, run)] };
@@ -732,7 +633,7 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "task" || !invocationActive) return;
-		const run = refresh(ctx.cwd);
+		const run = await refresh(ctx.cwd);
 		if (!run) {
 			return {
 				block: true,
@@ -749,9 +650,9 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 		if (!observation.available) {
 			return { block: true, reason: `OMP native delegation capability is incompatible: ${observation.reason}. Use SOLO/sequential fallback.` };
 		}
-		const stateValidation = await executeCanonical(pi, canonicalToolPath(pi, "swe-forge-state"), ["validate", "--state", run.filePath]);
-		if (!stateValidation.ok) {
-			return { block: true, reason: `Canonical run-state validation failed: ${stateValidation.detail}. Use SOLO/sequential fallback.` };
+		const inspected = await inspectActiveRun(pi, ctx.cwd, run.filePath);
+		if (!inspected || inspected.stateId !== run.stateId || !inspected.delegationAuthorized) {
+			return { block: true, reason: "Canonical run-state inspection no longer authorizes delegation. Use SOLO/sequential fallback." };
 		}
 		const input = isRecord(event.input) ? event.input : {};
 		const prepared = await prepareTaskInput(pi, ctx.cwd, input);
@@ -804,9 +705,7 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 			if (result.exitCode !== 0 || structured?.status !== "valid" || structured?.mode !== "strict") {
 				validation = { ok: false, detail: "native task result was not a valid strict structured completion" };
 			} else if (planned.profile === "REVIEW") {
-				validation = reviewShapeIsValid(data)
-					? { ok: true, detail: "review contract shape checked; root review contract remains authoritative" }
-					: { ok: false, detail: "native review data does not satisfy the canonical review contract shape" };
+				validation = { ok: true, detail: "native review transport accepted by the canonical JSON Schema; root review contract remains authoritative" };
 			} else {
 				validation = await validateResult(pi, data, planned.profile, planned.name);
 			}
