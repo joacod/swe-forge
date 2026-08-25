@@ -19,11 +19,9 @@ harness validation.
 - Repository type or stack:
 - Raw invocation (including mode tokens):
 - Ticket size: small / medium / large
-- Requested topology: AUTO / SOLO / SUBAGENTS / ISOLATED
-- Selected topology: SOLO / SUBAGENTS / ISOLATED / unknown
-- Requested provider, if any: AUTO / NATIVE / HERDR / NONE / unknown
-- Selected execution provider: NATIVE / HERDR / NONE / unknown
-- Delegation backend, if used: NATIVE / HERDR / OTHER / NONE / unknown
+- Requested topology: AUTO / SOLO / SUBAGENTS
+- Selected topology: SOLO / SUBAGENTS / unknown
+- Native subagent capability, if used: available / unavailable / unknown
 - Routing fallback or revision, if any:
 - Delivery mode: GUIDED / PR
 - Final status: ACCEPTED / BLOCKED / FAILED / unknown

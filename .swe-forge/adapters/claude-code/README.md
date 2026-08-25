@@ -25,8 +25,8 @@ The installer links `skills/swe-forge/SKILL.md` to:
 
 The skill creates `/swe-forge` and uses `disable-model-invocation: true`, so
 Claude can run it only when the user explicitly invokes it. The skill body is a
-loader that reads the user-level canonical support tree and the ticket
-workflow; it does not duplicate them.
+loader that reads the user-level canonical support tree and ticket workflow; it
+does not duplicate them.
 
 Natural-language activation remains available without installing the skill:
 
@@ -37,35 +37,26 @@ Use SWE Forge.
 ```
 
 Claude Code has no verified pre-agent runtime hook in this adapter. The skill
-therefore leaves raw arguments untouched and the canonical ticket bootstrap
-invokes `~/.claude/swe-forge/.swe-forge/tools/swe-forge-invocation` once before
+leaves raw arguments untouched and the canonical ticket bootstrap invokes
+`~/.claude/swe-forge/.swe-forge/tools/swe-forge-invocation` once before
 workflow reasoning. Project-specific `CLAUDE.md` configuration remains the
-harness's concern and is not changed by the SWE Forge installer. See
-[shared adapter behavior](../README.md) for the workflow and delivery rules.
+harness's concern and is not changed by the installer. See [shared adapter
+behavior](../README.md).
 
 ## Native Subagents
 
 Claude Code supports project subagents under `.claude/agents/`. Add a thin
 role bridge only when native registration provides a real benefit. Before
-launch, invoke `../../tools/swe-forge-worker-brief render` with the root-produced
+launch, invoke `../../tools/swe-forge-worker-brief render` with root-produced
 structured input and pass its validated output unchanged with the relevant
 canonical role and result/review contract. The renderer owns inclusion and
-dependency rules; this adapter does not construct briefing fields. Native
-workers with dedicated worktrees, exact integration bases, structured
-results, and lifecycle control may satisfy the `NATIVE` provider contract for
-`ISOLATED`; otherwise writable delegation remains sequential in `SUBAGENTS`.
+dependency rules; this adapter does not construct briefing fields.
 
 Use read-only tool lists for researchers, architects, reviewers, security
 reviewers, and performance reviewers. Give write tools only to a bounded task
 whose contract authorizes them. Omit model fields unless the user explicitly
-chooses a model mapping.
-Writable native subagents in one checkout must run sequentially. Concurrent
-writers require separate dedicated, classified worktrees and are classified as
-`ISOLATED`; non-overlapping file scope alone does not make a shared checkout
-safe. Final integration remains with the root orchestrator on the one
-integration/delivery branch. To request Herdr without making it a topology
-alias, state "Use `isolated` with Herdr as the execution provider" in the
-natural-language ticket.
+chooses a model mapping. Writable native subagents in one checkout run
+sequentially; the root orchestrator retains final integration and delivery.
 
 ## Installed projection
 
@@ -78,18 +69,18 @@ The installer links:
 ~/.claude/swe-forge/.swe-forge/
 ```
 
-The skill reads the canonical files through that stable support path, so a
-reviewed update to the source checkout updates future sessions. Existing files
-are never overwritten.
+The skill reads canonical files through that stable support path, so a reviewed
+update to the source checkout updates future sessions. Existing files are never
+overwritten.
 
 ## References
 
 The adapter follows current Claude Code conventions for:
 
-- project `CLAUDE.md` imports using `@AGENTS.md`
-- project skills under `.claude/skills/<name>/SKILL.md`
-- user-invoked skills with `disable-model-invocation: true`
-- project subagents under `.claude/agents/`
+- project `CLAUDE.md` imports using `@AGENTS.md`;
+- project skills under `.claude/skills/<name>/SKILL.md`;
+- user-invoked skills with `disable-model-invocation: true`; and
+- project subagents under `.claude/agents/`.
 
 References checked on 2026-08-10:
 

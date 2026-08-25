@@ -5,62 +5,61 @@
 Workers return one of:
 
 - `DONE`: acceptance criteria and assigned validation are satisfied, the
-  checkout is clean, and the structured result is complete
-- `BLOCKED`: safe progress requires context, access, a decision, isolation, or
-  a scope change
+  delivery checkout evidence is complete, and the structured result is valid;
+- `BLOCKED`: safe progress requires context, access, a decision, a capability,
+  or a scope change; and
 - `FAILED`: the attempt did not satisfy acceptance criteria or exposed an
-  unresolved failure
+  unresolved failure.
 
-A provider lifecycle state is scheduling evidence only. It never replaces a
-structured result, Git evidence, validation, or central integration.
+A host task lifecycle state is scheduling evidence only. It never replaces a
+structured result, Git evidence, validation, or root-owned acceptance.
 
-## Provider retry boundary
+## Host retry boundary
 
-Automatic model or provider retries are not SWE Forge task retries. While a
-provider is retrying, do not launch duplicate workers, repeat the plan, or make
-a second delivery attempt. Once the call settles, inspect the actual checkout
-and evidence state before continuing. If the provider still fails, record the
-provider failure separately and use at most the normal one Forge retry after a
-changed hypothesis or explicit correction.
+Automatic model or harness retries are not SWE Forge task retries. While a host
+is retrying, do not launch duplicate workers, repeat the plan, or make a second
+delivery attempt. Once the call settles, inspect the actual checkout and
+evidence state before continuing. If the call still fails, record the failure
+separately and use at most the normal one Forge retry after a changed hypothesis
+or explicit correction.
 
 ## Recovery Ladder
 
 Use the smallest recovery action that addresses the evidence:
 
-1. supply missing context or repository access
-2. clarify the task contract and retry once
-3. run a focused debugger investigation
-4. serialize work that exposed an ownership, environment, or ordering conflict
-5. reduce the task scope to the smallest safe unit
-6. change an unavailable isolated provider from `HERDR` to `NATIVE`, or fall
-   back to sequential `SUBAGENTS`/`SOLO` when isolation is not essential
-7. escalate capability or assign the work to the orchestrator
-8. stop and report the unresolved failure when safe progress is not possible
+1. supply missing context or repository access;
+2. clarify the task contract and retry once;
+3. run a focused debugger investigation;
+4. serialize work that exposed an ownership or ordering conflict;
+5. reduce the task scope to the smallest safe unit;
+6. fall back to root-owned sequential work when native delegation is unavailable;
+7. escalate capability or assign the work to the orchestrator; and
+8. stop and report the unresolved failure when safe progress is not possible.
 
-Do not hide a failure by changing the status to `DONE`. If required isolation
-would be lost, return `BLOCKED` rather than placing concurrent writers in one
-checkout.
+Do not hide a failure by changing the status to `DONE`. Never place concurrent
+writers in one checkout.
 
 ## Retry Limits
 
-- default to one retry per task after an explicit correction
-- record each attempt and its reason
-- default to at most two review-repair cycles
-- stop when the same evidence recurs without a changed hypothesis or approach
+- default to one retry per task after an explicit correction;
+- record each attempt and its reason;
+- default to at most two review-repair cycles;
+- stop when the same evidence recurs without a changed hypothesis or approach;
+  and
 - require an explicit orchestrator decision recorded in run state to exceed
-  defaults, and set a hard run-specific ceiling before continuing
+  defaults, with a hard run-specific ceiling before continuing.
 
-Retries must not overwrite unrelated user changes, recreate an ambiguous
-worktree, or create unbounded worker activity.
+Retries must not overwrite unrelated user changes or create unbounded worker
+activity.
 
 ## Common Failures
 
 ### Scope Conflict
 
-Stop the conflicting writers, preserve both results, and integrate one at a
-time. Update ownership or dependencies, serialize the remaining work, and
-rerun affected validation. A conflict between tasks classified as independent
-is evidence that the decomposition may be wrong.
+Stop the conflicting task, preserve its result, update ownership or
+ dependencies, serialize the remaining work, and rerun affected validation. A
+conflict between tasks classified as independent is evidence that the
+decomposition may be wrong.
 
 ### Test Failure
 
@@ -72,58 +71,47 @@ code inspection alone.
 ### Blocked Worker
 
 Provide the missing context once, then retry only if the blocker is removed.
-Otherwise reassign, serialize, change provider, change topology, or report the
-blocker. Preserve the worker's branch and worktree until its changes are
-proven integrated or safely preserved.
+Otherwise reassign the bounded task or return the blocker to the root. Preserve
+uncommitted changes and report their exact checkout state.
 
-### Provider Unavailable
+### Checkout Conflict
 
-If `NATIVE` cannot provide the required isolated-worker capabilities and the
-Herdr ownership guard or provider surface fails, do not fabricate a generic
-provider. Fall back to sequential `SUBAGENTS` or `SOLO` when safe. If required
-isolation would be lost, return `BLOCKED`. Record requested mode, requested
-provider, limitation evidence, selected fallback, and the reason.
-
-### Integration Conflict
-
-Stop safely, preserve the source worker branch and worktree, restore the
-integration worktree only to its recorded clean checkpoint using the safest
-available Git operation, and re-evaluate ownership and dependencies. Serialize
-or recreate the affected task from the current integration head. Never silently
-resolve a conflict or use force cleanup against ambiguous state.
+Stop safely, preserve the current checkout, inspect `HEAD`, diff, branch, and
+candidate paths, and re-evaluate ownership and dependencies. Serialize the
+affected task from the current safe baseline. Never silently resolve a conflict
+or use destructive cleanup against ambiguous state.
 
 ### Environment Failure
 
-Inspect setup commands and resource state. Treat ports, databases, Docker
-projects, temporary paths, migrations, and shared services as explicit
-resources. Allocate unique resources or serialize execution. Migrations and
-shared persistent environments require separate authorization. Preserve dirty
-or unknown resources and report cleanup status.
+Inspect setup commands and resource state. Treat ports, databases, temporary
+paths, migrations, and shared services as explicit resources. Allocate unique
+resources or serialize execution. Migrations and shared persistent environments
+require separate authorization. Preserve dirty or unknown resources and report
+cleanup status.
 
 ### Review Finding
 
-Classify the finding using the blocking matrix in
-`../contracts/review.md`. Repair blocking findings, rerun affected checks, and
-request a focused re-review. Do not loop on nonblocking low-confidence style
-opinions.
+Classify the finding using the blocking matrix in `../contracts/review.md`.
+Repair blocking findings, rerun affected checks, and request a focused re-
+review. Do not loop on nonblocking low-confidence style opinions.
 
 ## Cleanup Handoff
 
-Cleanup authorization and the exact safe-removal rules are owned by
+Cleanup authorization and exact safe-removal rules are owned by
 `../policies/delivery.md`. During recovery, preserve dirty, blocked, stale,
-conflicting, or ambiguous resources and report their state; never use recovery
-as permission for destructive cleanup.
+conflicting, or ambiguous state and report it; never use recovery as permission
+for destructive cleanup.
 
 ## Final Failure Reporting
 
 If acceptance is not possible, report:
 
-- original acceptance criteria that remain unmet
-- failed or unavailable checks
-- relevant worker, provider, and retry history
-- evidence and likely root cause
-- attempted recovery actions
-- remaining worktrees, branches, processes, and environment resources
-- remaining impact and safest next action
+- original acceptance criteria that remain unmet;
+- failed or unavailable checks;
+- relevant worker and retry history;
+- evidence and likely root cause;
+- attempted recovery actions;
+- remaining temporary state or processes; and
+- remaining impact and safest next action.
 
 An honest incomplete result is preferable to an unsupported success claim.

@@ -45,7 +45,6 @@ canonical_files=$(
       "$ROOT/.swe-forge/agents" \
       "$ROOT/.swe-forge/contracts" \
       "$ROOT/.swe-forge/policies" \
-      "$ROOT/.swe-forge/providers" \
       "$ROOT/.swe-forge/tools" \
       "$ROOT/.swe-forge/workflows"; do
       [ -d "$directory" ] || continue

@@ -6,25 +6,24 @@ SWE Forge turns explicit coding tickets into bounded, evidence-backed changes.
 It sits above your coding harness: it helps inspect, plan, implement, verify,
 review, and report without replacing the harness itself.
 
-SWE Forge is a harness-agnostic, explicitly invoked workflow with a portable
-canonical process and adapters for different coding harnesses. It is opt-in,
-so ordinary harness prompts remain ordinary prompts.
+SWE Forge is harness-agnostic and opt-in. A run takes one ticket toward one
+reviewable delivery outcome and owns one writable delivery checkout. Native
+harness subagents may assist with bounded work; concurrent writable-agent
+orchestration and fleet management are outside SWE Forge's scope.
 
 ## What it does
 
 ```text
-ticket → inspect and plan → choose a topology → implement → verify and review → deliver/report
+ticket → inspect and plan → choose SOLO or SUBAGENTS → implement → verify and review → deliver/report
 ```
 
 It chooses the smallest useful execution topology:
 
-- `SOLO` for tightly coupled work
-- `SUBAGENTS` when bounded delegation adds value
-- `ISOLATED` when concurrent writable work needs separate environments
+- `SOLO` for tightly coupled work;
+- `SUBAGENTS` when demonstrated native delegation adds value, with writable work
+  kept sequential in the one delivery checkout.
 
-Runs can work directly in one context, use subagents when available and
-useful, or use isolated writable workers when the host and provider can support
-them safely. The [workflow specification](SWE-FORGE.md) and
+The [workflow specification](SWE-FORGE.md) and
 [architecture guide](docs/architecture.md) describe the deeper behavior.
 
 ## Harnesses
@@ -58,9 +57,8 @@ scripts/swe-forge verify "$HARNESS"
 ```
 
 Set `HARNESS` to `pi`, `opencode`, `omp`, `claude`, `codex`, or `cursor` as
-needed. See the
-[installation guide](docs/installation.md) for the supported link locations
-and optional capabilities.
+needed. See the [installation guide](docs/installation.md) for supported link
+locations and optional capabilities.
 
 ## Use
 
@@ -77,15 +75,8 @@ for the lower-touch path through pull-request creation:
 /swe-forge pr <ticket>
 ```
 
-Neither mode merges automatically. When needed, request the isolated topology
-explicitly:
-
-```text
-/swe-forge isolated <ticket>
-```
-
-Codex exposes the same explicit skill as `$swe-forge`; the other listed
-adapters use `/swe-forge`.
+Neither mode merges automatically. Codex exposes the same explicit skill as
+`$swe-forge`; the other listed adapters use `/swe-forge`.
 
 ## Documentation
 

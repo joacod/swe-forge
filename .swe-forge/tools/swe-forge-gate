@@ -31,7 +31,7 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
-    [--requested-mode MODE] [--requested-provider PROVIDER]
+    [--requested-mode MODE]
     [--requested-delivery DELIVERY] [--delivery-mode MODE]
   scripts/swe-forge-gate plan-check --state DIR --name NAME --requirement TYPE \
     [--condition TEXT] [--final-required true|false]
@@ -54,19 +54,16 @@ Receipt metadata options:
   --forge-version VERSION       SWE Forge release version.
   --harness NAME                Harness used for the run.
   --harness-version VERSION     Harness version when known.
-  --requested-mode MODE         AUTO, SOLO, SUBAGENTS, or ISOLATED.
-  --selected-mode MODE          SOLO, SUBAGENTS, or ISOLATED.
-  --execution-provider PROVIDER NONE, NATIVE, or HERDR.
+  --requested-mode MODE         AUTO, SOLO, or SUBAGENTS.
+  --selected-mode MODE          SOLO or SUBAGENTS.
   --model-provider PROVIDER     Public model provider label when safe.
   --routing-reason TEXT         Short routing rationale.
   --model MODEL                 Model label when safe to publish.
   --context-status STATUS       healthy, compacted, overflow-recovered, not-observed, or blocked.
   --context-evidence TEXT       Short observed context/compaction evidence.
 
-  --provider PROVIDER           Compatibility alias for --execution-provider.
-
-The guard never launches agents, controls providers, pushes, creates a PR,
-publishes, deploys, or merges.
+The guard never launches agents, controls external orchestration, pushes,
+creates a PR, publishes, deploys, or merges.
 EOF
 }
 
@@ -235,20 +232,13 @@ preflight() {
   expected_branch=
   baseline_ref=HEAD
   requested_mode=AUTO
-  requested_provider=AUTO
-  execution_provider=NONE
-  delegation_backend=NONE
-  write_isolation=SHARED
-  provider_reason='non-isolated execution'
-  parallel_strategy=NONE
-  integration_strategy=NONE
   requested_delivery=PR
   delivery_mode=PR
   routing_initial=SOLO
   routing_preferred=SOLO
   routing_selected=SOLO
   routing_current=SOLO
-  state_reason='sequential central implementation'
+  state_reason='single-checkout implementation'
   fallback_used=no
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -273,48 +263,6 @@ preflight() {
         [ "$#" -ge 2 ] || fail "--requested-mode requires a topology"
         requested_mode=$2
         reject_control_chars "$requested_mode"
-        shift 2
-        ;;
-      --requested-provider)
-        [ "$#" -ge 2 ] || fail "--requested-provider requires a provider"
-        requested_provider=$2
-        reject_control_chars "$requested_provider"
-        shift 2
-        ;;
-      --execution-provider|--provider)
-        [ "$#" -ge 2 ] || fail "$1 requires a provider"
-        execution_provider=$2
-        reject_control_chars "$execution_provider"
-        shift 2
-        ;;
-      --delegation-backend)
-        [ "$#" -ge 2 ] || fail "--delegation-backend requires a backend"
-        delegation_backend=$2
-        reject_control_chars "$delegation_backend"
-        shift 2
-        ;;
-      --write-isolation)
-        [ "$#" -ge 2 ] || fail "--write-isolation requires SHARED or WORKTREE"
-        write_isolation=$2
-        reject_control_chars "$write_isolation"
-        shift 2
-        ;;
-      --provider-reason)
-        [ "$#" -ge 2 ] || fail "--provider-reason requires text"
-        provider_reason=$2
-        reject_control_chars "$provider_reason"
-        shift 2
-        ;;
-      --parallel-strategy)
-        [ "$#" -ge 2 ] || fail "--parallel-strategy requires NONE or COMPOSE"
-        parallel_strategy=$2
-        reject_control_chars "$parallel_strategy"
-        shift 2
-        ;;
-      --integration-strategy)
-        [ "$#" -ge 2 ] || fail "--integration-strategy requires NONE or CHERRY_PICK"
-        integration_strategy=$2
-        reject_control_chars "$integration_strategy"
         shift 2
         ;;
       --requested-delivery)
@@ -399,13 +347,6 @@ preflight() {
     --run-id "$(basename "$STATE")" \
     --baseline-ref "$base_head" \
     --requested-mode "$requested_mode" \
-    --requested-provider "$requested_provider" \
-    --execution-provider "$execution_provider" \
-    --delegation-backend "$delegation_backend" \
-    --write-isolation "$write_isolation" \
-    --provider-reason "$provider_reason" \
-    --parallel-strategy "$parallel_strategy" \
-    --integration-strategy "$integration_strategy" \
     --requested-delivery "$requested_delivery" \
     --delivery-mode "$delivery_mode" \
     --routing-initial "$routing_initial" \
@@ -414,14 +355,9 @@ preflight() {
     --routing-current "$routing_current" \
     --reason "$state_reason" \
     --fallback-used "$fallback_used" \
-    --invocation-classification writable \
-    --mutation-allowed true \
-    --delivery-kind task \
     --delivery-status ready \
     --delivery-branch-setup reused \
-    --remote-default-evidence "${remote_default:-none}" \
-    --capabilities-ref not-applicable \
-    --isolated-eligibility-evidence routing-policy >/dev/null
+    --remote-default-evidence "${remote_default:-none}" >/dev/null
   "$SCRIPT_DIR/swe-forge-state" set-continuation \
     --state "$STATE" \
     --workflow-active true \
@@ -1228,16 +1164,14 @@ receipt_text() {
   printf 'Delivery: %s\n' "$delivery"
   if [ -n "${receipt_forge_version:-}" ] || [ -n "${receipt_harness:-}" ] || \
     [ -n "${receipt_harness_version:-}" ] || [ -n "${receipt_requested_mode:-}" ] || \
-    [ -n "${receipt_selected_mode:-}" ] || [ -n "${receipt_provider:-}" ] || \
-    [ -n "${receipt_model_provider:-}" ] || [ -n "${receipt_routing_reason:-}" ] || \
-    [ -n "${receipt_model:-}" ]; then
+    [ -n "${receipt_selected_mode:-}" ] || [ -n "${receipt_model_provider:-}" ] || \
+    [ -n "${receipt_routing_reason:-}" ] || [ -n "${receipt_model:-}" ]; then
     printf 'Run metadata:\n'
     [ -z "${receipt_forge_version:-}" ] || printf -- '- SWE Forge: %s\n' "$receipt_forge_version"
     if [ -n "${receipt_harness:-}" ] || [ -n "${receipt_harness_version:-}" ]; then
       if [ -n "${receipt_harness_version:-}" ]; then printf -- '- Harness: %s %s\n' "$receipt_harness" "$receipt_harness_version"; else printf -- '- Harness: %s\n' "$receipt_harness"; fi
     fi
     if [ -n "${receipt_requested_mode:-}" ] || [ -n "${receipt_selected_mode:-}" ]; then printf -- '- Routing: %s -> %s\n' "${receipt_requested_mode:-unknown}" "${receipt_selected_mode:-unknown}"; fi
-    [ -z "${receipt_provider:-}" ] || printf -- '- Execution provider: %s\n' "$receipt_provider"
     [ -z "${receipt_model_provider:-}" ] || printf -- '- Model provider: %s\n' "$receipt_model_provider"
     [ -z "${receipt_model:-}" ] || printf -- '- Model: %s\n' "$receipt_model"
     [ -z "${receipt_routing_reason:-}" ] || printf -- '- Routing reason: %s\n' "$receipt_routing_reason"
@@ -1278,7 +1212,6 @@ receipt_run() {
   receipt_harness_version=
   receipt_requested_mode=
   receipt_selected_mode=
-  receipt_provider=
   receipt_model_provider=
   receipt_routing_reason=
   receipt_model=
@@ -1296,7 +1229,7 @@ receipt_run() {
         shift 2
         ;;
       --execution)
-        [ "$#" -ge 2 ] || fail "--execution requires SOLO, SUBAGENTS, or ISOLATED"
+        [ "$#" -ge 2 ] || fail "--execution requires SOLO or SUBAGENTS"
         execution=$2
         shift 2
         ;;
@@ -1345,11 +1278,6 @@ receipt_run() {
         receipt_selected_mode=$2
         shift 2
         ;;
-      --execution-provider|--provider)
-        [ "$#" -ge 2 ] || fail "$1 requires a value"
-        receipt_provider=$2
-        shift 2
-        ;;
       --model-provider)
         [ "$#" -ge 2 ] || fail "--model-provider requires a value"
         receipt_model_provider=$2
@@ -1385,16 +1313,14 @@ receipt_run() {
     receipt_verify --state "$STATE" --receipt "$output"
     return
   fi
-  case "$execution" in SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid execution topology: ${execution:-<missing>}" ;; esac
+  case "$execution" in SOLO|SUBAGENTS) ;; *) fail "invalid execution topology: ${execution:-<missing>}" ;; esac
   case "$delivery" in GUIDED|PR) ;; *) fail "invalid delivery mode: ${delivery:-<missing>}" ;; esac
-  case "$receipt_requested_mode" in ''|AUTO|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid requested topology metadata" ;; esac
-  case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS|ISOLATED) ;; *) fail "invalid selected topology metadata" ;; esac
-  case "$receipt_provider" in ''|NONE|NATIVE|HERDR) ;; *) fail "invalid provider metadata" ;; esac
+  case "$receipt_requested_mode" in ''|AUTO|SOLO|SUBAGENTS) ;; *) fail "invalid requested topology metadata" ;; esac
+  case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS) ;; *) fail "invalid selected topology metadata" ;; esac
   case "$receipt_context_status" in healthy|compacted|overflow-recovered|not-observed|blocked) ;; *) fail "invalid context status metadata" ;; esac
   for receipt_value in "$receipt_forge_version" "$receipt_harness" "$receipt_harness_version" \
-    "$receipt_requested_mode" "$receipt_selected_mode" "$receipt_provider" \
-    "$receipt_model_provider" "$receipt_routing_reason" "$receipt_model" \
-    "$receipt_context_status" "$receipt_context_evidence"; do
+    "$receipt_requested_mode" "$receipt_selected_mode" "$receipt_model_provider" \
+    "$receipt_routing_reason" "$receipt_model" "$receipt_context_status" "$receipt_context_evidence"; do
     reject_control_chars "$receipt_value"
   done
   if [ -n "$PR_URL" ]; then

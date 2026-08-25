@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # Dependency-free, portable parser for the reserved SWE-Forge invocation prefix.
-# It owns command grammar only; topology selection and provider semantics remain
-# agentic decisions after the normalized invocation facts are available.
+# It owns command grammar only; topology selection remains an agentic decision
+# after the normalized invocation facts are available.
 
 set -eu
 
@@ -15,11 +15,8 @@ Usage:
 `--raw-arguments` accepts the complete, unmodified argument string as one
 value. `--stdin` reads that same value without changing whitespace. The parser
 writes one deterministic JSON object with the normalized invocation facts
-(`input_status` is `COMPLETE`, `EMPTY`, `INCOMPLETE`, or
-`MIGRATION_REQUIRED`) and never chooses automatic topology or a provider.
-For `MIGRATION_REQUIRED`, use: "The `herdr` topology token was removed. Use
-`isolated` and request Herdr as an execution-provider preference if it is
-wanted."
+(`input_status` is `COMPLETE`, `EMPTY`, or `INCOMPLETE`) and never chooses
+automatic topology.
 EOF
 }
 
@@ -124,13 +121,9 @@ parse_stream() {
         first_token = token
         parse_remainder = token_remainder
 
-        if (first_token == "herdr") {
-          consumed[++consumed_count] = first_token
-          input_status = "MIGRATION_REQUIRED"
-        } else if (first_token == "solo" || first_token == "subagents" || first_token == "isolated") {
+        if (first_token == "solo" || first_token == "subagents") {
           if (first_token == "solo") requested_mode = "SOLO"
-          else if (first_token == "subagents") requested_mode = "SUBAGENTS"
-          else requested_mode = "ISOLATED"
+          else requested_mode = "SUBAGENTS"
           consumed[++consumed_count] = first_token
           parse_remainder = trim_leading(parse_remainder)
           if (parse_remainder != "") {
@@ -153,10 +146,9 @@ parse_stream() {
           parse_remainder = trim_leading(parse_remainder)
           if (parse_remainder != "") {
             take_token(parse_remainder)
-            if (token == "solo" || token == "subagents" || token == "isolated") {
+            if (token == "solo" || token == "subagents") {
               if (token == "solo") requested_mode = "SOLO"
-              else if (token == "subagents") requested_mode = "SUBAGENTS"
-              else requested_mode = "ISOLATED"
+              else requested_mode = "SUBAGENTS"
               consumed[++consumed_count] = token
               parse_remainder = token_remainder
             }

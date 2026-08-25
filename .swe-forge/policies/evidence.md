@@ -7,7 +7,6 @@ shell helper can enforce agent reasoning. The canonical helpers are:
 
 ```text
 .swe-forge/tools/swe-forge-gate
-.swe-forge/tools/swe-forge-isolated-gate
 .swe-forge/tools/swe-forge-state
 ```
 
@@ -45,44 +44,35 @@ latest status per planned check; attempt history remains private.
 
 Use `--final-required false` for a targeted check owned by the current
 implementation slice and the default `--final-required true` for final checks.
-Final-only checks may be registered before implementation, but slice
-checkpoints evaluate only the slice-local checks; this avoids forcing a full
-repository run before every commit. A checkpoint records which slice checks
-passed. Later checkpoints do not require an earlier slice check to match the
-new candidate fingerprint, but every new slice still needs current evidence.
-Final checks always require an exact current-candidate result. This keeps
-per-slice commits independent without weakening the final evidence gate.
+Final checks may be registered before implementation, but slice checkpoints
+evaluate only slice-local checks. Final checks always require an exact current
+candidate result.
 
 `validate` records the candidate fingerprint before and after the command. A
 normal command that changes candidate source content fails evidence binding. A
 mutation-producing check must declare its mutation scope and reason and binds
 to the post-command fingerprint. The deterministic fingerprint includes current
 `HEAD`, candidate path/type/mode/content records, deletions, renames exposed by
-Git, sorted untracked paths, and content hashes. It is computed with Git-native
-and POSIX tools and is not a changed-path list. The gate uses a checksum marker
-to avoid repeating the full run-state schema scan when the state file is
-unchanged; candidate fingerprints and validation commands are never skipped.
+Git, sorted untracked paths, and content hashes.
 
 A checkpoint records its exact path boundary and candidate fingerprint.
 Required current-slice and applicable conditional checks must pass for that
-candidate. `commit-slice` refuses candidate fingerprint drift, staged-tree
-drift, and path set drift. It never pushes.
+candidate. `commit-slice` refuses candidate fingerprint drift, staged-tree drift,
+and path set drift. It never pushes.
 
 The guard stores command output outside the repository and does not authorize
 migrations, deployment, publication, credentials, production access, or shared
-environment effects. It never launches agents or providers.
+environment effects. It never launches workers or external orchestration.
 
 ## Receipts
 
 Receipts are generated only from structured evidence and actual Git state. They
 are private run-evidence artifacts by default, not project-facing PR content.
 When no output path is supplied, the executable gate writes the receipt to
-`$STATE/receipt.md`, prints it, and records that path in the run state's
-`receipt_ref`. `receipt --verify --state "$STATE"` and
-`receipt-verify --state "$STATE"` use that run-local receipt by default. This
-retains evidence for the lifetime of the private run state without creating a
-repository or PR artifact; longer retention requires an explicit, separately
-managed output path.
+`$STATE/receipt.md`, prints it, and records that path in run state.
+`receipt --verify --state "$STATE"` and `receipt-verify --state "$STATE"` use
+that run-local receipt by default.
+
 They include:
 
 ```text
@@ -95,20 +85,7 @@ Generated at: <UTC timestamp>
 current `HEAD`, current candidate fingerprint, and final evidence. A receipt
 created before a later commit or same-path content change is stale. Receipts
 never contain transcripts, raw logs, secrets, or private ticket content and
-never upgrade a blocked status by hand. `Execution provider` is the isolated
-worker provider and must be `NONE` for non-isolated runs; a model provider is a
-separate optional metadata field in the private receipt. Never copy receipt
-content or workflow metadata into a pull-request description, commit message,
-or branch name. Merge state is intentionally not included because a receipt is
-not updated after a human merges the PR.
-
-## Isolated guard
-
-`.swe-forge/tools/swe-forge-isolated-gate` is a narrow Git/evidence helper. It
-initializes isolated evidence state, registers actual integration and worker
-worktrees, validates the fixed worker-result bundle, enforces planned order,
-checks integration drift, applies a documented `cherry-pick --no-commit`
-transfer, records conflicts and source-to-integration mappings, reports
-recoverable state, and verifies cleanup eligibility. It does not control Herdr,
-launch agents, schedule work, push, create PRs, publish, deploy, merge, or
-force-clean.
+never upgrade a blocked status by hand. A model provider is optional metadata
+in the private receipt; it is not a workflow or routing decision. Never copy
+receipt content or workflow metadata into a pull-request description, commit
+message, or branch name.

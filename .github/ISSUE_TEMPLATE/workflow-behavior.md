@@ -18,11 +18,9 @@ a successful projection does not establish harness behavior.
 - SWE Forge version or commit:
 - Raw invocation (`/swe-forge ...` or equivalent, including mode tokens):
 - Delivery mode: GUIDED / PR
-- Requested topology: AUTO / SOLO / SUBAGENTS / ISOLATED
-- Selected topology, if known: SOLO / SUBAGENTS / ISOLATED / unknown
-- Requested provider, if any: AUTO / NATIVE / HERDR / NONE / unknown
-- Selected execution provider, if known: NATIVE / HERDR / NONE / unknown
-- Delegation backend, if used: NATIVE / HERDR / OTHER / NONE / unknown
+- Requested topology: AUTO / SOLO / SUBAGENTS
+- Selected topology, if known: SOLO / SUBAGENTS / unknown
+- Native subagent capability, if used: available / unavailable / unknown
 - Routing fallback or revision, if any:
 - Final status, if known: ACCEPTED / BLOCKED / FAILED / unknown
 - Did it create a delivery branch? yes / no / unknown

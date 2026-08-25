@@ -35,7 +35,6 @@ mkdir -p "$fixture/.swe-forge" \
   "$fixture/.swe-forge/agents" \
   "$fixture/.swe-forge/contracts" \
   "$fixture/.swe-forge/policies" \
-  "$fixture/.swe-forge/providers" \
   "$fixture/.swe-forge/tools" \
   "$fixture/.swe-forge/workflows" \
   "$fixture/.swe-forge/adapters/pi" \

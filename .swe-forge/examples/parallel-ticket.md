@@ -119,10 +119,6 @@ routing:
   preferred: SUBAGENTS
   selected: SUBAGENTS
   current: SUBAGENTS
-requested_provider: AUTO
-execution_provider: NONE
-parallel_strategy: NONE
-integration_strategy: NONE
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
 reason: API research, UI research, and test strategy are independent read-only tasks; launch useful discovery questions in one bounded fan-out/fan-in batch, then keep implementation sequential because the API contract and UI behavior are coupled.
@@ -131,8 +127,6 @@ fan_in: one root barrier after the batch
 fallback: serialize research or use SOLO if native workers are unavailable
 ```
 
-The orchestrator does not select `ISOLATED` or an execution provider because
-no concurrent writable worktree or independent process is needed.
 
 ## 7. Task Contract
 
@@ -287,10 +281,6 @@ routing:
   preferred: SUBAGENTS
   selected: SUBAGENTS
   current: SUBAGENTS
-requested_provider: AUTO
-execution_provider: NONE
-parallel_strategy: NONE
-integration_strategy: NONE
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
 result: ACCEPTED

@@ -8,9 +8,9 @@ const RAW_ARGUMENTS_MARKER = "Raw invocation arguments:";
 const CAPABILITY_MARKER = "[SWE-FORGE OMP NATIVE SUBAGENT CAPABILITY]";
 const WORKER_CONTEXT =
 	"SWE Forge delegated task execution. The task assignment is the canonical worker_briefing/v1 projection. Do not infer routing, scope, permissions, or delivery authority from this context.";
-const ACTIVE_STATUSES = new Set(["planning", "running", "reviewing", "repairing"]);
-const TOPOLOGIES = new Set(["SOLO", "SUBAGENTS", "ISOLATED"]);
-const TERMINAL_STATUSES = new Set(["accepted", "failed"]);
+const ACTIVE_STATUSES: Record<string, true> = { planning: true, running: true, reviewing: true, repairing: true };
+const TOPOLOGIES: Record<string, true> = { SOLO: true, SUBAGENTS: true };
+const TERMINAL_STATUSES: Record<string, true> = { accepted: true, failed: true };
 const PROFILE_TO_RESULT = {
 	"swe-forge-read-only": "READ_ONLY",
 	"swe-forge-writable": "WRITABLE",
@@ -49,8 +49,6 @@ interface CapabilityObservation {
 	profiles: readonly ProfileName[];
 	profileTools: Record<string, readonly string[]>;
 	readOnlyParallelSupport: boolean;
-	writableConcurrencySupport: false;
-	nativeIsolatedSupport: false;
 	structuredResults: boolean;
 	strictResults: boolean;
 }
@@ -213,9 +211,8 @@ function discoverStatePaths(cwd: string): Set<string> {
 }
 
 function stateMatchesCheckout(values: Map<string, string>, cwd: string): boolean {
-	const invocation = values.get("invocation_checkout.path");
 	const delivery = values.get("delivery_checkout.path");
-	return Boolean(invocation && delivery && samePath(invocation, cwd) && samePath(delivery, cwd));
+	return Boolean(delivery && samePath(delivery, cwd));
 }
 
 function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
@@ -227,16 +224,16 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 	const text = readFile(filePath);
 	if (!text) return undefined;
 	const values = parseScalarYaml(text);
-	if (values.get("workflow") !== "swe-forge" || values.get("schema_version") !== "3") return undefined;
+	if (values.get("workflow") !== "swe-forge" || values.get("schema_version") !== "4") return undefined;
 	if (!stateMatchesCheckout(values, cwd)) return undefined;
 	const status = values.get("status") ?? "unknown";
-	if (!ACTIVE_STATUSES.has(status) || TERMINAL_STATUSES.has(status)) return undefined;
+	if (!ACTIVE_STATUSES[status] || TERMINAL_STATUSES[status]) return undefined;
 	if (values.get("continuation.workflow_active") !== "true") return undefined;
 	const updatedAt = Date.parse(values.get("continuation.updated_at") ?? "");
 	if (!Number.isFinite(updatedAt)) return undefined;
 	const currentTopology = values.get("routing.current")?.trim().toUpperCase() ?? "";
 	const preferredTopology = values.get("routing.preferred")?.trim().toUpperCase() ?? "";
-	if (!TOPOLOGIES.has(currentTopology) || !TOPOLOGIES.has(preferredTopology)) return undefined;
+	if (!TOPOLOGIES[currentTopology] || !TOPOLOGIES[preferredTopology]) return undefined;
 	const deliveryMode = values.get("delivery_mode") ?? "";
 	if ((deliveryMode !== "GUIDED" && deliveryMode !== "PR") || values.get("continuation.delivery.mode") !== deliveryMode) {
 		return undefined;
@@ -341,8 +338,6 @@ function observeCapability(pi: any, cwd: string): CapabilityObservation {
 		profiles: [],
 		profileTools: {},
 		readOnlyParallelSupport: false,
-		writableConcurrencySupport: false,
-		nativeIsolatedSupport: false,
 		structuredResults: false,
 		strictResults: false,
 	});
@@ -373,8 +368,6 @@ function observeCapability(pi: any, cwd: string): CapabilityObservation {
 			profiles: Object.keys(PROFILE_TO_RESULT) as ProfileName[],
 			profileTools: profiles.profileTools,
 			readOnlyParallelSupport: true,
-			writableConcurrencySupport: false,
-			nativeIsolatedSupport: false,
 			structuredResults: true,
 			strictResults: true,
 		};
@@ -390,7 +383,7 @@ function capabilityPrompt(observation: CapabilityObservation, run: ActiveRun | u
 		`OMP native task capability: ${observation.available ? "available" : "unavailable"}.`,
 		`capability evidence: ${observation.reason}.`,
 		`canonical routing.current: ${topology}.`,
-		"Canonical routing remains the owner of topology selection; this adapter never changes SOLO, SUBAGENTS, or ISOLATED.",
+		"Canonical routing remains the owner of topology selection; this adapter never changes SOLO or SUBAGENTS.",
 	];
 	if (observation.available) {
 		lines.push(
@@ -399,14 +392,14 @@ function capabilityPrompt(observation: CapabilityObservation, run: ActiveRun | u
 			"Pass the validated canonical worker_briefing/v1 projection unchanged as each native task item's `task` assignment.",
 			"The adapter supplies the translated canonical worker-result JSON Schema with schemaMode=strict and validates the returned result canonically.",
 			"Independent read-only items may use one native task.batch; writable shared-checkout items must be one sequential item at a time.",
-			"Never set native task isolation: OMP isolation is not SWE Forge ISOLATED support in this adapter.",
+			"Writers always run sequentially in the one delivery checkout; read-only items may use one native task.batch.",
 			"Headless workers have no interactive approval boundary; rely on the confined profile, bounded brief, no task recursion, and root-owned delivery authorization.",
 		);
 	} else {
 		lines.push("Do not call the native task tool for SWE Forge delegation; use the visible SOLO/sequential fallback.");
 	}
 	if (!run) {
-		lines.push("This explicit-invocation observation is discovery only. Persist a valid checkout-matching schema-v3 run-state with routing.current: SUBAGENTS before delegation.");
+		lines.push("This explicit-invocation observation is discovery only. Persist a valid checkout-matching schema-v4 run-state with routing.current: SUBAGENTS before delegation.");
 	} else if (topology !== "SUBAGENTS") {
 		lines.push(`The current canonical topology is ${topology}; native shared-checkout delegation is not authorized for this run.`);
 	}
@@ -449,7 +442,7 @@ function outputSchemaFor(profile: ResultProfile, taskId: string): Record<string,
 			BASE_SHA: { type: "string", pattern: SHA_PATTERN },
 			HEAD_SHA: { anyOf: [{ type: "string", pattern: SHA_PATTERN }, { type: "string", const: "none" }] },
 			BRANCH: { type: "string", minLength: 1 },
-			WORKTREE: { type: "string", minLength: 1 },
+			CHECKOUT: { type: "string", minLength: 1 },
 			FILES_CHANGED: stringArray,
 			GIT_STATE: stringArray,
 			DELIVERABLE_COMMITS: nullableArray({ type: "string" }),
@@ -466,9 +459,8 @@ function outputSchemaFor(profile: ResultProfile, taskId: string): Record<string,
 			review_focus: { type: "object", additionalProperties: true },
 			findings: { type: "array", items: { type: "object", additionalProperties: true } },
 			deferred_followups: { type: "array", items: { type: "object", additionalProperties: true } },
-			isolated_evidence: { type: "object", additionalProperties: true },
 		},
-		required: ["status", "scope", "review_focus", "findings", "deferred_followups", "isolated_evidence"],
+		required: ["status", "scope", "review_focus", "findings", "deferred_followups"],
 		additionalProperties: false,
 	};
 }
@@ -535,7 +527,7 @@ function serializeOrdinaryResult(data: unknown, profile: "READ_ONLY" | "WRITABLE
 	if (!appendScalar(lines, "STATUS", data.STATUS)) return undefined;
 	if (!appendScalar(lines, "TASK_ID", data.TASK_ID)) return undefined;
 	if (profile === "WRITABLE") {
-		for (const name of ["BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"]) {
+		for (const name of ["BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"]) {
 			if (!appendScalar(lines, name, data[name])) return undefined;
 		}
 		if (!appendList(lines, "FILES_CHANGED", data.FILES_CHANGED, true)) return undefined;
@@ -558,8 +550,7 @@ function reviewShapeIsValid(data: unknown): boolean {
 		isRecord(data.scope) &&
 		isRecord(data.review_focus) &&
 		Array.isArray(data.findings) &&
-		Array.isArray(data.deferred_followups) &&
-		isRecord(data.isolated_evidence)
+		Array.isArray(data.deferred_followups)
 	);
 }
 
@@ -648,15 +639,11 @@ async function prepareTaskInput(
 	cwd: string,
 	input: Record<string, unknown>,
 ): Promise<{ ok: true; input: Record<string, unknown>; items: PlannedItem[] } | { ok: false; reason: string }> {
-	if (input.isolated === true) return { ok: false, reason: "native OMP task isolation is not SWE Forge ISOLATED support; use the canonical fallback/provider" };
 	const shape = nativeItems(input);
 	if ("error" in shape) return { ok: false, reason: shape.error };
 	const planned: PlannedItem[] = [];
 	const nextItems: Array<Record<string, unknown>> = [];
 	for (const [index, item] of shape.items.entries()) {
-		if (item.isolated === true) {
-			return { ok: false, reason: "native OMP task isolation is not SWE Forge ISOLATED support; use the canonical fallback/provider" };
-		}
 		const name = typeof item.name === "string" ? item.name.trim() : "";
 		if (!TASK_ID_PATTERN.test(name)) return { ok: false, reason: `native task item ${index + 1} needs a canonical task name` };
 		const agent = item.agent;
@@ -738,7 +725,7 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 		if (!run) {
 			return {
 				block: true,
-				reason: "OMP native delegation refused: no active checkout-matching schema-v3 SWE Forge run-state is discoverable. Use SOLO/sequential fallback; a worker brief cannot establish routing authority.",
+				reason: "OMP native delegation refused: no active checkout-matching schema-v4 SWE Forge run-state is discoverable. Use SOLO/sequential fallback; a worker brief cannot establish routing authority.",
 			};
 		}
 		if (run.currentTopology !== "SUBAGENTS") {

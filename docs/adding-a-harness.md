@@ -147,8 +147,7 @@ The installer handles preflight, source-link verification, and
 `install`/`verify` for one explicitly selected harness at a time. There is
 intentionally no multi-harness install shortcut; callers can invoke the command
 once per desired harness.
-
-Test an adapter in an isolated fake home or controlled fixture:
+Test an adapter in a temporary fake home or controlled fixture:
 
 1. ordinary prompt does not activate Forge
 2. explicit natural-language invocation loads the canonical workflow
