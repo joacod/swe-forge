@@ -26,11 +26,12 @@ grading an agent from its explanation alone.
 
 | Scenario | Required behavior |
 | --- | --- |
-| Valid current schema v4 state | Validate successfully. |
+| Valid current schema v4 state | Validate successfully with only `routing.preferred` and `routing.current` as durable topology fields. |
 | Schema v3 state | Reject clearly as stale/unsupported; require a fresh run. |
 | Unknown/future schema version | Reject clearly as stale/unsupported; do not migrate or normalize it. |
 | Current state missing a required routing fact | Reject deterministically. |
 | Current state with preferred/effective divergence | Permit `routing.preferred: SUBAGENTS` with `routing.current: SOLO` after safe fallback. |
+| Current state with removed routing fields | Reject deterministically as obsolete; never migrate schema-v4 snapshots. |
 | Malformed current routing | Reject deterministically rather than guessing a topology. |
 | Matching delivery recovery projection | Validate successfully when `continuation.delivery.mode` equals `delivery_mode`. |
 | Contradictory delivery recovery projection | Reject deterministically. |
@@ -141,7 +142,7 @@ handoff and verifies that B receives selected facts without A's full result.
 | Two independent discovery questions | Record `DELEGATED_RESEARCH`, launch both bounded read-only workers together before consuming results, wait at one root fan-in barrier, resolve contradictions, and continue. |
 | Two coupled discovery questions | Record `ROOT_ONLY` or a real sequential dependency; do not parallelize coupled questions. |
 | Long sequential PR implementation | Keep one root owner responsible for ordered writes; use bounded `SUBAGENTS` research when useful and compact at validated PR boundaries. |
-| Context-heavy transition | Start `SOLO`, then record `SOLO -> SUBAGENTS` at a safe boundary when new independent work and context pressure make delegation useful; also accept `SUBAGENTS -> SOLO`. |
+| Context-heavy transition | Reassess once at a safe boundary when new independent work or context pressure makes delegation useful; update preferred/current and reason, without routing history. |
 | PR survives compaction | Persist `delivery: PR`, `awaiting: user_merge`, and `next_action.kind: verify_and_sync_merge`; after compaction, `merged` routes to `/git-sync merged` after verification. |
 | No native subagent capability | Record preferred `SUBAGENTS`, effective `SOLO`, and a visible capability-unavailable fallback; do not fail or simulate workers. |
 | No context telemetry | Record context `unknown`/`unavailable`; use durable checkpoints/manual recovery. |

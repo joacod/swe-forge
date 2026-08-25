@@ -126,11 +126,11 @@ are lowercase `solo`, `subagents`, `guided`, and `pr`; other text remains ticket
 content.
 
 The ticket workflow loads `.swe-forge/policies/execution-routing.md` before the
-final topology decision. That policy owns context value, preferred versus
-effective routing, adaptive revisions, runtime capability profiles, and safe
-fallback. A run records only the semantic topology and the native capability
-facts needed to explain delegation. Explicit selections never bypass safety,
-validation, scope, or delivery authorization.
+final topology decision. That policy owns the preferred/effective routing
+snapshot, concise decision rationale, meaningful reassessment boundaries,
+fresh semantic capability checks, and safe fallback. A run does not cache
+harness-specific routing profiles or ceremonial routing history. Explicit
+selections never bypass safety, validation, scope, or delivery authorization.
 
 ### SOLO
 
@@ -253,11 +253,12 @@ control snapshot after compaction; adapter reminders and conversation summaries
 are not authoritative.
 
 The canonical `swe-forge-state init` operation owns schema-v4 shell construction.
-Use `set-continuation` for bounded semantic continuation inputs; it generates
-`continuation.updated_at` and derives the delivery projection. Use
+Use `set-routing` for deliberate preferred/effective topology changes,
+`set-continuation` for bounded semantic continuation inputs, and
 `set-delivery-checkout` and `set-receipt-ref` for their purpose-specific
-updates. Callers must not hand-construct containers, timestamps, or delivery
-projections in YAML.
+updates. These helpers validate atomic replacements and derive
+`continuation.updated_at` and the delivery projection; callers must not
+hand-construct containers, timestamps, or projections in YAML.
 
 A run state is temporary by default and should live outside the repository, for
 example:

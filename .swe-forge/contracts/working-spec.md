@@ -91,26 +91,10 @@ commit_plan:
 
 routing:
   requested_mode: AUTO | SOLO | SUBAGENTS
-  initial: SOLO | SUBAGENTS
   preferred: SOLO | SUBAGENTS
-  selected: SOLO | SUBAGENTS
   current: SOLO | SUBAGENTS
   reason: <why this topology is the smallest safe choice>
   fallback_used: no | <preferred -> effective selection and reason>
-  context_value:
-    projected_pressure: low | medium | high | unknown
-    context_reducibility: low | medium | high | unknown
-    delegatable_context: low | medium | high | unknown
-    root_context_requirement: low | medium | high | unknown
-    continuity_risk: low | medium | high | unknown
-    rationale: <why generated information can or cannot leave the root>
-  revisions:
-    - from: SOLO | SUBAGENTS
-      to: SOLO | SUBAGENTS
-      reason: <evidence>
-      phase: <workflow phase>
-      boundary: <safe boundary>
-  runtime_profile_ref: <capability profile or none>
 
 context_strategy:
   status: healthy | near-limit | overflow | compacting | recovered | unknown | blocked
@@ -178,10 +162,12 @@ plan, and explicit assumptions. It records a lightweight discovery assessment;
 evidence, while coupled or unclear work remains `ROOT_ONLY`. In `PR`, it also
 has a review focus with a clear goal, the acceptance criteria to check, relevant
 in-scope quality concerns, non-goals, and a finding rule that keeps unrelated
-work out of the current review. It records preferred versus selected topology
-and the active runtime capability profile. For a long-running or context-risk
-ticket, it records context strategy, latest status, capability source,
-state-reinjection status, safe compaction boundary/action, expected next-action
-headroom, overflow action, and durable-state reference. Open questions may
-remain only when they do not block safe implementation and are recorded as
-risks. Ask the user about a blocking decision rather than guessing.
+work out of the current review. It records the preferred and current topology,
+concise routing reason, and fallback evidence; native capability is freshly
+observed at the delegation boundary rather than cached as a routing profile.
+For a long-running or context-risk ticket, it records context strategy, latest
+status, capability source, state-reinjection status, safe compaction
+boundary/action, expected next-action headroom, overflow action, and
+durable-state reference. Open questions may remain only when they do not block
+safe implementation and are recorded as risks. Ask the user about a blocking
+decision rather than guessing.

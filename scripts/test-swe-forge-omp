@@ -72,8 +72,7 @@ function makeState(name, current = "SUBAGENTS", runId = name) {
     "init", "--state", stateDir, "--checkout", checkout, "--run-id", runId,
     "--baseline-ref", "HEAD", "--status", "running", "--requested-mode", "AUTO",
     "--requested-delivery", "PR", "--delivery-mode", "PR", "--reason", "fixture state",
-    "--fallback-used", "no", "--routing-initial", current, "--routing-preferred", current,
-    "--routing-selected", current, "--routing-current", current,
+    "--fallback-used", "no", "--routing-preferred", current, "--routing-current", current,
     "--delivery-status", "ready", "--delivery-branch-setup", "reused",
     "--remote-default-evidence", "fixture",
   ];
@@ -256,6 +255,18 @@ fs.writeFileSync(obsolete, "workflow: swe-forge\nschema_version: 2\nstatus: runn
 const stale = makePi(agentDir);
 const staleAttempt = await prepare(stale, obsolete, { task: "no brief", name: "probe", agent: "swe-forge-read-only" });
 assert(staleAttempt.call?.block && staleAttempt.call.reason.includes("no active"), "obsolete run state authorized delegation");
+const obsoleteRouting = makeState("obsolete-routing", "SUBAGENTS", "obsolete-routing-run");
+fs.writeFileSync(
+  obsoleteRouting,
+  fs.readFileSync(obsoleteRouting, "utf8").replace("routing:\n", "routing:\n  initial: SUBAGENTS\n"),
+);
+const obsoleteRoutingAttempt = await prepare(
+  makePi(agentDir),
+  obsoleteRouting,
+  { task: "no brief", name: "probe", agent: "swe-forge-read-only" },
+  explicitEvent(),
+);
+assert(obsoleteRoutingAttempt.call?.block && obsoleteRoutingAttempt.call.reason.includes("no active"), "obsolete routing state authorized delegation");
 const wrongCheckout = makePi(agentDir);
 const wrongAttempt = await prepare(wrongCheckout, statePath, { task: "no brief", name: "probe", agent: "swe-forge-read-only" }, explicitEvent(), path.join(tmp, "other-checkout"));
 assert(wrongAttempt.call?.block && wrongAttempt.call.reason.includes("no active"), "wrong-checkout run state authorized delegation");

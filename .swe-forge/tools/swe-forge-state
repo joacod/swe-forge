@@ -21,6 +21,9 @@ usage() {
 Usage:
   swe-forge-state validate --state FILE|DIRECTORY
   swe-forge-state init --state DIRECTORY [--checkout PATH] [options]
+  swe-forge-state set-routing --state FILE|DIRECTORY \
+    --preferred TOPOLOGY --current TOPOLOGY --reason TEXT \
+    --fallback-used TEXT
   swe-forge-state set-continuation --state FILE|DIRECTORY [options]
   swe-forge-state set-delivery-checkout --state FILE|DIRECTORY \
     --head-sha SHA --checkpoint-sha SHA
@@ -32,11 +35,13 @@ Usage:
 `init` creates the current schema-v4 structural shell from explicit routing,
 delivery, checkout, and normalized invocation facts. Pass the parser's
 requested_mode, requested_delivery, and delivery_mode values unchanged.
-`set-continuation` accepts only the bounded continuation surface; it generates
-updated_at and derives the delivery projection. `set-delivery-checkout` and
-`set-receipt-ref` own their purpose-specific updates. All write operations
-validate a temporary result before atomic replacement. Obsolete or unknown
-state must be replaced by starting a fresh run.
+`set-routing` owns deliberate preferred/effective topology changes and their
+current rationale. `set-continuation` accepts only the bounded continuation
+surface; it generates updated_at and derives the delivery projection.
+`set-delivery-checkout` and `set-receipt-ref` own their purpose-specific
+updates. All write operations validate a temporary result before atomic
+replacement. Obsolete or unknown state must be replaced by starting a fresh
+run.
 EOF
 }
 
@@ -181,17 +186,39 @@ validate_delivery_projection() {
   canonical=$(required_scalar delivery_mode "$file")
   [ "$projection" = "$canonical" ] || fail 'continuation.delivery.mode must match delivery_mode'
 }
+reject_obsolete_routing() {
+  file=$1
+  if awk '
+    /^[[:space:]]*runtime_profile:/ ||
+    /^[[:space:]]*discovery_strategy:/ ||
+    /^  (initial|selected|revisions|context_value|runtime_profile_ref):/ {
+      found=1
+    }
+    END { if (found) exit 0; exit 1 }
+  ' "$file"; then
+    fail 'stale/unsupported run state: obsolete routing representation; start a fresh run'
+  fi
+}
+
 
 validate_routing() {
   requested=$1
-  initial=$2
+  preferred=$2
   current=$3
   requested_delivery=$4
   delivery_mode=$5
 
-  if [ "$requested" != AUTO ] && [ "$initial" != "$requested" ]; then
-    fail "routing.initial must match explicit requested_mode: $requested"
+  if [ "$requested" != AUTO ] && [ "$preferred" != "$requested" ]; then
+    fail "routing.preferred must match explicit requested_mode: $requested"
   fi
+  case "$preferred" in
+    SOLO|SUBAGENTS) ;;
+    *) fail "invalid routing.preferred: $preferred" ;;
+  esac
+  case "$current" in
+    SOLO|SUBAGENTS) ;;
+    *) fail "invalid routing.current: $current" ;;
+  esac
   case "$requested_delivery" in
     DEFAULT|GUIDED) expected_delivery=GUIDED ;;
     PR) expected_delivery=PR ;;
@@ -199,21 +226,19 @@ validate_routing() {
   esac
   [ "$delivery_mode" = "$expected_delivery" ] || \
     fail "delivery_mode must match requested_delivery: $requested_delivery requires $expected_delivery"
-  case "$current" in
-    SOLO|SUBAGENTS) ;;
-    *) fail "invalid routing.current: $current" ;;
-  esac
 }
+
 
 validate_state() {
   file=$(state_file "$1")
   schema=$(value_for schema_version "$file" || true)
   [ "$schema" = 4 ] || \
     fail 'stale/unsupported run state: only schema_version: 4 is supported; start a fresh run'
+  reject_obsolete_routing "$file"
 
   for key in workflow workflow_version schema_version run_id status requested_mode \
     requested_delivery delivery_mode reason fallback_used routing delivery_checkout \
-    runtime_profile delivery receipt_ref tasks; do
+    delivery receipt_ref tasks; do
     top_level "$key" "$file" || fail "schema-v4 state is missing top-level key: $key"
   done
 
@@ -224,37 +249,17 @@ validate_state() {
   validate_enum requested_delivery "$file" DEFAULT GUIDED PR
   validate_enum delivery_mode "$file" GUIDED PR
 
-  for field in initial preferred selected current; do
+  for field in preferred current; do
     nested_key routing "$field" "$file" || fail "routing is missing $field"
     validate_enum "routing.$field" "$file" SOLO SUBAGENTS
   done
-  for field in projected_pressure context_reducibility delegatable_context \
-    root_context_requirement continuity_risk; do
-    nested_key routing.context_value "$field" "$file" || \
-      fail "routing.context_value is missing $field"
-    validate_enum "routing.context_value.$field" "$file" low medium high unknown
-  done
-  required_scalar routing.context_value.rationale "$file" >/dev/null
-  required_scalar routing.runtime_profile_ref "$file" >/dev/null
 
   validate_routing \
     "$(required_scalar requested_mode "$file")" \
-    "$(required_scalar routing.initial "$file")" \
+    "$(required_scalar routing.preferred "$file")" \
     "$(required_scalar routing.current "$file")" \
     "$(required_scalar requested_delivery "$file")" \
     "$(required_scalar delivery_mode "$file")"
-
-  for field in harness context_usage context_window proactive_compaction \
-    compaction_hooks state_reinjection capability_precedence; do
-    nested_key runtime_profile "$field" "$file" || \
-      fail "runtime_profile is missing $field"
-  done
-  validate_enum runtime_profile.context_usage "$file" available estimated unavailable unknown
-  validate_enum runtime_profile.context_window "$file" reported configured unknown
-  validate_enum runtime_profile.proactive_compaction "$file" available unavailable unknown
-  validate_enum runtime_profile.compaction_hooks "$file" available unavailable unknown
-  validate_enum runtime_profile.state_reinjection "$file" available unavailable unknown
-  validate_enum runtime_profile.subagents.native "$file" available unavailable unknown
 
   for field in path branch base_sha head_sha checkpoint_sha status branch_setup \
     remote_default_evidence; do
@@ -353,20 +358,11 @@ init_state() {
   init_delivery_mode=
   init_reason='initial schema-v4 state'
   init_fallback_used=no
-  init_routing_initial=
   init_routing_preferred=
-  init_routing_selected=
   init_routing_current=
   init_delivery_status=ready
   init_delivery_branch_setup=reused
   init_remote_default_evidence=none
-  init_runtime_harness=unknown
-  init_runtime_context_usage=unknown
-  init_runtime_context_window=unknown
-  init_runtime_proactive_compaction=unknown
-  init_runtime_compaction_hooks=unknown
-  init_runtime_state_reinjection=unknown
-  init_runtime_subagents=unknown
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -420,19 +416,9 @@ init_state() {
         init_fallback_used=$2
         shift 2
         ;;
-      --routing-initial)
-        [ "$#" -ge 2 ] || fail '--routing-initial requires a topology'
-        init_routing_initial=$2
-        shift 2
-        ;;
       --routing-preferred)
         [ "$#" -ge 2 ] || fail '--routing-preferred requires a topology'
         init_routing_preferred=$2
-        shift 2
-        ;;
-      --routing-selected)
-        [ "$#" -ge 2 ] || fail '--routing-selected requires a topology'
-        init_routing_selected=$2
         shift 2
         ;;
       --routing-current)
@@ -453,41 +439,6 @@ init_state() {
       --remote-default-evidence)
         [ "$#" -ge 2 ] || fail '--remote-default-evidence requires text'
         init_remote_default_evidence=$2
-        shift 2
-        ;;
-      --runtime-harness)
-        [ "$#" -ge 2 ] || fail '--runtime-harness requires a value'
-        init_runtime_harness=$2
-        shift 2
-        ;;
-      --context-usage)
-        [ "$#" -ge 2 ] || fail '--context-usage requires a value'
-        init_runtime_context_usage=$2
-        shift 2
-        ;;
-      --context-window)
-        [ "$#" -ge 2 ] || fail '--context-window requires a value'
-        init_runtime_context_window=$2
-        shift 2
-        ;;
-      --proactive-compaction)
-        [ "$#" -ge 2 ] || fail '--proactive-compaction requires a value'
-        init_runtime_proactive_compaction=$2
-        shift 2
-        ;;
-      --compaction-hooks)
-        [ "$#" -ge 2 ] || fail '--compaction-hooks requires a value'
-        init_runtime_compaction_hooks=$2
-        shift 2
-        ;;
-      --state-reinjection)
-        [ "$#" -ge 2 ] || fail '--state-reinjection requires a value'
-        init_runtime_state_reinjection=$2
-        shift 2
-        ;;
-      --native-subagents)
-        [ "$#" -ge 2 ] || fail '--native-subagents requires a value'
-        init_runtime_subagents=$2
         shift 2
         ;;
       -h|--help)
@@ -525,32 +476,21 @@ init_state() {
     esac
   fi
   require_enum_arg delivery_mode "$init_delivery_mode" GUIDED PR
-  [ -n "$init_routing_initial" ] || {
+  [ -n "$init_routing_preferred" ] || {
     case "$init_requested_mode" in
-      AUTO) init_routing_initial=SOLO ;;
-      *) init_routing_initial=$init_requested_mode ;;
+      AUTO) init_routing_preferred=SOLO ;;
+      *) init_routing_preferred=$init_requested_mode ;;
     esac
   }
-  [ -n "$init_routing_preferred" ] || init_routing_preferred=$init_routing_initial
-  [ -n "$init_routing_selected" ] || init_routing_selected=$init_routing_preferred
-  [ -n "$init_routing_current" ] || init_routing_current=$init_routing_selected
-  for init_route in "$init_routing_initial" "$init_routing_preferred" \
-    "$init_routing_selected" "$init_routing_current"; do
-    require_enum_arg routing "$init_route" SOLO SUBAGENTS
-  done
+  [ -n "$init_routing_current" ] || init_routing_current=$init_routing_preferred
+  require_enum_arg routing.preferred "$init_routing_preferred" SOLO SUBAGENTS
+  require_enum_arg routing.current "$init_routing_current" SOLO SUBAGENTS
   require_scalar_arg reason "$init_reason"
   require_scalar_arg fallback_used "$init_fallback_used"
   require_enum_arg delivery_checkout.status "$init_delivery_status" ready running blocked dirty complete
   require_enum_arg delivery_checkout.branch_setup "$init_delivery_branch_setup" auto-created reused user-provided provided blocked
-  require_enum_arg runtime_profile.context_usage "$init_runtime_context_usage" available estimated unavailable unknown
-  require_enum_arg runtime_profile.context_window "$init_runtime_context_window" reported configured unknown
-  require_enum_arg runtime_profile.proactive_compaction "$init_runtime_proactive_compaction" available unavailable unknown
-  require_enum_arg runtime_profile.compaction_hooks "$init_runtime_compaction_hooks" available unavailable unknown
-  require_enum_arg runtime_profile.state_reinjection "$init_runtime_state_reinjection" available unavailable unknown
-  require_enum_arg runtime_profile.subagents.native "$init_runtime_subagents" available unavailable unknown
-  control_chars "$init_runtime_harness"
   control_chars "$init_remote_default_evidence"
-  validate_routing "$init_requested_mode" "$init_routing_initial" "$init_routing_current" \
+  validate_routing "$init_requested_mode" "$init_routing_preferred" "$init_routing_current" \
     "$init_requested_delivery" "$init_delivery_mode"
 
   if [ "$init_delivery_mode" = PR ]; then
@@ -575,29 +515,8 @@ init_state() {
     printf 'reason: %s\n' "$init_reason"
     printf 'fallback_used: %s\n' "$init_fallback_used"
     printf 'routing:\n'
-    printf '  initial: %s\n' "$init_routing_initial"
     printf '  preferred: %s\n' "$init_routing_preferred"
-    printf '  selected: %s\n' "$init_routing_selected"
     printf '  current: %s\n' "$init_routing_current"
-    printf '  revisions: []\n'
-    printf '  context_value:\n'
-    printf '    projected_pressure: unknown\n'
-    printf '    context_reducibility: unknown\n'
-    printf '    delegatable_context: low\n'
-    printf '    root_context_requirement: high\n'
-    printf '    continuity_risk: unknown\n'
-    printf '    rationale: initialization facts only\n'
-    printf '  runtime_profile_ref: none\n'
-    printf 'runtime_profile:\n'
-    printf '  harness: %s\n' "$init_runtime_harness"
-    printf '  context_usage: %s\n' "$init_runtime_context_usage"
-    printf '  context_window: %s\n' "$init_runtime_context_window"
-    printf '  proactive_compaction: %s\n' "$init_runtime_proactive_compaction"
-    printf '  compaction_hooks: %s\n' "$init_runtime_compaction_hooks"
-    printf '  state_reinjection: %s\n' "$init_runtime_state_reinjection"
-    printf '  subagents:\n'
-    printf '    native: %s\n' "$init_runtime_subagents"
-    printf '  capability_precedence: observed > adapter_declared > static_default > unknown\n'
     printf 'receipt_ref: none\n'
     printf 'delivery_checkout:\n'
     printf '  path: %s\n' "$init_checkout_root"
@@ -627,6 +546,96 @@ init_state() {
   mv "$state_tmp" "$init_state_file"
   state_tmp=
   printf 'PASS: schema-v4 run state initialized: %s\n' "$init_state_file"
+}
+
+set_routing() {
+  state_arg=
+  preferred_arg=
+  current_arg=
+  reason_arg=
+  fallback_arg=
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail '--state requires a file or directory'
+        state_arg=$2
+        shift 2
+        ;;
+      --preferred)
+        [ "$#" -ge 2 ] || fail '--preferred requires a topology'
+        preferred_arg=$2
+        shift 2
+        ;;
+      --current)
+        [ "$#" -ge 2 ] || fail '--current requires a topology'
+        current_arg=$2
+        shift 2
+        ;;
+      --reason)
+        [ "$#" -ge 2 ] || fail '--reason requires text'
+        reason_arg=$2
+        shift 2
+        ;;
+      --fallback-used)
+        [ "$#" -ge 2 ] || fail '--fallback-used requires text'
+        fallback_arg=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *) fail "unknown set-routing option: $1" ;;
+    esac
+  done
+
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$preferred_arg" ] || fail '--preferred is required'
+  [ -n "$current_arg" ] || fail '--current is required'
+  [ -n "$reason_arg" ] || fail '--reason is required'
+  [ -n "$fallback_arg" ] || fail '--fallback-used is required'
+  state_path=$(state_file "$state_arg")
+  validate_state "$state_path" >/dev/null
+  require_enum_arg routing.preferred "$preferred_arg" SOLO SUBAGENTS
+  require_enum_arg routing.current "$current_arg" SOLO SUBAGENTS
+  require_scalar_arg reason "$reason_arg"
+  require_scalar_arg fallback_used "$fallback_arg"
+  requested_mode=$(required_scalar requested_mode "$state_path")
+  validate_routing "$requested_mode" "$preferred_arg" "$current_arg" \
+    "$(required_scalar requested_delivery "$state_path")" \
+    "$(required_scalar delivery_mode "$state_path")"
+
+  state_tmp=$state_path.tmp.$$
+  awk -v preferred="$preferred_arg" -v current="$current_arg" \
+    -v reason="$reason_arg" -v fallback="$fallback_arg" '
+    BEGIN { section="" }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+    }
+    /^reason:/ { print "reason: " reason; reason_count++; next }
+    /^fallback_used:/ { print "fallback_used: " fallback; fallback_count++; next }
+    section == "routing" && $0 ~ /^  preferred:/ {
+      print "  preferred: " preferred
+      preferred_count++
+      next
+    }
+    section == "routing" && $0 ~ /^  current:/ {
+      print "  current: " current
+      current_count++
+      next
+    }
+    { print }
+    END {
+      if (reason_count != 1 || fallback_count != 1 ||
+          preferred_count != 1 || current_count != 1) exit 1
+    }
+  ' "$state_path" >"$state_tmp" || fail 'routing update could not locate the current state fields'
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: routing updated: %s\n' "$state_path"
 }
 
 set_delivery_checkout() {
@@ -920,6 +929,7 @@ main() {
       validate_state "$state"
       ;;
     init) init_state "$@" ;;
+    set-routing) set_routing "$@" ;;
     set-continuation) set_continuation "$@" ;;
     set-delivery-checkout) set_delivery_checkout "$@" ;;
     set-receipt-ref) set_receipt_ref "$@" ;;

@@ -34,9 +34,7 @@ distinguishes a missing optional field from existing numeric cases.
 ```text
 requested_mode: AUTO
 routing:
-  initial: SOLO
   preferred: SOLO
-  selected: SOLO
   current: SOLO
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
@@ -78,7 +76,6 @@ TASK_ID: receipt-discount-placeholder
 BASE_SHA: <task base>
 HEAD_SHA: <worker head or none>
 BRANCH: <task branch>
-WORKTREE: <task worktree>
 FILES_CHANGED:
 - src/receipts/format-total.ts
 - src/receipts/format-total.test.ts

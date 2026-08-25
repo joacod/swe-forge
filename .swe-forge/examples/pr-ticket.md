@@ -14,9 +14,7 @@ The parser records:
 ```text
 requested_mode: AUTO
 routing:
-  initial: SOLO
   preferred: SOLO
-  selected: SOLO
   current: SOLO
 requested_delivery: PR
 delivery_mode: PR

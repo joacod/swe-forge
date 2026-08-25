@@ -28,35 +28,8 @@ reason: <why this is the smallest safe topology>
 fallback_used: no | <preferred -> effective selection and reason>
 
 routing:
-  initial: SOLO | SUBAGENTS
   preferred: SOLO | SUBAGENTS
-  selected: SOLO | SUBAGENTS
   current: SOLO | SUBAGENTS
-  revisions:
-    - from: SOLO | SUBAGENTS
-      to: SOLO | SUBAGENTS
-      reason: <evidence>
-      phase: <workflow phase>
-      boundary: <safe boundary>
-  context_value:
-    projected_pressure: low | medium | high | unknown
-    context_reducibility: low | medium | high | unknown
-    delegatable_context: low | medium | high | unknown
-    root_context_requirement: low | medium | high | unknown
-    continuity_risk: low | medium | high | unknown
-    rationale: <why generated information can or cannot leave the root>
-  runtime_profile_ref: <capability profile or none>
-
-runtime_profile:
-  harness: <harness id>
-  context_usage: available | estimated | unavailable | unknown
-  context_window: reported | configured | unknown
-  proactive_compaction: available | unavailable | unknown
-  compaction_hooks: available | unavailable | unknown
-  state_reinjection: available | unavailable | unknown
-  subagents:
-    native: available | unavailable | unknown
-  capability_precedence: observed > adapter_declared > static_default > unknown
 
 receipt_ref: <receipt path or none>
 
@@ -104,15 +77,13 @@ the sole owner of live topology facts:
 
 | Field | Meaning and update rule |
 | --- | --- |
-| `routing.initial` | Initial semantic topology preference computed from the request and discovery; set once when routing starts. |
-| `routing.preferred` | Current semantic topology preference after deliberate reassessment; it may differ from the effective topology. |
-| `routing.selected` | Initial effective topology after capability fallback; it is not rewritten merely because `current` later changes. |
-| `routing.current` | Currently effective topology; update it only when an actual routing change is selected. |
+| `routing.preferred` | Current semantic topology preference after the latest meaningful assessment. |
+| `routing.current` | Currently effective topology authorized to run; update it only at a safe boundary when the effective decision changes. |
 
 A preferred `SUBAGENTS` topology may run with effective `SOLO` after native
 capability fallback. The preference remains visible with its reason; it is not
-reported as successful delegation. A preferred topology must not be collapsed
-into the effective executable topology.
+reported as successful delegation. Initial preference, initial effective
+selection, and routing history are not durable state.
 
 `delivery_mode` owns the active delivery decision.
 `continuation.delivery.mode`, when present, is a compact recovery projection of
@@ -133,8 +104,7 @@ valid schema-v4 snapshot always contains:
 - `workflow`, `workflow_version`, `schema_version`, `run_id`, `status`,
   `requested_mode`, `requested_delivery`, `delivery_mode`, `reason`, and
   `fallback_used`;
-- the complete `routing` mapping;
-- the complete `runtime_profile` mapping;
+- the `routing` mapping with `preferred` and `current`;
 - `receipt_ref`;
 - the complete `delivery_checkout` mapping;
 - the complete `delivery` authorization and action mapping; and
@@ -146,16 +116,18 @@ stage-dependent and may be absent from the initial shell.
 
 ## Routing and capability evidence
 
-Automatic routing considers projected pressure, context reducibility,
-delegatable context, root-context requirement, continuity risk, and the
-observed native subagent capability independently. Prompt length alone never
-selects delegation.
+Automatic routing uses task coupling, independent evaluability, expected
+context relief, continuity risk, and the root-owned acceptance boundary.
+Prompt length alone never selects delegation. The working spec or concise
+`reason` records the evidence without serializing a routing score or dimension
+matrix.
 
-A native capability is available only when the active adapter has demonstrated
-its task/subagent surface, bounded roles, structured results, and safe fallback.
-An unknown or unavailable capability keeps the effective topology `SOLO` or
-sequential root execution. Capability presence never selects a topology by
-itself.
+A native capability is available only when the active adapter has freshly
+demonstrated its task/subagent surface, bounded roles, structured results, and
+safe fallback. An unknown or unavailable capability keeps the effective
+topology `SOLO` or sequential root execution. Capability presence never
+selects a topology by itself, and a cached capability fact never authorizes a
+worker launch.
 
 ## Remaining state
 
@@ -172,17 +144,7 @@ specialist_skills:
 working_spec_ref: <external temporary spec, active context, or none>
 acceptance_ref: <acceptance criteria reference>
 current_phase: discovery | foundation | implementation | review | delivery | cleanup
-
-discovery_strategy:
-  mode: ROOT_ONLY | DELEGATED_RESEARCH
-  rationale: <why discovery questions can or cannot leave root context>
-  questions: []
-  batch:
-    strategy: FAN_OUT_FAN_IN | ROOT_ONLY | SEQUENTIAL
-    max_workers: <bounded worker limit>
-    fan_in: ONE_BARRIER | NONE
-  capability: available | unavailable | unknown
-  final_routing_deferred: true | false
+```
 
 context:
   status: healthy | near-limit | overflow | compacting | recovered | unknown | blocked
@@ -237,14 +199,19 @@ retries:
 
 A state whose `schema_version` is not `4` must be rejected as stale or
 unsupported, including older and future versions. No helper guesses a
-migration, normalizes an obsolete snapshot, or rewrites it in place. When
-`continuation` is present, the validator requires its workflow-control fields
-and a delivery projection matching `delivery_mode`.
+migration, normalizes an obsolete snapshot, or rewrites it in place. The
+validator also rejects the removed routing fields from earlier schema-v4
+representations; callers must start a fresh run rather than migrate them.
+When `continuation` is present, the validator requires its workflow-control
+fields and a delivery projection matching `delivery_mode`.
 
 ## Rules and transitions
 
 - State is updated only from actual Git/evidence facts or an explicit
   orchestrator decision.
+- Use `swe-forge-state set-routing` for deliberate preferred/effective
+  topology changes and their concise reason/fallback evidence; it validates
+  and atomically replaces only those fields.
 - Use `swe-forge-state set-continuation` for bounded continuation updates; it
   owns the update timestamp and derived delivery projection.
 - Use `swe-forge-state set-delivery-checkout` and `set-receipt-ref` for their

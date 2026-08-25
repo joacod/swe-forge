@@ -115,9 +115,7 @@ tasks:
 ```text
 requested_mode: AUTO
 routing:
-  initial: SUBAGENTS
   preferred: SUBAGENTS
-  selected: SUBAGENTS
   current: SUBAGENTS
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
@@ -142,8 +140,6 @@ dependencies:
   - ui-research
   - test-strategy
 write_access: read-write
-worktree_role: shared
-worktree: shared
 working_spec_ref: none
 checkout_baseline:
   path: <absolute checkout path>
@@ -189,8 +185,6 @@ expected_output:
   - focused test evidence
   - structured worker result
 authorization:
-  create_branch: {status: not-authorized, provenance: none, scope: none}
-  create_worktree: {status: not-authorized, provenance: none, scope: none}
   commit: {status: not-authorized, provenance: none, scope: none}
   push: {status: not-authorized, provenance: none, scope: none}
   create_pull_request: {status: not-authorized, provenance: none, scope: none}
@@ -210,7 +204,6 @@ TASK_ID: orders-pagination
 BASE_SHA: <task base>
 HEAD_SHA: <worker head or none>
 BRANCH: <task branch>
-WORKTREE: <task worktree>
 FILES_CHANGED:
 - services/orders/src/http/admin-orders.ts
 - services/orders/src/repositories/order-repository.ts
@@ -277,9 +270,7 @@ no critical or high-confidence correctness finding, and reports:
 ```text
 requested_mode: AUTO
 routing:
-  initial: SUBAGENTS
   preferred: SUBAGENTS
-  selected: SUBAGENTS
   current: SUBAGENTS
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
