@@ -5,10 +5,11 @@ discovery, explicit invocation, delegation, permissions, isolation, or model
 routing. Natural-language activation through `AGENTS.md` is always the
 fallback.
 
-SWE Forge is Pi-first, not Pi-only. Pi is the reference adapter, while other
-adapters may expose a smaller or different capability set with safe canonical
-fallbacks. A new adapter starts as experimental by default; it does not need to
-reproduce every Pi capability before it can be useful.
+SWE Forge is harness-agnostic: the canonical workflow owns semantics and an
+adapter translates them onto the host's native mechanisms. Adapters may expose
+a smaller or different capability set with safe canonical fallbacks. A new
+adapter starts as Experimental by default; it does not need to reproduce every
+other adapter's capabilities before it can be useful.
 
 ## Research Current Documentation
 
@@ -54,13 +55,54 @@ An adapter may still contain:
 
 - a short discovery and installation README
 - an explicit command, skill, or prompt loader
-- optional thin native role bridges
+- optional native role or runtime bridges
+- capability detection and worker-profile mapping
 - permission and model mapping guidance
 - isolation and fallback notes
 - validation steps
 
-Keep the adapter smaller than the canonical workflow. A loader should say which
-canonical files to read, not reproduce their procedure.
+Keep the adapter smaller than and subordinate to the canonical workflow. A
+loader should say which canonical files to read, not reproduce their procedure;
+a runtime bridge may translate host mechanics when the harness needs more than
+a loader.
+
+## Decide Where a New Host Primitive Belongs
+
+When a harness exposes a useful new primitive, use this small decision rule:
+
+```text
+A new host primitive appears
+        |
+        v
+Does it implement an existing SWE Forge semantic capability?
+        |
+      yes --------------> implement it entirely in the adapter
+        |
+        no
+        v
+Does SWE Forge lack a semantic contract that is independently useful
+regardless of this harness?
+        |
+      yes --------------> add the smallest harness-neutral contract
+        |
+       no ---------------> keep the behavior adapter-local
+```
+
+Canonical routing still selects the topology. An adapter does not choose a
+workflow topology merely because its host exposes a native task or subagent
+primitive.
+
+Before adding a canonical abstraction, ask:
+
+1. What SWE Forge semantic concept is missing?
+2. Would the concept still make sense if the requesting harness did not exist?
+3. Could another harness implement the same contract with a different
+   primitive?
+4. Does the abstraction avoid exposing the original host terminology?
+5. Does existing harness behavior remain unchanged?
+
+If the answers are not convincing, keep the change in the adapter. Do not turn
+this decision rule into a generic plugin or extension framework.
 
 ## Required Adapter Work
 

@@ -1,12 +1,11 @@
 # Compatibility
 
 SWE Forge is preparing its first alpha release, `v0.1.0-alpha.1`. It is a
-Pi-first coding workflow with a portable canonical core and optional harness
-adapters.
-The repository-maintained compatibility record below separates the maintenance
-tier from two different kinds of validation. It records the evidence currently
-available, not a promise that future harness releases remain compatible without
-review.
+harness-agnostic workflow with a portable canonical core and optional harness
+adapters. The repository-maintained compatibility record below separates the
+maintenance tier from two different kinds of validation. It records the
+evidence currently available, not a promise that future harness releases
+remain compatible without review.
 
 ## Support tiers
 
@@ -15,16 +14,16 @@ commitment. It does not require identical host behavior or feature parity.
 
 | Harness | Tier |
 | --- | --- |
-| Pi | First-class / reference |
-| OpenCode | Compatible / secondary |
+| Pi | First-class |
+| OpenCode | Compatible |
 | OMP | Experimental |
 | Claude Code | Experimental |
 | Codex | Experimental |
 | Cursor | Experimental |
 
 Experimental adapters may remain installable and useful while they accumulate
-real harness evidence. They do not block releases or new Pi capabilities unless
-a change breaks the portable canonical core.
+real harness evidence. They do not block changes to the harness-agnostic
+canonical workflow unless a change breaks a contract they legitimately consume.
 
 ## Projection and fixture validation
 
@@ -52,8 +51,8 @@ home. The evidence currently recorded is:
 
 | Harness | Real harness validation | Current evidence and boundary |
 | --- | --- | --- |
-| Pi | Yes | Pi is the reference harness actively used to develop SWE Forge; 0.84.2 is the observed version. |
-| OpenCode | Yes | OpenCode has prior successful maintainer usage; 1.18.16 is the observed version. It is secondary and does not impose parity requirements on Pi development. |
+| Pi | Yes | Pi has the strongest current maintainer validation evidence; 0.84.2 is the observed version. |
+| OpenCode | Yes | OpenCode has prior successful maintainer usage; 1.18.16 is the observed version. Its evidence does not impose parity requirements on other adapters. |
 | OMP | Yes | OMP 18.0.4 was exercised through an explicit `/swe-forge` invocation; the read-only smoke test loaded the prompt and passed installation, status, and version checks. It does not demonstrate lifecycle integration or feature parity. |
 | Claude Code | No | The maintainer has not actively exercised Claude Code. Projection/fixture validation must not be described as behavioral validation. |
 | Codex | No | Not installed or exercised in the validation environment. |

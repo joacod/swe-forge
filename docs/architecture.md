@@ -1,8 +1,9 @@
 # Architecture
 
-SWE Forge is a Pi-first coding workflow with a portable canonical core above
-coding harnesses. Its architecture separates canonical workflow logic from
-role definitions, contracts, policies, execution providers, and harness
+SWE Forge is a harness-agnostic workflow above coding harnesses. Adapters
+translate its portable canonical semantics onto demonstrated host capabilities
+without redefining them. Its architecture separates canonical workflow logic
+from role definitions, contracts, policies, execution providers, and harness
 integrations. Execution topology, provider, and delivery are orthogonal:
 
 - topology controls coordination: `SOLO`, `SUBAGENTS`, or `ISOLATED`
@@ -63,6 +64,38 @@ only ephemeral isolated worker branches use internal run/task namespacing.
 Providers are not topology branches. The orchestrator remains accountable for
 foundation, Git/evidence validation, central integration, final verification,
 review, delivery, and cleanup.
+
+## Canonical workflow and adapter ownership
+
+The canonical SWE Forge layer owns the semantics that must remain stable across
+harnesses:
+
+- activation semantics and the ticket lifecycle;
+- topology semantics and routing policy;
+- worker and delegation semantics, including worker briefs;
+- worker, result, and review contracts;
+- evidence semantics and delivery authorization;
+- isolation requirements and safe fallback behavior; and
+- run-state semantics.
+
+Harness adapters own the mechanics needed to expose those semantics through a
+host:
+
+- host discovery and loading;
+- commands, prompts, and skills used to expose SWE Forge;
+- host-native task or subagent invocation and worker confinement;
+- runtime capability observation and lifecycle hooks;
+- context telemetry integration and structured-result translation;
+- host approval behavior and configuration paths; and
+- installation projections.
+
+Adapters are harness integration layers. They remain smaller than and
+subordinate to the canonical workflow, but they may legitimately contain a
+loader, prompt or command projection, runtime bridge, capability detector,
+worker-profile mapping, structured-result translation, or lifecycle
+integration. The invariant is not that adapters contain almost no code:
+adapter code implements host mechanics while canonical SWE Forge owns
+semantics. Adapters translate; they do not redefine.
 
 ## Capability boundary
 
@@ -211,11 +244,12 @@ evidence only. Native selection requires structured proof of all mandatory
 capabilities; harnesses may expose them differently and no universal launcher
 is implied.
 
-Adapters under `.swe-forge/adapters/` are thin loaders. The registry is the
-installation source of truth, and adapters must resolve canonical references
-from the active user-level installation root rather than a project-local
-`.swe-forge/` tree. The adapter catalog remains in the SWE Forge checkout and
-is not installed with a harness projection.
+Adapters under `.swe-forge/adapters/` are harness integration layers, not
+alternate workflow definitions. The registry is the installation source of
+truth, and adapters must resolve canonical references from the active
+user-level installation root rather than a project-local `.swe-forge/` tree.
+The adapter catalog remains in the SWE Forge checkout and is not installed
+with a harness projection.
 
 ## State flow
 
@@ -244,11 +278,14 @@ and never migrated or guessed into a new shape; start a fresh run instead.
 ## Runtime capability boundary
 
 The generic core records capability names such as `context_usage`,
-`proactive_compaction`, `state_reinjection`, and `subagents`. Pi-specific
-methods stay inside the Pi adapter. Capability resolution uses observed
-runtime evidence first, then adapter declarations, documented static defaults,
-and finally `unknown`; unknown capabilities degrade to durable checkpoints and
-manual recovery rather than invented thresholds. The optional Pi
-`swe_forge_subagent` bridge is only a capability handoff: canonical routing
-still owns whether to delegate, and the adapter gates one negotiated bounded
-run while preserving SOLO/sequential fallback and rejecting `ISOLATED` use.
+`proactive_compaction`, `state_reinjection`, and `subagents`. Capability
+resolution uses observed runtime evidence first, then adapter declarations,
+documented static defaults, and finally `unknown`; unknown capabilities
+degrade to durable checkpoints and manual recovery rather than invented
+thresholds.
+
+Adapters may translate demonstrated host-native worker facilities into the
+canonical delegation capability. Canonical routing still owns whether
+delegation occurs, and unavailable capabilities use the canonical fallback
+where one exists. Host API and bridge details belong in the relevant adapter,
+not in this architectural description.

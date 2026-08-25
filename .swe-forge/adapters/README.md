@@ -3,10 +3,9 @@
 Adapters expose the canonical SWE Forge workflow and its explicit delivery
 actions through harness-native features. They are optional, asymmetric
 integration layers, not alternate workflow definitions or execution providers.
-SWE Forge is Pi-first: Pi is the reference/first-class adapter, OpenCode is
-compatible/secondary, and Claude Code, Codex, and Cursor are experimental. A
-projection can be useful without providing feature parity or real harness
-validation.
+The canonical workflow is harness-agnostic; each adapter translates its
+semantics onto demonstrated host capabilities. A projection can be useful
+without providing feature parity or real harness validation.
 
 ## Source of Truth
 
@@ -90,9 +89,9 @@ configuration; review it manually first.
 
 ## Adapters
 
-- [Pi](pi/README.md): first-class/reference user-level prompt-template bridge
-- [OpenCode](opencode/README.md): compatible/secondary user-level command and
-  optional native-agent bridge pattern
+- [Pi](pi/README.md): First-class user-level prompt-template bridge
+- [OpenCode](opencode/README.md): Compatible user-level command and optional
+  native-agent bridge pattern
 - [OMP](omp/README.md): experimental user-level prompt-template projection
 - [Claude Code](claude-code/README.md): experimental user-level skill projection
 - [Shared Agent Skill](shared/agent-skill/README.md): experimental Codex and

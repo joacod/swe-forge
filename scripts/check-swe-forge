@@ -152,12 +152,17 @@ require_text '## Harnesses' README.md
 require_text '## Install' README.md
 require_text '## Use' README.md
 require_text '## Documentation' README.md
-require_text 'Pi-first' README.md
+require_text 'harness-agnostic' README.md
+require_text '| [Pi](.swe-forge/adapters/pi/README.md) | First-class |' README.md
+require_text '| [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible |' README.md
+require_text 'Adapters are harness integration layers' docs/architecture.md
+require_text 'A new host primitive appears' docs/adding-a-harness.md
+reject_text '/swe-forge subagents <ticket>' .swe-forge/adapters/omp/README.md
 require_text '`SOLO`' README.md
 require_text '`SUBAGENTS`' README.md
 require_text '`ISOLATED`' README.md
-require_text 'scripts/swe-forge install pi' README.md
-require_text 'scripts/swe-forge verify pi' README.md
+require_text 'scripts/swe-forge install "$HARNESS"' README.md
+require_text 'scripts/swe-forge verify "$HARNESS"' README.md
 require_text 'scripts/swe-forge install omp' docs/installation.md
 require_text 'scripts/swe-forge verify omp' docs/installation.md
 require_text '/swe-forge pr <ticket>' README.md

@@ -5,9 +5,9 @@ canonical workflow through OMP's user-level prompt-template and runtime
 extension conventions while keeping routing, worker briefs, result contracts,
 review, Git integration, and delivery in the canonical SWE Forge support tree.
 
-The adapter targets the observed OMP `18.0.4` task API and remains a thin
-control-plane bridge. It does not replace OMP's native task executor or change
-the OMP support tier.
+The adapter targets the observed OMP `18.0.4` task API and remains a small
+control-plane integration layer. It does not replace OMP's native task
+executor or change the OMP support tier.
 
 ## Installation
 
@@ -47,8 +47,14 @@ After installation, restart OMP and invoke:
 ```text
 /swe-forge <ticket>
 /swe-forge pr <ticket>
-/swe-forge subagents <ticket>
 ```
+
+The normal OMP experience uses the canonical ticket entry point. Canonical
+routing decides whether `SUBAGENTS` is useful; when it selects that topology
+and the adapter observes a compatible native backend, this adapter realizes
+the decision through OMP's native task mechanism. The global canonical
+`solo`, `subagents`, and `isolated` overrides remain available for explicit
+routing and testing, but they are not OMP-specific workflows.
 
 The prompt template passes `$ARGUMENTS` unchanged to the canonical invocation
 bootstrap. The shared `swe-forge-invocation` tool remains responsible for

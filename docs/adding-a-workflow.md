@@ -61,5 +61,6 @@ when it protects a required behavior or safety boundary.
 - workers return structured results with exact bases, scope, validation, and
   environment-resource evidence when isolated
 - verification and fresh review are proportional and real
-- adapters remain thin loaders
+- adapters remain subordinate integration layers and do not redefine canonical
+  workflow semantics
 - examples and conformance coverage explain when the workflow should not be used

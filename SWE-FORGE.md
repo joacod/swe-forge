@@ -1,18 +1,19 @@
 # SWE Forge Specification
 
-SWE Forge is an explicitly invoked, portable software-engineering workflow for
-AI coding harnesses. It sits above the harness and chooses how much process is
-useful for the current ticket. Execution topology (`SOLO`, `SUBAGENTS`, or
-`ISOLATED`) is independent from delivery mode (`GUIDED` or `PR`). An isolated
-run may use a native harness capability or the optional Herdr execution
-provider, but neither provider defines SWE Forge behavior.
+SWE Forge is an explicitly invoked, harness-agnostic software-engineering
+workflow for AI coding harnesses. It sits above the harness and adapts to
+demonstrated host capabilities without allowing a host to redefine workflow
+semantics. Execution topology (`SOLO`, `SUBAGENTS`, or `ISOLATED`) is
+independent from delivery mode (`GUIDED` or `PR`). An isolated run may use a
+native harness capability or the optional Herdr execution provider, but neither
+provider defines SWE Forge behavior.
 
-SWE Forge is Pi-first, not Pi-only: Pi is the first-class/reference harness,
-OpenCode is a compatible secondary harness, and Claude Code, Codex, and Cursor
-are experimental adapters. The canonical workflow remains portable, while
-adapter capabilities may be asymmetric and degrade through documented
-fallbacks. Projection success or fixture coverage does not by itself imply
-real harness validation, and adapter parity is not a project requirement.
+The canonical workflow remains portable. Adapters may expose asymmetric
+capabilities and use documented fallbacks; projection success or fixture
+coverage does not by itself imply real harness validation, and feature parity
+is not a project requirement. Current adapter maintenance and validation
+confidence belong in [`docs/compatibility.md`](docs/compatibility.md), not in
+this workflow specification.
 
 ## Activation Contract
 

@@ -1,11 +1,11 @@
 # Installation
 
-SWE Forge is a Pi-first coding workflow with a portable canonical repository.
-Keep one stable checkout as the source of truth and install the requested
-harness projection as links back to that checkout. Projects are repositories
-SWE Forge operates on; SWE Forge is not installed into them. Installation
-availability is separate from the support tier and real harness validation
-recorded in the compatibility snapshot.
+SWE Forge is a harness-agnostic coding workflow with a portable canonical
+repository. Keep one stable checkout as the source of truth and install the
+requested harness projection as links back to that checkout. Projects are
+repositories SWE Forge operates on; SWE Forge is not installed into them.
+Installation availability is separate from the support tier and real harness
+validation recorded in the compatibility snapshot.
 
 The dependency-free installer uses the user's home directory and handles one
 harness per invocation:
