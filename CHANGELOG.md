@@ -40,8 +40,8 @@ compatibility, and known limitations.
 - Portable `SOLO`, `SUBAGENTS`, and `ISOLATED` workflow guidance.
 - Separate `GUIDED` and `PR` delivery modes with explicit delivery boundaries.
 - A first-class/reference Pi adapter, a compatible/secondary OpenCode adapter,
-  and experimental Claude Code, Codex, and Cursor adapters, with no feature-
-  parity requirement.
+  and experimental OMP, Claude Code, Codex, and Cursor adapters, with no
+  feature-parity requirement.
 - Transactional source-link installation and verification with collision and
   rollback checks.
 - Executable evidence gates and compact run receipts.

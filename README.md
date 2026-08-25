@@ -33,6 +33,7 @@ them safely. The [workflow specification](SWE-FORGE.md) and
 | --- | --- |
 | [Pi](.swe-forge/adapters/pi/README.md) | First-class / reference |
 | [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible / secondary |
+| [OMP](.swe-forge/adapters/omp/README.md) | Experimental |
 | [Claude Code](.swe-forge/adapters/claude-code/README.md) | Experimental |
 | [Codex](.swe-forge/adapters/codex/README.md) | Experimental |
 | [Cursor](.swe-forge/adapters/cursor/README.md) | Experimental |
@@ -55,7 +56,7 @@ scripts/swe-forge install pi
 scripts/swe-forge verify pi
 ```
 
-Replace `pi` with `opencode`, `claude`, `codex`, or `cursor` as needed. See the
+Replace `pi` with `opencode`, `omp`, `claude`, `codex`, or `cursor` as needed. See the
 [installation guide](docs/installation.md) for the supported link locations
 and optional capabilities.
 

@@ -151,6 +151,8 @@ require_text '`SUBAGENTS`' README.md
 require_text '`ISOLATED`' README.md
 require_text 'scripts/swe-forge install pi' README.md
 require_text 'scripts/swe-forge verify pi' README.md
+require_text 'scripts/swe-forge install omp' docs/installation.md
+require_text 'scripts/swe-forge verify omp' docs/installation.md
 require_text '/swe-forge pr <ticket>' README.md
 require_text 'Neither mode merges automatically' README.md
 require_text 'scripts/swe-forge update' docs/installation.md
@@ -423,6 +425,7 @@ require_text 'Structured worker results, Git evidence, validation, and central i
 
 for file in \
   .swe-forge/adapters/opencode/commands/swe-forge.md \
+  .swe-forge/adapters/omp/prompts/swe-forge.md \
   .swe-forge/adapters/claude-code/skills/swe-forge/SKILL.md \
   .swe-forge/adapters/pi/prompts/swe-forge.md \
   .swe-forge/adapters/shared/agent-skill/swe-forge/SKILL.md; do
@@ -436,6 +439,7 @@ for file in \
 done
 for file in \
   .swe-forge/adapters/opencode/commands/swe-forge.md \
+  .swe-forge/adapters/omp/prompts/swe-forge.md \
   .swe-forge/adapters/claude-code/skills/swe-forge/SKILL.md \
   .swe-forge/adapters/pi/prompts/swe-forge.md \
   .swe-forge/adapters/shared/agent-skill/swe-forge/SKILL.md; do
@@ -444,10 +448,12 @@ for file in \
 done
 for file in \
   .swe-forge/adapters/opencode/commands/swe-forge.md \
+  .swe-forge/adapters/omp/prompts/swe-forge.md \
   .swe-forge/adapters/pi/prompts/swe-forge.md; do
   require_text '$ARGUMENTS' "$file"
 done
 require_text '~/.pi/agent/swe-forge' .swe-forge/adapters/pi/prompts/swe-forge.md
+require_text '~/.omp/agent/swe-forge' .swe-forge/adapters/omp/prompts/swe-forge.md
 require_text '~/.pi/agent/swe-forge/.swe-forge/policies/delivery.md' .swe-forge/adapters/pi/prompts/git-pr.md
 require_text 'thin loader' .swe-forge/adapters/opencode/commands/git-push.md
 require_text 'clean status' .swe-forge/providers/herdr/runbook.md
@@ -475,6 +481,7 @@ EOF
 require_text 'ADAPTER_REGISTRY' scripts/swe-forge
 require_text 'opencode|file|opencode/commands/git-push.md' .swe-forge/adapters/registry.tsv
 require_text 'opencode|file|opencode/commands/git-pr.md' .swe-forge/adapters/registry.tsv
+require_text 'omp|file|omp/prompts/swe-forge.md' .swe-forge/adapters/registry.tsv
 require_text 'pi|file|pi/prompts/git-sync.md' .swe-forge/adapters/registry.tsv
 require_text 'pi|file|pi/extensions/swe-forge-runtime.ts' .swe-forge/adapters/registry.tsv
 require_text 'codex|tree|shared/agent-skill/swe-forge' .swe-forge/adapters/registry.tsv
@@ -489,6 +496,7 @@ require_text 'https://cursor.com/docs' .swe-forge/adapters/shared/agent-skill/RE
 require_text 'shared adapter behavior' .swe-forge/adapters/claude-code/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/opencode/README.md
 require_text 'shared adapter behavior' .swe-forge/adapters/pi/README.md
+require_text 'https://omp.sh/docs/prompt-templates' .swe-forge/adapters/omp/README.md
 require_text '### Context management' .swe-forge/adapters/pi/README.md
 require_text 'agent_settled' .swe-forge/adapters/pi/README.md
 require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts

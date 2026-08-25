@@ -93,6 +93,7 @@ configuration; review it manually first.
 - [Pi](pi/README.md): first-class/reference user-level prompt-template bridge
 - [OpenCode](opencode/README.md): compatible/secondary user-level command and
   optional native-agent bridge pattern
+- [OMP](omp/README.md): experimental user-level prompt-template projection
 - [Claude Code](claude-code/README.md): experimental user-level skill projection
 - [Shared Agent Skill](shared/agent-skill/README.md): experimental Codex and
   Cursor projection
