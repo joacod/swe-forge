@@ -31,7 +31,7 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
-    [--requested-mode MODE]
+    [--requested-mode MODE] [--routing-preferred MODE] [--routing-current MODE]
     [--requested-delivery DELIVERY] [--delivery-mode MODE]
   scripts/swe-forge-gate plan-check --state DIR --name NAME --requirement TYPE \
     [--condition TEXT] [--final-required true|false]
@@ -234,9 +234,7 @@ preflight() {
   requested_mode=AUTO
   requested_delivery=PR
   delivery_mode=PR
-  routing_initial=SOLO
   routing_preferred=SOLO
-  routing_selected=SOLO
   routing_current=SOLO
   state_reason='single-checkout implementation'
   fallback_used=no
@@ -277,22 +275,10 @@ preflight() {
         reject_control_chars "$delivery_mode"
         shift 2
         ;;
-      --routing-initial)
-        [ "$#" -ge 2 ] || fail "--routing-initial requires a topology"
-        routing_initial=$2
-        reject_control_chars "$routing_initial"
-        shift 2
-        ;;
       --routing-preferred)
         [ "$#" -ge 2 ] || fail "--routing-preferred requires a topology"
         routing_preferred=$2
         reject_control_chars "$routing_preferred"
-        shift 2
-        ;;
-      --routing-selected)
-        [ "$#" -ge 2 ] || fail "--routing-selected requires a topology"
-        routing_selected=$2
-        reject_control_chars "$routing_selected"
         shift 2
         ;;
       --routing-current)
@@ -349,9 +335,7 @@ preflight() {
     --requested-mode "$requested_mode" \
     --requested-delivery "$requested_delivery" \
     --delivery-mode "$delivery_mode" \
-    --routing-initial "$routing_initial" \
     --routing-preferred "$routing_preferred" \
-    --routing-selected "$routing_selected" \
     --routing-current "$routing_current" \
     --reason "$state_reason" \
     --fallback-used "$fallback_used" \

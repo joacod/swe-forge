@@ -78,16 +78,6 @@ requested_delivery: PR
 delivery_mode: PR
 reason: fixture
 fallback_used: no
-runtime_profile:
-  harness: pi
-  context_usage: unknown
-  context_window: unknown
-  proactive_compaction: unknown
-  compaction_hooks: unknown
-  state_reinjection: unknown
-  subagents:
-    native: unknown
-  capability_precedence: observed > adapter_declared > static_default > unknown
 delivery_checkout:
   path: ${cwd}
   branch: feature/fixture
@@ -98,18 +88,8 @@ delivery_checkout:
   branch_setup: reused
   remote_default_evidence: fixture
 routing:
-  initial: ${options.initial ?? preferred}
   preferred: ${preferred}
-  selected: ${options.selected ?? current}
   current: ${current}
-  context_value:
-    projected_pressure: ${options.projected ?? "low"}
-    context_reducibility: unknown
-    delegatable_context: unknown
-    root_context_requirement: high
-    continuity_risk: unknown
-    rationale: fixture
-  runtime_profile_ref: none
 continuation:
   workflow_active: true
   workflow: ticket
@@ -217,6 +197,21 @@ fs.writeFileSync(staleState, `workflow: swe-forge\nschema_version: 3\nstatus: ru
 process.env.SWE_FORGE_RUN_STATE = staleState;
 const staleInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
 if (staleInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("stale schema was accepted");
+const obsoleteState = path.join(fixtureCwd, "states", "obsolete", "run-state.yaml");
+writeRuntimeState(obsoleteState, {
+  runId: "obsolete-run",
+  current: "SUBAGENTS",
+  preferred: "SUBAGENTS",
+  updatedAt: "2060-01-01T00:00:00Z",
+});
+fs.writeFileSync(
+  obsoleteState,
+  fs.readFileSync(obsoleteState, "utf8").replace("routing:\n", "routing:\n  initial: SUBAGENTS\n"),
+);
+process.env.SWE_FORGE_RUN_STATE = obsoleteState;
+const obsoleteInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (obsoleteInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("obsolete routing state was accepted");
+
 
 const subagentState = path.join(fixtureCwd, "states", "subagent", "run-state.yaml");
 writeRuntimeState(subagentState, {

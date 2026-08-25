@@ -73,10 +73,11 @@ PR delivery; do not treat delivery preference as permission to merge.
 ### 2. Discover
 
 Before broad discovery, load and follow `policies/execution-routing.md` for its
-lightweight discovery-shape assessment. Record `discovery_strategy.mode` as
-`ROOT_ONLY` unless there are clearly independent, read-only questions whose
-answers can return concise evidence and materially reduce root-context growth.
-This is an early research strategy, not the final topology decision.
+lightweight discovery-shape assessment. Keep `discovery_strategy` in the
+transient working spec or active context, using `ROOT_ONLY` unless there are
+clearly independent, read-only questions whose answers can return concise
+evidence and materially reduce root-context growth. This is an early research
+strategy, not the final topology decision or durable routing state.
 
 For `DELEGATED_RESEARCH`, load `policies/delegation.md`, the bounded researcher
 role, the task/result contracts, and model-routing before assigning a worker.
@@ -153,9 +154,9 @@ contents.
 
 Before making the final automatic or explicit topology decision, load and
 follow `policies/execution-routing.md`. Choose the smallest safe topology,
-recording `routing.initial`, `preferred`, `selected`, and `current` with the
-context-value rationale and native capability profile. Explicit selections do
-not bypass safety, validation, scope, or delivery authorization.
+recording `routing.preferred`, `routing.current`, the concise reason, and any
+fallback evidence. Explicit selections do not bypass safety, validation, scope,
+or delivery authorization.
 
 When an optional native `SUBAGENTS` capability is used, the adapter carries the
 validated `worker_briefing/v1` projection, not complete root task or run state.

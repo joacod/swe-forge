@@ -170,6 +170,7 @@ require_text 'context:' .swe-forge/contracts/run-state.md
 require_text 'continuation:' .swe-forge/contracts/run-state.md
 require_text 'delivery_checkout:' .swe-forge/contracts/run-state.md
 require_text 'set-continuation' .swe-forge/tools/swe-forge-state
+require_text 'set-routing' .swe-forge/tools/swe-forge-state
 require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-state
 require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
 require_text 'one fan-in barrier' .swe-forge/policies/delegation.md

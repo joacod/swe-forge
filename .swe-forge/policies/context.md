@@ -120,13 +120,13 @@ at the host's fully settled lifecycle event—use this sequence:
    projected context pressure is planning evidence and does not by itself
    establish insufficient headroom.
 5. Wait for the host compaction lifecycle to settle. Do not launch a duplicate
-   retry or continue while `compacting`.
 6. Re-read the working spec and run state, inspect the actual checkout and
    current `HEAD`, and verify the expected branch, diff boundary, and evidence
    are still present.
 7. Resume only from the recorded next action. A changed context estimate may
-   justify a deliberate routing revision at this boundary, recorded in
-   `routing.revisions`.
+   justify a deliberate routing revision at this boundary; update the current
+   preferred/effective topology and concise reason with `set-routing` only when
+   the decision actually changes.
 
 A runtime extension may provide steps 3–5, but the core workflow remains
 responsible for persistence and the post-compaction recheck. If a host exposes
@@ -208,10 +208,10 @@ compact before starting the next step. A one-step ticket still gets one
 cohesive commit; do not create ceremonial commits just to force compaction.
 
 After compaction, routing may be reconsidered once at the next meaningful
-boundary. `SOLO -> SUBAGENTS` and `SUBAGENTS -> SOLO` are valid when the
-context-value evidence or native capability changes. Record the
-preferred/effective distinction and revision rather than silently changing the
-topology.
+boundary, after the root re-reads state and Git. Update preferred/current
+topology and the concise reason only when context-value evidence or native
+capability changes; do not persist an initial/selected distinction or routing
+history.
 
 Fresh review and delivery must use the post-compaction, post-validation
 `HEAD`. A review or receipt created before recovery is stale when the candidate

@@ -225,6 +225,17 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 	if (!text) return undefined;
 	const values = parseScalarYaml(text);
 	if (values.get("workflow") !== "swe-forge" || values.get("schema_version") !== "4") return undefined;
+	for (const field of [
+		"routing.initial",
+		"routing.selected",
+		"routing.revisions",
+		"routing.context_value",
+		"routing.runtime_profile_ref",
+		"runtime_profile",
+		"discovery_strategy",
+	]) {
+		if (values.has(field)) return undefined;
+	}
 	if (!stateMatchesCheckout(values, cwd)) return undefined;
 	const status = values.get("status") ?? "unknown";
 	if (!ACTIVE_STATUSES[status] || TERMINAL_STATUSES[status]) return undefined;

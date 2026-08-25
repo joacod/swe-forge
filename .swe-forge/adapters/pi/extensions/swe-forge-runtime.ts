@@ -227,7 +227,6 @@ interface ActiveRun {
 	nextActionTarget: string;
 	expectedContextTokens?: number;
 	safeBoundary: boolean;
-	projectedPressure: string;
 	contextStatus: string;
 	prNumber: string;
 	prState: string;
@@ -280,7 +279,6 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 		nextActionTarget: displayValue(values, "continuation.next_action.target", "none"),
 		expectedContextTokens: numberOrUndefined(values.get("continuation.next_action.expected_context_tokens")),
 		safeBoundary: boolValue(values.get("continuation.safe_boundary")) ?? false,
-		projectedPressure: displayValue(values, "routing.context_value.projected_pressure", "unknown"),
 		contextStatus: displayValue(values, "context.status", "unknown"),
 		prNumber: displayValue(values, "continuation.delivery.pr_number", "none"),
 		prState: displayValue(values, "continuation.delivery.pr_state", "none"),
@@ -359,8 +357,18 @@ function topology(value: string): string {
 
 function currentStateError(values: Map<string, string>): string | undefined {
 	if (values.get("schema_version") !== "4") return "unsupported run-state schema";
-	const topologyFields = ["routing.initial", "routing.preferred", "routing.selected", "routing.current"];
-	for (const field of topologyFields) {
+	for (const field of [
+		"routing.initial",
+		"routing.selected",
+		"routing.revisions",
+		"routing.context_value",
+		"routing.runtime_profile_ref",
+		"runtime_profile",
+		"discovery_strategy",
+	]) {
+		if (values.has(field)) return `obsolete run-state field: ${field}`;
+	}
+	for (const field of ["routing.preferred", "routing.current"]) {
 		const value = values.get(field);
 		if (!value || (topology(value) !== "SOLO" && topology(value) !== "SUBAGENTS")) {
 			return `missing or malformed ${field}`;

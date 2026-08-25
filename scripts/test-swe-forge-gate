@@ -43,9 +43,10 @@ state=$TMP_ROOT/clean.state
   grep -F 'schema_version: 4' "$state/run-state.yaml" >/dev/null
   grep -F '  preferred: SOLO' "$state/run-state.yaml" >/dev/null
   grep -F '  current: SOLO' "$state/run-state.yaml" >/dev/null
-  grep -F 'delivery_checkout:' "$state/run-state.yaml" >/dev/null
-  grep -F 'runtime_profile:' "$state/run-state.yaml" >/dev/null
-  grep -F 'continuation:' "$state/run-state.yaml" >/dev/null
+  test ! -e "$state/run-state.yaml.tmp" || fail 'state initializer left a temporary file'
+  if grep -Eq 'runtime_profile:|context_value:|  (initial|selected|revisions):' "$state/run-state.yaml"; then
+    fail 'state initializer emitted removed routing representation'
+  fi
   "$ROOT/scripts/swe-forge-state" validate --state "$state/run-state.yaml" >/dev/null
   "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'changed\n' >>README.md
@@ -88,8 +89,7 @@ propagation_state=$TMP_ROOT/propagation.state
   cd "$propagation_repo"
   "$GATE" preflight --state "$propagation_state" \
     --requested-mode SUBAGENTS --requested-delivery GUIDED --delivery-mode GUIDED \
-    --routing-initial SUBAGENTS --routing-preferred SUBAGENTS \
-    --routing-selected SUBAGENTS --routing-current SUBAGENTS \
+    --routing-preferred SUBAGENTS --routing-current SUBAGENTS \
     --reason 'requested propagation fixture' >/dev/null
 )
 grep -F 'requested_mode: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
@@ -101,8 +101,7 @@ state_tool=$ROOT/scripts/swe-forge-state
 early_state=$TMP_ROOT/early-state
 "$state_tool" init --state "$early_state" --checkout "$propagation_repo" --run-id early-state \
   --requested-mode SUBAGENTS --requested-delivery GUIDED --delivery-mode GUIDED \
-  --routing-initial SUBAGENTS --routing-preferred SUBAGENTS \
-  --routing-selected SUBAGENTS --routing-current SUBAGENTS \
+  --routing-preferred SUBAGENTS --routing-current SUBAGENTS \
   --reason 'early shell fixture' >/dev/null
 "$state_tool" validate --state "$early_state" >/dev/null
 if grep -Eq '^continuation:' "$early_state/run-state.yaml"; then fail 'init unexpectedly created continuation data'; fi
@@ -114,6 +113,27 @@ if grep -Eq '^continuation:' "$early_state/run-state.yaml"; then fail 'init unex
 grep -F '    mode: GUIDED' "$early_state/run-state.yaml" >/dev/null
 updated_at=$(awk '$1 == "updated_at:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
 case "$updated_at" in *T*Z) ;; *) fail 'set-continuation generated malformed timestamp' ;; esac
+"$state_tool" set-routing --state "$early_state" \
+  --preferred SUBAGENTS --current SOLO --reason 'native fallback' \
+  --fallback-used 'SUBAGENTS -> SOLO: native capability unavailable' >/dev/null
+grep -F '  preferred: SUBAGENTS' "$early_state/run-state.yaml" >/dev/null
+grep -F '  current: SOLO' "$early_state/run-state.yaml" >/dev/null
+grep -F 'fallback_used: SUBAGENTS -> SOLO: native capability unavailable' "$early_state/run-state.yaml" >/dev/null
+"$state_tool" validate --state "$early_state" >/dev/null
+adaptive_state=$TMP_ROOT/adaptive.state
+"$state_tool" init --state "$adaptive_state" --checkout "$propagation_repo" --run-id adaptive-state \
+  --requested-mode AUTO --requested-delivery GUIDED --delivery-mode GUIDED \
+  --routing-preferred SOLO --routing-current SOLO --reason 'adaptive baseline' >/dev/null
+"$state_tool" set-routing --state "$adaptive_state" \
+  --preferred SUBAGENTS --current SUBAGENTS --reason 'independent discovery remains useful' \
+  --fallback-used no >/dev/null
+grep -F '  preferred: SUBAGENTS' "$adaptive_state/run-state.yaml" >/dev/null
+grep -F '  current: SUBAGENTS' "$adaptive_state/run-state.yaml" >/dev/null
+"$state_tool" set-routing --state "$adaptive_state" \
+  --preferred SOLO --current SOLO --reason 'remaining work is coupled' \
+  --fallback-used no >/dev/null
+grep -F '  preferred: SOLO' "$adaptive_state/run-state.yaml" >/dev/null
+grep -F '  current: SOLO' "$adaptive_state/run-state.yaml" >/dev/null
 
 state_ops=$TMP_ROOT/state-operations.yaml
 cp "$early_state/run-state.yaml" "$state_ops"
@@ -127,6 +147,9 @@ grep -F "receipt_ref: $TMP_ROOT/private-receipt.md" "$state_ops" >/dev/null
 schema_v3=$TMP_ROOT/schema-v3.yaml
 sed 's/^schema_version: 4$/schema_version: 3/' "$state_ops" >"$schema_v3"
 expect_failure 'stale/unsupported run state' "$state_tool" validate --state "$schema_v3"
+obsolete_route=$TMP_ROOT/obsolete-route.yaml
+awk '/^routing:/{print; print "  initial: SOLO"; next} {print}' "$state_ops" >"$obsolete_route"
+expect_failure 'obsolete routing representation' "$state_tool" validate --state "$obsolete_route"
 invalid_route=$TMP_ROOT/invalid-route.yaml
 sed 's/^  current: SUBAGENTS$/  current: UNKNOWN/' "$propagation_state/run-state.yaml" >"$invalid_route"
 expect_failure 'invalid routing.current' "$state_tool" validate --state "$invalid_route"

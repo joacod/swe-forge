@@ -7,17 +7,17 @@ change between alpha releases.
 
 ## [Unreleased]
 
-- Context-aware routing now records reducibility, preferred versus effective
-  topology, adaptive `SOLO`/`SUBAGENTS` revisions, delegation backends, and
-  capability-aware fallbacks while preserving the writable `ISOLATED` gate.
+- Context-aware routing now defaults to `SOLO` and records only the preferred
+  and effective topology, concise decision evidence, and safe native-capability
+  fallback; bounded `SUBAGENTS` work remains sequential in one checkout.
 - Run state now carries a compact durable continuation snapshot, and the Pi
   adapter adds lifecycle-based state reinjection, active-PR shorthand recovery,
   and safe-boundary proactive compaction.
 - Model/provider/reasoning-mode optimization remains intentionally out of scope
   for this change.
 - Final alpha hardening adds exact candidate-content evidence binding,
-  schema-v3 run state, machine-valid isolated worker results, executable
-  isolated Git conformance, head-bound receipts, and release-readiness checks.
+  schema-v4 run state, machine-valid worker results, executable Git conformance,
+  head-bound receipts, and release-readiness checks.
 - PR runs now plan meaningful implementation slices before editing, preserve one
   validated commit per slice, and support sequential slice evidence without
   repeating unchanged run-state validation.
@@ -37,7 +37,8 @@ compatibility, and known limitations.
 
 ### Added
 
-- Portable `SOLO`, `SUBAGENTS`, and `ISOLATED` workflow guidance.
+- Portable `SOLO` and `SUBAGENTS` workflow guidance with one writable delivery
+  checkout and optional bounded native delegation.
 - Separate `GUIDED` and `PR` delivery modes with explicit delivery boundaries.
 - First-class Pi, Compatible OpenCode, and Experimental OMP, Claude Code,
   Codex, and Cursor adapters, with no feature-parity requirement.
@@ -53,8 +54,8 @@ compatibility, and known limitations.
 - All harness installations are user-level source links and require a current
   managed manifest for safe update or uninstall. Obsolete installations are
   inspectable, but destructive operations refuse to guess ownership.
-- Isolated execution depends on demonstrated native worktree capabilities or
-  the optional Herdr provider; Herdr is never installed automatically.
+- Native delegated execution depends on a demonstrated host capability and
+  falls back to root-owned sequential work when unavailable.
 - SWE Forge creates pull requests in PR mode but never merges them or publishes
   a release automatically.
 

@@ -116,24 +116,24 @@ execution uses the safe root-owned fallback.
 ## Routing boundary
 
 Automatic routing does not use prompt length alone. Before broad discovery, the
-orchestrator makes a lightweight discovery-shape assessment: clearly
-independent, read-only questions may use bounded `DELEGATED_RESEARCH`, while
-coupled questions remain `ROOT_ONLY`. This assessment records bounded
-objectives and concise evidence limits; it does not choose delivery or
- duplicate the final topology router.
+orchestrator makes a lightweight, transient discovery-shape assessment:
+clearly independent read-only questions may use bounded
+`DELEGATED_RESEARCH`, while coupled questions remain `ROOT_ONLY`. The
+assessment records bounded objectives and concise evidence limits; it does not
+choose delivery or duplicate the final topology router.
 
-The final routing decision records projected pressure, context reducibility,
-delegatable context, root-context requirement, continuity risk, and runtime
-capability evidence. Independent investigations may make `SUBAGENTS` preferable
-when concise structured results materially reduce root context, even when all
-implementation writes remain sequential. Multiple independent discovery
-questions use one small read-only fan-out/fan-in batch. Globally coupled work
-stays `SOLO`, or uses an explicit sequential dependency.
+The final routing decision records only `preferred`, `current`, a concise
+reason, and any fallback evidence. Prefer `SOLO` unless independently
+evaluable work materially benefits from concise delegated results and the
+active adapter demonstrates the semantic native capability. Independent
+discovery questions may use one small read-only fan-out/fan-in batch; globally
+coupled work stays `SOLO` or uses an explicit sequential dependency.
 
 A preferred `SUBAGENTS` run with no active native capability falls back to
-effective `SOLO` or sequential work with a visible reason. At safe boundaries,
-`SOLO` and `SUBAGENTS` may be revised deliberately; each revision records its
-evidence and phase.
+effective `SOLO` or sequential work with a visible reason. Reassess only when
+discovery, recovery, delegation value, capability, context headroom, or review
+needs materially change; ordinary turns and unchanged checkpoints do not
+create routing history.
 
 ## Shared-checkout boundary
 
@@ -204,7 +204,7 @@ ticket/raw invocation
   -> acceptance and transient PR working spec
   -> context capability and durable continuation plan
   -> architecture, ownership, and validation plan
-  -> preferred/effective routing and native capability evidence
+  -> preferred/effective routing and fresh native capability check
   -> one delivery checkout
   -> bounded root or sequential native work
   -> exact-content evidence and final review
@@ -214,17 +214,19 @@ ticket/raw invocation
 
 Run state is temporary or ignored and schema-v4 only. Its short `continuation`
 block is authoritative workflow-control state after compaction; conversation
-summaries and adapter reminders are not. Any state with another schema version
-is stale, rejected clearly, and never migrated or guessed into a new shape.
+summaries and adapter reminders are not. Any state with another schema version,
+or with removed routing fields, is stale, rejected clearly, and never migrated
+or guessed into a new shape.
 
 ## Runtime capability boundary
 
-The generic core records capability names such as `context_usage`,
-`proactive_compaction`, `state_reinjection`, and `subagents.native`.
+The generic core consumes semantic capability observations such as
+`context_usage`, `proactive_compaction`, `state_reinjection`, and
+`subagents.native`; it does not cache harness-specific routing profiles.
 Capability resolution uses observed runtime evidence first, then adapter
-declarations, documented static defaults, and finally `unknown`; unknown
-capabilities degrade to durable checkpoints and manual recovery rather than
-invented thresholds.
+declarations, documented static defaults, and finally `unknown`. Unknown
+capabilities degrade to durable checkpoints, manual recovery, or root-owned
+sequential work rather than invented thresholds or delegation authority.
 
 Adapters may translate demonstrated host-native worker facilities into the
 canonical delegation capability. Canonical routing still owns whether

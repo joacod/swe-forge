@@ -70,19 +70,21 @@ current public surfaces:
 - the canonical brief, result, and state validators.
 
 It advertises the capability only when those observations are compatible. A
-task tool's mere presence does not change routing.
+task tool's mere presence does not change routing, and capability observations
+are not trusted as durable authorization.
 
 When canonical routing has persisted `routing.current: SUBAGENTS`, the bridge:
 
 1. validates the active schema-v4, checkout-matching run state with the
    canonical state tool;
-2. validates each `worker_briefing/v1` projection with
+2. re-observes the native capability at the delegation boundary;
+3. validates each `worker_briefing/v1` projection with
    `swe-forge-worker-brief`;
-3. passes the exact rendered projection as the native OMP task assignment;
-4. selects the adapter-owned `swe-forge-*` host profile;
-5. supplies the translated canonical result JSON Schema with `schemaMode:
+4. passes the exact rendered projection as the native OMP task assignment;
+5. selects the adapter-owned `swe-forge-*` host profile;
+6. supplies the translated canonical result JSON Schema with `schemaMode:
    strict`; and
-6. validates returned ordinary results with `swe-forge-worker-result` before
+7. validates returned ordinary results with `swe-forge-worker-result` before
    marking delegation successful.
 
 The extension uses OMP's `tool_call` input-revision and `tool_result` middleware
@@ -160,8 +162,7 @@ The canonical run state recorded:
 
 ```text
 requested_mode: AUTO
-routing.initial/preferred/selected/current: SUBAGENTS
-runtime_profile.subagents.native: available
+routing.preferred/current: SUBAGENTS
 ```
 
 The root session recorded `native_task_prepared` for one two-item read-only

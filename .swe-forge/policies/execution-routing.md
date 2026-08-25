@@ -1,4 +1,4 @@
-# Context-Aware Execution Routing Policy
+# Execution Routing Policy
 
 ## Objective
 
@@ -8,9 +8,8 @@ context headroom, and safe task ownership. Supported topologies are `SOLO` and
 
 ## Routing record
 
-Every automatic or explicit run records the following fields. The nested
-`routing` mapping is the sole owner of live topology facts. Full field semantics
-and update rules are defined in the run-state contract.
+Every run records only the semantic topology facts needed to resume and explain
+the decision. The nested `routing` mapping owns the live topology:
 
 ```text
 requested_mode: AUTO | SOLO | SUBAGENTS
@@ -20,51 +19,38 @@ reason: <specific evidence>
 fallback_used: no | <preferred -> effective selection and reason>
 
 routing:
-  initial: SOLO | SUBAGENTS
   preferred: SOLO | SUBAGENTS
-  selected: SOLO | SUBAGENTS
   current: SOLO | SUBAGENTS
-  revisions:
-    - from: SOLO | SUBAGENTS
-      to: SOLO | SUBAGENTS
-      reason: <evidence>
-      phase: <workflow phase>
-      boundary: <safe boundary>
-  context_value:
-    projected_pressure: low | medium | high | unknown
-    context_reducibility: low | medium | high | unknown
-    delegatable_context: low | medium | high | unknown
-    root_context_requirement: low | medium | high | unknown
-    continuity_risk: low | medium | high | unknown
-    rationale: <why generated information can or cannot leave the root>
-  runtime_profile_ref: <capability profile or none>
 ```
 
-`requested_mode` is the immutable invocation request. `routing.initial` is the
-initial semantic preference, `routing.preferred` is the current preference
-after deliberate reassessment, `routing.selected` is the initial effective
-result after capability fallback, and `routing.current` is the currently
-effective topology. A preferred `SUBAGENTS` result with no demonstrated native
-capability retains that preference while `routing.current` records the safe
-`SOLO` fallback with its reason; it is not silently reported as delegation.
+`requested_mode` is the immutable invocation request. `routing.preferred` is
+the current semantic preference after the latest meaningful assessment.
+`routing.current` is the currently effective topology authorized to run.
+When native capability fallback is required, `preferred: SUBAGENTS` and
+`current: SOLO` remain visible with `fallback_used`; delegation is never
+reported from preference alone.
 
-## Context value and reducibility
+Initial preference, initial effective selection, and routing history are
+derived or transient. They do not survive as separate durable fields. The
+continuation snapshot, task graph, accepted dependency digests, checkout facts,
+and concise routing reason provide the recovery evidence that matters.
+
+## Decision evidence
 
 Do not route from ticket size, prompt length, token count, or file count alone.
-First estimate the information generated during the work and what the root
-agent must retain to make the next correct decision:
+Assess the work shape and keep the evidence in the transient working spec or
+the concise run-state `reason`; this is not a score or a durable dimensions
+matrix:
 
-- `projected_pressure`: likely growth from discovery, tool output, tests,
-  review, delivery, and user interaction, not original prompt size;
-- `context_reducibility`: how much growth can leave the root as concise
-  structured evidence;
-- `delegatable_context`: independently evaluable investigation or bounded work;
-- `root_context_requirement`: how much global state must remain together; and
-- `continuity_risk`: the cost of losing workflow state or coordination context.
+- how much global state the root must retain together;
+- whether bounded work is independently evaluable;
+- whether concise structured results materially reduce root-context growth;
+- whether continuity or recovery makes delegation unsafe; and
+- whether fresh native capability and one-checkout ownership support delegation.
 
-A large ticket with high root-context requirement and low reducibility remains
+Large work with high root-context requirement and low reducibility remains
 `SOLO`. Independent investigations may make `SUBAGENTS` preferable when their
-concise structured results materially reduce root growth.
+results materially reduce root growth.
 
 ## Early discovery-shape assessment
 
@@ -107,34 +93,32 @@ sequential when a real dependency requires it.
 
 ## Decision procedure
 
-1. Record root-context requirement, independent evaluability, projected pressure,
-   reducibility, continuity risk, and the observed native capability profile.
-2. Prefer `SOLO` when work is tightly coupled, global context is required, or
-   coordination costs exceed expected relief.
-3. Prefer `SUBAGENTS` when at least one bounded read-only investigation or
-   sequentially consumable task is independently evaluable and delegation
-   materially reduces root-context growth.
-4. Resolve native capability fallback after the semantic preference. If the
-   preferred topology cannot be executed safely, retain the preference and use
-   the smallest safe effective topology, normally `SOLO` or sequential work.
-5. Record the rationale in structured state rather than adding a score or
-   pretending a token threshold is a routing proof.
+1. After discovery and specification, identify global coupling, independently
+   evaluable work, expected context relief, and the root acceptance boundary.
+2. Prefer `SOLO` unless a bounded task materially benefits from delegation and
+   can return concise, independently checkable evidence.
+3. If delegation is useful, require a demonstrated semantic native capability
+   and compatibility with the single writable delivery checkout.
+4. Resolve capability fallback after the semantic preference. Keep
+   `preferred: SUBAGENTS` visible when the effective safe choice is `SOLO` or
+   sequential root work.
+5. Record only `preferred`, `current`, `reason`, and `fallback_used`. Prompt
+   length never establishes a routing proof.
 
 ## Adaptive routing
 
-Reconsider at deliberate boundaries:
+Reconsider topology only at a meaningful boundary where evidence may have
+changed:
 
-- after repository discovery;
-- after a validated implementation or PR step;
-- before a new large implementation phase;
-- after compaction or recovery;
-- between commit-plan steps; and
-- before review or when context pressure materially changes.
+- repository discovery changes decomposition, dependencies, or coupling;
+- compaction or recovery completes and the root has re-read state and Git; or
+- a new implementation or review phase changes delegation value, capability,
+  context headroom, or acceptance needs.
 
-A revision requires new evidence that changes context reducibility, root-context
-requirement, coordination cost, native capability, or continuity risk. Record
-`from`, `to`, `reason`, `phase`, and the safe `boundary`. Do not churn on every
-turn.
+Routine turns, unchanged validation checkpoints, and ordinary PR slice
+boundaries do not trigger ceremonial reassessment. When a decision changes,
+update `routing.preferred`, `routing.current`, `reason`, and `fallback_used`
+atomically with `swe-forge-state set-routing`; do not append routing history.
 
 The supported transitions are:
 
@@ -143,32 +127,23 @@ The supported transitions are:
 - `SUBAGENTS -> SOLO` when results are consumed, remaining work is coupled, or
   coordination no longer pays for itself.
 
-After compaction, re-read durable state and Git before applying a revision. A
-conversation summary cannot establish that a topology or delivery phase is
-still active.
+After compaction, re-read durable state and Git before applying a routing
+change. A conversation summary cannot establish that a topology or delivery
+phase is still active.
 
-## Runtime capability profiles
+## Native capability observation
 
-The core reasons about capabilities, not harness method names:
+Canonical routing consumes the semantic capability `subagents.native` as
+`available`, `unavailable`, or `unknown`; it does not depend on harness
+identity. Adapters own observation of their host task surface, bounded roles,
+structured results, and safe fallback. Observed evidence outranks adapter
+declarations; unknown never becomes available by assumption.
 
-```yaml
-runtime_profile:
-  harness: <active-harness>
-  context_usage:
-    status: available | estimated | unavailable | unknown
-    source: <observed adapter/runtime evidence>
-  context_window: reported | configured | unknown
-  proactive_compaction: available | unavailable | unknown
-  compaction_hooks: available | unavailable | unknown
-  state_reinjection: available | unavailable | unknown
-  subagents:
-    native: available | unavailable | unknown
-  capability_precedence: observed > adapter_declared > static_default > unknown
-```
-
-Observed runtime evidence outranks an adapter declaration; an adapter
-declaration outranks a static default; unknown never becomes available merely
-because a harness is installed. Each capability is recorded independently.
+Native capability is fresh execution evidence, not durable authorization. An
+active state with `routing.current: SUBAGENTS` is necessary but not sufficient:
+the adapter must renegotiate capability immediately before delegation. Context
+usage, compaction, and state-reinjection capabilities remain owned by the
+context policy and continuation state rather than a routing profile cache.
 
 ## Topologies
 
