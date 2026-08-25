@@ -53,7 +53,7 @@ home. The evidence currently recorded is:
 | --- | --- | --- |
 | Pi | Yes | Pi has the strongest current maintainer validation evidence; 0.84.2 is the observed version. |
 | OpenCode | Yes | OpenCode has prior successful maintainer usage; 1.18.16 is the observed version. Its evidence does not impose parity requirements on other adapters. |
-| OMP | Yes | OMP 18.0.4 was exercised through an explicit `/swe-forge` invocation; the read-only smoke test loaded the prompt and passed installation, status, and version checks. It does not demonstrate lifecycle integration or feature parity. |
+| OMP | Yes | OMP 18.0.4 was exercised inside the real OMP + SWE Forge session through the normal automatic `/swe-forge` path. Canonical AUTO routing selected shared-checkout `SUBAGENTS`; two native read-only workers returned strict structured results that passed canonical validation, a temporary writable worker and sequential-writer guard were exercised, and capability-unavailable fallback was observed. Full mounted-tool confinement, context lifecycle, and native `ISOLATED` remain unproven; the adapter remains Experimental. |
 | Claude Code | No | The maintainer has not actively exercised Claude Code. Projection/fixture validation must not be described as behavioral validation. |
 | Codex | No | Not installed or exercised in the validation environment. |
 | Cursor | No | Not installed or exercised in the validation environment. |
@@ -71,7 +71,7 @@ capabilities, not canonical requirements:
 | --- | --- | --- |
 | Pi 0.84.2 | `getContextUsage()`, `compact()`, lifecycle hooks, state reinjection, and optional subagent negotiation are implemented by the Pi adapter | Pi can provide proactive compaction, lifecycle recovery, and the optional `swe_forge_subagent` backend; missing or incompatible negotiation falls back to canonical SOLO/sequential behavior. |
 | OpenCode 1.18.16 | Not measured by the current adapter integration | Do not claim proactive detection; use documented host behavior or manual checkpoint/resume until revalidated. |
-| OMP 18.0.4 | Native task/profile/strict-output observations are adapter-level; context lifecycle is not measured | The adapter can bridge native shared-checkout `SUBAGENTS` when the active task surface, confined profiles, canonical validators, and matching run state are observed. OMP context telemetry, state reinjection, and proactive compaction remain unavailable/unknown; native task isolation is not SWE Forge `ISOLATED` proof. |
+| OMP 18.0.4 | Native task/profile/strict-output observations were exercised at runtime; read-only batch fan-out, canonical brief/result validation, shared-checkout writer serialization, and headless blocking workers were exercised | The adapter bridges native shared-checkout `SUBAGENTS` only after active task/profile/validator and matching schema-v3 state checks. A controlled malformed result was rejected and a fresh process with task disabled fell back visibly to `SOLO`/sequential. Full mounted-tool confinement is not proven because a read-only worker accessed the mounted `mcp__node_repl_js` tool; context telemetry, state reinjection, proactive compaction, and native `ISOLATED` remain unavailable/unsupported. |
 | Claude Code 2.1.37 | Not measured by the current adapter integration | Do not claim proactive detection or behavioral support from projection checks. |
 | Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
 | Cursor | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
@@ -80,6 +80,29 @@ Pi-specific context telemetry, compaction, lifecycle support, and optional
 subagent negotiation remain inside the Pi adapter/runtime integration. The
 canonical workflow consumes semantic capabilities and uses safe fallbacks when
 those capabilities are unavailable.
+
+## OMP Step 3 capability evidence
+
+The 2026-08-25 evidence separates demonstrated technical capabilities from
+support-tier commitment:
+
+| Capability | Result | Boundary |
+| --- | --- | --- |
+| Native shared-checkout `SUBAGENTS` | Proven | AUTO state recorded `requested_mode: AUTO`, `routing.current: SUBAGENTS`, and `delegation_backend: NATIVE`; OMP emitted native task preparation and validation lifecycle records. |
+| Canonical worker briefs | Proven | The two-item read-only batch and the single writable worker used validated `worker_briefing/v1` projections; assignments remained bounded. |
+| Strict structured results | Proven | OMP returned caller-sourced strict structured data and the adapter recorded canonical `worker-result/v1` validation for every read-only result and the writable result. |
+| Read-only fan-out/fan-in | Proven | Two real workers completed in one native batch; aggregate duration was approximately the longest item duration rather than the sum. Root consumption remained centralized. |
+| Shared-checkout writer safety | Proven for the tested boundary | One real native writable worker changed only a temporary Git fixture; a two-writer native batch was refused before launch. |
+| Capability-unavailable fallback | Proven | A fresh OMP process with `task` disabled reported the missing native provider and visible `SUBAGENTS` to `SOLO`/sequential fallback. |
+| Native `ISOLATED` | Not proven; deliberately unsupported | OMP task isolation does not establish canonical baseline, integration, evidence, or delivery ownership. |
+| Context telemetry/reinjection/compaction | Not proven | The OMP adapter continues to report these capabilities as unknown or unavailable. |
+| Complete worker confinement | Not proven | Declared OMP profiles restrict built-in tools and recursion, but the tested child also accessed mounted `mcp__node_repl_js`; no stronger claim is justified. |
+| Headless approval behavior | Proven for supported native workers | Blocking native workers completed without an interactive approval prompt; approval was not treated as SWE Forge delivery authorization. |
+
+The OMP support tier was **Experimental before and after** this run. The
+technical capability evidence increased, but one dogfood run does not establish
+the repository maintenance and repeated-validation commitment required for a
+support-tier change.
 
 ## Core validation
 

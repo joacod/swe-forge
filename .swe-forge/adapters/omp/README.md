@@ -165,6 +165,49 @@ The implementation follows the current OMP documentation and source for:
 - [settings and task isolation](https://omp.sh/docs/settings)
 
 The observed local OMP CLI is `18.0.4`. Installer, profile, runtime-fixture,
-and canonical regression checks are covered locally. This step does not claim
-an end-to-end native worker run or promote OMP beyond its Experimental tier;
-real-harness validation remains a separate step.
+and canonical regression checks are covered locally. The demonstrated
+capabilities and their limits are recorded below; this evidence does not
+change OMP's Experimental support tier.
+
+## Demonstrated native validation
+
+On 2026-08-25, the validation ran inside real OMP `18.0.4` through the normal
+automatic SWE Forge prompt path. The invocation used the `pr` delivery token,
+not an OMP-specific topology command. The canonical run state recorded:
+
+```text
+requested_mode: AUTO
+routing.initial/preferred/selected/current: SUBAGENTS
+delegation_backend: NATIVE
+execution_provider: NONE
+write_isolation: SHARED
+```
+
+The root session recorded `native_task_prepared` for one two-item read-only
+batch and `native_task_validated` for two results. The native task result
+contained `structuredOutput.source: caller`, `mode: strict`, and
+`status: valid` for both items; the adapter's `sweForge.status: valid` metadata
+also records canonical `swe-forge-worker-result` validation. The validated
+assignments were the canonical `worker_briefing/v1` projections unchanged.
+Individual worker durations of approximately 161 seconds and 215 seconds
+against an aggregate batch duration of approximately 215 seconds provide
+runtime evidence of fan-out before the root fan-in.
+
+The same run exercised shared-checkout writable safety against a temporary Git
+repository: one native `WRITABLE` worker created one untracked marker and
+returned the required Git/change/validation evidence; a two-item writable
+native batch was refused with the visible reason that shared-checkout writers
+must run sequentially. A controlled malformed-result fixture was rejected as
+invalid rather than accepted as prose. A fresh OMP process with the native
+`task` tool disabled reported `native OMP task tool is not present`, retained
+preferred `SUBAGENTS`, and used effective `SOLO/sequential` fallback.
+
+The installed profiles declare the expected built-in tool sets, `spawns: []`,
+and `blocking: true`; actual native read-only workers completed headlessly
+without an interactive approval boundary. In this OMP-hosted session a
+read-only worker also invoked the mounted `mcp__node_repl_js` tool to run a
+version check. Because that capability is outside the declared OMP profile,
+complete confinement of every mounted tool is not proven; the adapter makes
+no stronger confinement claim. Native OMP task isolation remains unsupported
+as SWE Forge `ISOLATED`, and context telemetry, state reinjection, and
+proactive compaction remain unknown/unavailable.
