@@ -12,6 +12,7 @@ NEWLINE='
 '
 
 MAX_PROJECTION_LENGTH=160
+
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
   exit 1
@@ -106,6 +107,15 @@ file_mtime_seconds() {
 timestamp_epoch() {
   value=$1
   if parsed=$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$value" '+%s' 2>/dev/null); then
+    printf '%s\n' "$parsed"
+    return
+  fi
+  if parsed=$(date -u -j -f '%Y-%m-%dT%H:%M:%S%z' "$value" '+%s' 2>/dev/null); then
+    printf '%s\n' "$parsed"
+    return
+  fi
+  normalized=$(printf '%s\n' "$value" | sed -E 's/\.[0-9]+([Z+-])/\1/; s/([+-][0-9][0-9]):([0-9][0-9])$/\1\2/')
+  if parsed=$(date -u -j -f '%Y-%m-%dT%H:%M:%S%z' "$normalized" '+%s' 2>/dev/null); then
     printf '%s\n' "$parsed"
     return
   fi
@@ -407,10 +417,10 @@ inspection_run_id=
 inspection_status=
 inspection_workflow_active_json=false
 inspection_updated_at=
-  inspection_updated_epoch=
-  inspection_updated_at_ms=0
-  inspection_modified_epoch=
-  inspection_modified_at_ms=0
+inspection_updated_epoch=
+inspection_updated_at_ms=0
+inspection_modified_epoch=
+inspection_modified_at_ms=0
 inspection_preferred=
 inspection_current=
 inspection_delivery_mode=
@@ -595,7 +605,6 @@ emit_state_json() {
 projection_value() {
   awk -v value="$1" -v maximum="$MAX_PROJECTION_LENGTH" '
     BEGIN {
-      gsub(sprintf("%c", 0), "", value)
       print substr(value, 1, maximum)
     }
   '
