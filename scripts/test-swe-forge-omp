@@ -211,7 +211,7 @@ const batched = await prepare(initial, statePath, {
   context: "discard this root transcript",
   tasks: [
     { name: "reader-check", agent: "swe-forge-read-only", task: brief },
-    { name: "reader-two", agent: "swe-forge-reviewer", task: briefTwo },
+    { name: "reader-two", agent: "swe-forge-read-only", task: briefTwo },
   ],
 }, ordinaryEvent());
 assert(!batched.call?.block, `read-only native batch was blocked: ${batched.call?.reason}`);
@@ -228,6 +228,15 @@ const writableBatch = await prepare(initial, statePath, {
   ],
 }, ordinaryEvent());
 assert(writableBatch.call?.block && writableBatch.call.reason.includes("sequentially"), "writable shared-checkout workers were concurrently launchable");
+const writableSingle = await prepare(initial, statePath, {
+  name: "writer-single", agent: "swe-forge-writable", task: writeBrief,
+}, ordinaryEvent());
+assert(!writableSingle.call?.block, `single writable worker was blocked: ${writableSingle.call?.reason}`);
+const concurrentWritable = await prepare(initial, statePath, {
+  name: "writer-concurrent", agent: "swe-forge-writable", task: writeBriefTwo,
+}, ordinaryEvent());
+assert(concurrentWritable.call?.block && concurrentWritable.call.reason.includes("already running"), "separate writable task calls were concurrently launchable");
+await initial.handlers.get("tool_result")({ toolName: "task", toolCallId: writableSingle.toolCallId, input: writableSingle.call.input, isError: true, content: [], details: {} }, { cwd: checkout });
 
 const isolatedAttempt = await prepare(initial, statePath, {
   name: "isolated-worker", agent: "swe-forge-read-only", task: brief, isolated: true,

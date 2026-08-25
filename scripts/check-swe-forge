@@ -514,7 +514,7 @@ require_text 'shared adapter behavior' .swe-forge/adapters/pi/README.md
 require_text 'https://omp.sh/docs/prompt-templates' .swe-forge/adapters/omp/README.md
 require_text 'native `task` tool' .swe-forge/adapters/omp/README.md
 require_text 'schemaMode: strict' .swe-forge/adapters/omp/README.md
-require_text 'native OMP `ISOLATED` remains unsupported' .swe-forge/adapters/omp/README.md
+require_text 'Native OMP `ISOLATED` remains unsupported' .swe-forge/adapters/omp/README.md
 require_text 'OMP native SUBAGENTS bridge' docs/installation.md
 require_text 'Native task/profile/strict-output observations' docs/compatibility.md
 require_text '### Context management' .swe-forge/adapters/pi/README.md

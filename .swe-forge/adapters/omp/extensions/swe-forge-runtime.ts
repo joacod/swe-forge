@@ -66,6 +66,7 @@ interface PlannedItem {
 interface PendingTaskCall {
 	items: PlannedItem[];
 	runId: string;
+	writable: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -633,6 +634,15 @@ function nativeItems(input: Record<string, unknown>): { batch: boolean; items: A
 	return { error: "native task input has no task assignment" };
 }
 
+function briefContract(briefing: string): { profile: ResultProfile; writeAccess: "read-only" | "read-write" } | undefined {
+	const profile = briefing.match(/\n\s{4}profile:\s*['"]?(READ_ONLY|WRITABLE|REVIEW)['"]?\s*\n/)?.[1] as ResultProfile | undefined;
+	const writeAccess = briefing.match(/\n\s{4}write_access:\s*['"]?(read-only|read-write)['"]?\s*\n/)?.[1] as
+		| "read-only"
+		| "read-write"
+		| undefined;
+	return profile && writeAccess ? { profile, writeAccess } : undefined;
+}
+
 async function prepareTaskInput(
 	pi: any,
 	cwd: string,
@@ -658,6 +668,11 @@ async function prepareTaskInput(
 		if (typeof task !== "string" || task.trim().length === 0) return { ok: false, reason: `native task item ${name} has no assignment` };
 		const brief = await validateBrief(pi, task);
 		if (!brief.ok) return { ok: false, reason: `canonical worker briefing validation failed for ${name}: ${brief.detail}` };
+		const contract = briefContract(task);
+		const expectedWriteAccess = profile === "WRITABLE" ? "read-write" : "read-only";
+		if (!contract || contract.profile !== profile || contract.writeAccess !== expectedWriteAccess) {
+			return { ok: false, reason: `canonical worker briefing profile does not match confined OMP profile ${agent}` };
+		}
 		planned.push({ index, name, profile, agent: agent as ProfileName, task });
 		nextItems.push({ ...item, outputSchema: outputSchemaFor(profile, name), schemaMode: "strict" });
 	}
@@ -696,6 +711,7 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 	let fencedRunIds = new Set<string>();
 	let activeRun: ActiveRun | undefined;
 	let pending = new Map<string, PendingTaskCall>();
+	let writableInFlight = false;
 
 	const refresh = (cwd: string, freshInvocation = false): ActiveRun | undefined => {
 		const runs = discoverActiveRuns(cwd);
@@ -742,7 +758,15 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 		const input = isRecord(event.input) ? event.input : {};
 		const prepared = await prepareTaskInput(pi, ctx.cwd, input);
 		if (!prepared.ok) return { block: true, reason: `${prepared.reason}. Use SOLO/sequential fallback.` };
-		pending.set(event.toolCallId, { items: prepared.items, runId: run.stateId });
+		const writable = prepared.items.some(item => item.profile === "WRITABLE");
+		if (writable && writableInFlight) {
+			return {
+				block: true,
+				reason: "a shared-checkout writable SWE Forge worker is already running; wait for its result before launching another",
+			};
+		}
+		if (writable) writableInFlight = true;
+		pending.set(event.toolCallId, { items: prepared.items, runId: run.stateId, writable });
 		appendRuntimeEntry(pi, "native_task_prepared", run, {
 			items: prepared.items.length,
 			read_only_batch: prepared.items.length > 1,
@@ -757,12 +781,14 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 		if (!call) return;
 		pending.delete(event.toolCallId);
 		if (event.isError) {
+			if (call.writable) writableInFlight = false;
 			appendRuntimeEntry(pi, "native_task_failed", activeRun, { reason: "native task returned an error" });
 			return;
 		}
 		const details = isRecord(event.details) ? event.details : {};
 		const results = Array.isArray(details.results) ? details.results : [];
 		if (results.length !== call.items.length) {
+			if (call.writable) writableInFlight = false;
 			const reason = "native task did not return one blocking structured result per bounded assignment";
 			appendRuntimeEntry(pi, "native_task_rejected", activeRun, { reason });
 			return {
@@ -788,6 +814,7 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 			}
 			validations.push({ task_id: planned.name, profile: planned.profile, status: validation.ok ? "valid" : "invalid", detail: validation.detail });
 			if (!validation.ok) {
+				if (call.writable) writableInFlight = false;
 				const reason = `${planned.name}: ${validation.detail}`;
 				appendRuntimeEntry(pi, "native_task_rejected", activeRun, { reason });
 				return {
@@ -800,6 +827,7 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 				};
 			}
 		}
+		if (call.writable) writableInFlight = false;
 		appendRuntimeEntry(pi, "native_task_validated", activeRun, { results: validations.length });
 		return { details: { ...details, sweForge: { schema: "worker-result/v1", status: "valid", results: validations } } };
 	});
