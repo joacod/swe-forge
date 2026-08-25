@@ -4,7 +4,7 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 INSTALL=$ROOT/scripts/swe-forge
-HARNESSES='opencode claude codex cursor pi'
+HARNESSES='opencode omp claude codex cursor pi'
 DELIVERY_COMMANDS='git-commit git-push git-pr git-sync'
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-test.XXXXXX")
 TMP_ROOT=$(CDPATH= cd "$TMP_ROOT" && pwd -P)
@@ -84,6 +84,11 @@ assert_projection() {
       projection_support=$projection_home/.claude/swe-forge
       assert_link "$projection_home/.claude/skills/swe-forge" \
         "$ROOT/.swe-forge/adapters/claude-code/skills/swe-forge"
+      ;;
+    omp)
+      projection_support=$projection_home/.omp/agent/swe-forge
+      assert_link "$projection_home/.omp/agent/prompts/swe-forge.md" \
+        "$ROOT/.swe-forge/adapters/omp/prompts/swe-forge.md"
       ;;
     codex|cursor)
       projection_support=$projection_home/.agents/swe-forge

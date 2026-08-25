@@ -20,8 +20,8 @@ scripts/swe-forge update <harness>
 scripts/swe-forge uninstall <harness>
 ```
 
-Installable harness names are `opencode`, `claude`, `codex`, `cursor`, and
-`pi`. Installation is link-based, so a reviewed update to this checkout is
+Installable harness names are `opencode`, `omp`, `claude`, `codex`, `cursor`,
+and `pi`. Installation is link-based, so a reviewed update to this checkout is
 reflected in the installed projection. The user-level link model is the only
 supported installation path; it does not imply equal capabilities or real
 harness validation. See [compatibility](compatibility.md) for current tiers and
@@ -47,6 +47,7 @@ Install the harnesses you use explicitly:
 
 ```bash
 scripts/swe-forge install opencode
+scripts/swe-forge install omp
 scripts/swe-forge install claude
 scripts/swe-forge install codex
 scripts/swe-forge install cursor
@@ -66,6 +67,7 @@ at its normal user-level location:
 | Harness | Entry points | Canonical support link |
 | --- | --- | --- |
 | OpenCode | `~/.config/opencode/commands/` | `~/.config/opencode/swe-forge/` |
+| OMP | `~/.omp/agent/prompts/` | `~/.omp/agent/swe-forge/` |
 | Claude Code | `~/.claude/skills/swe-forge/` | `~/.claude/swe-forge/` |
 | Codex | `~/.agents/skills/swe-forge/` | `~/.agents/swe-forge/` |
 | Cursor | `~/.agents/skills/swe-forge/` | `~/.agents/swe-forge/` |
@@ -160,6 +162,7 @@ Installation verifies automatically. It can also be run later:
 
 ```bash
 scripts/swe-forge verify opencode
+scripts/swe-forge verify omp
 scripts/swe-forge verify claude
 scripts/swe-forge verify codex
 scripts/swe-forge verify cursor

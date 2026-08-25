@@ -4,6 +4,7 @@ opencode|file|opencode/commands/git-commit.md|.config/opencode/commands/git-comm
 opencode|file|opencode/commands/git-push.md|.config/opencode/commands/git-push.md|.config/opencode/swe-forge
 opencode|file|opencode/commands/git-pr.md|.config/opencode/commands/git-pr.md|.config/opencode/swe-forge
 opencode|file|opencode/commands/git-sync.md|.config/opencode/commands/git-sync.md|.config/opencode/swe-forge
+omp|file|omp/prompts/swe-forge.md|.omp/agent/prompts/swe-forge.md|.omp/agent/swe-forge
 claude|tree|claude-code/skills/swe-forge|.claude/skills/swe-forge|.claude/swe-forge
 codex|tree|shared/agent-skill/swe-forge|.agents/skills/swe-forge|.agents/swe-forge
 cursor|tree|shared/agent-skill/swe-forge|.agents/skills/swe-forge|.agents/swe-forge

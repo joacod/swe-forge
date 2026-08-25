@@ -16,6 +16,7 @@ commitment. It does not require identical host behavior or feature parity.
 | --- | --- |
 | Pi | First-class / reference |
 | OpenCode | Compatible / secondary |
+| OMP | Experimental |
 | Claude Code | Experimental |
 | Codex | Experimental |
 | Cursor | Experimental |
@@ -34,6 +35,7 @@ It does **not** establish that the target harness has been used successfully.
 | --- | --- | --- |
 | Pi | 0.84.2 | Installer, prompt projection, and runtime extension syntax/fixture validated locally |
 | OpenCode | 1.18.16 | Installer and command projection validated locally |
+| OMP | 18.0.4 | Installer and prompt projection validated locally; target harness not exercised |
 | Claude Code | 2.1.37 | Installer and skill projection validated locally; no behavioral claim follows |
 | Codex | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
 | Cursor | Not installed in the validation environment | Shared Agent Skill projection and installer fixture validated; target harness not exercised |
@@ -51,6 +53,7 @@ home. The evidence currently recorded is:
 | --- | --- | --- |
 | Pi | Yes | Pi is the reference harness actively used to develop SWE Forge; 0.84.2 is the observed version. |
 | OpenCode | Yes | OpenCode has prior successful maintainer usage; 1.18.16 is the observed version. It is secondary and does not impose parity requirements on Pi development. |
+| OMP | No | OMP 18.0.4 is installed in the validation environment, but SWE Forge has not been behaviorally exercised through it. |
 | Claude Code | No | The maintainer has not actively exercised Claude Code. Projection/fixture validation must not be described as behavioral validation. |
 | Codex | No | Not installed or exercised in the validation environment. |
 | Cursor | No | Not installed or exercised in the validation environment. |
@@ -67,6 +70,7 @@ capabilities, not canonical requirements:
 | --- | --- | --- |
 | Pi 0.84.2 | `getContextUsage()`, `compact()`, lifecycle hooks, state reinjection, and optional subagent negotiation are implemented by the Pi adapter | Pi can provide proactive compaction, lifecycle recovery, and the optional `swe_forge_subagent` backend; missing or incompatible negotiation falls back to canonical SOLO/sequential behavior. |
 | OpenCode 1.18.16 | Not measured by the current adapter snapshot | Do not claim proactive detection; use documented host behavior or manual checkpoint/resume until revalidated. |
+| OMP 18.0.4 | Not measured by the current adapter snapshot | Native sessions, compaction, and task features are documented, but this adapter has no SWE Forge lifecycle bridge; use canonical durable-checkpoint/manual fallback. |
 | Claude Code 2.1.37 | Not measured by the current adapter snapshot | Do not claim proactive detection or behavioral support from projection checks. |
 | Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
 | Cursor | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
