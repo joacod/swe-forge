@@ -11,13 +11,12 @@ this rule applies to every repository, including SWE Forge itself.
 
 ```text
 ## SWE Forge receipt
-Execution: SOLO | SUBAGENTS | ISOLATED
+Execution: SOLO | SUBAGENTS
 Delivery: GUIDED | PR
 Run metadata: (optional)
 - SWE Forge: <release version>
 - Harness: <name> <version>
 - Routing: <requested topology> -> <selected topology>
-- Execution provider: NONE | NATIVE | HERDR
 - Model provider: <safe public model provider label>
 - Routing reason: <short rationale>
 Repository: <repository identity>
@@ -41,11 +40,9 @@ ledger. The executable gate retains the default receipt at `$STATE/receipt.md`
 and records that run-local path in `receipt_ref`; an explicit output path may
 replace it.
 
-`Execution provider` describes the isolated worker lifecycle and is `NONE` for
-non-isolated runs; it is not the model backend. Record a `Model provider`
-separately only when a safe public label is available. Omit unavailable
-metadata rather than guessing, and never publish credentials, private paths,
-raw transcripts, or private ticket details.
+Record a model provider separately only when a safe public label is available.
+Omit unavailable metadata rather than guessing, and never publish credentials,
+private paths, raw transcripts, or private ticket details.
 
 ## Required evidence
 
@@ -62,5 +59,5 @@ untracked-content change, or replacement file is stale and must be rejected.
 A receipt reports failed, skipped, unavailable, not-applicable, or missing
 evidence explicitly. Context status is `not-observed` when no limit was reached;
 when pressure occurred, the receipt names the observed compaction/recovery
-evidence or reports `blocked`. It never infers success from provider lifecycle
-state or worker summaries and cannot be hand-edited to upgrade a status.
+evidence or reports `blocked`. It never infers success from worker summaries
+and cannot be hand-edited to upgrade a status.

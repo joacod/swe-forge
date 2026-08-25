@@ -5,10 +5,7 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 TOOL=$ROOT/.swe-forge/tools/swe-forge-worker-brief
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-briefing.XXXXXX")
-
-cleanup() {
-  rm -rf "$TMP_ROOT"
-}
+cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM
 
 fail() {
@@ -38,29 +35,13 @@ expect_failure() {
   fi
 }
 
-record() {
-  printf '%s\n' "$*"
-}
-
-record3() {
-  printf '%s\t%s\t%s\n' "$1" "$2" "$3"
-}
-
-record4() {
-  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"
-}
-
-record_validation() {
-  printf 'task\tvalidation\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"
-}
+record() { printf '%s\n' "$*"; }
+record3() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
+record4() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"; }
+record_validation() { printf 'task\tvalidation\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"; }
 
 shared_state() {
   record3 state routing.current SUBAGENTS
-  record3 state write_isolation SHARED
-  record3 state execution_provider NONE
-  record3 state delegation_backend NATIVE
-  record3 state parallel_strategy NONE
-  record3 state integration_strategy NONE
 }
 
 read_input() {
@@ -91,7 +72,7 @@ shared_input() {
     record3 task id shared-writer
     record3 task owner_role implementer
     record3 task depth 1
-    record3 task objective 'Implement the bounded shared-checkout change.'
+    record3 task objective 'Implement the bounded delivery-checkout change.'
     record3 task write_access read-write
     record3 task acceptance 'The implementation remains within its declared scope.'
     record3 task instruction AGENTS.md
@@ -117,65 +98,6 @@ review_input() {
     record3 task expected_output 'PASS or CHANGES_REQUIRED'
     record_validation scripts/test-brief required always local-only
     shared_state
-  } >"$file"
-}
-
-isolated_input() {
-  file=$1
-  base_sha=1111111111111111111111111111111111111111
-  checkpoint_sha=2222222222222222222222222222222222222222
-  {
-    record worker-brief-input/v1
-    record3 task id isolated-writer
-    record3 task owner_role implementer
-    record3 task depth 1
-    record3 task objective 'Implement the bounded isolated change.'
-    record3 task write_access read-write
-    record3 task acceptance 'The isolated implementation remains within its ownership.'
-    record3 task instruction AGENTS.md
-    record3 task allowed_read src/brief.ts
-    record3 task allowed_write src/brief.ts
-    record3 task forbidden_scope 'src/other/**'
-    printf 'task\tshared_artifact\tgenerated/index\torchestrator\n'
-    record3 task expected_output 'FILES_CHANGED and VALIDATION'
-    record_validation scripts/test-brief required always local-only
-    record3 state routing.current ISOLATED
-    record3 state write_isolation WORKTREE
-    record3 state execution_provider NATIVE
-    record3 state delegation_backend NATIVE
-    record3 state parallel_strategy COMPOSE
-    record3 state integration_strategy CHERRY_PICK
-    record3 execution provider NATIVE
-    record3 execution delegation_backend NATIVE
-    record3 execution checkout.path /tmp/worker-brief
-    record3 execution checkout.branch worker/isolated-writer
-    record3 execution checkout.worktree_role worker
-    record3 execution checkout.worktree_kind worker
-    record3 execution checkout.integration_path /tmp/integration
-    record3 execution checkout.integration_branch feat/isolated-worker-brief
-    record3 execution git.base_sha "$base_sha"
-    record3 execution git.integration_checkpoint_sha "$checkpoint_sha"
-    record3 execution git.wave 1
-    record3 execution git.integration_order 1
-    record3 execution ownership.allowed_scope src/brief.ts
-    record3 execution ownership.forbidden_scope 'src/other/**'
-    printf 'execution\tshared_artifact\tgenerated/index\torchestrator\n'
-    record3 execution environment.setup_commands ./setup-worker
-    record3 execution authorization.create_branch not-authorized
-    record3 execution authorization.create_worktree not-authorized
-    record3 execution authorization.worker_setup PR
-    record3 execution authorization.worker_transfer_commit PR
-    record3 execution authorization.commit not-authorized
-    record3 execution authorization.push not-authorized
-    record3 execution authorization.create_pull_request not-authorized
-    record3 execution authorization.publish not-authorized
-    record3 execution authorization.deploy not-authorized
-    record3 execution authorization.merge not-authorized
-    record3 execution transfer.local_only true
-    record3 execution transfer.integration_strategy CHERRY_PICK
-    record3 execution transfer.result_bundle .swe-forge/contracts/result-bundle.md
-    record3 execution transfer.required_deliverable_commits true
-    record3 execution transfer.source_to_integration_mapping required
   } >"$file"
 }
 
@@ -215,8 +137,6 @@ assert_text 'worker-brief/v1' "$ROOT/.swe-forge/contracts/worker-brief.md"
 assert_text 'render --input' "$TOOL"
 assert_text 'validate --brief' "$TOOL"
 
-# READ_ONLY: the real renderer owns the common projection and omits isolated
-# provider/worktree data.
 read_input "$TMP_ROOT/read.input" reader-check researcher
 "$TOOL" render --input "$TMP_ROOT/read.input" >"$TMP_ROOT/read.brief"
 "$TOOL" validate --brief "$TMP_ROOT/read.brief" --input "$TMP_ROOT/read.input" >/dev/null
@@ -224,32 +144,25 @@ for required in \
   'schema: worker-brief/v1' "task_id: 'reader-check'" \
   'mode: delegated_worker' 'recursive_delegation: false' \
   'write_access: read-only' 'topology: SUBAGENTS' \
-  'write_isolation: SHARED' 'profile: READ_ONLY' \
-  'contract: .swe-forge/contracts/result.md' \
-  'allowed_writes:' "- none"; do
+  'profile: READ_ONLY' 'contract: .swe-forge/contracts/result.md' \
+  'allowed_writes:' "- 'none'"; do
   assert_text "$required" "$TMP_ROOT/read.brief"
 done
-for forbidden in isolated_execution: 'provider: NATIVE' 'base_sha:' 'worktree:' \
-  'source_commits:' 'create_pull_request:'; do
+for forbidden in 'CHECKOUT:' 'source_commits:' 'create_pull_request:'; do
   assert_absent "$forbidden" "$TMP_ROOT/read.brief"
 done
 
-# Repeated rendering is byte-for-byte deterministic.
 "$TOOL" render --input "$TMP_ROOT/read.input" >"$TMP_ROOT/read-again.brief"
 cmp -s "$TMP_ROOT/read.brief" "$TMP_ROOT/read-again.brief" || fail 'repeated rendering changed the briefing'
-
-# Structural failures are rejected by the same executable validator.
 sed '/^  objective:/d' "$TMP_ROOT/read.brief" >"$TMP_ROOT/missing-objective.brief"
 expect_failure 'missing required objective' "$TOOL" validate --brief "$TMP_ROOT/missing-objective.brief"
 sed "s/^  objective: 'Inspect the bounded worker boundary\.'$/  objective: ''/" "$TMP_ROOT/read.brief" >"$TMP_ROOT/empty-objective.brief"
 expect_failure 'empty required objective' "$TOOL" validate --brief "$TMP_ROOT/empty-objective.brief"
 sed 's/write_access: read-only/write_access: read-write/' "$TMP_ROOT/read.brief" >"$TMP_ROOT/illegal-permission.brief"
 expect_failure 'read-only worker with writable permission' "$TOOL" validate --brief "$TMP_ROOT/illegal-permission.brief"
-sed 's/^state\twrite_isolation\tSHARED$/state\twrite_isolation\tWORKTREE/' "$TMP_ROOT/read.input" >"$TMP_ROOT/bad-state.input"
-expect_failure 'inconsistent topology execution facts' "$TOOL" render --input "$TMP_ROOT/bad-state.input"
+sed 's/state\trouting.current\tSUBAGENTS/state\trouting.current\tSOLO/' "$TMP_ROOT/read.input" >"$TMP_ROOT/bad-state.input"
+expect_failure 'invalid delegated topology' "$TOOL" render --input "$TMP_ROOT/bad-state.input"
 
-# Shared WRITABLE: writable scope and edit permission are present, but no
-# isolated safety section is emitted.
 shared_input "$TMP_ROOT/shared.input"
 "$TOOL" render --input "$TMP_ROOT/shared.input" >"$TMP_ROOT/shared.brief"
 "$TOOL" validate --brief "$TMP_ROOT/shared.brief" --input "$TMP_ROOT/shared.input" >/dev/null
@@ -257,46 +170,18 @@ for required in 'write_access: read-write' 'allowed_writes:' "- 'src/brief.ts'" 
   'allowed_actions:' '      - edit' 'profile: WRITABLE'; do
   assert_text "$required" "$TMP_ROOT/shared.brief"
 done
-assert_absent isolated_execution: "$TMP_ROOT/shared.brief"
 sed "s#- 'src/brief.ts'#- 'src/expanded.ts'#" "$TMP_ROOT/shared.brief" >"$TMP_ROOT/expanded-scope.brief"
 expect_failure 'scope expansion beyond canonical task' "$TOOL" validate --brief "$TMP_ROOT/expanded-scope.brief" --input "$TMP_ROOT/shared.input"
-sed 's/SHARED/WORKTREE/' "$TMP_ROOT/shared.brief" >"$TMP_ROOT/illegal-shared-isolation.brief"
-expect_failure 'shared writable worker with isolation permission' "$TOOL" validate --brief "$TMP_ROOT/illegal-shared-isolation.brief"
 
-# REVIEW: the existing review result profile gets the review contract and
-# remains read-only.
 review_input "$TMP_ROOT/review.input"
 "$TOOL" render --input "$TMP_ROOT/review.input" >"$TMP_ROOT/review.brief"
 "$TOOL" validate --brief "$TMP_ROOT/review.brief" --input "$TMP_ROOT/review.input" >/dev/null
-assert_text 'role: '\''reviewer' "$TMP_ROOT/review.brief"
+assert_text "role: 'reviewer'" "$TMP_ROOT/review.brief"
 assert_text 'profile: REVIEW' "$TMP_ROOT/review.brief"
 assert_text 'contract: .swe-forge/contracts/review.md' "$TMP_ROOT/review.brief"
 assert_absent '      - edit' "$TMP_ROOT/review.brief"
 
-# ISOLATED writable: the complete safety section travels together.
-isolated_input "$TMP_ROOT/isolated.input"
-"$TOOL" render --input "$TMP_ROOT/isolated.input" >"$TMP_ROOT/isolated.brief"
-"$TOOL" validate --brief "$TMP_ROOT/isolated.brief" --input "$TMP_ROOT/isolated.input" >/dev/null
-for required in \
-  'topology: ISOLATED' 'write_isolation: WORKTREE' \
-  'profile: ISOLATED_WRITABLE' \
-  'contract: .swe-forge/contracts/result-bundle.md' \
-  'isolated_execution:' 'provider: NATIVE' 'delegation_backend: NATIVE' \
-  'integration_checkpoint_sha:' 'environment_isolation:' \
-  'authorization:' 'local_only: true' \
-  'source_to_integration_mapping: required'; do
-  assert_text "$required" "$TMP_ROOT/isolated.brief"
-done
-sed '/integration_checkpoint_sha:/d' "$TMP_ROOT/isolated.brief" >"$TMP_ROOT/missing-isolated-field.brief"
-expect_failure 'isolated writer missing safety field' "$TOOL" validate --brief "$TMP_ROOT/missing-isolated-field.brief"
-sed 's/^    provider: NATIVE$/    provider: BOGUS/' "$TMP_ROOT/isolated.brief" >"$TMP_ROOT/illegal-provider.brief"
-expect_failure 'isolated worker with incompatible provider' "$TOOL" validate --brief "$TMP_ROOT/illegal-provider.brief"
-sed '/git.base_sha/d' "$TMP_ROOT/isolated.input" >"$TMP_ROOT/missing-isolated-input.input"
-# The line-oriented input deliberately remains invalid if a required isolated
-# execution fact is absent; the renderer must not invent it.
-expect_failure 'isolated input missing execution data' "$TOOL" render --input "$TMP_ROOT/missing-isolated-input.input"
-
-# Dependency handoff: only the selected digest categories are projected, and
+# Dependency handoff: only selected digest categories are projected, and
 # completion requires accepted result evidence in canonical state.
 dependency_input "$TMP_ROOT/dependency.input" done result/parser.result
 "$TOOL" render --input "$TMP_ROOT/dependency.input" >"$TMP_ROOT/dependency.brief"

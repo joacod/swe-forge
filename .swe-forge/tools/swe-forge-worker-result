@@ -1,9 +1,9 @@
 #!/bin/sh
 
-# Dependency-free schema and validator for ordinary canonical worker results.
+# Dependency-free schema and validator for canonical worker results.
 # The result contract is harness-neutral; this tool owns only its executable
-# profile boundary and leaves review and isolated-bundle validation to their
-# existing canonical owners.
+# ordinary-profile boundary and leaves review validation to its dedicated
+# contract.
 
 set -eu
 
@@ -28,14 +28,13 @@ Usage:
     [--task-id ID] --result FILE|-
 
 `schema` writes the machine-readable worker-result/v1 profile map. Without a
-profile it describes ordinary, review, and isolated result ownership. With a
-profile it writes only that profile. `--role reviewer` selects the REVIEW
-profile and cannot be combined with an ordinary result profile.
+profile it describes ordinary and review result ownership. With a profile it
+writes only that profile. `--role reviewer` selects the REVIEW profile and
+cannot be combined with an ordinary result profile.
 
 `validate` accepts the ordinary READ_ONLY or WRITABLE result profiles and
 returns a non-zero status for malformed, profile-mismatched, or role-
-incompatible results. Review results use contracts/review.md and isolated
-writable results use result-bundle.md plus the isolated gate.
+incompatible results. Review results use contracts/review.md.
 EOF
 }
 
@@ -51,21 +50,16 @@ schema_all() {
       "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
       "required_sections": ["FINDINGS", "EVIDENCE"],
       "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
-      "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+      "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
       "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
     },
     "WRITABLE": {
       "contract": ".swe-forge/contracts/result.md",
       "validation": "swe-forge-worker-result validate --profile WRITABLE",
-      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
       "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
       "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
       "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
-    },
-    "ISOLATED_WRITABLE": {
-      "contract": ".swe-forge/contracts/result-bundle.md",
-      "validation": ".swe-forge/tools/swe-forge-isolated-gate validate-result",
-      "representation": "fixed result directory bundle"
     },
     "REVIEW": {
       "contract": ".swe-forge/contracts/review.md",
@@ -96,7 +90,7 @@ schema_profile() {
   "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
   "required_sections": ["FINDINGS", "EVIDENCE"],
   "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
-  "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+  "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
   "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
 }
 EOF
@@ -109,22 +103,10 @@ EOF
   "profile": "WRITABLE",
   "contract": ".swe-forge/contracts/result.md",
   "validation": "swe-forge-worker-result validate --profile WRITABLE",
-  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "WORKTREE"],
+  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
   "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
   "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
   "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
-}
-EOF
-      ;;
-    ISOLATED_WRITABLE)
-      cat <<'EOF'
-{
-  "schema": "worker-result/v1",
-  "format": "fixed-directory-bundle",
-  "profile": "ISOLATED_WRITABLE",
-  "contract": ".swe-forge/contracts/result-bundle.md",
-  "validation": ".swe-forge/tools/swe-forge-isolated-gate validate-result",
-  "representation": "fixed result directory bundle"
 }
 EOF
       ;;
@@ -238,7 +220,7 @@ validate_result_file() {
       allowed_scalar_names["BASE_SHA"] = 1
       allowed_scalar_names["HEAD_SHA"] = 1
       allowed_scalar_names["BRANCH"] = 1
-      allowed_scalar_names["WORKTREE"] = 1
+      allowed_scalar_names["CHECKOUT"] = 1
       allowed_section_names[1] = "FINDINGS"
       allowed_section_names[2] = "EVIDENCE"
       allowed_section_names[3] = "RISKS"
@@ -318,7 +300,7 @@ validate_result_file() {
 
       if (profile == "READ_ONLY") {
         for (scalar_name in scalar) {
-          if (scalar_name == "BASE_SHA" || scalar_name == "HEAD_SHA" || scalar_name == "BRANCH" || scalar_name == "WORKTREE") {
+          if (scalar_name == "BASE_SHA" || scalar_name == "HEAD_SHA" || scalar_name == "BRANCH" || scalar_name == "CHECKOUT") {
             fail("READ_ONLY result contains implementation field: " scalar_name)
           }
         }
@@ -331,7 +313,7 @@ validate_result_file() {
         require_scalar("BASE_SHA", "BASE_SHA")
         require_scalar("HEAD_SHA", "HEAD_SHA")
         require_scalar("BRANCH", "BRANCH")
-        require_scalar("WORKTREE", "WORKTREE")
+        require_scalar("CHECKOUT", "CHECKOUT")
         valid_sha(scalar["BASE_SHA"], "BASE_SHA")
         if (scalar["HEAD_SHA"] != "none") valid_sha(scalar["HEAD_SHA"], "HEAD_SHA")
         if (!seen_section["FILES_CHANGED"] || list_count["FILES_CHANGED"] == 0) fail("FILES_CHANGED must contain at least one item")
@@ -439,8 +421,7 @@ validate_command() {
   [ -n "$profile" ] || fail 'validate requires --profile'
   case "$profile" in
     READ_ONLY|WRITABLE) ;;
-    REVIEW) fail 'REVIEW results use contracts/review.md and its acceptance contract' ;;
-    ISOLATED_WRITABLE) fail 'ISOLATED_WRITABLE results use result-bundle.md and the isolated gate' ;;
+    REVIEW) fail 'REVIEW results require contracts/review.md and its acceptance contract' ;;
     *) fail "unknown result profile: $profile" ;;
   esac
   case "$role" in

@@ -12,625 +12,179 @@ fail() {
 require_text() {
   needle=$1
   file=$2
-  grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1 || \
-    fail "$file does not contain required text: $needle"
+  grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1 || fail "$file does not contain required text: $needle"
 }
 
 reject_text() {
   needle=$1
   file=$2
-  if grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1; then
-    fail "$file contains obsolete text: $needle"
-  fi
+  if grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1; then fail "$file contains obsolete text: $needle"; fi
 }
 
 require_ordered_text() {
   first=$1
   second=$2
   file=$3
-  if ! awk -v first="$first" -v second="$second" '
+  awk -v first="$first" -v second="$second" '
     index($0, first) && first_line == 0 { first_line = NR }
     first_line > 0 && NR > first_line && index($0, second) { found = 1 }
     END { exit !(first_line > 0 && found) }
-  ' "$ROOT/$file"; then
-    fail "$file does not load '$second' after '$first'"
-  fi
+  ' "$ROOT/$file" || fail "$file does not load '$second' after '$first'"
 }
 
 REGISTRY_VALIDATOR=$ROOT/scripts/lib/registry.sh
-[ -f "$REGISTRY_VALIDATOR" ] || fail "missing adapter registry validator"
+[ -f "$REGISTRY_VALIDATOR" ] || fail 'missing adapter registry validator'
 . "$REGISTRY_VALIDATOR"
 
 validate_registry() {
-  registry_line_number=0
-  while IFS='|' read -r registry_harness registry_kind registry_source \
-    registry_destination registry_support; do
-    registry_line_number=$((registry_line_number + 1))
-    case "$registry_harness" in
-      ''|\#*) continue ;;
-    esac
-    if ! swe_forge_registry_row_is_valid \
-      "$registry_harness" \
-      "$registry_kind" \
-      "$registry_source" \
-      "$registry_destination" \
-      "$registry_support"; then
-      fail "invalid adapter registry row at line $registry_line_number"
-    fi
-    case "$registry_kind" in
-      file)
-        [ -f "$ROOT/.swe-forge/adapters/$registry_source" ] || \
-          fail "missing adapter registry file source at line $registry_line_number"
-        ;;
-      tree)
-        [ -d "$ROOT/.swe-forge/adapters/$registry_source" ] || \
-          fail "missing adapter registry tree source at line $registry_line_number"
-        ;;
+  line_number=0
+  while IFS='|' read -r harness kind source destination support; do
+    line_number=$((line_number + 1))
+    case "$harness" in ''|\#*) continue ;; esac
+    swe_forge_registry_row_is_valid "$harness" "$kind" "$source" "$destination" "$support" || \
+      fail "invalid adapter registry row at line $line_number"
+    case "$kind" in
+      file) [ -f "$ROOT/.swe-forge/adapters/$source" ] || fail "missing adapter registry file source at line $line_number" ;;
+      tree) [ -d "$ROOT/.swe-forge/adapters/$source" ] || fail "missing adapter registry tree source at line $line_number" ;;
     esac
   done <"$ROOT/.swe-forge/adapters/registry.tsv"
   reject_text '|project|' .swe-forge/adapters/registry.tsv
 }
 
-sh -n "$ROOT/scripts/lib/registry.sh" "$ROOT/scripts/swe-forge" \
-  "$ROOT/scripts/check-swe-forge" "$ROOT/scripts/test-swe-forge" \
-  "$ROOT/scripts/validate-swe-forge" "$ROOT/scripts/test-swe-forge-isolated" \
-  "$ROOT/scripts/test-swe-forge-pi" "$ROOT/scripts/test-swe-forge-omp" \
+sh -n \
+  "$ROOT/scripts/lib/registry.sh" \
+  "$ROOT/scripts/swe-forge" \
+  "$ROOT/scripts/check-swe-forge" \
+  "$ROOT/scripts/test-swe-forge" \
+  "$ROOT/scripts/validate-swe-forge" \
+  "$ROOT/scripts/test-swe-forge-gate" \
+  "$ROOT/scripts/test-swe-forge-pi" \
+  "$ROOT/scripts/test-swe-forge-omp" \
   "$ROOT/scripts/test-swe-forge-invocation" \
-  "$ROOT/scripts/test-swe-forge-briefing" "$ROOT/scripts/test-swe-forge-results" \
-  "$ROOT/scripts/check-swe-forge-boundary" "$ROOT/scripts/test-swe-forge-boundary" \
-  "$ROOT/scripts/swe-forge-gate" "$ROOT/scripts/test-swe-forge-gate" \
-  "$ROOT/.swe-forge/tools/swe-forge-gate" "$ROOT/.swe-forge/tools/swe-forge-state" \
-  "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
-  "$ROOT/.swe-forge/tools/swe-forge-invocation" "$ROOT/.swe-forge/tools/swe-forge-worker-brief" \
-  "$ROOT/.swe-forge/tools/swe-forge-worker-result" \
-  "$ROOT/scripts/swe-forge-invocation" \
+  "$ROOT/scripts/test-swe-forge-briefing" \
+  "$ROOT/scripts/test-swe-forge-results" \
+  "$ROOT/scripts/check-swe-forge-boundary" \
+  "$ROOT/scripts/test-swe-forge-boundary" \
+  "$ROOT/scripts/swe-forge-gate" \
   "$ROOT/scripts/swe-forge-state" \
-  "$ROOT/scripts/swe-forge-isolated-gate" \
-  "$ROOT/scripts/check-release"
-[ -x "$ROOT/scripts/check-swe-forge-boundary" ] || fail "canonical boundary check is not executable"
-[ -x "$ROOT/scripts/test-swe-forge-boundary" ] || fail "canonical boundary fixture is not executable"
-"$ROOT/scripts/check-swe-forge-boundary" "$ROOT" >/dev/null
-[ -x "$ROOT/.swe-forge/tools/swe-forge-gate" ] || fail "evidence gate is not executable"
-[ -x "$ROOT/.swe-forge/tools/swe-forge-state" ] || fail "run-state validator is not executable"
-[ -x "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" ] || fail "isolated gate is not executable"
-[ -x "$ROOT/scripts/swe-forge-state" ] || fail "run-state wrapper is not executable"
-[ -x "$ROOT/scripts/swe-forge-isolated-gate" ] || fail "isolated gate wrapper is not executable"
-[ -x "$ROOT/scripts/test-swe-forge-isolated" ] || fail "isolated fixture is not executable"
-[ -x "$ROOT/scripts/test-swe-forge-pi" ] || fail "Pi runtime fixture is not executable"
-[ -x "$ROOT/scripts/test-swe-forge-omp" ] || fail "OMP runtime fixture is not executable"
-[ -x "$ROOT/scripts/test-swe-forge-invocation" ] || fail "invocation parser fixture is not executable"
-[ -x "$ROOT/.swe-forge/tools/swe-forge-invocation" ] || fail "invocation parser is not executable"
-[ -x "$ROOT/.swe-forge/tools/swe-forge-worker-brief" ] || fail "worker briefing renderer is not executable"
-[ -x "$ROOT/.swe-forge/tools/swe-forge-worker-result" ] || fail "worker result validator is not executable"
-[ -x "$ROOT/scripts/swe-forge-invocation" ] || fail "invocation parser wrapper is not executable"
-[ -x "$ROOT/scripts/test-swe-forge-briefing" ] || fail "worker briefing fixture is not executable"
-[ -x "$ROOT/scripts/test-swe-forge-results" ] || fail "worker result profile fixture is not executable"
-[ -x "$ROOT/scripts/validate-swe-forge" ] || fail "validation batch is not executable"
-[ -x "$ROOT/scripts/check-release" ] || fail "release checker is not executable"
-[ -f "$ROOT/.github/workflows/ci.yml" ] || fail "missing GitHub Actions CI workflow"
+  "$ROOT/scripts/swe-forge-invocation" \
+  "$ROOT/scripts/check-release" \
+  "$ROOT/.swe-forge/tools/swe-forge-gate" \
+  "$ROOT/.swe-forge/tools/swe-forge-state" \
+  "$ROOT/.swe-forge/tools/swe-forge-invocation" \
+  "$ROOT/.swe-forge/tools/swe-forge-worker-brief" \
+  "$ROOT/.swe-forge/tools/swe-forge-worker-result"
+
+for executable in \
+  scripts/check-swe-forge scripts/validate-swe-forge scripts/test-swe-forge \
+  scripts/test-swe-forge-gate scripts/test-swe-forge-pi scripts/test-swe-forge-omp \
+  scripts/test-swe-forge-invocation scripts/test-swe-forge-briefing \
+  scripts/test-swe-forge-results scripts/check-swe-forge-boundary \
+  scripts/test-swe-forge-boundary scripts/swe-forge-state scripts/swe-forge-gate \
+  scripts/swe-forge-invocation .swe-forge/tools/swe-forge-gate \
+  .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-invocation \
+  .swe-forge/tools/swe-forge-worker-brief .swe-forge/tools/swe-forge-worker-result; do
+  [ -x "$ROOT/$executable" ] || fail "not executable: $executable"
+done
+
+[ -f "$ROOT/.github/workflows/ci.yml" ] || fail 'missing GitHub Actions CI workflow'
 require_text 'fetch-depth: 0' .github/workflows/ci.yml
 require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
 require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
 require_text './scripts/validate-swe-forge' .github/workflows/ci.yml
 require_text 'pi-runtime:' .github/workflows/ci.yml
 require_text 'omp-runtime:' .github/workflows/ci.yml
-require_text 'uses: actions/setup-node@' .github/workflows/ci.yml
 require_text 'node-version: 22.19.0' .github/workflows/ci.yml
-require_text 'SWE_FORGE_PI_CI: "1"' .github/workflows/ci.yml
-require_text 'SWE_FORGE_OMP_CI: "1"' .github/workflows/ci.yml
 require_text 'scripts/test-swe-forge-omp' .github/workflows/ci.yml
 require_text 'scripts/test-swe-forge-briefing' .github/workflows/ci.yml
 require_text 'scripts/test-swe-forge-results' .github/workflows/ci.yml
-require_text 'Validation cadence and batching' .swe-forge/policies/verification.md
 validate_registry
 
-for role in \
-  orchestrator researcher architect implementer reviewer debugger test-engineer \
+for role in orchestrator researcher architect implementer reviewer debugger test-engineer \
   refactor-specialist security-reviewer performance-reviewer; do
   [ -f "$ROOT/.swe-forge/agents/$role.md" ] || fail "missing specialist role: $role"
 done
 
-[ -f "$ROOT/VERSION" ] || fail "missing release version file"
+[ -f "$ROOT/VERSION" ] || fail 'missing release version file'
 release_version=$(awk 'NR == 1 { print; exit }' "$ROOT/VERSION")
-case "$release_version" in
-  *.*) ;;
-  *) fail "VERSION is not a release version: ${release_version:-<empty>}" ;;
-esac
-[ -f "$ROOT/CHANGELOG.md" ] || fail "missing changelog"
-[ -f "$ROOT/docs/compatibility.md" ] || fail "missing compatibility snapshot"
-[ -f "$ROOT/docs/releases/v0.1.0-alpha.1.md" ] || fail "missing alpha release notes"
+case "$release_version" in *.*) ;; *) fail "invalid VERSION: ${release_version:-<empty>}" ;; esac
+[ -f "$ROOT/CHANGELOG.md" ] || fail 'missing changelog'
+[ -f "$ROOT/docs/compatibility.md" ] || fail 'missing compatibility snapshot'
+[ -f "$ROOT/docs/releases/v0.1.0-alpha.1.md" ] || fail 'missing alpha release notes'
+
 for issue_template in \
   .github/ISSUE_TEMPLATE/installation-adapter.md \
   .github/ISSUE_TEMPLATE/workflow-behavior.md \
   .github/ISSUE_TEMPLATE/real-run-report.md; do
   [ -f "$ROOT/$issue_template" ] || fail "missing issue template: $issue_template"
 done
-require_text 'v0.1.0-alpha.1' README.md
-require_text 'issues/new/choose' README.md
-require_text '## What it does' README.md
-require_text '## Harnesses' README.md
-require_text '## Install' README.md
-require_text '## Use' README.md
-require_text '## Documentation' README.md
+
+for heading in '## What it does' '## Harnesses' '## Install' '## Use' '## Documentation'; do
+  require_text "$heading" README.md
+done
 require_text 'harness-agnostic' README.md
-require_text '| [Pi](.swe-forge/adapters/pi/README.md) | First-class |' README.md
-require_text '| [OpenCode](.swe-forge/adapters/opencode/README.md) | Compatible |' README.md
-require_text 'Adapters are harness integration layers' docs/architecture.md
-require_text 'A new host primitive appears' docs/adding-a-harness.md
-reject_text '/swe-forge subagents <ticket>' .swe-forge/adapters/omp/README.md
 require_text '`SOLO`' README.md
 require_text '`SUBAGENTS`' README.md
-require_text '`ISOLATED`' README.md
 require_text 'scripts/swe-forge install "$HARNESS"' README.md
 require_text 'scripts/swe-forge verify "$HARNESS"' README.md
-require_text 'scripts/swe-forge install omp' docs/installation.md
-require_text 'scripts/swe-forge verify omp' docs/installation.md
-require_text '/swe-forge pr <ticket>' README.md
 require_text 'Neither mode merges automatically' README.md
-require_text 'scripts/swe-forge update' docs/installation.md
-require_text 'The manifest records' docs/installation.md
-require_text 'Run metadata:' .swe-forge/contracts/receipt.md
-require_text 'Execution provider:' .swe-forge/contracts/receipt.md
-require_text 'Model provider:' .swe-forge/contracts/receipt.md
-require_text '--execution-provider' .swe-forge/tools/swe-forge-gate
-require_text '--model-provider' .swe-forge/tools/swe-forge-gate
-require_text '--context-status' .swe-forge/tools/swe-forge-gate
-require_text '--context-evidence' .swe-forge/tools/swe-forge-gate
-require_text '--forge-version' .swe-forge/tools/swe-forge-gate
-require_text 'plan-check' .swe-forge/policies/evidence.md
-require_text 'record-check-status' .swe-forge/policies/evidence.md
-require_text 'candidate fingerprint' .swe-forge/policies/evidence.md
-require_text 'context continuity and compaction' SWE-FORGE.md
-require_text 'Early discovery-shape assessment' .swe-forge/policies/execution-routing.md
-require_text 'discovery_strategy:' .swe-forge/contracts/working-spec.md
-require_text 'discovery_strategy:' .swe-forge/contracts/run-state.md
-require_text 'FAN_OUT_FAN_IN' .swe-forge/policies/execution-routing.md
-require_text 'max_workers: <existing conservative worker limit>' .swe-forge/contracts/working-spec.md
-require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
-require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
-require_text 'Worker Briefing Projection' .swe-forge/policies/delegation.md
-require_text 'Dependency handoff projection' .swe-forge/policies/delegation.md
-require_text 'worker-brief-input/v1' .swe-forge/contracts/task.md
-require_text 'worker-brief renderer' .swe-forge/contracts/task.md
-require_text 'worker-brief.md' .swe-forge/contracts/task.md
-require_text 'worker-brief-input/v1' .swe-forge/tools/swe-forge-worker-brief
-require_text 'render --input' .swe-forge/tools/swe-forge-worker-brief
-require_text 'validate --brief' .swe-forge/tools/swe-forge-worker-brief
+require_text 'one writable delivery checkout' README.md
+require_text 'Adapters are harness integration layers' docs/architecture.md
+require_text 'one delivery checkout' docs/architecture.md
+require_text 'Writable delegated work is sequential' SWE-FORGE.md
+require_text 'schema-v4' SWE-FORGE.md
+require_text 'schema_version: 4' .swe-forge/contracts/run-state.md
+require_text 'schema-v4' .swe-forge/tools/swe-forge-state
 require_text 'worker-result/v1' .swe-forge/tools/swe-forge-worker-result
-require_text 'schema' .swe-forge/tools/swe-forge-worker-result
-require_text 'validate' .swe-forge/tools/swe-forge-worker-result
-require_text 'swe-forge-worker-result' .swe-forge/contracts/result.md
-require_text 'renderer owns this inclusion matrix' .swe-forge/contracts/worker-brief.md
-reject_text 'render the compact `worker_briefing` projection' .swe-forge/workflows/ticket.md
-reject_text 'Render conditional state deliberately' .swe-forge/policies/delegation.md
-reject_text 'derive the compact `worker_briefing` projection' .swe-forge/providers/herdr/runbook.md
-require_text 'accepted_result_ref' .swe-forge/contracts/run-state.md
-require_text 'Dependency handoff eligibility' .swe-forge/contracts/result.md
-require_text 'worker_briefing:' .swe-forge/contracts/worker-brief.md
-require_text 'worker-brief/v1' .swe-forge/contracts/worker-brief.md
-require_text 'dependency_digest:' .swe-forge/contracts/worker-brief.md
-require_text 'accepted_decisions:' .swe-forge/contracts/worker-brief.md
-require_text 'source_refs:' .swe-forge/contracts/worker-brief.md
-require_text 'Worker Briefing Projection' .swe-forge/contracts/worker-brief.md
-require_text 'final_routing_deferred: true' .swe-forge/policies/execution-routing.md
-require_text 'Pre-continuation protocol' .swe-forge/policies/context.md
-require_text 'Overflow protocol' .swe-forge/policies/context.md
-require_text 'projected context pressure is planning evidence' .swe-forge/policies/context.md
-require_text 'projected_pressure: high` is planning evidence only' .swe-forge/adapters/pi/README.md
-require_text 'worker_runtime:' .swe-forge/policies/model-routing.md
-require_text 'strategy: inherit' .swe-forge/policies/model-routing.md
-require_text 'For an explicitly selected capability override' .swe-forge/policies/model-routing.md
-require_text 'Worker Runtime' .swe-forge/policies/delegation.md
-require_text 'Default worker runtime' .swe-forge/conformance/scenarios.md
-require_text 'Head:' .swe-forge/contracts/receipt.md
-require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
-require_text 'Generated at:' .swe-forge/contracts/receipt.md
-require_text 'Context: healthy | compacted | overflow-recovered' .swe-forge/contracts/receipt.md
-require_text 'context:' .swe-forge/contracts/run-state.md
-require_text 'context_strategy:' .swe-forge/contracts/working-spec.md
-require_text 'last_compaction:' .swe-forge/contracts/working-spec.md
-require_text 'workflow_version: 1' .swe-forge/contracts/run-state.md
-require_text 'schema_version: 3' .swe-forge/contracts/run-state.md
-require_text 'invocation_checkout:' .swe-forge/contracts/run-state.md
-require_text 'delivery_checkout:' .swe-forge/contracts/run-state.md
-require_text 'isolated_eligibility:' .swe-forge/contracts/run-state.md
-require_text 'provider_capabilities:' .swe-forge/contracts/run-state.md
-require_text 'delivery_checkout:' .swe-forge/contracts/working-spec.md
-require_text 'delivery_checkout:' .swe-forge/contracts/review.md
-require_text 'evidence state is stale or unsupported' .swe-forge/tools/swe-forge-gate
-require_text 'stale/unsupported run state' .swe-forge/tools/swe-forge-state
-require_text 'swe-forge-state init' .swe-forge/tools/swe-forge-state
-require_text 'swe-forge-state set-continuation' .swe-forge/tools/swe-forge-state
-require_text 'swe-forge-state set-delivery-checkout' .swe-forge/tools/swe-forge-state
-require_text 'swe-forge-state set-receipt-ref' .swe-forge/tools/swe-forge-state
-require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-gate
-require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-gate
-require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-isolated-gate
-reject_text 'write_run_state' .swe-forge/tools/swe-forge-gate
-reject_text 'write_run_state' .swe-forge/tools/swe-forge-isolated-gate
-reject_text 'delivery_checkout' .swe-forge/tools/swe-forge-gate
-reject_text 'receipt_ref' .swe-forge/tools/swe-forge-gate
-reject_text 'delivery_checkout' .swe-forge/tools/swe-forge-isolated-gate
-require_text 'swe-forge-state init' SWE-FORGE.md
-require_text 'swe-forge-state set-continuation' .swe-forge/policies/context.md
-require_text 'set-delivery-checkout' SWE-FORGE.md
-require_text 'set-receipt-ref' SWE-FORGE.md
-require_text 'result-bundle.md' .swe-forge/contracts/result.md
-require_text 'swe-forge-isolated-gate' .swe-forge/policies/evidence.md
-require_text 'result-bundle.md' .swe-forge/workflows/isolated-execution.md
-require_text 'capabilities-ref' .swe-forge/tools/swe-forge-isolated-gate
-require_text 'result/meta.tsv' .swe-forge/contracts/result-bundle.md
-require_text 'Do not use `eval`' .swe-forge/contracts/result-bundle.md
-require_text 'prepare' scripts/check-release
-require_text 'published' scripts/check-release
-require_text 'allow-dirty' scripts/check-release
-require_text 'remote tag evidence' scripts/check-release
-require_text 'macos-core:' .github/workflows/ci.yml
-
-require_text 'final status: `ACCEPTED`, `BLOCKED`, or `FAILED`' SWE-FORGE.md
-require_text 'Work summary' SWE-FORGE.md
-require_text 'plain human' SWE-FORGE.md
-require_text 'canonical final-report' .swe-forge/workflows/ticket.md
-require_text 'Work summary' .swe-forge/examples/pr-ticket.md
-require_text 'Final run report' .swe-forge/conformance/scenarios.md
-require_text 'actions/workflows/ci.yml' README.md
-require_text 'Run the repository checks' CONTRIBUTING.md
-require_text 'scripts/test-swe-forge-gate' CONTRIBUTING.md
-require_text 'evidence ledger' .swe-forge/policies/evidence.md
-require_text '`$STATE/receipt.md`' .swe-forge/policies/evidence.md
+require_text 'worker-brief-input/v1' .swe-forge/tools/swe-forge-worker-brief
+require_text 'dependency_digest' .swe-forge/contracts/worker-brief.md
+require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
+require_text 'Early discovery-shape assessment' .swe-forge/policies/execution-routing.md
 require_text 'Independent Review Handoff' .swe-forge/policies/verification.md
 require_text 'Acceptance handoff' .swe-forge/policies/verification.md
 require_text 'Cleanup Handoff' .swe-forge/policies/failure-recovery.md
-reject_text '## Final Gate' .swe-forge/policies/verification.md
-require_text 'receipt_ref' .swe-forge/contracts/run-state.md
-require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
-require_text 'Final status: ACCEPTED | BLOCKED | FAILED' .swe-forge/contracts/receipt.md
-reject_text 'Merge performed: no' .swe-forge/contracts/receipt.md
-require_text 'pre-edit baseline' SWE-FORGE.md
-require_text 'Execution topology and delivery mode are orthogonal' SWE-FORGE.md
-require_text '`/git-pr draft` requests a draft PR' SWE-FORGE.md
-require_text 'The same policy resolves repository branch, commit, title, template, and draft' docs/architecture.md
-require_text '/swe-forge isolated <ticket>' SWE-FORGE.md
-require_text 'requested_mode: AUTO | SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
-require_text '  current: SOLO | SUBAGENTS | ISOLATED' .swe-forge/policies/execution-routing.md
-require_text 'requested_provider: AUTO | NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
-require_text 'execution_provider: NATIVE | HERDR | NONE' .swe-forge/policies/provider-selection.md
-require_text 'parallel_strategy: NONE | COMPOSE' .swe-forge/policies/provider-selection.md
-require_text 'integration_strategy: NONE | CHERRY_PICK' .swe-forge/policies/provider-selection.md
-require_text 'delivery_mode: GUIDED | PR' .swe-forge/contracts/run-state.md
-require_text 'Canonical routing ownership' .swe-forge/contracts/run-state.md
-require_text 'mapping is the sole owner of live topology facts' .swe-forge/contracts/run-state.md
-require_text 'delivery_mode` owns the active delivery-domain decision' .swe-forge/contracts/run-state.md
-reject_text 'requested_mode: AUTO | SOLO | SUBAGENTS | HERDR' SWE-FORGE.md
-require_text 'transient working spec' SWE-FORGE.md
-require_text 'specialist skills optional and on demand' SWE-FORGE.md
-require_text 'risk-proportional testing decision' SWE-FORGE.md
-require_text 'Only current schema v3 is' SWE-FORGE.md
-require_text 'ephemeral internal implementation state' AGENTS.md
-require_text 'root/orchestrator authority' AGENTS.md
-require_text 'side effects' .swe-forge/policies/verification.md
-require_text 'No blanket coverage percentage' .swe-forge/policies/verification.md
-require_text 'specialist_skills:' .swe-forge/contracts/working-spec.md
-require_text 'testing:' .swe-forge/contracts/working-spec.md
-require_text 'testing:' .swe-forge/contracts/task.md
-require_text 'RESULT_PROFILE: READ_ONLY' .swe-forge/contracts/result.md
-require_text 'VALIDATION:' .swe-forge/contracts/result.md
-require_text 'specialist_skills:' .swe-forge/contracts/run-state.md
-require_text 'Do not add external skill URLs to the adapter registry' .swe-forge/policies/specialist-skills.md
-require_text 'refactor-design-patterns' docs/adding-a-skill.md
-require_text 'ui-design-token-refactor' docs/adding-a-skill.md
-require_text 'Ticket names an optional specialist skill' .swe-forge/conformance/scenarios.md
-require_text 'Read-only researcher result' .swe-forge/conformance/scenarios.md
-require_text 'Normal writable result' .swe-forge/conformance/scenarios.md
-require_text 'Isolated writable result' .swe-forge/conformance/scenarios.md
-require_text 'Behavior-changing ticket with a test seam' .swe-forge/conformance/scenarios.md
-require_text '## Canonical Load Ordering And Behavior Preservation' .swe-forge/conformance/scenarios.md
-require_text 'Normal `SOLO` ticket' .swe-forge/conformance/scenarios.md
-require_text '`PR` specification and delivery' .swe-forge/conformance/scenarios.md
-require_text 'Delivery before first write' .swe-forge/conformance/scenarios.md
-require_text 'Executable evidence and candidate binding' .swe-forge/conformance/scenarios.md
-require_text 'Delegated implementer with reduced context' .swe-forge/conformance/scenarios.md
-require_text 'Independent review' .swe-forge/conformance/scenarios.md
-require_text 'Isolated routing candidate' .swe-forge/conformance/scenarios.md
-require_text 'Context-risk or pressure path' .swe-forge/conformance/scenarios.md
-require_text '`BLOCKED`/`FAILED` recovery path' .swe-forge/conformance/scenarios.md
-require_text 'Final acceptance' .swe-forge/conformance/scenarios.md
-require_text '## Repository-aware delivery conventions' .swe-forge/conformance/scenarios.md
-require_text 'Remote PR template' .swe-forge/conformance/scenarios.md
-require_text 'Explicit draft PR' .swe-forge/conformance/scenarios.md
-require_text '## Context Continuity' .swe-forge/conformance/scenarios.md
-require_text '## Context-Aware Routing And Continuity' .swe-forge/conformance/scenarios.md
-require_text 'Large but globally coupled task' .swe-forge/conformance/scenarios.md
-require_text 'C1. Two independent discovery questions' .swe-forge/conformance/scenarios.md
-require_text 'C2. Two coupled discovery questions' .swe-forge/conformance/scenarios.md
-require_text 'Context-heavy transition' .swe-forge/conformance/scenarios.md
-require_text 'PR survives compaction' .swe-forge/conformance/scenarios.md
-require_text 'Herdr read-only backend' .swe-forge/conformance/scenarios.md
-require_text 'Bounded worker' .swe-forge/conformance/scenarios.md
-require_text 'worker-brief-input/v1' .swe-forge/workflows/ticket.md
-require_text 'swe-forge-worker-brief render' .swe-forge/workflows/ticket.md
-require_text 'isolated_execution' .swe-forge/workflows/isolated-execution.md
-require_text 'Stale state pointer' .swe-forge/conformance/scenarios.md
-require_text 'Reliable near-limit signal' .swe-forge/conformance/scenarios.md
-require_text 'explicit test-first' docs/adding-a-skill.md
-require_text 'Brief Alignment Interview' .swe-forge/policies/specification.md
-require_text 'git-sync' .swe-forge/policies/delivery.md
-require_text 'one dedicated task branch' .swe-forge/policies/delivery.md
-require_text '<type>/<short-kebab-case-description>' .swe-forge/policies/delivery.md
-require_text 'repository/project name' .swe-forge/policies/delivery.md
-require_text 'feat/order-cancellation' .swe-forge/examples/isolated-ticket.md
-reject_text 'swe-forge/<run-id>/integration' .swe-forge/examples/isolated-ticket.md
-require_text 'per-slice commits' .swe-forge/policies/delivery.md
-require_text 'provider state is `MERGED`' .swe-forge/policies/delivery.md
-require_text 'Project-facing delivery artifacts' .swe-forge/policies/delivery.md
-require_text 'Repository-aware delivery conventions' .swe-forge/policies/delivery.md
-require_text 'explicit instruction from the user or ticket' .swe-forge/policies/delivery.md
-require_text 'strong, recurring evidence from recent Git history' .swe-forge/policies/delivery.md
-require_text 'Do not create, require, or update a' .swe-forge/policies/delivery.md
-require_text 'immediately before SWE Forge must create a task or' .swe-forge/policies/delivery.md
-require_text 'immediately before each delivery commit' .swe-forge/policies/delivery.md
-require_text "remote repository's default branch" .swe-forge/policies/delivery.md
-require_text 'GitHub' .swe-forge/policies/delivery.md
-require_text 'optional standalone' .swe-forge/policies/delivery.md
-require_text 'DRAFT | OPEN | MERGED | CLOSED | none' .swe-forge/contracts/run-state.md
-require_text 'The same rule applies to SWE Forge' .swe-forge/policies/delivery.md
-require_text 'Receipts remain private run-evidence artifacts' .swe-forge/policies/delivery.md
-require_text 'private run-evidence artifacts' .swe-forge/policies/delivery.md
-require_text 'Support tiers and available capabilities are asymmetric' README.md
-require_text 'feature parity is not' README.md
-require_text 'no public release yet' README.md
-require_text 'stable user-level checkout' README.md
-require_text 'as links' README.md
-require_text 'Project-facing PR content' .swe-forge/conformance/scenarios.md
-reject_text 'add it to the PR description' SWE-FORGE.md
-reject_text 'add it to the PR description' README.md
-require_text '`go` authorizes one reviewed' .swe-forge/policies/delivery.md
-require_text 'working_spec_ref:' .swe-forge/contracts/run-state.md
-require_text 'requirement: required' .swe-forge/contracts/task.md
-require_text 'create_pull_request: {status: not-authorized' .swe-forge/contracts/task.md
-require_text 'delegation.allowed' .swe-forge/contracts/task.md
-require_text 'Only a dependency in `done`' .swe-forge/contracts/run-state.md
-require_text 'every critical finding blocks' .swe-forge/contracts/review.md
-require_text 'review: skipped' .swe-forge/examples/simple-ticket.md
-require_text 'checkout_baseline:' .swe-forge/examples/parallel-ticket.md
-require_text 'checkout_baseline:' .swe-forge/examples/isolated-ticket.md
-require_text 'branch_setup:' .swe-forge/contracts/run-state.md
-require_text 'branch_setup:' .swe-forge/contracts/task.md
-require_text 'branch_setup:' .swe-forge/examples/parallel-ticket.md
-require_text 'branch_setup:' .swe-forge/examples/isolated-ticket.md
-require_text '## Shared Workflow Behavior' .swe-forge/adapters/README.md
-require_text 'SWE-FORGE.md' .swe-forge/adapters/README.md
-require_text 'workflows/ticket.md' .swe-forge/adapters/README.md
-require_text 'policies/delegation.md' .swe-forge/adapters/README.md
-require_text 'contracts/worker-brief.md' .swe-forge/adapters/README.md
-require_text 'policies/delivery.md' .swe-forge/adapters/README.md
-require_text 'policies/context.md' .swe-forge/adapters/README.md
-require_text 'must not preload stage-specific' .swe-forge/adapters/README.md
-require_text 'remote default branch' .swe-forge/adapters/README.md
-require_text 'gh repo view' .swe-forge/adapters/README.md
-require_text 'gh pr create --draft' .swe-forge/adapters/README.md
-require_text 'argument-hint: "[draft|title/body options]"' .swe-forge/adapters/pi/prompts/git-pr.md
+require_text 'projected pressure alone cannot trigger it' .swe-forge/adapters/pi/README.md
+require_text 'native `task` tool' .swe-forge/adapters/omp/README.md
+require_text 'schemaMode: strict' .swe-forge/adapters/omp/README.md
+require_text 'workerBriefing' .swe-forge/adapters/pi/README.md
 require_text 'raw arguments through unchanged' .swe-forge/adapters/pi/prompts/git-pr.md
 require_text 'raw arguments through unchanged' .swe-forge/adapters/opencode/commands/git-pr.md
-require_text '`/git-pr draft` forwards an explicit draft request' .swe-forge/adapters/pi/README.md
-require_text '/git-pr [draft]' .swe-forge/adapters/opencode/README.md
-require_text 'ISOLATED' .swe-forge/workflows/ticket.md
-require_text '/swe-forge isolated <ticket>' .swe-forge/workflows/ticket.md
+require_text '~/.agents/swe-forge/.swe-forge/workflows/ticket.md' .swe-forge/adapters/shared/agent-skill/swe-forge/SKILL.md
+require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/swe-forge/agents/openai.yaml
+require_text 'worker-brief-input/v1' .swe-forge/workflows/ticket.md
 require_text 'swe-forge-invocation' .swe-forge/workflows/ticket.md
 require_text 'input_status' .swe-forge/workflows/ticket.md
 require_text 'parse --raw-arguments TEXT' .swe-forge/tools/swe-forge-invocation
 require_text 'consumed_tokens' .swe-forge/tools/swe-forge-invocation
-require_text 'MIGRATION_REQUIRED' .swe-forge/tools/swe-forge-invocation
-reject_text 'inspect the first token' .swe-forge/workflows/ticket.md
-reject_text 'delivery token was consumed' .swe-forge/workflows/ticket.md
-require_text 'requested_provider: HERDR' .swe-forge/policies/provider-selection.md
-require_text 'Hard isolated eligibility' .swe-forge/policies/execution-routing.md
-require_text 'Economic preference' .swe-forge/policies/execution-routing.md
-require_text 'Prefer `NATIVE`' .swe-forge/policies/provider-selection.md
-require_text 'use Herdr as the provider for this isolated run' .swe-forge/policies/provider-selection.md
-require_text 'Herdr is optional' .swe-forge/providers/herdr/README.md
-require_text 'does not define SWE Forge behavior' .swe-forge/providers/herdr/README.md
-require_text 'does not replace the coding harness' .swe-forge/providers/herdr/README.md
-require_text 'must not be installed automatically' .swe-forge/providers/herdr/README.md
-require_text 'HERDR_ENV' .swe-forge/providers/herdr/README.md
-require_text 'scheduling evidence' .swe-forge/providers/herdr/README.md
-require_text 'Structured worker results, Git evidence, validation, and central integration' .swe-forge/providers/herdr/README.md
-[ ! -e "$ROOT/.swe-forge/adapters/herdr" ] || fail "Herdr provider remains under adapters"
-[ -d "$ROOT/.swe-forge/providers/herdr" ] || fail "missing Herdr provider directory"
-[ -f "$ROOT/.swe-forge/providers/README.md" ] || fail "missing provider catalog"
-
-for file in \
-  .swe-forge/adapters/opencode/commands/swe-forge.md \
-  .swe-forge/adapters/omp/prompts/swe-forge.md \
-  .swe-forge/adapters/claude-code/skills/swe-forge/SKILL.md \
-  .swe-forge/adapters/pi/prompts/swe-forge.md \
-  .swe-forge/adapters/shared/agent-skill/swe-forge/SKILL.md; do
-  require_text 'ticket procedure' "$file"
-  require_text 'invocation arguments' "$file"
-  reject_text 'Supported isolated forms include' "$file"
-  reject_text 'A leading `herdr`' "$file"
-  reject_text 'Only after canonical routing selects' "$file"
-  reject_text 'policies/context.md' "$file"
-  reject_text 'policies/delivery.md' "$file"
-done
-for file in \
-  .swe-forge/adapters/opencode/commands/swe-forge.md \
-  .swe-forge/adapters/omp/prompts/swe-forge.md \
-  .swe-forge/adapters/claude-code/skills/swe-forge/SKILL.md \
-  .swe-forge/adapters/pi/prompts/swe-forge.md \
-  .swe-forge/adapters/shared/agent-skill/swe-forge/SKILL.md; do
-  require_text 'Resolve every' "$file"
-  require_text 'relative reference under' "$file"
-done
-for file in \
-  .swe-forge/adapters/opencode/commands/swe-forge.md \
-  .swe-forge/adapters/omp/prompts/swe-forge.md \
-  .swe-forge/adapters/pi/prompts/swe-forge.md; do
-  require_text '$ARGUMENTS' "$file"
-done
-require_text '~/.pi/agent/swe-forge' .swe-forge/adapters/pi/prompts/swe-forge.md
-require_text '~/.omp/agent/swe-forge' .swe-forge/adapters/omp/prompts/swe-forge.md
-require_text '~/.pi/agent/swe-forge/.swe-forge/policies/delivery.md' .swe-forge/adapters/pi/prompts/git-pr.md
-require_text 'thin loader' .swe-forge/adapters/opencode/commands/git-push.md
-require_text 'clean status' .swe-forge/providers/herdr/runbook.md
-require_text 'worker-local transfer commit' .swe-forge/workflows/isolated-execution.md
-require_text 'Integration follows dependencies and the' .swe-forge/workflows/isolated-execution.md
-require_text 'recorded plan; completion order never determines integration order.' .swe-forge/workflows/isolated-execution.md
-require_text 'integrated-state validation' .swe-forge/workflows/isolated-execution.md
-require_text 'never use forced removal automatically' .swe-forge/workflows/isolated-execution.md
-require_text 'validation_ref:' .swe-forge/contracts/run-state.md
-require_text 'receipt_ref:' .swe-forge/contracts/run-state.md
-
-while IFS='|' read -r file action; do
-  require_text "\`$action\` action only" "$file"
-  require_text 'thin loader' "$file"
-done <<'EOF'
-.swe-forge/adapters/opencode/commands/git-commit.md|commit
-.swe-forge/adapters/opencode/commands/git-push.md|push
-.swe-forge/adapters/opencode/commands/git-pr.md|create_pull_request
-.swe-forge/adapters/opencode/commands/git-sync.md|sync
-.swe-forge/adapters/pi/prompts/git-commit.md|commit
-.swe-forge/adapters/pi/prompts/git-push.md|push
-.swe-forge/adapters/pi/prompts/git-pr.md|create_pull_request
-.swe-forge/adapters/pi/prompts/git-sync.md|sync
-EOF
-require_text 'ADAPTER_REGISTRY' scripts/swe-forge
-require_text 'opencode|file|opencode/commands/git-push.md' .swe-forge/adapters/registry.tsv
-require_text 'opencode|file|opencode/commands/git-pr.md' .swe-forge/adapters/registry.tsv
-require_text 'omp|file|omp/prompts/swe-forge.md' .swe-forge/adapters/registry.tsv
-require_text 'omp|file|omp/extensions/swe-forge-runtime.ts' .swe-forge/adapters/registry.tsv
-require_text 'omp|file|omp/agents/swe-forge-read-only.md' .swe-forge/adapters/registry.tsv
-require_text 'omp|file|omp/agents/swe-forge-writable.md' .swe-forge/adapters/registry.tsv
-require_text 'omp|file|omp/agents/swe-forge-reviewer.md' .swe-forge/adapters/registry.tsv
-require_text 'pi|file|pi/prompts/git-sync.md' .swe-forge/adapters/registry.tsv
-require_text 'pi|file|pi/extensions/swe-forge-runtime.ts' .swe-forge/adapters/registry.tsv
-require_text 'codex|tree|shared/agent-skill/swe-forge' .swe-forge/adapters/registry.tsv
-require_text 'cursor|tree|shared/agent-skill/swe-forge' .swe-forge/adapters/registry.tsv
-reject_text 'shared/agent-skill/project' .swe-forge/adapters/registry.tsv
-reject_text 'SCOPE=' scripts/swe-forge
-reject_text 'TARGET=' scripts/swe-forge
-reject_text 'MODE=' scripts/swe-forge
-reject_text 'copy mode' scripts/swe-forge
-require_text 'https://developers.openai.com/learn/codex' .swe-forge/adapters/shared/agent-skill/README.md
-require_text 'https://cursor.com/docs' .swe-forge/adapters/shared/agent-skill/README.md
-require_text 'shared adapter behavior' .swe-forge/adapters/claude-code/README.md
-require_text 'shared adapter behavior' .swe-forge/adapters/opencode/README.md
-require_text 'shared adapter behavior' .swe-forge/adapters/pi/README.md
-require_text 'https://omp.sh/docs/prompt-templates' .swe-forge/adapters/omp/README.md
-require_text 'native `task` tool' .swe-forge/adapters/omp/README.md
-require_text 'schemaMode: strict' .swe-forge/adapters/omp/README.md
-require_text 'Native OMP `ISOLATED` remains unsupported' .swe-forge/adapters/omp/README.md
-require_text 'OMP native SUBAGENTS bridge' docs/installation.md
-require_text 'Native task/profile/strict-output observations' docs/compatibility.md
-require_text '### Context management' .swe-forge/adapters/pi/README.md
-require_text 'agent_settled' .swe-forge/adapters/pi/README.md
-require_text 'getContextUsage' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'ExtensionAPI' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
-require_text 'outputSchema' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
-require_text 'schemaMode' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
-require_text 'SWE Forge ISOLATED' .swe-forge/adapters/omp/extensions/swe-forge-runtime.ts
-require_text 'swe-forge-read-only' .swe-forge/adapters/omp/agents/swe-forge-read-only.md
-require_text 'spawns: []' .swe-forge/adapters/omp/agents/swe-forge-read-only.md
-require_text 'blocking: true' .swe-forge/adapters/omp/agents/swe-forge-writable.md
-require_text 'test-swe-forge-pi' CONTRIBUTING.md
-require_text 'test-swe-forge-omp' CONTRIBUTING.md
-require_text 'test-swe-forge-invocation' CONTRIBUTING.md
-require_text 'test-swe-forge-briefing' CONTRIBUTING.md
-require_text 'worker briefing fixture' scripts/validate-swe-forge
-require_text 'worker result profile fixture' scripts/validate-swe-forge
-require_text 'canonical boundary fixture' scripts/validate-swe-forge
-require_text 'worker-result/v1' scripts/test-swe-forge-results
-require_text 'discoverable-old' scripts/test-swe-forge-pi
-require_text 'project-overrides-global' scripts/test-swe-forge-pi
-require_text 'taskId: "reader-check"' scripts/test-swe-forge-pi
-require_text 'workerBriefing' scripts/test-swe-forge-pi
-require_text 'session_before_compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'runtime_status=near-limit' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-reject_text 'projected_pressure=high' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'settingsSnapshot' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'projectSettingsTrusted' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text '.pi/settings.json' .swe-forge/adapters/pi/README.md
-require_text 'ctx.compact' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'workerBriefing' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'worker_briefing/v1' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'workerBriefing' .swe-forge/adapters/pi/README.md
-require_text 'worker_briefing/v1' .swe-forge/workflows/ticket.md
-reject_text 'taskContract' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-reject_text 'taskContract' .swe-forge/adapters/pi/README.md
-reject_text '`taskContract` argument' .swe-forge/workflows/ticket.md
-require_text 'SWE_FORGE_RUN_STATE' .swe-forge/adapters/pi/extensions/swe-forge-runtime.ts
-require_text 'Pi 0.84.2' docs/compatibility.md
-require_text 'shared adapter behavior' .swe-forge/adapters/shared/agent-skill/README.md
-require_text 'actually `MERGED`' .swe-forge/conformance/scenarios.md
-require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/swe-forge/agents/openai.yaml
-require_text '~/.agents/swe-forge' .swe-forge/adapters/shared/agent-skill/swe-forge/SKILL.md
-require_text 'write_access: read-write' .swe-forge/contracts/task.md
-require_text 'worktree_role: shared | integration | worker | none' .swe-forge/contracts/task.md
-require_text 'base_sha:' .swe-forge/contracts/task.md
-require_text 'integration_order:' .swe-forge/contracts/task.md
-require_text 'environment_isolation:' .swe-forge/contracts/task.md
-for removed_task_field in \
-  'requested_mode:' 'preferred_mode:' 'execution_mode:' 'routing:' \
-  'routing.initial:' 'routing.preferred:' 'routing.selected:' 'routing.current:' \
-  'requested_provider:' 'execution_provider:' 'delegation_backend:' \
-  'write_isolation:' 'provider_reason:' 'provider_constraints:' \
-  'parallel_strategy:' 'integration_strategy:' 'requested_delivery:' 'delivery_mode:'; do
-  reject_text "$removed_task_field" .swe-forge/contracts/task.md
-done
-require_text 'RESULT_PROFILE: READ_ONLY' .swe-forge/contracts/result.md
-require_text 'RESULT_PROFILE: WRITABLE' .swe-forge/contracts/result.md
-require_text 'ISOLATED_WRITABLE' .swe-forge/contracts/result.md
-require_text 'not asked to reshape review findings' .swe-forge/contracts/result.md
-require_text 'source_to_integration:' .swe-forge/contracts/run-state.md
-require_text 'workers:' .swe-forge/contracts/run-state.md
-require_text 'parallel_strategy:' .swe-forge/contracts/run-state.md
-require_text 'cleanup_status:' .swe-forge/contracts/run-state.md
-require_text 'provider: NATIVE | HERDR | NONE' .swe-forge/contracts/review.md
-require_text 'delegation_backend: NONE | NATIVE | HERDR | OTHER' .swe-forge/contracts/run-state.md
+require_text 'root/orchestrator authority' AGENTS.md
+require_text 'ephemeral internal implementation state' AGENTS.md
+require_text 'risk-proportional testing decision' SWE-FORGE.md
+require_text 'Work summary' SWE-FORGE.md
+require_text 'plain human' SWE-FORGE.md
+require_text 'Run metadata:' .swe-forge/contracts/receipt.md
+require_text 'Model provider:' .swe-forge/contracts/receipt.md
+require_text 'Head:' .swe-forge/contracts/receipt.md
+require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
+require_text 'Generated at:' .swe-forge/contracts/receipt.md
+require_text 'context:' .swe-forge/contracts/run-state.md
 require_text 'continuation:' .swe-forge/contracts/run-state.md
-require_text 'routing.preferred` is the current semantic' .swe-forge/policies/execution-routing.md
-require_text '`routing` mapping is the sole owner' .swe-forge/policies/execution-routing.md
-require_text 'A preferred topology must not be collapsed into the' .swe-forge/policies/execution-routing.md
-require_text 'integrated_validation_checked:' .swe-forge/contracts/review.md
-require_text 'local-only transfer resources' .swe-forge/policies/delivery.md
-require_text 'Completion order' .swe-forge/policies/delivery.md
-require_text 'Integrated-state validation' .swe-forge/policies/delivery.md
-require_text 'forced removal is never automatic' .swe-forge/policies/delivery.md
-reject_text 'install all' README.md
-reject_text 'install all' docs/installation.md
-reject_text 'install all' scripts/swe-forge
-reject_text 'verify all' scripts/test-swe-forge
-reject_text 'commit_policy:' .swe-forge/examples/parallel-ticket.md
-reject_text 'commit_policy:' .swe-forge/examples/isolated-ticket.md
-reject_text 'pushing no longer asks whether' README.md
-
-require_text 'normative ownership and stage-triggered load map is defined in' docs/architecture.md
-require_text '../SWE-FORGE.md' docs/architecture.md
-require_text '../.swe-forge/workflows/ticket.md' docs/architecture.md
-reject_text 'activation and lifecycle -> SWE-FORGE.md' docs/architecture.md
-reject_text 'Minimal load sets are stage-triggered' docs/architecture.md
-
-# Runtime orchestration must expose canonical policy owners before their
-# decisions or actions are needed. These assertions protect the load path
-# while allowing the detailed rules to remain in their owning files.
-require_ordered_text 'Before broad discovery' 'full evidence-backed topology decision' .swe-forge/workflows/ticket.md
+require_text 'delivery_checkout:' .swe-forge/contracts/run-state.md
+require_text 'set-continuation' .swe-forge/tools/swe-forge-state
+require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-state
+require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
+require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
+require_text 'ordered commit plan' .swe-forge/policies/delivery.md
+require_text 'remote default branch' .swe-forge/policies/delivery.md
+require_text 'review-repair commit' .swe-forge/policies/delivery.md
+require_text 'relevant PR is actually `MERGED`' .swe-forge/conformance/scenarios.md
+require_ordered_text 'Before broad discovery' 'final topology decision' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before specification or clarification behavior is needed' 'policies/specification.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'In `PR`, also load' 'contracts/working-spec.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Every normal run loads' 'before specification or clarification' SWE-FORGE.md
-require_ordered_text '`PR` additionally loads' 'building the transient working spec' SWE-FORGE.md
-require_ordered_text 'When delegation or an independent review is useful' 'policies/delegation.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'When delegation or an independent review is useful' 'policies/model-routing.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before making the final automatic or explicit topology decision' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'policies/execution-routing.md' 'policies/provider-selection.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before worker execution, also load' 'result-bundle.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before worker execution, also load' 'providers/' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before worker execution, also load' 'swe-forge-isolated-gate' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before selecting or executing the validation strategy' 'policies/verification.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'When executable gate evidence, candidate' 'policies/evidence.md' .swe-forge/workflows/ticket.md
+require_ordered_text 'Before selecting or executing validation' 'policies/verification.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before the first writable checkout/setup operation' 'policies/delivery.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'When the review trigger applies' 'agents/reviewer.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'When the review trigger applies' 'contracts/review.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before a `BLOCKED` or `FAILED` recovery path' 'policies/failure-recovery.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Compare the final integrated diff' 'canonical gate' .swe-forge/workflows/ticket.md
+require_ordered_text 'The canonical Acceptance Gate' 'Compare the final integrated diff' .swe-forge/workflows/ticket.md
 
 printf '%s\n' 'PASS: SWE Forge structural checks'

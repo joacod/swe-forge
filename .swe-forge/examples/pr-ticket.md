@@ -18,10 +18,6 @@ routing:
   preferred: SOLO
   selected: SOLO
   current: SOLO
-requested_provider: AUTO
-execution_provider: NONE
-parallel_strategy: NONE
-integration_strategy: NONE
 requested_delivery: PR
 delivery_mode: PR
 reason: One tightly coupled endpoint and test can be implemented and verified in one context.
@@ -52,21 +48,19 @@ Before editing, the working spec records an ordered commit plan. Each step names
 one cohesive objective, scope, dependencies, targeted validation, and commit
 subject. The agent implements and validates one step, creates its local commit,
 and then starts the next step; it does not defer commits until the end. A single
-inseparable step remains one commit. For `ISOLATED`, those become central
-integration commits on the one integration/delivery branch after each accepted
-worker unit; worker branches remain local-only. It runs the final required
-checks, performs a fresh acceptance-first review within the review focus,
-repairs blocking in-scope findings as additional commits, and inspects the
-final diff. Unrelated improvements are recorded as deferred follow-ups rather
-than pulled into the PR. It does not stop after each slice for user approval.
+inseparable step remains one commit. It runs the final required checks, performs
+a fresh acceptance-first review within the review focus, repairs blocking
+in-scope findings as additional commits, and inspects the final diff. Unrelated
+improvements are recorded as deferred follow-ups rather than pulled into the
+PR. It does not stop after each slice for user approval.
 
-After all final gates pass, `PR` mode pushes the one task branch (or the one
-isolated integration/delivery branch) and creates exactly one pull request with
-a concise, project-facing title and body. The body explains the outcome and
-motivation, lists only relevant validation, and notes material risks or
-follow-ups when needed. It follows repository conventions and never includes a
-receipt, tool/process metadata, transcript, or unrelated detail. The harness
-output also starts with a short human-facing summary, separate from the receipt:
+After all final gates pass, `PR` mode pushes the one task branch and creates
+exactly one pull request with a concise, project-facing title and body. The body
+explains the outcome and motivation, lists only relevant validation, and notes
+material risks or follow-ups when needed. It follows repository conventions and
+never includes a receipt, tool/process metadata, transcript, or unrelated
+detail. The harness output also starts with a short human-facing summary,
+separate from the receipt:
 
 ```text
 Work summary:
@@ -81,6 +75,6 @@ without changing the PR. The final report contains the PR URL. Merge remains a
 human action.
 
 After the user merges the PR, they can say `merged` or invoke `git-sync merged`.
-The sync action verifies the provider reports `MERGED` before returning to the
-remote default branch and fast-forwarding it. PR creation never implies that
-synchronization or merge has happened.
+The sync action verifies the remote PR state reports `MERGED` before returning
+to the remote default branch and fast-forwarding it. PR creation never implies
+that synchronization or merge has happened.

@@ -8,10 +8,7 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-validation.XXXXXX")
 TMP_ROOT=$(CDPATH= cd "$TMP_ROOT" && pwd -P)
-
-cleanup() {
-  rm -rf "$TMP_ROOT"
-}
+cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM
 
 usage() {
@@ -19,11 +16,10 @@ usage() {
 Usage:
   scripts/validate-swe-forge [--serial]
 
-Run syntax and structural checks first, then run the installer,
-evidence-gate, isolated-worktree, Pi and OMP runtime, worker briefing, worker
-result-profile, and canonical boundary fixtures. The default runs the fixture
-suites concurrently and
-reports every result; --serial is useful for tracing.
+Run syntax and structural checks first, then run the installer, evidence-gate,
+Pi and OMP runtime, invocation, worker briefing, worker result, and canonical
+boundary fixtures. The default runs fixture suites concurrently and reports
+every result; --serial is useful for tracing.
 EOF
 }
 
@@ -35,17 +31,9 @@ fail() {
 parallel=yes
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --serial)
-      parallel=no
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      fail "unknown option: $1"
-      ;;
+    --serial) parallel=no; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) fail "unknown option: $1" ;;
   esac
 done
 
@@ -55,11 +43,7 @@ run_check() {
   shift 2
   log=$TMP_ROOT/$slug.log
   status_file=$TMP_ROOT/$slug.status
-  if "$@" >"$log" 2>&1; then
-    status=0
-  else
-    status=$?
-  fi
+  if "$@" >"$log" 2>&1; then status=0; else status=$?; fi
   printf '%s\n' "$status" >"$status_file"
 }
 
@@ -68,9 +52,7 @@ report_check() {
   slug=$2
   status=$(cat "$TMP_ROOT/$slug.status")
   case "$status" in
-    0)
-      printf 'PASS: %s\n' "$label"
-      ;;
+    0) printf 'PASS: %s\n' "$label" ;;
     ''|*[!0-9]*)
       printf 'FAIL: %s (invalid status: %s)\n' "$label" "$status" >&2
       [ ! -s "$TMP_ROOT/$slug.log" ] || cat "$TMP_ROOT/$slug.log" >&2
@@ -93,7 +75,6 @@ run_check 'shell syntax' syntax sh -n \
   "$ROOT/scripts/validate-swe-forge" \
   "$ROOT/scripts/swe-forge-gate" \
   "$ROOT/scripts/test-swe-forge-gate" \
-  "$ROOT/scripts/test-swe-forge-isolated" \
   "$ROOT/scripts/test-swe-forge-pi" \
   "$ROOT/scripts/test-swe-forge-omp" \
   "$ROOT/scripts/test-swe-forge-invocation" \
@@ -101,48 +82,28 @@ run_check 'shell syntax' syntax sh -n \
   "$ROOT/scripts/test-swe-forge-results" \
   "$ROOT/scripts/check-release" \
   "$ROOT/scripts/swe-forge-state" \
-  "$ROOT/scripts/swe-forge-isolated-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-state" \
-  "$ROOT/.swe-forge/tools/swe-forge-isolated-gate" \
   "$ROOT/.swe-forge/tools/swe-forge-invocation" \
   "$ROOT/.swe-forge/tools/swe-forge-worker-brief" \
   "$ROOT/.swe-forge/tools/swe-forge-worker-result" \
   "$ROOT/scripts/swe-forge-invocation"
-if ! report_check 'shell syntax' syntax; then
-  exit 1
-fi
+if ! report_check 'shell syntax' syntax; then exit 1; fi
 
 run_check 'structural checks' structural "$ROOT/scripts/check-swe-forge"
-if ! report_check 'structural checks' structural; then
-  exit 1
-fi
+if ! report_check 'structural checks' structural; then exit 1; fi
 
 if [ "$parallel" = yes ]; then
-  run_check 'installer fixture tests' installer "$ROOT/scripts/test-swe-forge" &
-  installer_pid=$!
-  run_check 'evidence-gate fixtures' gate "$ROOT/scripts/test-swe-forge-gate" &
-  gate_pid=$!
-  run_check 'isolated-worktree fixtures' isolated "$ROOT/scripts/test-swe-forge-isolated" &
-  isolated_pid=$!
-  run_check 'Pi runtime fixture' pi "$ROOT/scripts/test-swe-forge-pi" &
-  pi_pid=$!
-  run_check 'OMP runtime fixture' omp "$ROOT/scripts/test-swe-forge-omp" &
-  omp_pid=$!
-  run_check 'invocation parser fixture' invocation "$ROOT/scripts/test-swe-forge-invocation" &
-  invocation_pid=$!
-  run_check 'worker briefing fixture' briefing "$ROOT/scripts/test-swe-forge-briefing" &
-  briefing_pid=$!
-  run_check 'worker result profile fixture' results "$ROOT/scripts/test-swe-forge-results" &
-  results_pid=$!
-  run_check 'canonical boundary fixture' boundary "$ROOT/scripts/test-swe-forge-boundary" &
-  boundary_pid=$!
-
-  # Each run_check records its command status and exits successfully, so
-  # waiting never hides a fixture failure or terminates the batch under set -e.
+  run_check 'installer fixture tests' installer "$ROOT/scripts/test-swe-forge" & installer_pid=$!
+  run_check 'evidence-gate fixtures' gate "$ROOT/scripts/test-swe-forge-gate" & gate_pid=$!
+  run_check 'Pi runtime fixture' pi "$ROOT/scripts/test-swe-forge-pi" & pi_pid=$!
+  run_check 'OMP runtime fixture' omp "$ROOT/scripts/test-swe-forge-omp" & omp_pid=$!
+  run_check 'invocation parser fixture' invocation "$ROOT/scripts/test-swe-forge-invocation" & invocation_pid=$!
+  run_check 'worker briefing fixture' briefing "$ROOT/scripts/test-swe-forge-briefing" & briefing_pid=$!
+  run_check 'worker result fixture' results "$ROOT/scripts/test-swe-forge-results" & results_pid=$!
+  run_check 'canonical boundary fixture' boundary "$ROOT/scripts/test-swe-forge-boundary" & boundary_pid=$!
   wait "$installer_pid"
   wait "$gate_pid"
-  wait "$isolated_pid"
   wait "$pi_pid"
   wait "$omp_pid"
   wait "$invocation_pid"
@@ -152,25 +113,28 @@ if [ "$parallel" = yes ]; then
 else
   run_check 'installer fixture tests' installer "$ROOT/scripts/test-swe-forge"
   run_check 'evidence-gate fixtures' gate "$ROOT/scripts/test-swe-forge-gate"
-  run_check 'isolated-worktree fixtures' isolated "$ROOT/scripts/test-swe-forge-isolated"
   run_check 'Pi runtime fixture' pi "$ROOT/scripts/test-swe-forge-pi"
   run_check 'OMP runtime fixture' omp "$ROOT/scripts/test-swe-forge-omp"
   run_check 'invocation parser fixture' invocation "$ROOT/scripts/test-swe-forge-invocation"
   run_check 'worker briefing fixture' briefing "$ROOT/scripts/test-swe-forge-briefing"
-  run_check 'worker result profile fixture' results "$ROOT/scripts/test-swe-forge-results"
+  run_check 'worker result fixture' results "$ROOT/scripts/test-swe-forge-results"
   run_check 'canonical boundary fixture' boundary "$ROOT/scripts/test-swe-forge-boundary"
 fi
 
 failures=0
-if ! report_check 'installer fixture tests' installer; then failures=$((failures + 1)); fi
-if ! report_check 'evidence-gate fixtures' gate; then failures=$((failures + 1)); fi
-if ! report_check 'isolated-worktree fixtures' isolated; then failures=$((failures + 1)); fi
-if ! report_check 'Pi runtime fixture' pi; then failures=$((failures + 1)); fi
-if ! report_check 'OMP runtime fixture' omp; then failures=$((failures + 1)); fi
-if ! report_check 'invocation parser fixture' invocation; then failures=$((failures + 1)); fi
-if ! report_check 'worker briefing fixture' briefing; then failures=$((failures + 1)); fi
-if ! report_check 'worker result profile fixture' results; then failures=$((failures + 1)); fi
-if ! report_check 'canonical boundary fixture' boundary; then failures=$((failures + 1)); fi
+for check in \
+  'installer fixture tests:installer' \
+  'evidence-gate fixtures:gate' \
+  'Pi runtime fixture:pi' \
+  'OMP runtime fixture:omp' \
+  'invocation parser fixture:invocation' \
+  'worker briefing fixture:briefing' \
+  'worker result fixture:results' \
+  'canonical boundary fixture:boundary'; do
+  label=${check%%:*}
+  slug=${check#*:}
+  if ! report_check "$label" "$slug"; then failures=$((failures + 1)); fi
+done
 
 if [ "$failures" -gt 0 ]; then
   printf 'FAIL: %s validation suite(s) failed\n' "$failures" >&2

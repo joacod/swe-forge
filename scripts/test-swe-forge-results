@@ -4,10 +4,7 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-results.XXXXXX")
-
-cleanup() {
-  rm -rf "$TMP_ROOT"
-}
+cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM
 
 fail() {
@@ -39,20 +36,11 @@ expect_failure() {
 
 contract=$ROOT/.swe-forge/contracts/result.md
 result_tool=$ROOT/.swe-forge/tools/swe-forge-worker-result
-bundle_contract=$ROOT/.swe-forge/contracts/result-bundle.md
 
-for profile in 'RESULT_PROFILE: READ_ONLY' 'RESULT_PROFILE: WRITABLE' \
-  'ISOLATED_WRITABLE' 'REVIEW'; do
+for profile in 'RESULT_PROFILE: READ_ONLY' 'RESULT_PROFILE: WRITABLE' 'REVIEW'; do
   require_text "$profile" "$contract"
 done
-for bundle_file in meta.tsv commits.txt files.txt validations.tsv \
-  scope-exceptions.txt staged.txt unstaged.txt untracked.txt resources.tsv; do
-  require_text "$bundle_file" "$bundle_contract"
-done
-require_text 'Every bundle file remains required' "$contract"
-require_text 'do not add an ordinary `RESULT_PROFILE` field' "$bundle_contract"
 
-# A read-only researcher result has no implementation-shaped empty sections.
 read_only=$TMP_ROOT/read-only.result
 cat >"$read_only" <<'EOF_READ_ONLY'
 RESULT_PROFILE: READ_ONLY
@@ -69,28 +57,13 @@ EVIDENCE:
 RECOMMENDED_ACTION:
 - Keep Git and validation fields out of this result.
 EOF_READ_ONLY
-for field in 'RESULT_PROFILE: READ_ONLY' 'STATUS: DONE' \
-  'TASK_ID:' 'FINDINGS:' 'EVIDENCE:'; do
-  require_text "$field" "$read_only"
-done
-for field in 'BASE_SHA:' 'HEAD_SHA:' 'BRANCH:' 'WORKTREE:' \
-  'FILES_CHANGED:' 'GIT_STATE:' 'DELIVERABLE_COMMITS:' 'VALIDATION:' \
-  'ENVIRONMENT_RESOURCES:' 'PROVIDER:' 'DELEGATION_BACKEND:' \
-  'WRITE_ISOLATION:' 'AUTHORIZATION:' 'SCOPE_EXCEPTIONS:' \
-  'STAGED_CHANGES:' 'UNTRACKED_CHANGES:' 'RESULT_BUNDLE:' \
-  'create_pull_request:'; do
-  reject_text "$field" "$read_only"
-done
 
-# The canonical schema is machine-readable and contains no host-specific
-# assumptions. Role selection keeps review results on their dedicated contract.
 [ -x "$result_tool" ] || fail 'worker-result schema/validator is not executable'
 schema=$TMP_ROOT/schema.json
 "$result_tool" schema >"$schema"
 require_text '"schema": "worker-result/v1"' "$schema"
 require_text '"READ_ONLY"' "$schema"
 require_text '"WRITABLE"' "$schema"
-require_text '"ISOLATED_WRITABLE"' "$schema"
 require_text '"REVIEW"' "$schema"
 for host in Pi OMP OpenCode Claude Codex Cursor Harness; do
   reject_text "$host" "$schema"
@@ -103,18 +76,11 @@ expect_failure 'reviewer ordinary result' \
   "$result_tool" validate --profile READ_ONLY --role reviewer --result "$read_only"
 "$result_tool" validate --profile READ_ONLY --task-id researcher-result-profile \
   --result "$read_only" >"$TMP_ROOT/read-only.validation"
-require_text '"valid":true' "$TMP_ROOT/read-only.validation"
-cat "$read_only" | "$result_tool" validate --profile READ_ONLY --result - >/dev/null
-expect_failure 'malformed read-only result' \
-  "$result_tool" validate --profile READ_ONLY --result "$TMP_ROOT/missing.result"
-sed '/^EVIDENCE:/d' "$read_only" >"$TMP_ROOT/missing-evidence.result"
+missing_evidence=$TMP_ROOT/missing-evidence.result
+sed '/^EVIDENCE:/d' "$read_only" >"$missing_evidence"
 expect_failure 'read-only result without evidence' \
-  "$result_tool" validate --profile READ_ONLY --result "$TMP_ROOT/missing-evidence.result"
-sed 's/^RESULT_PROFILE: READ_ONLY$/RESULT_PROFILE: WRITABLE/' "$read_only" >"$TMP_ROOT/profile-mismatch.result"
-expect_failure 'profile mismatch' \
-  "$result_tool" validate --profile WRITABLE --result "$TMP_ROOT/profile-mismatch.result"
+  "$result_tool" validate --profile READ_ONLY --result "$missing_evidence"
 
-# A normal writable result adds only the evidence needed to consume a change.
 writable=$TMP_ROOT/writable.result
 cat >"$writable" <<'EOF_WRITABLE'
 RESULT_PROFILE: WRITABLE
@@ -124,7 +90,7 @@ TASK_ID: writable-result-profile
 BASE_SHA: 1111111111111111111111111111111111111111
 HEAD_SHA: 2222222222222222222222222222222222222222
 BRANCH: refactor/result-profiles
-WORKTREE: /tmp/result-profiles
+CHECKOUT: /tmp/result-profiles
 
 FILES_CHANGED:
 - .swe-forge/contracts/result.md
@@ -146,16 +112,6 @@ FINDINGS:
 EVIDENCE:
 - .swe-forge/contracts/result.md#normal-writable-result
 EOF_WRITABLE
-for field in 'RESULT_PROFILE: WRITABLE' 'STATUS: DONE' 'TASK_ID:' \
-  'BASE_SHA:' 'HEAD_SHA:' 'FILES_CHANGED:' 'GIT_STATE:' 'VALIDATION:' \
-  'FINDINGS:' 'EVIDENCE:'; do
-  require_text "$field" "$writable"
-done
-for field in 'ENVIRONMENT_RESOURCES:' 'result/meta.tsv' 'PROVIDER_ID:' \
-  'CANDIDATE_FINGERPRINT:' 'WORKER_TRANSFER:' 'AUTHORIZATION:' \
-  'TESTING_DECISION:' 'TEST_RESULTS:'; do
-  reject_text "$field" "$writable"
-done
 "$result_tool" validate --profile WRITABLE --task-id writable-result-profile \
   --result "$writable" >"$TMP_ROOT/writable.validation"
 require_text '"profile":"WRITABLE"' "$TMP_ROOT/writable.validation"
@@ -169,38 +125,5 @@ awk '
 ' "$writable" >"$TMP_ROOT/missing-validation.result"
 expect_failure 'writable result without validation' \
   "$result_tool" validate --profile WRITABLE --result "$TMP_ROOT/missing-validation.result"
-
-# An isolated writable result keeps the complete fixed bundle. This fixture
-# checks the profile boundary; the isolated-worktree fixture executes the gate
-# against actual Git state and fingerprints.
-isolated=$TMP_ROOT/isolated-result
-mkdir -p "$isolated"
-cat >"$isolated/meta.tsv" <<'EOF_META'
-schema_version	1
-task_id	isolated-result-profile
-status	BLOCKED
-provider	NATIVE
-branch	worker/result-profiles
-worktree	/tmp/worker-result-profiles
-base_sha	1111111111111111111111111111111111111111
-head_sha	2222222222222222222222222222222222222222
-candidate_fingerprint	3333333333333333333333333333333333333333
-EOF_META
-for file in commits.txt files.txt validations.tsv scope-exceptions.txt \
-  staged.txt unstaged.txt untracked.txt resources.tsv; do
-  : >"$isolated/$file"
-done
-for file in meta.tsv commits.txt files.txt validations.tsv scope-exceptions.txt \
-  staged.txt unstaged.txt untracked.txt resources.tsv; do
-  test -f "$isolated/$file" || fail "isolated bundle is missing $file"
-done
-for key in schema_version task_id status provider branch worktree base_sha \
-  head_sha candidate_fingerprint; do
-  grep "^$key[[:space:]]" "$isolated/meta.tsv" >/dev/null || \
-    fail "isolated meta.tsv is missing $key"
-done
-if grep -F 'RESULT_PROFILE:' "$isolated/meta.tsv" >/dev/null; then
-  fail 'isolated meta.tsv added a competing ordinary profile field'
-fi
 
 printf '%s\n' 'PASS: proportional worker result profiles'

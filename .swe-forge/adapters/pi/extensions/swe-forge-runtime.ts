@@ -12,8 +12,8 @@ const COMPACTION_COOLDOWN_MS = 30_000;
 const MAX_STATE_FILES = 64;
 const MAX_STATE_BYTES = 256 * 1024;
 const MAX_FIELD_LENGTH = 160;
-const ACTIVE_STATUSES = new Set(["planning", "running", "reviewing", "repairing", "blocked"]);
-const TERMINAL_STATUSES = new Set(["accepted", "failed"]);
+const ACTIVE_STATUSES: Record<string, true> = { planning: true, running: true, reviewing: true, repairing: true, blocked: true };
+const TERMINAL_STATUSES: Record<string, true> = { accepted: true, failed: true };
 const RUN_STATE_ENV_VARS = ["SWE_FORGE_RUN_STATE", "SWE_FORGE_STATE"];
 const SUBAGENT_TOOL_NAME = "swe_forge_subagent";
 const SUBAGENT_PROTOCOL_VERSION = 1;
@@ -37,10 +37,10 @@ const reserveCache = new Map<string, ReserveCacheEntry>();
 interface NormalizedInvocation {
 	raw_arguments: string;
 	parsed_ticket: string;
-	requested_mode: "AUTO" | "SOLO" | "SUBAGENTS" | "ISOLATED";
+	requested_mode: "AUTO" | "SOLO" | "SUBAGENTS";
 	requested_delivery: "DEFAULT" | "GUIDED" | "PR";
 	delivery_mode: "GUIDED" | "PR";
-	input_status: "COMPLETE" | "EMPTY" | "INCOMPLETE" | "MIGRATION_REQUIRED";
+	input_status: "COMPLETE" | "EMPTY" | "INCOMPLETE";
 	consumed_tokens: string[];
 }
 
@@ -206,10 +206,8 @@ function boolValue(value: string | undefined): boolean | undefined {
 
 function stateMatchesCwd(values: Map<string, string>, cwd: string): boolean {
 	const project = canonicalPath(cwd);
-	const paths = [values.get("invocation_checkout.path"), values.get("delivery_checkout.path")].filter(
-		(value): value is string => Boolean(value),
-	);
-	return paths.some((value) => canonicalPath(value) === project);
+	const delivery = values.get("delivery_checkout.path");
+	return Boolean(delivery && canonicalPath(delivery) === project);
 }
 
 interface ActiveRun {
@@ -248,9 +246,9 @@ function parseActiveRun(filePath: string, cwd: string): ActiveRun | undefined {
 	if (currentStateError(values)) return undefined;
 
 	const status = values.get("status") ?? "unknown";
-	if (!ACTIVE_STATUSES.has(status) && !TERMINAL_STATUSES.has(status)) return undefined;
+	if (!ACTIVE_STATUSES[status] && !TERMINAL_STATUSES[status]) return undefined;
 	const workflowActive = boolValue(values.get("continuation.workflow_active"));
-	if (workflowActive !== true || TERMINAL_STATUSES.has(status)) return undefined;
+	if (workflowActive !== true || TERMINAL_STATUSES[status]) return undefined;
 
 	const recordedTime = values.get("continuation.updated_at");
 	if (!recordedTime) return undefined;
@@ -360,14 +358,11 @@ function topology(value: string): string {
 }
 
 function currentStateError(values: Map<string, string>): string | undefined {
-	if (values.get("schema_version") !== "3") return "unsupported run-state schema";
-	if (values.has("preferred_mode") || values.has("execution_mode")) {
-		return "run-state contains removed routing fields";
-	}
+	if (values.get("schema_version") !== "4") return "unsupported run-state schema";
 	const topologyFields = ["routing.initial", "routing.preferred", "routing.selected", "routing.current"];
 	for (const field of topologyFields) {
 		const value = values.get(field);
-		if (!value || !["SOLO", "SUBAGENTS", "ISOLATED"].includes(topology(value))) {
+		if (!value || (topology(value) !== "SOLO" && topology(value) !== "SUBAGENTS")) {
 			return `missing or malformed ${field}`;
 		}
 	}
@@ -391,7 +386,7 @@ function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: stri
 		return [
 			"Canonical routing is UNKNOWN because no active, checkout-matching SWE-Forge run-state is discoverable.",
 			"Use the existing SOLO/sequential fallback.",
-			"Capability discovery may proceed, but before action=run persist a complete active schema-v3 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
+			"Capability discovery may proceed, but before action=run persist a complete active schema-v4 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
 			"The worker briefing does not establish canonical routing.",
 		].join(" ");
 	}
@@ -486,13 +481,10 @@ function normalizedInvocation(value: unknown, rawArguments: string): NormalizedI
 	const inputStatus = value.input_status;
 	const consumedTokens = value.consumed_tokens;
 	if (
-		(requestedMode !== "AUTO" && requestedMode !== "SOLO" && requestedMode !== "SUBAGENTS" && requestedMode !== "ISOLATED") ||
+		(requestedMode !== "AUTO" && requestedMode !== "SOLO" && requestedMode !== "SUBAGENTS") ||
 		(requestedDelivery !== "DEFAULT" && requestedDelivery !== "GUIDED" && requestedDelivery !== "PR") ||
 		(deliveryMode !== "GUIDED" && deliveryMode !== "PR") ||
-		(inputStatus !== "COMPLETE" &&
-			inputStatus !== "EMPTY" &&
-			inputStatus !== "INCOMPLETE" &&
-			inputStatus !== "MIGRATION_REQUIRED") ||
+		(inputStatus !== "COMPLETE" && inputStatus !== "EMPTY" && inputStatus !== "INCOMPLETE") ||
 		!Array.isArray(consumedTokens) ||
 		!consumedTokens.every((token) => typeof token === "string")
 	) {
@@ -526,7 +518,7 @@ function invocationFactsPrompt(invocation: NormalizedInvocation): string {
 	return [
 		NORMALIZED_INVOCATION_MARKER,
 		JSON.stringify(invocation),
-		"The shared parser produced these invocation facts. Do not reinterpret command syntax; use requested_mode and requested_delivery as requests, and make automatic topology/provider decisions from the software task and canonical policy.",
+		"The shared parser produced these invocation facts. Do not reinterpret command syntax; use requested_mode and requested_delivery as requests, and make automatic topology decisions from the software task and canonical policy.",
 	].join("\n");
 }
 
@@ -547,8 +539,8 @@ function subagentCapabilityPrompt(observation: SubagentToolObservation, run: Act
 		`current topology: ${current} (preferred: ${preferred})`,
 		"Canonical routing owns whether to use this shared-checkout capability; use it only for one bounded SUBAGENTS task.",
 		"Call action=capabilities first and require the requested role and READ_ONLY/WRITABLE profile before action=run.",
-		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v3 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
-		"Pass only the canonical worker_briefing projection to action=run. Missing or incompatible capability falls back to SOLO/sequential; never use it for ISOLATED work.",
+		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v4 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
+		"Pass only the canonical worker_briefing projection to action=run. Missing or incompatible capability falls back to SOLO/sequential.",
 	].join("\n");
 }
 
@@ -822,12 +814,6 @@ export default function sweForgeRuntime(pi: any) {
 			return {
 				block: true,
 				reason: "swe_forge_subagent is only available during an explicitly invoked SWE-Forge run; use the normal workflow instead.",
-			};
-		}
-		if (current === "ISOLATED") {
-			return {
-				block: true,
-				reason: "SWE-Forge ISOLATED work cannot use the shared-checkout swe_forge_subagent primitive.",
 			};
 		}
 		if (action !== "capabilities" && action !== "run") {

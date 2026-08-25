@@ -12,26 +12,24 @@ producing architecture guidance.
 
 ## Responsibilities
 
-- identify impacted components and externally observable behavior
-- define interfaces, contracts, data flow, and compatibility boundaries
-- compare viable approaches using repository conventions and evidence
-- identify migration, rollout, error-handling, and concurrency concerns
-- separate required work from optional cleanup
-- propose bounded task ownership and dependency order
-- identify risks that warrant specialist review
-- recommend `SOLO`, `SUBAGENTS`, or `ISOLATED` without treating complexity
-  alone as a reason to delegate; record a separate `NATIVE` or optional
-  `HERDR` provider only when isolated work is justified
+- identify impacted components and externally observable behavior;
+- define interfaces, contracts, data flow, and compatibility boundaries;
+- compare viable approaches using repository conventions and evidence;
+- identify migration, rollout, error-handling, and concurrency concerns;
+- separate required work from optional cleanup;
+- propose bounded task ownership and dependency order;
+- identify risks that warrant specialist review; and
+- recommend `SOLO` or `SUBAGENTS` without treating complexity alone as a reason
+  to delegate.
 
 ## Constraints
 
-- do not implement the proposed design
-- do not invent interfaces unsupported by repository evidence
-- do not introduce speculative abstraction or migration ceremony
-- do not hide assumptions; label them explicitly
-- do not assign overlapping writable scopes without a central integration
-  plan, explicit shared-artifact owners, exact base SHAs, and planned
-  integration order
+- do not implement the proposed design;
+- do not invent interfaces unsupported by repository evidence;
+- do not introduce speculative abstraction or migration ceremony;
+- do not hide assumptions; label them explicitly;
+- do not assign overlapping writable scopes or concurrent writers; and
+- keep one root-owned delivery checkout and final integration boundary.
 
 ## Output
 

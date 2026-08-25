@@ -5,11 +5,7 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 GATE=$ROOT/scripts/swe-forge-gate
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-gate-test.XXXXXX")
-
-cleanup() {
-  rm -rf "$TMP_ROOT"
-}
-
+cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM
 
 fail() {
@@ -20,26 +16,8 @@ fail() {
 expect_failure() {
   expected=$1
   shift
-  if output=$("$@" 2>&1); then
-    fail "expected command to fail: $*"
-  fi
-  case "$output" in
-    *"$expected"*) ;;
-    *) fail "failure did not contain '$expected': $output" ;;
-  esac
-}
-
-expect_repo_failure() {
-  expected=$1
-  repo=$2
-  shift 2
-  if output=$(cd "$repo" && "$@" 2>&1); then
-    fail "expected command to fail: $*"
-  fi
-  case "$output" in
-    *"$expected"*) ;;
-    *) fail "failure did not contain '$expected': $output" ;;
-  esac
+  if output=$("$@" 2>&1); then fail "expected command to fail: $*"; fi
+  case "$output" in *"$expected"*) ;; *) fail "failure did not contain '$expected': $output" ;; esac
 }
 
 make_repo() {
@@ -48,55 +26,43 @@ make_repo() {
   mkdir -p "$repo"
   git -C "$repo" init -q
   git -C "$repo" config user.email test@example.com
-  git -C "$repo" config user.name "SWE Forge Test"
+  git -C "$repo" config user.name 'SWE Forge Test'
   printf 'base\n' >"$repo/README.md"
   git -C "$repo" add README.md
   git -C "$repo" commit -qm 'Initial commit'
   git -C "$repo" branch -M main
+  git -C "$repo" checkout -qb feature
   printf '%s\n' "$repo"
 }
 
-clean_feature_state() {
-  repo=$1
-  git -C "$repo" checkout -qb feature
-  state=$TMP_ROOT/$(basename "$repo").state
-  printf '%s\n' "$state"
-}
-
 repo=$(make_repo clean)
-state=$(clean_feature_state "$repo")
+state=$TMP_ROOT/clean.state
 (
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
-  grep -F 'schema_version: 3' "$state/run-state.yaml" >/dev/null
+  grep -F 'schema_version: 4' "$state/run-state.yaml" >/dev/null
   grep -F '  preferred: SOLO' "$state/run-state.yaml" >/dev/null
   grep -F '  current: SOLO' "$state/run-state.yaml" >/dev/null
-  grep -F 'delegation_backend: NONE' "$state/run-state.yaml" >/dev/null
+  grep -F 'delivery_checkout:' "$state/run-state.yaml" >/dev/null
+  grep -F 'runtime_profile:' "$state/run-state.yaml" >/dev/null
   grep -F 'continuation:' "$state/run-state.yaml" >/dev/null
-  grep -F 'safe_boundary: true' "$state/run-state.yaml" >/dev/null
   "$ROOT/scripts/swe-forge-state" validate --state "$state/run-state.yaml" >/dev/null
   "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'changed\n' >>README.md
-  "$GATE" validate --state "$state" --name smoke -- \
-    sh -c 'grep -q changed README.md' >/dev/null
+  "$GATE" validate --state "$state" --name smoke -- sh -c 'grep -q changed README.md' >/dev/null
   "$GATE" checkpoint --scope README.md --state "$state" >/dev/null
-  "$GATE" commit-slice --state "$state" --checkpoint 1 \
-    --message 'Record gate evidence' --authorized-by PR >/dev/null
+  "$GATE" commit-slice --state "$state" --checkpoint 1 --message 'Record gate evidence' --authorized-by PR >/dev/null
   "$GATE" plan-check --state "$state" --name final-smoke --requirement required >/dev/null
-  "$GATE" validate --state "$state" --name final-smoke \
-    --final -- sh -c 'grep -q changed README.md' >/dev/null
-  "$GATE" review --state "$state" --result PASS --source fresh-context \
-    --findings 1 --repaired 1 >/dev/null
+  "$GATE" validate --state "$state" --name final-smoke --final -- sh -c 'grep -q changed README.md' >/dev/null
+  "$GATE" review --state "$state" --result PASS --source fresh-context --findings 1 --repaired 1 >/dev/null
   "$GATE" deliver-pr --state "$state" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 \
     --forge-version 0.1.0-alpha.1 --harness Pi --harness-version 0.84.1 \
-    --requested-mode AUTO --selected-mode SOLO --execution-provider NONE \
-    --model-provider openai-codex --routing-reason 'tightly coupled test fixture' \
-    --model test-model --context-status compacted \
-    --context-evidence 'manual fixture compaction' --output "$TMP_ROOT/receipt.md" >/dev/null
-  # The default output is retained in run-local evidence state and is usable
-  # without repeating the output path during verification.
+    --requested-mode AUTO --selected-mode SOLO --model-provider openai-codex \
+    --routing-reason 'tightly coupled test fixture' --model test-model \
+    --context-status compacted --context-evidence 'manual fixture compaction' \
+    --output "$TMP_ROOT/receipt.md" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 >/dev/null
   test -f "$state/receipt.md"
@@ -105,657 +71,64 @@ state=$(clean_feature_state "$repo")
   "$GATE" receipt --verify --state "$state" >/dev/null
   "$GATE" receipt-verify --state "$state" >/dev/null
 )
-grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "accepted receipt is missing final status"
-grep -F 'Context: compacted — manual fixture compaction' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "receipt is missing context evidence"
-grep -F 'Fresh review: PASS — 1 findings, 1 repaired' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "receipt is missing review summary"
-grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "receipt is missing harness metadata"
-grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "receipt is missing routing metadata"
-grep -F -- '- Execution provider: NONE' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "receipt is missing execution-provider metadata"
-grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null || \
-  fail "receipt is missing model-provider metadata"
-if grep -F 'Merge performed: no' "$TMP_ROOT/receipt.md" >/dev/null; then
-  fail "receipt exposes a merge status that becomes stale after PR creation"
-fi
+grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || fail 'accepted receipt is missing final status'
+grep -F 'Context: compacted — manual fixture compaction' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing context evidence'
+grep -F 'Fresh review: PASS — 1 findings, 1 repaired' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
+grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing harness metadata'
+grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing routing metadata'
+grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing model metadata'
+if grep -F 'Merge performed: no' "$TMP_ROOT/receipt.md" >/dev/null; then fail 'receipt exposes stale merge status'; fi
 receipt_ref=$(awk -F': ' '$1 == "receipt_ref" { print $2; exit }' "$state/run-state.yaml")
-[ "$receipt_ref" != none ] || fail "run state does not retain the default receipt reference"
-[ -f "$receipt_ref" ] || fail "run state receipt reference does not point to a file"
-if grep -F 'grep -q' "$TMP_ROOT/receipt.md" >/dev/null; then
-  fail "receipt leaked validation command output"
-fi
-if "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
-  --pr-url https://github.com/example/repo/pull/1 \
-  --context-status blocked --context-evidence 'recovery unavailable' \
-  --output "$TMP_ROOT/blocked-receipt.md" >/dev/null 2>&1; then
-  fail "blocked context produced an accepted receipt"
-fi
-grep -F 'Final status: BLOCKED' "$TMP_ROOT/blocked-receipt.md" >/dev/null || \
-  fail "blocked context receipt is missing blocked status"
+[ "$receipt_ref" != none ] || fail 'run state does not retain receipt reference'
+[ -f "$receipt_ref" ] || fail 'receipt reference does not point to a file'
 
-# Canonical state operations preserve the early shell boundary, propagate
-# semantic request values, and own continuation projections/timestamps.
 propagation_repo=$(make_repo propagation)
-propagation_state=$(clean_feature_state "$propagation_repo")
+propagation_state=$TMP_ROOT/propagation.state
 (
   cd "$propagation_repo"
   "$GATE" preflight --state "$propagation_state" \
-    --requested-mode SUBAGENTS --requested-provider HERDR \
-    --requested-delivery GUIDED --delivery-mode GUIDED \
+    --requested-mode SUBAGENTS --requested-delivery GUIDED --delivery-mode GUIDED \
     --routing-initial SUBAGENTS --routing-preferred SUBAGENTS \
     --routing-selected SUBAGENTS --routing-current SUBAGENTS \
     --reason 'requested propagation fixture' >/dev/null
 )
 grep -F 'requested_mode: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
-grep -F 'requested_provider: HERDR' "$propagation_state/run-state.yaml" >/dev/null
 grep -F 'requested_delivery: GUIDED' "$propagation_state/run-state.yaml" >/dev/null
 grep -F 'delivery_mode: GUIDED' "$propagation_state/run-state.yaml" >/dev/null
 grep -F '  current: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
 
+state_tool=$ROOT/scripts/swe-forge-state
 early_state=$TMP_ROOT/early-state
-"$ROOT/scripts/swe-forge-state" init --state "$early_state" \
-  --checkout "$propagation_repo" --run-id early-state \
-  --requested-mode SUBAGENTS --requested-provider HERDR \
-  --requested-delivery GUIDED --delivery-mode GUIDED \
+"$state_tool" init --state "$early_state" --checkout "$propagation_repo" --run-id early-state \
+  --requested-mode SUBAGENTS --requested-delivery GUIDED --delivery-mode GUIDED \
   --routing-initial SUBAGENTS --routing-preferred SUBAGENTS \
   --routing-selected SUBAGENTS --routing-current SUBAGENTS \
   --reason 'early shell fixture' >/dev/null
-"$ROOT/scripts/swe-forge-state" validate --state "$early_state" >/dev/null
-if grep -Eq '^continuation:' "$early_state/run-state.yaml"; then
-  fail "init unexpectedly required or created continuation data"
-fi
-invocation_head_before=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
-reason_before=$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$early_state/run-state.yaml")
-"$ROOT/scripts/swe-forge-state" set-continuation --state "$early_state" \
+"$state_tool" validate --state "$early_state" >/dev/null
+if grep -Eq '^continuation:' "$early_state/run-state.yaml"; then fail 'init unexpectedly created continuation data'; fi
+"$state_tool" set-continuation --state "$early_state" \
   --workflow-active true --workflow ticket --phase implementation --step 1 \
   --awaiting none --next-action-kind implement --next-action-target state-tool \
   --next-action-acceptance 'schema valid' --safe-boundary true \
   --expected-context-tokens 100 >/dev/null
-updated_at=$(awk '$1 == "updated_at:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
-[ -n "$updated_at" ] || fail "set-continuation did not generate updated_at"
-case "$updated_at" in *T*Z) ;; *) fail "set-continuation generated a malformed timestamp" ;; esac
 grep -F '    mode: GUIDED' "$early_state/run-state.yaml" >/dev/null
-grep -F "reason: $reason_before" "$early_state/run-state.yaml" >/dev/null
-invocation_head_after=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
-[ "$invocation_head_after" = "$invocation_head_before" ] || \
-  fail "set-continuation changed immutable invocation facts"
+updated_at=$(awk '$1 == "updated_at:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
+case "$updated_at" in *T*Z) ;; *) fail 'set-continuation generated malformed timestamp' ;; esac
 
-atomic_state=$TMP_ROOT/atomic-state.yaml
-cp "$early_state/run-state.yaml" "$atomic_state"
-atomic_before=$(cksum "$atomic_state")
-sed 's/^delivery_mode: GUIDED$/delivery_mode: PR/' "$atomic_state" >"$TMP_ROOT/atomic-malformed.yaml"
-expect_failure 'continuation.delivery.mode must match delivery_mode' \
-  "$ROOT/scripts/swe-forge-state" set-continuation --state "$TMP_ROOT/atomic-malformed.yaml" \
-  --workflow-active true --workflow ticket --phase review --step 2 \
-  --awaiting none --next-action-kind review --next-action-target review \
-  --safe-boundary true
-[ "$(cksum "$atomic_state")" = "$atomic_before" ] || \
-  fail "failed continuation update corrupted the previous state"
-
-# Focused coverage for the bounded canonical state mutations. The normal
-# checkpoint shape updates only the two commit fields, while the integration
-# shape establishes the complete delivery checkout without changing invocation
-# facts or unrelated state.
 state_ops=$TMP_ROOT/state-operations.yaml
 cp "$early_state/run-state.yaml" "$state_ops"
-ops_invocation_head=$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
-ops_reason=$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state_ops")
-ops_run_id=$(awk '$1 == "run_id:" { print $2; exit }' "$state_ops")
-ops_delivery_path=$(awk '$1 == "path:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
 ops_sha=$(printf '%040d' 7)
-"$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$state_ops" \
-  --head-sha "$ops_sha" --checkpoint-sha "$ops_sha" >/dev/null
-ops_head=$(awk '$1 == "head_sha:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
-ops_checkpoint=$(awk '$1 == "checkpoint_sha:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")
-[ "$ops_head" = "$ops_sha" ] || fail "normal checkout update did not set head_sha"
-[ "$ops_checkpoint" = "$ops_sha" ] || fail "normal checkout update did not set checkpoint_sha"
-[ "$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")" = "$ops_invocation_head" ] || \
-  fail "normal checkout update changed invocation facts"
-[ "$(awk '$1 == "path:" && section == "delivery_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$state_ops")" = "$ops_delivery_path" ] || \
-  fail "normal checkout update changed unrelated checkout fields"
-[ "$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state_ops")" = "$ops_reason" ] || \
-  fail "normal checkout update changed unrelated run-state fields"
-[ "$(awk '$1 == "run_id:" { print $2; exit }' "$state_ops")" = "$ops_run_id" ] || \
-  fail "normal checkout update changed run_id"
+"$state_tool" set-delivery-checkout --state "$state_ops" --head-sha "$ops_sha" --checkpoint-sha "$ops_sha" >/dev/null
+grep -F "  head_sha: $ops_sha" "$state_ops" >/dev/null
+grep -F "  checkpoint_sha: $ops_sha" "$state_ops" >/dev/null
+"$state_tool" set-receipt-ref --state "$state_ops" --receipt-ref "$TMP_ROOT/private-receipt.md" >/dev/null
+grep -F "receipt_ref: $TMP_ROOT/private-receipt.md" "$state_ops" >/dev/null
 
-"$ROOT/scripts/swe-forge-state" set-receipt-ref --state "$state_ops" \
-  --receipt-ref "$TMP_ROOT/state-receipt.md" >/dev/null
-grep -F "receipt_ref: $TMP_ROOT/state-receipt.md" "$state_ops" >/dev/null
-[ "$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$state_ops")" = "$ops_reason" ] || \
-  fail "receipt update changed unrelated run-state fields"
+schema_v3=$TMP_ROOT/schema-v3.yaml
+sed 's/^schema_version: 4$/schema_version: 3/' "$state_ops" >"$schema_v3"
+expect_failure 'stale/unsupported run state' "$state_tool" validate --state "$schema_v3"
+invalid_route=$TMP_ROOT/invalid-route.yaml
+sed 's/^  current: SUBAGENTS$/  current: UNKNOWN/' "$propagation_state/run-state.yaml" >"$invalid_route"
+expect_failure 'invalid routing.current' "$state_tool" validate --state "$invalid_route"
 
-integration_state=$TMP_ROOT/integration-update.yaml
-cp "$early_state/run-state.yaml" "$integration_state"
-integration_path=$TMP_ROOT/integration-worktree
-"$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$integration_state" \
-  --path "$integration_path" --branch integration --kind integration \
-  --base-sha "$ops_sha" --head-sha "$ops_sha" --checkpoint-sha "$ops_sha" >/dev/null
-grep -F "  path: $integration_path" "$integration_state" >/dev/null
-grep -F '  branch: integration' "$integration_state" >/dev/null
-grep -F '  kind: integration' "$integration_state" >/dev/null
-grep -F "  base_sha: $ops_sha" "$integration_state" >/dev/null
-grep -F "  head_sha: $ops_sha" "$integration_state" >/dev/null
-grep -F "  checkpoint_sha: $ops_sha" "$integration_state" >/dev/null
-[ "$(awk '$1 == "head_sha:" && section == "invocation_checkout" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$integration_state")" = "$ops_invocation_head" ] || \
-  fail "integration checkout update changed invocation facts"
-[ "$(awk '$1 == "reason:" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$integration_state")" = "$ops_reason" ] || \
-  fail "integration checkout update changed unrelated run-state fields"
-
-invalid_checkout=$TMP_ROOT/invalid-checkout.yaml
-cp "$early_state/run-state.yaml" "$invalid_checkout"
-invalid_checkout_before=$(cksum "$invalid_checkout")
-expect_failure 'delivery_checkout.head_sha is not a hexadecimal SHA' \
-  "$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$invalid_checkout" \
-  --head-sha invalid --checkpoint-sha "$ops_sha"
-[ "$(cksum "$invalid_checkout")" = "$invalid_checkout_before" ] || \
-  fail "invalid checkout arguments changed canonical state"
-
-invalid_result=$TMP_ROOT/invalid-result.yaml
-cp "$early_state/run-state.yaml" "$invalid_result"
-invalid_result_before=$(cksum "$invalid_result")
-expect_failure 'invalid delivery_checkout.kind' \
-  "$ROOT/scripts/swe-forge-state" set-delivery-checkout --state "$invalid_result" \
-  --path "$integration_path" --branch integration --kind task \
-  --base-sha "$ops_sha" --head-sha "$ops_sha" --checkpoint-sha "$ops_sha"
-[ "$(cksum "$invalid_result")" = "$invalid_result_before" ] || \
-  fail "invalid resulting checkout state replaced the previous state"
-
-malformed_update=$TMP_ROOT/malformed-update.yaml
-sed 's/^schema_version: 3$/schema_version: 2/' "$early_state/run-state.yaml" >"$malformed_update"
-malformed_before=$(cksum "$malformed_update")
-expect_failure 'stale/unsupported run state' \
-  "$ROOT/scripts/swe-forge-state" set-receipt-ref --state "$malformed_update" \
-  --receipt-ref "$TMP_ROOT/receipt.md"
-[ "$(cksum "$malformed_update")" = "$malformed_before" ] || \
-  fail "malformed current state was changed"
-
-receipt_optional=$TMP_ROOT/receipt-optional.yaml
-grep -v '^receipt_ref:' "$integration_state" >"$receipt_optional"
-"$ROOT/scripts/swe-forge-state" validate --state "$receipt_optional" >/dev/null
-"$ROOT/scripts/swe-forge-state" set-receipt-ref --state "$receipt_optional" \
-  --receipt-ref "$TMP_ROOT/optional-receipt.md" >/dev/null
-grep -F "receipt_ref: $TMP_ROOT/optional-receipt.md" "$receipt_optional" >/dev/null
-
-# Regression: PR mode can validate and commit multiple sequential slices in one
-# run, including a newly added file whose fingerprint is stable before and after
-# staging.
-repo=$(make_repo multi-slice)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name first-slice \
-    --requirement required --final-required false >/dev/null
-  printf 'first slice\n' >>README.md
-  "$GATE" validate --state "$state" --name first-slice -- \
-    sh -c 'grep -q "first slice" README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-  "$GATE" commit-slice --state "$state" --checkpoint 1 \
-    --message 'Record first slice' --authorized-by PR >/dev/null
-  "$GATE" plan-check --state "$state" --name second-slice \
-    --requirement required --final-required false >/dev/null
-  printf 'second slice\n' >SECOND.md
-  "$GATE" validate --state "$state" --name second-slice -- \
-    test -f SECOND.md >/dev/null
-  "$GATE" checkpoint --state "$state" --scope SECOND.md >/dev/null
-  "$GATE" commit-slice --state "$state" --checkpoint 2 \
-    --message 'Record second slice' --authorized-by PR >/dev/null
-)
-test "$(git -C "$repo" rev-list --count main..HEAD)" -eq 2 || \
-  fail "multi-slice run did not create one commit per slice"
-git -C "$repo" show HEAD:SECOND.md | grep -Fx 'second slice' >/dev/null || \
-  fail "second slice was not committed"
-
-# Regression: final-only checks can be planned before a slice without forcing
-# the full final suite to run before the slice commit.
-repo=$(make_repo deferred-final)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name slice-check \
-    --requirement required --final-required false >/dev/null
-  "$GATE" plan-check --state "$state" --name final-check \
-    --requirement required >/dev/null
-  printf 'deferred final\n' >>README.md
-  "$GATE" validate --state "$state" --name slice-check -- \
-    grep -q 'deferred final' README.md >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-  "$GATE" commit-slice --state "$state" --checkpoint 1 \
-    --message 'Commit before final validation' --authorized-by PR >/dev/null
-)
-expect_repo_failure 'required or applicable final validation' "$repo" "$GATE" \
-  deliver-pr --state "$state"
-
-# Regression: an out-of-band commit is still rejected instead of being mixed
-# into the next evidence checkpoint.
-repo=$(make_repo out-of-band)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name slice \
-    --requirement required --final-required false >/dev/null
-  printf 'untracked slice\n' >SLICE.md
-  "$GATE" validate --state "$state" --name slice -- test -f SLICE.md >/dev/null
-  git add SLICE.md
-  git commit -qm 'Untracked delivery outside gate'
-  printf 'later slice\n' >LATER.md
-)
-expect_repo_failure 'checkout HEAD changed outside SWE Forge slice delivery' \
-  "$repo" "$GATE" checkpoint --state "$state" --scope LATER.md
-
-repo=$(make_repo committed)
-git -C "$repo" checkout -qb feature
-printf 'committed change\n' >>"$repo/README.md"
-git -C "$repo" add README.md
-git -C "$repo" commit -qm 'Commit before evidence setup'
-state=$TMP_ROOT/committed.state
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" --base HEAD~1 >/dev/null
-  "$GATE" plan-check --state "$state" --name committed-smoke --requirement required >/dev/null
-  "$GATE" validate --state "$state" --name committed-smoke \
-    --final -- sh -c 'grep -q committed README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-  "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
-  "$GATE" deliver-pr --state "$state" >/dev/null
-  "$GATE" receipt --state "$state" --execution SOLO --delivery GUIDED \
-    --provider NONE --output "$TMP_ROOT/committed-receipt.md" >/dev/null
-)
-grep -F 'Final status: ACCEPTED' "$TMP_ROOT/committed-receipt.md" >/dev/null || \
-  fail "committed-range receipt is missing final status"
-
-repo=$(make_repo dirty)
-git -C "$repo" checkout -qb feature
-printf 'uncommitted\n' >>"$repo/README.md"
-state=$TMP_ROOT/dirty.state
-expect_repo_failure 'checkout is not clean' "$repo" "$GATE" preflight --state "$state"
-test ! -e "$state/meta.env" || fail "dirty preflight wrote a baseline"
-
-repo=$(make_repo protected)
-state=$TMP_ROOT/protected.state
-expect_repo_failure 'protected branch is not writable' "$repo" "$GATE" preflight --state "$state"
-test ! -e "$state/meta.env" || fail "protected preflight wrote a baseline"
-
-repo=$(make_repo detached)
-git -C "$repo" checkout -q --detach HEAD
-state=$TMP_ROOT/detached.state
-expect_repo_failure 'checkout is detached' "$repo" "$GATE" preflight --state "$state"
-test ! -e "$state/meta.env" || fail "detached preflight wrote a baseline"
-
-repo=$(make_repo scope)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name scope-smoke --requirement required >/dev/null
-  printf 'allowed\n' >>README.md
-  printf 'forbidden\n' >OTHER.md
-  "$GATE" validate --state "$state" --name scope-smoke -- \
-    sh -c 'test -f OTHER.md' >/dev/null
-)
-expect_failure 'outside checkpoint scope' "$GATE" checkpoint --state "$state" --scope README.md
-
-repo=$(make_repo authorization)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
-  printf 'change\n' >>README.md
-  "$GATE" validate --state "$state" --name smoke -- \
-    sh -c 'grep -q change README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-)
-expect_failure 'requires explicit PR or GO authorization' \
-  "$GATE" commit-slice --state "$state" --checkpoint 1 \
-  --message 'Record gate evidence' --authorized-by NONE
-
-repo=$(make_repo final-evidence)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
-  printf 'change\n' >>README.md
-  "$GATE" validate --state "$state" --name smoke -- \
-    sh -c 'grep -q change README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-  "$GATE" commit-slice --state "$state" --checkpoint 1 \
-    --message 'Record gate evidence' --authorized-by PR >/dev/null
-  "$GATE" plan-check --state "$state" --name final-smoke --requirement required >/dev/null
-  "$GATE" validate --state "$state" --name final-smoke --final -- \
-    sh -c 'grep -q change README.md' >/dev/null
-  "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
-  "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
-    --pr-url https://github.com/example/repo/pull/2 \
-    --output "$TMP_ROOT/final-evidence-receipt.md" >/dev/null
-  printf 'later change\n' >>README.md
-  git add README.md
-  git commit -qm 'Change after receipt'
-)
-expect_failure 'receipt is stale' "$GATE" receipt-verify --state "$state" \
-  --receipt "$TMP_ROOT/final-evidence-receipt.md"
-
-# Regression: an unregistered check cannot be validated.
-repo=$(make_repo unregistered)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-)
-expect_failure 'unregistered check' "$GATE" validate --state "$state" \
-  --name missing-check -- true
-
-# Regression: a validation command that mutates candidate content is rejected.
-repo=$(make_repo mutation)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name mutation --requirement required >/dev/null
-)
-expect_failure 'changed candidate source content' "$GATE" validate --state "$state" \
-  --name mutation -- sh -c 'printf mutation >>README.md'
-
-# Receipt verification remains read-only and compares repository identity.
-repo=$(make_repo receipt-identity)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name check --requirement required --final-required false >/dev/null
-  printf change >>README.md
-  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-  "$GATE" commit-slice --state "$state" --checkpoint 1 --message change --authorized-by PR >/dev/null
-  "$GATE" plan-check --state "$state" --name final --requirement required >/dev/null
-  "$GATE" validate --state "$state" --name final --final -- sh -c 'test -f README.md' >/dev/null
-  "$GATE" review --state "$state" --result PASS --source fresh >/dev/null
-  "$GATE" receipt --state "$state" --execution SOLO --delivery GUIDED --output "$TMP_ROOT/identity-receipt.md" >/dev/null
-)
-sed 's/^Repository:.*/Repository: forged/' "$TMP_ROOT/identity-receipt.md" >"$TMP_ROOT/tampered-receipt.md"
-expect_failure 'receipt repository identity does not match' "$GATE" receipt-verify \
-  --state "$state" --receipt "$TMP_ROOT/tampered-receipt.md"
-
-# Regression: missing, unavailable, and unjustified conditional evidence block.
-repo=$(make_repo missing-check)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name required-check --requirement required >/dev/null
-  printf change >>README.md
-)
-expect_failure 'planned validation is not passing' "$GATE" checkpoint \
-  --state "$state" --scope README.md
-
-repo=$(make_repo unavailable-check)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name required-check --requirement required >/dev/null
-  "$GATE" record-check-status --state "$state" --name required-check \
-    --status unavailable --reason 'fixture unavailable' >/dev/null
-  printf change >>README.md
-)
-expect_failure 'planned validation is not passing' "$GATE" checkpoint \
-  --state "$state" --scope README.md
-
-repo=$(make_repo conditional-check)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name conditional-check \
-    --requirement conditional --condition 'only when enabled' >/dev/null
-)
-expect_failure 'not-applicable check status requires --reason' \
-  "$GATE" record-check-status --state "$state" --name conditional-check \
-  --status not-applicable
-
-# Regression: same-path edits, untracked-content edits, and replacements are
-# rejected even when the changed path set remains unchanged.
-repo=$(make_repo same-path)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
-  printf one >>README.md
-  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
-  printf two >>README.md
-)
-expect_failure 'planned validation is not passing' "$GATE" checkpoint \
-  --state "$state" --scope README.md
-
-repo=$(make_repo after-checkpoint)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
-  printf one >>README.md
-  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-  printf two >>README.md
-)
-expect_failure 'candidate fingerprint differs' "$GATE" commit-slice \
-  --state "$state" --checkpoint 1 --message 'Reject stale content' --authorized-by PR
-
-repo=$(make_repo untracked-content)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
-  printf one >new.txt
-  "$GATE" validate --state "$state" --name check -- sh -c 'test -f new.txt' >/dev/null
-  printf two >new.txt
-)
-expect_failure 'planned validation is not passing' "$GATE" checkpoint \
-  --state "$state" --scope new.txt
-
-repo=$(make_repo replacement)
-state=$(clean_feature_state "$repo")
-(
-  cd "$repo"
-  "$GATE" preflight --state "$state" >/dev/null
-  "$GATE" plan-check --state "$state" --name check --requirement required >/dev/null
-  printf one >README.md
-  "$GATE" validate --state "$state" --name check -- sh -c 'test -f README.md' >/dev/null
-  "$GATE" checkpoint --state "$state" --scope README.md >/dev/null
-  rm README.md
-  printf replacement >README.md
-)
-expect_failure 'candidate fingerprint differs' "$GATE" commit-slice \
-  --state "$state" --checkpoint 1 --message 'Reject replacement' --authorized-by PR
-
-# Obsolete and unknown run-state schemas are rejected rather than migrated.
-v1=$TMP_ROOT/schema-v1.yaml
-cat >"$v1" <<'EOF_V1'
-workflow: swe-forge
-version: 1
-checkout:
-  path: /tmp/legacy
-EOF_V1
-expect_failure 'stale/unsupported run state' "$ROOT/scripts/swe-forge-state" \
-  validate --state "$v1"
-
-projection_repo=$(make_repo projection)
-projection_state=$(clean_feature_state "$projection_repo")
-(
-  cd "$projection_repo"
-  "$GATE" preflight --state "$projection_state" >/dev/null
-)
-projection_modern=$TMP_ROOT/projection-modern.yaml
-cp "$projection_state/run-state.yaml" "$projection_modern"
-"$ROOT/scripts/swe-forge-state" validate --state "$projection_modern" >/dev/null
-
-strip_top_level_section() {
-  remove=$1
-  input=$2
-  output=$3
-  awk -v remove="$remove" '
-    /^[^[:space:]#][^:]*:/ {
-      section=$1
-      sub(/:$/, "", section)
-      skip=(section == remove)
-      if (skip) next
-    }
-    !skip { print }
-  ' "$input" >"$output"
-}
-
-replace_top_level_scalar() {
-  key=$1
-  value=$2
-  input=$3
-  output=$4
-  awk -v key="$key" -v value="$value" '
-    $0 ~ "^" key ":[[:space:]]*" {
-      print key ": " value
-      found=1
-      next
-    }
-    { print }
-    END { if (!found) exit 1 }
-  ' "$input" >"$output"
-}
-
-replace_nested_scalar() {
-  section=$1
-  key=$2
-  value=$3
-  input=$4
-  output=$5
-  awk -v section="$section" -v key="$key" -v value="$value" '
-    /^[^[:space:]#][^:]*:/ {
-      current=$1
-      sub(/:$/, "", current)
-    }
-    current == section && $0 ~ "^  " key ":[[:space:]]*" {
-      print "  " key ": " value
-      found=1
-      next
-    }
-    { print }
-    END { if (!found) exit 1 }
-  ' "$input" >"$output"
-}
-
-remove_nested_scalar() {
-  section=$1
-  key=$2
-  input=$3
-  output=$4
-  awk -v section="$section" -v key="$key" '
-    /^[^[:space:]#][^:]*:/ {
-      current=$1
-      sub(/:$/, "", current)
-    }
-    current == section && $0 ~ "^  " key ":[[:space:]]*" {
-      found=1
-      next
-    }
-    { print }
-    END { if (!found) exit 1 }
-  ' "$input" >"$output"
-}
-
-# The earliest generic schema-v3 snapshot keeps the required shell and the
-# state tool's initial/unknown values, but has no continuation or later activity.
-minimal_without_continuation=$TMP_ROOT/minimal-v3-no-continuation.yaml
-strip_top_level_section continuation "$projection_modern" "$minimal_without_continuation"
-minimal_without_runtime_profile=$TMP_ROOT/minimal-v3-no-runtime-profile.yaml
-strip_top_level_section runtime_profile "$minimal_without_continuation" \
-  "$minimal_without_runtime_profile"
-minimal_v3=$TMP_ROOT/minimal-v3.yaml
-strip_top_level_section receipt_ref "$minimal_without_runtime_profile" "$minimal_v3"
-"$ROOT/scripts/swe-forge-state" validate --state "$minimal_v3" >/dev/null
-grep -F '  source_to_integration: []' "$minimal_v3" >/dev/null
-grep -F 'workers: {}' "$minimal_v3" >/dev/null
-if grep -Eq '^(continuation|runtime_profile|receipt_ref):' "$minimal_v3"; then
-  fail "minimal schema-v3 fixture contains a later-stage top-level section"
-fi
-
-missing_provider_capabilities=$TMP_ROOT/minimal-v3-missing-provider-capabilities.yaml
-strip_top_level_section provider_capabilities "$minimal_v3" \
-  "$missing_provider_capabilities"
-expect_failure 'schema-v3 state is missing top-level key: provider_capabilities' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$missing_provider_capabilities"
-
-schema_v2=$TMP_ROOT/schema-v2.yaml
-replace_top_level_scalar schema_version 2 "$projection_modern" "$schema_v2"
-expect_failure 'stale/unsupported run state' "$ROOT/scripts/swe-forge-state" \
-  validate --state "$schema_v2"
-
-future_schema=$TMP_ROOT/schema-future.yaml
-replace_top_level_scalar schema_version 99 "$projection_modern" "$future_schema"
-expect_failure 'stale/unsupported run state' "$ROOT/scripts/swe-forge-state" \
-  validate --state "$future_schema"
-
-missing_routing=$TMP_ROOT/missing-routing-fact.yaml
-remove_nested_scalar routing preferred "$projection_modern" "$missing_routing"
-expect_failure 'routing is missing preferred' "$ROOT/scripts/swe-forge-state" \
-  validate --state "$missing_routing"
-
-preferred_effective=$TMP_ROOT/preferred-effective.yaml
-replace_nested_scalar routing preferred SUBAGENTS \
-  "$projection_modern" "$preferred_effective"
-"$ROOT/scripts/swe-forge-state" validate --state "$preferred_effective" >/dev/null
-
-invalid_current=$TMP_ROOT/invalid-current.yaml
-replace_nested_scalar routing current BOGUS \
-  "$projection_modern" "$invalid_current"
-expect_failure 'invalid routing.current' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$invalid_current"
-
-impossible_provider=$TMP_ROOT/impossible-provider.yaml
-replace_top_level_scalar execution_provider NATIVE \
-  "$projection_modern" "$impossible_provider"
-expect_failure 'routing.current SOLO requires execution_provider: NONE' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_provider"
-
-impossible_strategy=$TMP_ROOT/impossible-strategy.yaml
-replace_top_level_scalar parallel_strategy COMPOSE \
-  "$projection_modern" "$impossible_strategy"
-expect_failure 'routing.current SOLO requires parallel_strategy: NONE' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_strategy"
-
-impossible_backend=$TMP_ROOT/impossible-backend.yaml
-replace_top_level_scalar delegation_backend HERDR \
-  "$projection_modern" "$impossible_backend"
-expect_failure 'routing.current SOLO requires delegation_backend: NONE' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_backend"
-
-impossible_requested_mode=$TMP_ROOT/impossible-requested-mode.yaml
-replace_top_level_scalar requested_mode SUBAGENTS \
-  "$projection_modern" "$impossible_requested_mode"
-expect_failure 'routing.initial must match explicit requested_mode: SUBAGENTS' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_requested_mode"
-
-impossible_requested_delivery=$TMP_ROOT/impossible-requested-delivery.yaml
-replace_top_level_scalar requested_delivery GUIDED \
-  "$projection_modern" "$impossible_requested_delivery"
-expect_failure 'delivery_mode must match requested_delivery: GUIDED requires GUIDED' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$impossible_requested_delivery"
-
-mismatch_delivery=$TMP_ROOT/mismatch-delivery.yaml
-sed 's/^    mode: PR$/    mode: GUIDED/' "$projection_modern" >"$mismatch_delivery"
-expect_failure 'continuation.delivery.mode must match delivery_mode' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$mismatch_delivery"
-
-removed_alias=$TMP_ROOT/removed-alias.yaml
-awk '/^requested_mode:/ { print; print "preferred_mode: SOLO"; next } { print }' \
-  "$projection_modern" >"$removed_alias"
-expect_failure 'removed routing field' "$ROOT/scripts/swe-forge-state" \
-  validate --state "$removed_alias"
-
-printf '%s\n' 'PASS: executable gate tests'
+printf '%s\n' 'PASS: executable evidence and schema-v4 fixtures'

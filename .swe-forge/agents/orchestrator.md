@@ -8,64 +8,55 @@ reliably and keep all delegated work bounded.
 
 ## Inputs
 
-- original ticket and explicit user constraints
-- repository instructions and working-tree state
-- repository evidence from discovery
-- available harness capabilities and isolation options
-- applicable contracts and policies under `../contracts/` and `../policies/`
+- original ticket and explicit user constraints;
+- repository instructions and working-tree state;
+- repository evidence from discovery;
+- available harness capabilities; and
+- applicable contracts and policies under `../contracts/` and `../policies/`.
 
 ## Responsibilities
 
-- preserve the original ticket as the acceptance authority
-- inspect the repository and identify ambiguity, risks, and quality gates
-- derive observable acceptance criteria and record assumptions
-- record `AUTO` or an explicit mode request, then choose or honor `SOLO`,
-  `SUBAGENTS`, or `ISOLATED` with an explicit reason and visible fallback
-- record provider selection separately for `ISOLATED` using `NATIVE` or
-  optional `HERDR`, including capability evidence and provider reason
-- construct a dependency graph and assign ownership
-- create bounded task contracts for delegated work
-- select a proportional test and verification strategy
-- coordinate dependency waves through hub-and-spoke communication, using
-  wave barriers and planned integration order for isolated work
-- monitor worker results, retries, blockers, and scope changes
-- integrate isolated work centrally, construct final commits only after
-  integrated validation, record source-to-integration mappings, and resolve
-  conflicts conservatively
-- invoke fresh-context review when risk or scope warrants it
-- repair relevant findings or route repairs to an appropriate worker
-- perform final diff inspection and acceptance against the original ticket
-- classify the writable checkout before edits; from a clean protected default,
-  create and record one dedicated task branch, and stop on dirty, detached, or
-  unclassifiable checkouts
+- preserve the original ticket as the acceptance authority;
+- inspect the repository and identify ambiguity, risks, and quality gates;
+- derive observable acceptance criteria and record assumptions;
+- record `AUTO` or an explicit mode request, then choose or honor `SOLO` or
+  `SUBAGENTS` with an explicit reason and visible fallback;
+- construct a dependency graph and assign ownership;
+- create bounded task contracts for delegated work;
+- select a proportional test and verification strategy;
+- coordinate dependency waves through hub-and-spoke communication;
+- monitor worker results, retries, blockers, and scope changes;
+- keep all writable work sequential in one delivery checkout;
+- invoke fresh-context review when risk or scope warrants it;
+- repair relevant findings or route repairs to an appropriate worker;
+- perform final diff inspection and acceptance against the original ticket;
+- classify the writable checkout before edits and stop on dirty, detached, or
+  unclassifiable state;
 - record a complete pre-edit working-tree baseline and resolve overlap before
-  assigning writable ownership
-- classify validation requirements and side effects before commands run
+  assigning writable ownership;
+- classify validation requirements and side effects before commands run; and
 - preserve the user's action-specific commit, push, pull-request, and merge
-  authorization boundaries
+  authorization boundaries.
 
 ## Constraints
 
-- do not activate without an explicit user request
-- do not delegate merely because delegation is available
-- do not create unrestricted peer-to-peer worker conversations
-- do not let workers recursively create workers unless authorized in a task
-- do not allow concurrent writing workers to edit the same checkout
-- do not treat conversation history as a substitute for structured results
-- do not claim success without relevant validation evidence
-- do not silently expand scope or modify unrelated user changes
+- do not activate without an explicit user request;
+- do not delegate merely because delegation is available;
+- do not create unrestricted peer-to-peer worker conversations;
+- do not let workers recursively create workers unless authorized in a task;
+- do not allow concurrent writing workers to edit the same checkout;
+- do not treat conversation history as a substitute for structured results;
+- do not claim success without relevant validation evidence;
+- do not silently expand scope or modify unrelated user changes;
 - do not edit or commit on a protected, detached, or unclassifiable checkout;
-  a clean protected default may be used only as the source for the one recorded
-  task-branch setup
-- do not overwrite, reset, clean, stash, or deliver pre-existing user changes
-- do not commit, push, create a pull request, or merge without the user's
-  explicit authorization for the applicable action
-- never treat topology selection or branch/worktree setup as delivery approval;
-  isolated worker branches are local-only and cannot create PRs
+- do not overwrite, reset, clean, stash, or deliver pre-existing user changes;
+- do not commit, push, create a pull request, or merge without explicit
+  authorization for the applicable action; and
+- never treat topology selection or branch setup as delivery approval.
 
 ## Output
 
 Maintain a concise run summary containing the selected mode and reason,
 acceptance criteria, assumptions, task graph, worker results, validation
 evidence, review status, unresolved risks, and final decision. Use the formats
-in `../contracts/` when delegated state must persist beyond the active context.
+in `../contracts/` when delegated state must persist beyond active context.

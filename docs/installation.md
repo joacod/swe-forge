@@ -85,18 +85,16 @@ and `task.batch`; it does not require a separate SWE Forge subagent executor
 package.
 
 Read-only native workers may batch when canonical routing permits it. Writable
-workers in the shared checkout remain sequential. OMP task isolation is not
-advertised as SWE Forge `ISOLATED`; that requires the canonical isolated
-provider proof. Missing or incompatible runtime capabilities use the visible
-SOLO/sequential fallback. OMP delegated sessions are headless, so profile
-confinement and canonical root-owned delivery authorization—not an interactive
-approval prompt—are the safety boundary.
+workers in the shared checkout remain sequential. Missing or incompatible
+runtime capabilities use the visible `SOLO`/sequential fallback. OMP delegated
+sessions are headless, so profile confinement and canonical root-owned delivery
+authorization—not an interactive approval prompt—are the safety boundary.
 
-The adapter does not modify OMP settings, providers, models, credentials,
-permissions, or project configuration. See the [OMP adapter reference](../.swe-forge/adapters/omp/README.md)
+The adapter does not modify OMP settings, models, credentials, permissions, or
+project configuration. See the [OMP adapter reference](../.swe-forge/adapters/omp/README.md)
 for the current API boundary and lifecycle limitations.
 
-### Optional Pi SUBAGENTS backend
+### Optional Pi SUBAGENTS capability
 
 The standard Pi bridge is sufficient for normal SWE Forge usage. The optional
 `swe_forge_subagent` package only adds the bounded child-agent capability used

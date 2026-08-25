@@ -14,9 +14,9 @@ overflow recovery.
 ## Portable capability boundary
 
 There is no universal cross-harness API for context usage, context-window
-limits, compaction, or overflow classification. A model name, provider name,
-or installed harness is not evidence of any of those capabilities. The
-orchestrator records what the active adapter or runtime actually exposes:
+limits, compaction, or overflow classification. A model name or installed
+harness is not evidence of any of those capabilities. The orchestrator records
+what the active adapter or runtime actually exposes:
 
 ```yaml
 context_capabilities:
@@ -88,8 +88,7 @@ Record the latest observed state in run state and the transient working spec:
 - `healthy`: enough headroom exists for the next bounded action;
 - `near-limit`: the host reports that the next response or planned slice may
   exceed its safe budget;
-- `overflow`: a provider or harness rejected or truncated a request because of
-  context size;
+- `overflow`: a host rejected or truncated a request because of context size;
 - `compacting`: the host is currently summarizing; no new Forge action should
   race it;
 - `recovered`: compaction or host recovery completed and state was rechecked;
@@ -105,7 +104,7 @@ commit-plan step, between dependency waves, after discovery, before review, or
 at the host's fully settled lifecycle event—use this sequence:
 
 1. Finish or classify the current atomic operation. Do not interrupt a write,
-   commit, validation command, or provider retry.
+   commit, validation command, or host retry.
 2. Validate the completed step and update the short working spec plus the
    continuation through `swe-forge-state set-continuation`, supplying the
    current phase, next action, `safe_boundary`, and expected context need. Keep
@@ -182,12 +181,12 @@ not permission to continue with an unverified or improvised summary.
 
 ## Overflow protocol
 
-If a provider reports `overflow` during a turn:
+If the host reports `overflow` during a turn:
 
 1. Treat the failed response as a recovery event, not as a completed task or a
    reason to launch a duplicate Forge retry.
 2. If the host documents automatic compact-and-retry, wait for that lifecycle
-   to settle. Provider retry state is not Forge task state.
+   to settle. Host retry state is not Forge task state.
 3. Verify that compaction/recovery actually occurred, then re-read durable
    state and inspect Git before interpreting the retried response.
 4. If automatic recovery is absent, failed, or cannot be distinguished from a
@@ -210,9 +209,9 @@ cohesive commit; do not create ceremonial commits just to force compaction.
 
 After compaction, routing may be reconsidered once at the next meaningful
 boundary. `SOLO -> SUBAGENTS` and `SUBAGENTS -> SOLO` are valid when the
-context-value evidence changes. A move toward `ISOLATED` reruns writable
-eligibility and provider proof. Record the preferred/effective distinction and
-revision rather than silently changing the topology.
+context-value evidence or native capability changes. Record the
+preferred/effective distinction and revision rather than silently changing the
+topology.
 
 Fresh review and delivery must use the post-compaction, post-validation
 `HEAD`. A review or receipt created before recovery is stale when the candidate

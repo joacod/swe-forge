@@ -14,14 +14,7 @@ skip_or_fail() {
   exit 0
 }
 
-if ! command -v node >/dev/null 2>&1; then
-  skip_or_fail 'Pi runtime fixture (Node.js is unavailable)'
-fi
-
-# Pi loads TypeScript extensions through its own runtime. The dependency-free
-# fixture uses Node's native loader when the validation host exposes it; local
-# contributors can still skip on older generic runtimes, while dedicated CI
-# marks that environment mismatch as a failure.
+command -v node >/dev/null 2>&1 || skip_or_fail 'Pi runtime fixture (Node.js is unavailable)'
 NODE_TS_ARGS=
 if node --experimental-strip-types --input-type=module -e 'if (!process.features?.typescript) process.exit(1)' >/dev/null 2>&1; then
   NODE_TS_ARGS=--experimental-strip-types
@@ -30,105 +23,14 @@ elif ! node --input-type=module -e 'if (!process.features?.typescript) process.e
 fi
 
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/pi-runtime-fixture.XXXXXX")
-cleanup() {
-  rm -rf "$TMP_ROOT"
-}
+cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM
 
-old_dir=$TMP_ROOT/old
-new_dir=$TMP_ROOT/new
 fixture_cwd=$TMP_ROOT/checkout
-mkdir -p "$old_dir" "$new_dir" "$fixture_cwd"
-
-cat >"$old_dir/run-state.yaml" <<EOF_STATE
-workflow: swe-forge
-workflow_version: 1
-schema_version: 3
-run_id: old-run
-status: running
-requested_mode: AUTO
-requested_provider: AUTO
-execution_provider: NONE
-delegation_backend: NONE
-write_isolation: SHARED
-invocation_checkout:
-  path: $fixture_cwd
-delivery_checkout:
-  path: $fixture_cwd
-delivery_mode: PR
-routing:
-  initial: SUBAGENTS
-  preferred: SUBAGENTS
-  selected: SOLO
-  current: SOLO
-  context_value:
-    projected_pressure: high
-continuation:
-  workflow_active: true
-  workflow: ticket
-  phase: awaiting_merge
-  step: 4
-  awaiting: user_merge
-  next_action:
-    kind: verify_and_sync_merge
-    target: pull request
-    expected_context_tokens: unknown
-  safe_boundary: true
-  updated_at: 2020-01-01T00:00:00Z
-  delivery:
-    mode: PR
-    pr_number: 184
-    pr_state: OPEN
-context:
-  status: near-limit
-EOF_STATE
-
-cat >"$new_dir/run-state.yaml" <<EOF_STATE
-workflow: swe-forge
-workflow_version: 1
-schema_version: 3
-run_id: newer-run
-status: running
-requested_mode: AUTO
-requested_provider: AUTO
-execution_provider: NONE
-delegation_backend: NONE
-write_isolation: SHARED
-invocation_checkout:
-  path: $fixture_cwd
-delivery_checkout:
-  path: $fixture_cwd
-delivery_mode: PR
-routing:
-  initial: SOLO
-  preferred: SOLO
-  selected: SOLO
-  current: SOLO
-  context_value:
-    projected_pressure: low
-continuation:
-  workflow_active: true
-  workflow: ticket
-  phase: implementation
-  step: 5
-  awaiting: none
-  next_action:
-    kind: implement
-    target: next step
-    expected_context_tokens: unknown
-  safe_boundary: true
-  updated_at: 2030-01-01T00:00:00Z
-  delivery:
-    mode: PR
-    pr_number: 184
-    pr_state: OPEN
-context:
-  status: healthy
-EOF_STATE
+mkdir -p "$fixture_cwd"
 
 cd "$ROOT"
-SWE_FORGE_RUN_STATE="$old_dir/run-state.yaml" \
-  node $NODE_TS_ARGS --input-type=module - "$ROOT" "$fixture_cwd" <<'NODE'
+node $NODE_TS_ARGS --input-type=module - "$ROOT" "$fixture_cwd" <<'NODE'
 import * as fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
@@ -156,196 +58,45 @@ function renderWorkerBriefing({ taskId, role, writeAccess, allowedRead, allowedW
     "task\texpected_output\tstructured result evidence",
     "task\tvalidation\tscripts/test-swe-forge-briefing\trequired\talways\tlocal-only",
     "state\trouting.current\tSUBAGENTS",
-    "state\twrite_isolation\tSHARED",
-    "state\texecution_provider\tNONE",
-    "state\tdelegation_backend\tNATIVE",
-    "state\tparallel_strategy\tNONE",
-    "state\tintegration_strategy\tNONE",
   ];
   fs.mkdirSync(path.dirname(inputPath), { recursive: true });
   fs.writeFileSync(inputPath, records.join("\n") + "\n");
   return execFileSync(workerBriefTool, ["render", "--input", inputPath], { encoding: "utf8" });
 }
-const testHome = path.join(fixtureCwd, "home");
-fs.mkdirSync(path.join(testHome, ".pi", "agent"), { recursive: true });
-process.env.HOME = testHome;
-const handlers = new Map();
-const entries = [];
-const pi = {
-  on(name, handler) {
-    handlers.set(name, handler);
-  },
-  appendEntry(type, data) {
-    entries.push({ type, data });
-  },
-};
-extension(pi);
-
-const ctx = {
-  cwd: fixtureCwd,
-  isProjectTrusted: () => true,
-  hasPendingMessages: () => false,
-  getContextUsage: () => ({ tokens: 90_000, contextWindow: 100_000 }),
-  compact(options) {
-    this.compaction = options;
-  },
-};
-
-const injected = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
-if (!injected?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("missing continuation injection");
-if (!injected.systemPrompt.includes("PR: #184 OPEN")) throw new Error("missing PR continuation state");
-
-// Continuation reinjection is a bounded projection, not a transcript or a
-// serialized run state. Long scalar values must be truncated before entering
-// the next model turn.
-const originalState = process.env.SWE_FORGE_RUN_STATE;
-if (!originalState) throw new Error("fixture did not set an original run-state path");
-const boundedState = path.join(fixtureCwd, "bounded", "run-state.yaml");
-const boundedMarker = "bounded-tail-marker";
-const oversized = `prefix-${"x".repeat(5000)}-${boundedMarker}`;
-fs.mkdirSync(path.dirname(boundedState), { recursive: true });
-fs.writeFileSync(
-  boundedState,
-  `workflow: swe-forge
-workflow_version: 1
-schema_version: 3
-run_id: ${oversized}
-status: running
-requested_mode: AUTO
-requested_provider: AUTO
-delivery_mode: PR
-invocation_checkout:
-  path: ${fixtureCwd}
-delivery_checkout:
-  path: ${fixtureCwd}
-routing:
-  initial: SOLO
-  preferred: SOLO
-  selected: SOLO
-  current: SOLO
-continuation:
-  workflow_active: true
-  workflow: ticket
-  phase: ${oversized}
-  step: 1
-  awaiting: none
-  next_action:
-    kind: continue
-    target: ${oversized}
-    expected_context_tokens: unknown
-  safe_boundary: true
-  updated_at: 2060-01-01T00:00:00Z
-  delivery:
-    mode: PR
-    pr_number: none
-    pr_state: none
-context:
-  status: healthy
-`,
-);
-process.env.SWE_FORGE_RUN_STATE = boundedState;
-const boundedInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
-if (!boundedInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
-  throw new Error("bounded state did not produce a continuation projection");
-}
-if (boundedInjection.systemPrompt.includes(boundedMarker)) {
-  throw new Error("continuation reinjection forwarded an oversized scalar");
-}
-process.env.SWE_FORGE_RUN_STATE = originalState;
-
-const transformed = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
-if (transformed?.text !== "/git-sync merged") throw new Error("active merged shorthand was not routed");
-
-await handlers.get("agent_settled")({}, ctx);
-if (!ctx.compaction) throw new Error("safe-boundary proactive compaction was not requested");
-const proactive = entries.find((entry) => entry.data.event === "proactive_compaction_requested");
-if (!proactive) throw new Error("proactive compaction evidence was not recorded");
-if (!proactive.data.reason.includes("runtime_status=near-limit") || !proactive.data.reason.includes("expected_next=unknown")) {
-  throw new Error("near-limit did not override an unknown expected-token estimate");
-}
-ctx.compaction.onComplete?.();
-await handlers.get("agent_settled")({}, ctx);
-if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
-  throw new Error("unchanged state triggered repeated proactive compaction");
-}
-
-// A native/overflow compaction lifecycle must suppress a competing Forge request
-// even when the durable state still reports the same near-limit boundary.
-await handlers.get("session_before_compact")({ reason: "overflow", willRetry: true }, ctx);
-await handlers.get("agent_settled")({}, ctx);
-if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
-  throw new Error("native overflow recovery triggered duplicate proactive compaction");
-}
-await handlers.get("session_compact")({ reason: "overflow", willRetry: true }, ctx);
-await handlers.get("agent_settled")({}, ctx);
-if (entries.filter((entry) => entry.data.event === "proactive_compaction_requested").length !== 1) {
-  throw new Error("completed native recovery triggered duplicate proactive compaction");
-}
-
-const newer = path.join(path.dirname(process.env.SWE_FORGE_RUN_STATE), "..", "new", "run-state.yaml");
-process.env.SWE_FORGE_RUN_STATE = path.resolve(newer);
-const refreshed = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
-if (!refreshed?.systemPrompt.includes("phase: implementation")) throw new Error("newer state did not win");
-const newerTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
-if (newerTransform) throw new Error("stale PR state overrode newer continuation state");
-
-// Obsolete schema state is stale, not a compatibility input. Pi must ignore
-// it rather than inferring routing or delivery from its old fields.
-const staleState = path.join(fixtureCwd, "stale", "run-state.yaml");
-fs.mkdirSync(path.dirname(staleState), { recursive: true });
-fs.writeFileSync(
-  staleState,
-  `workflow: swe-forge
-workflow_version: 1
-schema_version: 2
-run_id: stale-run
-status: running
-preferred_mode: SUBAGENTS
-execution_mode: SOLO
-invocation_checkout:
-  path: ${fixtureCwd}
-delivery_checkout:
-  path: ${fixtureCwd}
-`,
-);
-process.env.SWE_FORGE_RUN_STATE = staleState;
-const staleInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
-if (staleInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
-  throw new Error("stale schema state was accepted for continuation injection");
-}
-const staleTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
-if (staleTransform) throw new Error("stale schema state enabled PR shorthand");
-
-// A malformed current routing section is also ignored; no obsolete field is
-// consulted as a substitute for the missing canonical fact.
-const malformedState = path.join(fixtureCwd, "malformed", "run-state.yaml");
-writeRuntimeState(malformedState, { runId: "malformed-run", updatedAt: "2045-01-01T00:00:00Z" });
-fs.writeFileSync(malformedState, fs.readFileSync(malformedState, "utf8").replace("  current: SOLO\n", ""));
-process.env.SWE_FORGE_RUN_STATE = malformedState;
-const malformedInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
-if (malformedInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) {
-  throw new Error("malformed current routing state was accepted");
-}
 
 function writeRuntimeState(filePath, options = {}) {
-  const expected = options.expected ?? "unknown";
+  const cwd = options.cwd ?? fixtureCwd;
   const current = options.current ?? "SOLO";
   const preferred = options.preferred ?? "SOLO";
   const yaml = `workflow: swe-forge
 workflow_version: 1
-schema_version: 3
+schema_version: 4
 run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
 status: running
 requested_mode: AUTO
-requested_provider: AUTO
-execution_provider: NONE
-delegation_backend: NONE
-write_isolation: SHARED
+requested_delivery: PR
 delivery_mode: PR
-invocation_checkout:
-  path: ${options.cwd ?? fixtureCwd}
+reason: fixture
+fallback_used: no
+runtime_profile:
+  harness: pi
+  context_usage: unknown
+  context_window: unknown
+  proactive_compaction: unknown
+  compaction_hooks: unknown
+  state_reinjection: unknown
+  subagents:
+    native: unknown
+  capability_precedence: observed > adapter_declared > static_default > unknown
 delivery_checkout:
-  path: ${options.cwd ?? fixtureCwd}
+  path: ${cwd}
+  branch: feature/fixture
+  base_sha: none
+  head_sha: none
+  checkpoint_sha: none
+  status: ready
+  branch_setup: reused
+  remote_default_evidence: fixture
 routing:
   initial: ${options.initial ?? preferred}
   preferred: ${preferred}
@@ -353,22 +104,31 @@ routing:
   current: ${current}
   context_value:
     projected_pressure: ${options.projected ?? "low"}
+    context_reducibility: unknown
+    delegatable_context: unknown
+    root_context_requirement: high
+    continuity_risk: unknown
+    rationale: fixture
+  runtime_profile_ref: none
 continuation:
   workflow_active: true
   workflow: ticket
   phase: ${options.phase ?? "implementation"}
   step: 1
-  awaiting: none
+  awaiting: ${options.awaiting ?? "none"}
   next_action:
     kind: ${options.nextKind ?? "implement"}
     target: ${options.nextTarget ?? "next step"}
-    expected_context_tokens: ${expected}
+    expected_context_tokens: ${options.expected ?? "unknown"}
   safe_boundary: true
   updated_at: ${options.updatedAt ?? "2040-01-01T00:00:00Z"}
   delivery:
     mode: PR
     pr_number: ${options.prNumber ?? "none"}
     pr_state: ${options.prState ?? "none"}
+  recovery:
+    host_signal: none
+    status: none
 context:
   status: ${options.contextStatus ?? "healthy"}
 `;
@@ -376,263 +136,89 @@ context:
   fs.writeFileSync(filePath, yaml);
 }
 
-const freshOldState = path.join(fixtureCwd, "fresh-invocation", "old-a", "run-state.yaml");
-const freshStalePeerState = path.join(fixtureCwd, ".swe-forge", "runs", "fresh-invocation-old-b", "run-state.yaml");
-const freshNewState = path.join(fixtureCwd, "fresh-invocation", "new", "run-state.yaml");
-writeRuntimeState(freshOldState, {
-  cwd: fixtureCwd,
-  runId: "fresh-old-a",
-  phase: "stale_a_phase",
-  nextKind: "stale_a_next",
-  nextTarget: "stale A evidence",
-  updatedAt: "2061-01-01T00:00:00Z",
-  prNumber: 901,
+const oldState = path.join(fixtureCwd, "states", "old", "run-state.yaml");
+const newState = path.join(fixtureCwd, "states", "new", "run-state.yaml");
+writeRuntimeState(oldState, {
+  runId: "old-run",
+  current: "SOLO",
+  preferred: "SUBAGENTS",
+  updatedAt: "2020-01-01T00:00:00Z",
+  phase: "awaiting_merge",
+  awaiting: "user_merge",
+  nextKind: "verify_and_sync_merge",
+  nextTarget: "pull request",
+  prNumber: 184,
+  prState: "OPEN",
+  contextStatus: "near-limit",
+});
+writeRuntimeState(newState, {
+  runId: "new-run",
+  current: "SOLO",
+  preferred: "SOLO",
+  updatedAt: "2030-01-01T00:00:00Z",
+  phase: "implementation",
+  nextTarget: "next step",
+  prNumber: 184,
   prState: "OPEN",
 });
-writeRuntimeState(freshStalePeerState, {
+
+process.env.HOME = path.join(fixtureCwd, "home");
+fs.mkdirSync(path.join(process.env.HOME, ".pi", "agent"), { recursive: true });
+process.env.SWE_FORGE_RUN_STATE = oldState;
+const handlers = new Map();
+const entries = [];
+const pi = {
+  on(name, handler) { handlers.set(name, handler); },
+  appendEntry(type, data) { entries.push({ type, data }); },
+};
+extension(pi);
+const ctx = {
   cwd: fixtureCwd,
-  runId: "fresh-old-b",
-  phase: "stale_b_phase",
-  nextKind: "stale_b_next",
-  nextTarget: "stale B evidence",
+  isProjectTrusted: () => true,
+  hasPendingMessages: () => false,
+  getContextUsage: () => ({ tokens: 90_000, contextWindow: 100_000 }),
+  compact(options) { this.compaction = options; },
+};
+
+const injected = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (!injected?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("missing continuation injection");
+if (!injected.systemPrompt.includes("PR: #184 OPEN")) throw new Error("missing PR continuation state");
+
+const boundedState = path.join(fixtureCwd, "states", "bounded", "run-state.yaml");
+const boundedMarker = "bounded-tail-marker";
+const oversized = `prefix-${"x".repeat(5000)}-${boundedMarker}`;
+writeRuntimeState(boundedState, {
+  runId: oversized,
+  phase: oversized,
+  nextTarget: oversized,
   updatedAt: "2060-01-01T00:00:00Z",
-  prNumber: 900,
-  prState: "OPEN",
 });
-delete process.env.SWE_FORGE_STATE;
-process.env.SWE_FORGE_RUN_STATE = freshOldState;
-const freshHandlers = new Map();
-const freshPi = {
-  on(name, handler) {
-    freshHandlers.set(name, handler);
-  },
-  async exec(command, args) {
-    try {
-      return { stdout: execFileSync(command, args, { encoding: "utf8" }), code: 0 };
-    } catch (error) {
-      return { stdout: "", code: error?.status ?? 1 };
-    }
-  },
-  appendEntry() {},
-};
-extension(freshPi);
-const freshContext = {
-  cwd: fixtureCwd,
-  isProjectTrusted: () => true,
-  hasPendingMessages: () => false,
-};
-const freshStart = await freshHandlers.get("before_agent_start")({
-  prompt: "The user explicitly invoked SWE Forge through Pi.\nRaw invocation arguments: pr fresh task",
-  systemPrompt: "base",
-}, freshContext);
-const freshStartPrompt = freshStart?.systemPrompt ?? "";
-if (!freshStartPrompt.includes("[SWE-FORGE NORMALIZED INVOCATION]")) {
-  throw new Error("fresh invocation did not receive normalized parser facts");
-}
-for (const normalizedValue of [
-  '"raw_arguments":"pr fresh task"',
-  '"parsed_ticket":"fresh task"',
-  '"requested_mode":"AUTO"',
-  '"requested_delivery":"PR"',
-  '"delivery_mode":"PR"',
-  '"input_status":"COMPLETE"',
-  '"consumed_tokens":["pr"]',
-]) {
-  if (!freshStartPrompt.includes(normalizedValue)) {
-    throw new Error(`normalized invocation facts omitted ${normalizedValue}`);
-  }
-}
-for (const staleValue of [
-  "SWE-FORGE ACTIVE RUN",
-  "PR: #901 OPEN",
-  "phase: stale_a_phase",
-  "next_action: stale_a_next -> stale A evidence",
-  "PR: #900 OPEN",
-  "phase: stale_b_phase",
-  "next_action: stale_b_next -> stale B evidence",
-]) {
-  if (freshStartPrompt.includes(staleValue)) throw new Error("fresh invocation inherited a stale run");
-}
+process.env.SWE_FORGE_RUN_STATE = boundedState;
+const boundedInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (!boundedInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("bounded state did not inject");
+if (boundedInjection.systemPrompt.includes(boundedMarker)) throw new Error("continuation forwarded an oversized scalar");
 
-// Removing the previous discovery winner must not release another run that was
-// already discoverable at the same fresh-invocation boundary.
-fs.rmSync(freshOldState);
-const stalePeerRefresh = await freshHandlers.get("before_agent_start")({
-  prompt: "ordinary follow-up turn",
-  systemPrompt: "base",
-}, freshContext);
-const stalePeerPrompt = stalePeerRefresh?.systemPrompt ?? "";
-for (const staleValue of [
-  "SWE-FORGE ACTIVE RUN",
-  "PR: #900 OPEN",
-  "phase: stale_b_phase",
-  "next_action: stale_b_next -> stale B evidence",
-]) {
-  if (stalePeerPrompt.includes(staleValue)) throw new Error("stale peer run became authoritative");
-}
-const stalePeerMerge = await freshHandlers.get("input")({ text: "merged", source: "interactive" }, freshContext);
-if (stalePeerMerge) throw new Error("stale peer run remained authoritative during input handling");
+process.env.SWE_FORGE_RUN_STATE = oldState;
+const transformed = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
+if (transformed?.text !== "/git-sync merged") throw new Error("active merged shorthand was not routed");
+await handlers.get("agent_settled")({}, ctx);
+if (!ctx.compaction) throw new Error("safe-boundary proactive compaction was not requested");
+if (!entries.some((entry) => entry.data.event === "proactive_compaction_requested")) throw new Error("compaction evidence missing");
 
-writeRuntimeState(freshNewState, {
-  cwd: fixtureCwd,
-  runId: "fresh-new-run",
-  phase: "fresh_phase",
-  nextKind: "fresh_next",
-  nextTarget: "fresh evidence",
-  updatedAt: "2062-01-01T00:00:00Z",
-  prNumber: 902,
-  prState: "OPEN",
-});
-process.env.SWE_FORGE_RUN_STATE = freshNewState;
-const resumedStart = await freshHandlers.get("before_agent_start")({
-  prompt: "ordinary follow-up turn",
-  systemPrompt: "base",
-}, freshContext);
-const resumedPrompt = resumedStart?.systemPrompt ?? "";
-if (
-  !resumedPrompt.includes("SWE-FORGE ACTIVE RUN") ||
-  !resumedPrompt.includes("PR: #902 OPEN") ||
-  !resumedPrompt.includes("phase: fresh_phase") ||
-  !resumedPrompt.includes("next_action: fresh_next -> fresh evidence")
-) {
-  throw new Error("new run did not resume normal continuation behavior");
-}
-fs.rmSync(freshStalePeerState);
+process.env.SWE_FORGE_RUN_STATE = newState;
+const refreshed = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (!refreshed?.systemPrompt.includes("phase: implementation")) throw new Error("newer state did not win");
+const newerTransform = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
+if (newerTransform) throw new Error("stale state overrode newer continuation");
 
-function writeSettings(filePath, value) {
-  if (value === undefined) {
-    fs.rmSync(filePath, { force: true });
-    return;
-  }
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, typeof value === "string" ? value : JSON.stringify(value));
-}
+const staleState = path.join(fixtureCwd, "states", "stale", "run-state.yaml");
+fs.mkdirSync(path.dirname(staleState), { recursive: true });
+fs.writeFileSync(staleState, `workflow: swe-forge\nschema_version: 3\nstatus: running\n`);
+process.env.SWE_FORGE_RUN_STATE = staleState;
+const staleInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (staleInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("stale schema was accepted");
 
-async function runSettingsScenario(name, options, shouldCompact, expectedReason) {
-  const cwd = path.join(fixtureCwd, `settings-${name}`);
-  const statePath = path.join(cwd, "run-state.yaml");
-  const globalSettings = path.join(testHome, ".pi", "agent", "settings.json");
-  const projectSettings = path.join(cwd, ".pi", "settings.json");
-  writeRuntimeState(statePath, {
-    cwd,
-    runId: `settings-${name}`,
-    expected: options.expected ?? 10_000,
-    projected: options.projected ?? "low",
-    contextStatus: options.contextStatus ?? "healthy",
-  });
-  writeSettings(globalSettings, options.global === undefined ? undefined : { compaction: { reserveTokens: options.global } });
-  writeSettings(projectSettings, options.project);
-  process.env.SWE_FORGE_RUN_STATE = statePath;
-  delete process.env.SWE_FORGE_STATE;
-
-  const localHandlers = new Map();
-  const localEntries = [];
-  extension({
-    on(name, handler) {
-      localHandlers.set(name, handler);
-    },
-    appendEntry(type, data) {
-      localEntries.push({ type, data });
-    },
-  });
-  const localContext = {
-    cwd,
-    isProjectTrusted: () => true,
-    hasPendingMessages: () => false,
-    getContextUsage: () => ({ tokens: 75_000, contextWindow: 100_000 }),
-    compact(optionsForCompaction) {
-      this.compaction = optionsForCompaction;
-    },
-  };
-  await localHandlers.get("agent_settled")({}, localContext);
-  const request = localEntries.find((entry) => entry.data.event === "proactive_compaction_requested");
-  if (Boolean(request) !== shouldCompact) {
-    throw new Error(`${name} reserve/pressure scenario had unexpected compaction result`);
-  }
-  if (expectedReason && (!request || !request.data.reason.includes(expectedReason))) {
-    throw new Error(`${name} did not expose expected compaction reason: ${request?.data.reason ?? "none"}`);
-  }
-  return request;
-}
-
-const noSettings = await runSettingsScenario("no-settings", { expected: 10_000 }, true, "reserve=16384");
-if (!noSettings.data.reason.includes("expected_next=10000")) throw new Error("default reserve scenario omitted expected tokens");
-await runSettingsScenario("global-only", { global: 8192, expected: 10_000 }, false);
-await runSettingsScenario("project-only", { project: { compaction: { reserveTokens: 32_768 } }, expected: 10_000 }, true, "reserve=32768");
-await runSettingsScenario(
-  "project-overrides-global",
-  { global: 8192, project: { compaction: { reserveTokens: 32_768 } }, expected: 10_000 },
-  true,
-  "reserve=32768",
-);
-await runSettingsScenario("invalid-project", { global: 8192, project: "{ invalid json", expected: 10_000 }, false);
-// Planning pressure alone must not compact healthy context when the next-step
-// estimate is unknown and runtime headroom is available.
-await runSettingsScenario("projected-high", { expected: "unknown", projected: "high" }, false);
-await runSettingsScenario("overflow", { global: 8192, expected: 10_000, projected: "high", contextStatus: "overflow" }, false);
-await runSettingsScenario("compacting", { global: 8192, expected: 10_000, projected: "high", contextStatus: "compacting" }, false);
-
-// Both candidates remain discoverable at once. The explicit state path and
-// current pointer still point at the older state; automatic discovery must
-// select the newer valid checkout-compatible snapshot by updated_at.
-const projectRuns = path.join(fixtureCwd, ".swe-forge", "runs");
-const discoverableOld = path.join(projectRuns, "old", "run-state.yaml");
-const discoverableNew = path.join(projectRuns, "new", "run-state.yaml");
-writeRuntimeState(discoverableOld, {
-  runId: "discoverable-old",
-  phase: "old_discovery",
-  nextKind: "old_next",
-  nextTarget: "old evidence",
-  updatedAt: "2041-01-01T00:00:00Z",
-  prNumber: 201,
-  prState: "OPEN",
-});
-writeRuntimeState(discoverableNew, {
-  runId: "discoverable-new",
-  phase: "new_discovery",
-  nextKind: "new_next",
-  nextTarget: "new evidence",
-  updatedAt: "2042-01-01T00:00:00Z",
-  prNumber: 202,
-  prState: "MERGED",
-});
-const currentPointer = path.join(projectRuns, "current");
-fs.writeFileSync(currentPointer, "old/run-state.yaml\n");
-process.env.SWE_FORGE_RUN_STATE = discoverableOld;
-const discoveryHandlers = new Map();
-const discoveryPi = {
-  on(name, handler) {
-    discoveryHandlers.set(name, handler);
-  },
-  appendEntry() {},
-};
-extension(discoveryPi);
-const discoveryContext = {
-  cwd: fixtureCwd,
-  isProjectTrusted: () => true,
-  hasPendingMessages: () => false,
-  getContextUsage: () => ({ tokens: 75_000, contextWindow: 100_000 }),
-  compact() {},
-};
-const discoveryInjection = await discoveryHandlers.get("before_agent_start")({ systemPrompt: "base" }, discoveryContext);
-if (!discoveryInjection?.systemPrompt.includes("phase: new_discovery")) {
-  throw new Error("newer simultaneous run state did not win automatic discovery");
-}
-if (!discoveryInjection.systemPrompt.includes("next_action: new_next -> new evidence")) {
-  throw new Error("newest run state did not supply its next action");
-}
-if (!discoveryInjection.systemPrompt.includes("PR: #202 MERGED")) {
-  throw new Error("newest run state did not supply its PR state");
-}
-if (fs.readFileSync(currentPointer, "utf8").trim() !== "old/run-state.yaml") {
-  throw new Error("state precedence test changed the current pointer");
-}
-const simultaneousTransform = await discoveryHandlers.get("input")({ text: "merged", source: "interactive" }, discoveryContext);
-if (simultaneousTransform) throw new Error("stale simultaneous PR state overrode newer continuation state");
-
-// The optional package is negotiated through Pi's public tool lifecycle. The
-// fixture models the package's v1 capability response without importing it.
-const subagentState = path.join(fixtureCwd, "subagent", "run-state.yaml");
+const subagentState = path.join(fixtureCwd, "states", "subagent", "run-state.yaml");
 writeRuntimeState(subagentState, {
   runId: "subagent-run",
   current: "SUBAGENTS",
@@ -643,45 +229,21 @@ process.env.SWE_FORGE_RUN_STATE = subagentState;
 const subagentHandlers = new Map();
 const subagentEntries = [];
 const subagentPi = {
-  on(name, handler) {
-    subagentHandlers.set(name, handler);
-  },
-  getAllTools() {
-    return [{ name: "swe_forge_subagent" }];
-  },
-  getActiveTools() {
-    return ["swe_forge_subagent"];
-  },
-  appendEntry(type, data) {
-    subagentEntries.push({ type, data });
-  },
+  on(name, handler) { subagentHandlers.set(name, handler); },
+  getAllTools() { return [{ name: "swe_forge_subagent" }]; },
+  getActiveTools() { return ["swe_forge_subagent"]; },
+  appendEntry(type, data) { subagentEntries.push({ type, data }); },
   exec(command, args) {
-    try {
-      return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), stderr: "" };
-    } catch (error) {
-      return { code: error?.status ?? 1, stdout: error?.stdout?.toString?.() ?? "", stderr: error?.stderr?.toString?.() ?? "" };
-    }
+    try { return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), stderr: "" }; }
+    catch (error) { return { code: error?.status ?? 1, stdout: "", stderr: error?.message ?? String(error) }; }
   },
 };
 extension(subagentPi);
-const subagentContext = {
-  cwd: fixtureCwd,
-  isProjectTrusted: () => true,
-  hasPendingMessages: () => false,
-};
-const subagentPrompt = await subagentHandlers.get("before_agent_start")({
-  prompt: "ordinary continuation turn",
-  systemPrompt: "base",
-}, subagentContext);
-if (!subagentPrompt?.systemPrompt.includes("swe_forge_subagent tool observed by the Pi adapter: available")) {
-  throw new Error("available subagent capability was not advertised");
-}
+const subagentContext = { cwd: fixtureCwd, isProjectTrusted: () => true, hasPendingMessages: () => false };
+const subagentPrompt = await subagentHandlers.get("before_agent_start")({ prompt: "ordinary continuation turn", systemPrompt: "base" }, subagentContext);
+if (!subagentPrompt?.systemPrompt.includes("swe_forge_subagent tool observed by the Pi adapter: available")) throw new Error("capability was not advertised");
 const capabilitiesInput = { action: "capabilities" };
-const allowedCapabilities = await subagentHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: capabilitiesInput,
-}, subagentContext);
-if (allowedCapabilities) throw new Error("capability discovery was unexpectedly blocked");
+if (await subagentHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: capabilitiesInput }, subagentContext)) throw new Error("capability discovery was blocked");
 const capabilityDetails = {
   protocolVersion: 1,
   packageVersion: "0.1.0",
@@ -700,232 +262,26 @@ const capabilityDetails = {
   },
   compatibilityErrors: [],
 };
-await subagentHandlers.get("tool_result")({
-  toolName: "swe_forge_subagent",
-  input: capabilitiesInput,
-  details: capabilityDetails,
-  isError: false,
-}, subagentContext);
-const workerBriefingContract = renderWorkerBriefing({
-  taskId: "reader-check",
-  role: "reader",
-  writeAccess: "read-only",
-  allowedRead: "src/parser.ts#parseRecord",
-});
-const runInput = {
-  action: "run",
-  role: "reader",
-  workerBriefing: workerBriefingContract,
-  expectedOutputContract: "result",
-  profile: "READ_ONLY",
-};
-const allowedRun = await subagentHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: runInput,
-}, subagentContext);
-if (allowedRun) throw new Error(`negotiated SUBAGENTS run was blocked: ${allowedRun.reason}`);
-const invalidBriefRun = await subagentHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: {
-    ...runInput,
-    workerBriefing: workerBriefingContract.replace(/^  objective:.*$/m, ""),
-  },
-}, subagentContext);
-if (!invalidBriefRun?.block || !invalidBriefRun.reason.includes("Canonical worker briefing validation failed")) {
-  throw new Error("invalid canonical worker briefing was not rejected by the Pi adapter");
-}
+await subagentHandlers.get("tool_result")({ toolName: "swe_forge_subagent", input: capabilitiesInput, details: capabilityDetails, isError: false }, subagentContext);
+const workerBriefingContract = renderWorkerBriefing({ taskId: "reader-check", role: "reader", writeAccess: "read-only", allowedRead: "src/parser.ts#parseRecord" });
+const runInput = { action: "run", role: "reader", workerBriefing: workerBriefingContract, expectedOutputContract: "result", profile: "READ_ONLY" };
+if (await subagentHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: runInput }, subagentContext)) throw new Error("valid delegated run was blocked");
+const invalidBriefRun = await subagentHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: { ...runInput, workerBriefing: workerBriefingContract.replace(/^  objective:.*$/m, "") } }, subagentContext);
+if (!invalidBriefRun?.block || !invalidBriefRun.reason.includes("Canonical worker briefing validation failed")) throw new Error("invalid briefing was accepted");
 
-// The adapter requires the new wire field and does not accept the old name as
-// an alias. The companion runtime owns the deeper worker-briefing checks.
-const legacyWireRun = await subagentHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: {
-    ...runInput,
-    workerBriefing: undefined,
-    taskContract: workerBriefingContract,
-  },
-}, subagentContext);
-if (!legacyWireRun?.block || !legacyWireRun.reason.includes("workerBriefing")) {
-  throw new Error("old taskContract wire field was silently accepted");
-}
+writeRuntimeState(subagentState, { runId: "solo-run", current: "SOLO", preferred: "SOLO", updatedAt: "2051-01-01T00:00:00Z" });
+const soloPrompt = await subagentHandlers.get("before_agent_start")({ prompt: "ordinary continuation turn", systemPrompt: "base" }, subagentContext);
+if (soloPrompt?.systemPrompt.includes("swe_forge_subagent")) throw new Error("unselected capability was injected into SOLO");
+const reroutedAttempt = await subagentHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: runInput }, subagentContext);
+if (!reroutedAttempt?.block || !reroutedAttempt.reason.includes("Canonical routing selected SOLO")) throw new Error("SOLO fallback was not enforced");
 
-// An explicit invocation may discover the optional tool before the canonical
-// run state exists, but worker-briefing text must not authorize a run. Once the
-// state appears, the same extension must require a fresh capabilities probe.
-const noStateCwd = path.join(fixtureCwd, "no-state");
-fs.mkdirSync(noStateCwd, { recursive: true });
-delete process.env.SWE_FORGE_RUN_STATE;
-delete process.env.SWE_FORGE_STATE;
-const noStateHandlers = new Map();
-const noStatePi = {
-  on(name, handler) {
-    noStateHandlers.set(name, handler);
-  },
-  getAllTools() {
-    return [{ name: "swe_forge_subagent" }];
-  },
-  getActiveTools() {
-    return ["swe_forge_subagent"];
-  },
-  exec(command, args) {
-    return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), stderr: "" };
-  },
-};
-extension(noStatePi);
-const noStateContext = {
-  cwd: noStateCwd,
-  hasPendingMessages: () => false,
-  isProjectTrusted: () => true,
-};
-const noStatePrompt = await noStateHandlers.get("before_agent_start")({
-  prompt: "The user explicitly invoked SWE Forge through Pi.",
-  systemPrompt: "base",
-}, noStateContext);
-if (noStatePrompt?.systemPrompt.includes("swe_forge_subagent")) {
-  throw new Error("pre-state capability guidance was injected before routing");
-}
-const noStateCapabilities = await noStateHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: capabilitiesInput,
-}, noStateContext);
-if (noStateCapabilities) throw new Error("pre-state capability discovery was unexpectedly blocked");
-await noStateHandlers.get("tool_result")({
-  toolName: "swe_forge_subagent",
-  input: capabilitiesInput,
-  details: capabilityDetails,
-  isError: false,
-}, noStateContext);
-const blockedNoStateRun = await noStateHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: runInput,
-}, noStateContext);
-if (!blockedNoStateRun?.block || !blockedNoStateRun.reason.includes("run-state")) {
-  throw new Error("missing run state did not block delegation with actionable evidence");
-}
-const noStatePath = path.join(noStateCwd, "state", "run-state.yaml");
-writeRuntimeState(noStatePath, {
-  cwd: noStateCwd,
-  runId: "rediscovered-subagent-run",
-  current: "SUBAGENTS",
-  preferred: "SUBAGENTS",
-  updatedAt: "2060-01-01T00:00:00Z",
-});
-process.env.SWE_FORGE_RUN_STATE = noStatePath;
-const rediscoveredCapabilities = await noStateHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: capabilitiesInput,
-}, noStateContext);
-if (rediscoveredCapabilities) throw new Error("capability renegotiation after state creation was blocked");
-await noStateHandlers.get("tool_result")({
-  toolName: "swe_forge_subagent",
-  input: capabilitiesInput,
-  details: capabilityDetails,
-  isError: false,
-}, noStateContext);
-const allowedAfterState = await noStateHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: runInput,
-}, noStateContext);
-if (allowedAfterState) throw new Error(`state-backed SUBAGENTS run was blocked: ${allowedAfterState.reason}`);
-process.env.SWE_FORGE_RUN_STATE = subagentState;
-
-const writableInput = {
-  action: "run",
-  role: "writer",
-  workerBriefing: renderWorkerBriefing({
-    taskId: "writer-check",
-    role: "writer",
-    writeAccess: "read-write",
-    allowedRead: "src/parser.ts",
-    allowedWrite: "src/parser.ts",
-  }),
-  expectedOutputContract: "result",
-  profile: "WRITABLE",
-};
-const allowedWritableRun = await subagentHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: writableInput,
-}, subagentContext);
-if (allowedWritableRun) throw new Error(`negotiated WRITABLE run was blocked: ${allowedWritableRun.reason}`);
-if (!subagentEntries.some((entry) => entry.data.event === "subagent_capabilities_observed")) {
-  throw new Error("capability negotiation evidence was not recorded");
-}
-
-// Optional capability guidance is not injected when the selected topology does
-// not need the shared-checkout backend.
-writeRuntimeState(subagentState, {
-  runId: "solo-run",
-  current: "SOLO",
-  preferred: "SOLO",
-  updatedAt: "2050-01-01T00:00:00Z",
-});
-const soloPrompt = await subagentHandlers.get("before_agent_start")({
-  prompt: "ordinary continuation turn",
-  systemPrompt: "base",
-}, subagentContext);
-if (soloPrompt?.systemPrompt.includes("swe_forge_subagent")) {
-  throw new Error("unselected subagent capability was injected into a SOLO run");
-}
-const reroutedAttempt = await subagentHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: runInput,
-}, subagentContext);
-if (!reroutedAttempt?.block || !reroutedAttempt.reason.includes("Canonical routing selected SOLO")) {
-  throw new Error("adaptive routing did not use current run state at launch");
-}
-
-// A changed topology invalidates the negotiation and protects the shared
-// primitive from an ISOLATED task.
-writeRuntimeState(subagentState, {
-  runId: "isolated-run",
-  current: "ISOLATED",
-  preferred: "ISOLATED",
-  updatedAt: "2051-01-01T00:00:00Z",
-});
-const isolatedAttempt = await subagentHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: runInput,
-}, subagentContext);
-if (!isolatedAttempt?.block || !isolatedAttempt.reason.includes("ISOLATED")) {
-  throw new Error("ISOLATED work was not protected from the shared subagent tool");
-}
-
-// Missing package/tool capability keeps the canonical fallback available.
-writeRuntimeState(subagentState, {
-  runId: "fallback-run",
-  current: "SUBAGENTS",
-  preferred: "SUBAGENTS",
-  updatedAt: "2052-01-01T00:00:00Z",
-});
 const fallbackHandlers = new Map();
-const fallbackPi = {
-  on(name, handler) {
-    fallbackHandlers.set(name, handler);
-  },
-  getAllTools() {
-    return [];
-  },
-  getActiveTools() {
-    return [];
-  },
-  appendEntry() {},
-};
+const fallbackPi = { on(name, handler) { fallbackHandlers.set(name, handler); }, getAllTools() { return []; }, getActiveTools() { return []; }, appendEntry() {} };
 extension(fallbackPi);
 const fallbackContext = { cwd: fixtureCwd, hasPendingMessages: () => false, isProjectTrusted: () => true };
-const fallbackPrompt = await fallbackHandlers.get("before_agent_start")({
-  prompt: "The user explicitly invoked SWE Forge through Pi.",
-  systemPrompt: "base",
-}, fallbackContext);
-if (fallbackPrompt?.systemPrompt.includes("swe_forge_subagent")) {
-  throw new Error("unavailable subagent capability was injected into the prompt");
-}
-const fallbackAttempt = await fallbackHandlers.get("tool_call")({
-  toolName: "swe_forge_subagent",
-  input: capabilitiesInput,
-}, fallbackContext);
-if (!fallbackAttempt?.block || !fallbackAttempt.reason.includes("fallback")) {
-  throw new Error("missing subagent capability did not preserve fallback");
-}
+await fallbackHandlers.get("before_agent_start")({ prompt: "The user explicitly invoked SWE Forge through Pi.", systemPrompt: "base" }, fallbackContext);
+const fallbackAttempt = await fallbackHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: capabilitiesInput }, fallbackContext);
+if (!fallbackAttempt?.block || !fallbackAttempt.reason.includes("fallback")) throw new Error("missing native capability did not preserve fallback");
 
 console.log("PASS: Pi runtime extension fixture");
 NODE

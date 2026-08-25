@@ -16,27 +16,20 @@ Successful validation returns a compact machine-readable confirmation; the
 returned result remains untrusted evidence until the normal workflow consumes
 it.
 
-The tool's ordinary validator is intentionally narrow. `REVIEW` uses
-`review.md` and its blocking matrix, while `ISOLATED_WRITABLE` uses the fixed
-`result-bundle.md` and isolated gate. The `reviewer` role therefore cannot be
-validated as an ordinary result profile.
+`REVIEW` uses `review.md` and its blocking matrix. Reviewers therefore return
+the dedicated review shape rather than an implementation result profile.
 
 ## Profile selection
 
-The profile is selected from the worker's role, write access, and execution
-mode. This table is the canonical profile map; roles, policies, and providers
-refer to it rather than defining competing result shapes.
+The profile is selected from the worker's role and write access. This table is
+the canonical profile map; roles and policies refer to it rather than defining
+competing result shapes.
 
 | Worker responsibility | Profile | Canonical return contract |
 | --- | --- | --- |
 | Read-only research or analysis that returns a worker result | `READ_ONLY` | This file, [Read-only result](#read-only-result) |
-| Normal writable implementation in a shared checkout | `WRITABLE` | This file, [Writable result](#normal-writable-result) |
-| Writable implementation in `ISOLATED` execution | `ISOLATED_WRITABLE` | [result-bundle.md](result-bundle.md) and the isolated gate |
+| Bounded writable implementation in the delivery checkout | `WRITABLE` | This file, [Writable result](#normal-writable-result) |
 | Independent review | `REVIEW` | [review.md](review.md), never an implementation result |
-
-`ISOLATED_WRITABLE` is a semantic profile name only. It is not an additional
-field in `result/meta.tsv`; the fixed bundle and its validator remain the
-machine-valid source of truth for isolated work.
 
 ## Ordinary result rules
 
@@ -69,11 +62,11 @@ Rules for both ordinary profiles:
   common result surface. Keep findings concise and use references instead of
   pasting source excerpts or replaying exploration.
 - `RISKS` and `RECOMMENDED_ACTION` are conditional. Do not emit empty sections
-  merely to match the writable or isolated profile.
+  merely to match the writable profile.
 - `DONE` means the bounded task was answered with the evidence required by its
   task contract. It does not authorize delivery or replace Git/evidence gates.
 - `BLOCKED` and `FAILED` include the evidence and smallest useful next action;
-  they do not need irrelevant checkout or environment headings.
+  they do not need irrelevant checkout or delivery headings.
 
 ### Dependency handoff eligibility
 
@@ -104,7 +97,7 @@ STATUS: DONE
 TASK_ID: repository-result-contract-map
 
 FINDINGS:
-- Ordinary result.md currently requires implementation-shaped fields for read-only research.
+- The researcher can report the profile boundary without a checkout snapshot.
 
 EVIDENCE:
 - .swe-forge/contracts/result.md#profile-selection
@@ -117,25 +110,25 @@ RECOMMENDED_ACTION:
 - Use the READ_ONLY profile for the discovery task.
 ```
 
-Do not add `BASE_SHA`, `HEAD_SHA`, `BRANCH`, `WORKTREE`, `FILES_CHANGED`,
+Do not add `BASE_SHA`, `HEAD_SHA`, `BRANCH`, `CHECKOUT`, `FILES_CHANGED`,
 `GIT_STATE`, `DELIVERABLE_COMMITS`, `VALIDATION`, environment resources, or
 delivery authorization to a read-only result. A command used during research
 is evidence, not an implementation validation block.
 
 ### Normal writable result
 
-A normal shared-checkout implementer adds only the Git, change, and validation
-evidence needed to verify and consume its implementation:
+A bounded implementer adds only the Git, change, and validation evidence needed
+to verify and consume its implementation:
 
 ```text
 RESULT_PROFILE: WRITABLE
 STATUS: DONE
 TASK_ID: result-contract-profiles
 
-BASE_SHA: <exact task base>
-HEAD_SHA: <worker head or none>
-BRANCH: <local branch or none>
-WORKTREE: <absolute worktree or none>
+BASE_SHA: <exact delivery-checkout base>
+HEAD_SHA: <delivery-checkout head or none>
+BRANCH: <delivery branch or none>
+CHECKOUT: <absolute delivery-checkout path>
 
 FILES_CHANGED:
 - <repository-relative path>
@@ -148,7 +141,7 @@ GIT_STATE:
 # - untracked: <path>
 
 DELIVERABLE_COMMITS:
-- <local commit SHA and subject; emit only when a transfer or commit exists>
+- <local commit SHA and subject; emit only when a commit exists>
 
 VALIDATION:
 - command: <assigned check>
@@ -179,32 +172,18 @@ assigned `VALIDATION` entries are required when the writable task reaches that
 stage. `DELIVERABLE_COMMITS` and `SCOPE_EXCEPTIONS` are conditional; do not
 return empty lists. The task contract and working spec already contain the
 testing decision, so a writable result reports the checks actually run rather
-than repeating `TESTING_DECISION` or exploratory `TEST_RESULTS` prose.
+than repeating testing prose.
 
 The task contract remains responsible for allowed scope and per-action
 authorization. The result exposes changed paths and exceptions so the
 orchestrator can compare them with that contract; it does not grant authority.
-
-## Isolated writable result
-
-An isolated writer must return the complete fixed directory bundle defined in
-[result-bundle.md](result-bundle.md). Every bundle file remains required even
-when its contents are empty, and `scripts/swe-forge-isolated-gate` remains the
-eligibility gate. A concise ordinary `WRITABLE` result cannot substitute for
-`meta.tsv`, declared commits and files, validation fingerprints, cleanliness,
-scope exceptions, or resource evidence.
-
-The isolated workflow owns provider lifecycle and central integration. The
-orchestrator accepts an isolated worker only after the fixed bundle, actual Git
-state, planned validation, exact base, scope, and integration evidence pass the
-gate.
 
 ## Review result
 
 Review workers use [review.md](review.md) and its `PASS`/
 `CHANGES_REQUIRED` contract. They are not asked to reshape review findings into
 `READ_ONLY` or `WRITABLE`, and a review result never replaces implementation
-or isolated evidence.
+evidence.
 
 ## Consumption
 
@@ -213,10 +192,8 @@ Consume every result through the selected profile:
 - correlate `TASK_ID` and `STATUS` first;
 - for `READ_ONLY`, evaluate findings, references, risks, and any recommended
   action without inventing Git or delivery requirements;
-- for `WRITABLE`, verify scope, Git/change evidence, assigned validation, and
-  blockers before consuming the implementation;
-- for `ISOLATED_WRITABLE`, run the fixed isolated gate and central integration
-  workflow; and
+- for `WRITABLE`, verify scope, checkout identity, Git/change evidence,
+  assigned validation, and blockers before consuming the implementation; and
 - for `REVIEW`, evaluate the dedicated review contract and its blocking matrix.
 
 Workers do not create PRs, push, merge, publish, deploy, make delivery

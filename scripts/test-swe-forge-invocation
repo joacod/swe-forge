@@ -5,10 +5,7 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
 PARSER=$ROOT/.swe-forge/tools/swe-forge-invocation
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-invocation.XXXXXX")
-
-cleanup() {
-  rm -rf "$TMP_ROOT"
-}
+cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM
 
 fail() {
@@ -34,24 +31,19 @@ assert_parse 'pr implement the parser' \
   '{"raw_arguments":"pr implement the parser","parsed_ticket":"implement the parser","requested_mode":"AUTO","requested_delivery":"PR","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["pr"]}'
 assert_parse 'subagents guided inspect the adapters' \
   '{"raw_arguments":"subagents guided inspect the adapters","parsed_ticket":"inspect the adapters","requested_mode":"SUBAGENTS","requested_delivery":"GUIDED","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":["subagents","guided"]}'
-assert_parse 'pr isolated inspect the adapters' \
-  '{"raw_arguments":"pr isolated inspect the adapters","parsed_ticket":"inspect the adapters","requested_mode":"ISOLATED","requested_delivery":"PR","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["pr","isolated"]}'
-assert_parse 'implement pr behavior without a prefix' \
-  '{"raw_arguments":"implement pr behavior without a prefix","parsed_ticket":"implement pr behavior without a prefix","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":[]}'
-assert_parse 'isolated pr' \
-  '{"raw_arguments":"isolated pr","parsed_ticket":"","requested_mode":"ISOLATED","requested_delivery":"PR","delivery_mode":"PR","input_status":"INCOMPLETE","consumed_tokens":["isolated","pr"]}'
+assert_parse 'pr subagents inspect the adapters' \
+  '{"raw_arguments":"pr subagents inspect the adapters","parsed_ticket":"inspect the adapters","requested_mode":"SUBAGENTS","requested_delivery":"PR","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["pr","subagents"]}'
+assert_parse 'subagents pr' \
+  '{"raw_arguments":"subagents pr","parsed_ticket":"","requested_mode":"SUBAGENTS","requested_delivery":"PR","delivery_mode":"PR","input_status":"INCOMPLETE","consumed_tokens":["subagents","pr"]}'
 assert_parse 'SOLO PR uppercase words remain ticket text' \
   '{"raw_arguments":"SOLO PR uppercase words remain ticket text","parsed_ticket":"SOLO PR uppercase words remain ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":[]}'
 assert_parse 'unknown solo pr words stay ticket text' \
   '{"raw_arguments":"unknown solo pr words stay ticket text","parsed_ticket":"unknown solo pr words stay ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":[]}'
-assert_parse 'herdr old topology spelling' \
-  '{"raw_arguments":"herdr old topology spelling","parsed_ticket":"","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"MIGRATION_REQUIRED","consumed_tokens":["herdr"]}'
-assert_parse 'solo fix pr isolated guided is ticket content' \
-  '{"raw_arguments":"solo fix pr isolated guided is ticket content","parsed_ticket":"fix pr isolated guided is ticket content","requested_mode":"SOLO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":["solo"]}'
+assert_parse 'former command token remains ticket text' \
+  '{"raw_arguments":"former command token remains ticket text","parsed_ticket":"former command token remains ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":[]}'
+assert_parse 'solo former command token is ticket content' \
+  '{"raw_arguments":"solo former command token is ticket content","parsed_ticket":"former command token is ticket content","requested_mode":"SOLO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":["solo"]}'
 
-# Leading/trailing command whitespace is discarded only around the parsed
-# ticket. Internal spacing, quotes, backslashes, tabs, and newlines remain
-# exact ticket content.
 raw_file=$TMP_ROOT/raw-arguments
 printf '  solo\tpr  preserve  "quoted"  \\\\ text\nwith a second line  \n' >"$raw_file"
 actual=$($PARSER parse --stdin <"$raw_file")
@@ -69,8 +61,6 @@ while [ "$iteration" -le 20 ]; do
   iteration=$((iteration + 1))
 done
 
-# Ticket-sized raw input must remain a bounded bootstrap operation rather than
-# copying the unparsed remainder once per character.
 long_ticket=$(awk 'BEGIN { for (i = 0; i < 9000; i++) printf "x"; print "" }')
 long_parse=$($PARSER parse --raw-arguments "pr $long_ticket")
 case "$long_parse" in
@@ -78,8 +68,6 @@ case "$long_parse" in
   *) fail 'long invocation was not parsed as a complete ticket' ;;
 esac
 
-# The normalized request values map directly to the canonical state writer;
-# no fixture or adapter writes a second state representation.
 state_repo=$TMP_ROOT/state-repo
 mkdir -p "$state_repo"
 git -C "$state_repo" init -q
@@ -91,12 +79,9 @@ git -C "$state_repo" commit -qm 'Fixture base'
 normalized=$($PARSER parse --raw-arguments 'subagents pr initialize from parser facts')
 json_value() {
   case "$1" in
-    requested_mode)
-      printf '%s\n' "$normalized" | sed -n 's/.*"requested_mode":"\([^"]*\)".*/\1/p' ;;
-    requested_delivery)
-      printf '%s\n' "$normalized" | sed -n 's/.*"requested_delivery":"\([^"]*\)".*/\1/p' ;;
-    delivery_mode)
-      printf '%s\n' "$normalized" | sed -n 's/.*"delivery_mode":"\([^"]*\)".*/\1/p' ;;
+    requested_mode) printf '%s\n' "$normalized" | sed -n 's/.*"requested_mode":"\([^"]*\)".*/\1/p' ;;
+    requested_delivery) printf '%s\n' "$normalized" | sed -n 's/.*"requested_delivery":"\([^"]*\)".*/\1/p' ;;
+    delivery_mode) printf '%s\n' "$normalized" | sed -n 's/.*"delivery_mode":"\([^"]*\)".*/\1/p' ;;
     *) fail "unknown parser JSON field: $1" ;;
   esac
 }
@@ -106,6 +91,7 @@ $ROOT/scripts/swe-forge-state init --state "$state_dir" --checkout "$state_repo"
   --requested-delivery "$(json_value requested_delivery)" \
   --delivery-mode "$(json_value delivery_mode)" >/dev/null
 $ROOT/scripts/swe-forge-state validate --state "$state_dir" >/dev/null
+grep -F 'schema_version: 4' "$state_dir/run-state.yaml" >/dev/null
 grep -F 'requested_mode: SUBAGENTS' "$state_dir/run-state.yaml" >/dev/null
 grep -F 'requested_delivery: PR' "$state_dir/run-state.yaml" >/dev/null
 grep -F 'delivery_mode: PR' "$state_dir/run-state.yaml" >/dev/null

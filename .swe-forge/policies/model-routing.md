@@ -42,12 +42,12 @@ worker_runtime:
   strategy: inherit
 ```
 
-Inheritance covers the selected harness/runtime, provider, model, and
+Inheritance covers the selected harness/runtime, model provider, model, and
 reasoning or thinking configuration. It applies consistently to early
 `DELEGATED_RESEARCH`, standard `SUBAGENTS` workers, review workers,
-implementation workers, native subagents, and Herdr-backed delegation. A
-worker does not receive an automatic role-based model change merely because it
-has a different capability class.
+implementation workers, and native subagents. A worker does not receive an
+automatic role-based model change merely because it has a different capability
+class.
 
 ## Selection Rules
 
