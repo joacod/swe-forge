@@ -4,9 +4,9 @@ SWE Forge is an explicitly invoked, harness-agnostic software-engineering
 workflow for AI coding harnesses. It takes one coding ticket through inspection,
 planning, implementation, verification, review, and delivery. A run owns one
 writable delivery checkout and one reviewable delivery outcome. Harness-native
-subagents may assist with bounded work, but concurrent writable-agent
-orchestration, worker fleets, external orchestration, and multi-workspace
-integration are outside SWE Forge's scope.
+subagents may assist with bounded work, but orchestration of concurrent
+mutation of the canonical delivery candidate, worker fleets, external
+orchestration, and multi-workspace integration are outside SWE Forge's scope.
 
 The canonical workflow remains portable. Adapters expose asymmetric native
 capabilities and use documented fallbacks; projection success or fixture
