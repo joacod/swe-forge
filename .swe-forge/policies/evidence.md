@@ -30,6 +30,10 @@ Register the expected checks before executing them:
   --plan-step S1 --scope .swe-forge/policies/** --scope README.md
 .swe-forge/tools/swe-forge-gate commit-slice --state "$STATE" \
   --checkpoint 1 --plan-step S1 --message "Document evidence policy" --authorized-by PR
+.swe-forge/tools/swe-forge-gate plan-check --state "$STATE" \
+  --name "integrated checks" --requirement required
+.swe-forge/tools/swe-forge-gate validate --state "$STATE" \
+  --name "integrated checks" --final -- ./scripts/validate-swe-forge
 .swe-forge/tools/swe-forge-gate review --state "$STATE" \
   --result PASS --source fresh-context
 .swe-forge/tools/swe-forge-gate deliver-pr --state "$STATE"
@@ -49,8 +53,11 @@ step evidence fails `deliver-pr`. A review-repair checkpoint and commit use the
 explicit repair kind and never satisfy a planned step.
 
 `deliver-pr` and receipt generation inspect only local checkout, validation,
-review, plan, and authorization evidence. Creating the PR and recording its URL
-ends the synchronous run; remote CI is not awaited or polled.
+review, plan, and authorization evidence. Final validation evidence is
+established after the planned implementation commits, and again only when a
+repair changes the candidate; review, acceptance, and PR preparation consume
+that exact evidence without rerunning its command. Creating the PR and recording
+its URL ends the synchronous run; remote CI is not awaited or polled.
 
 Use `--final-required false` for a targeted check owned by the current
 implementation slice and the default `--final-required true` for final checks.
@@ -67,8 +74,10 @@ Git, sorted untracked paths, and content hashes.
 
 A checkpoint records its exact path boundary and candidate fingerprint.
 Required current-slice and applicable conditional checks must pass for that
-candidate. `commit-slice` refuses candidate fingerprint drift, staged-tree drift,
-and path set drift. It never pushes.
+candidate. Planned implementation checkpoints need only their targeted checks;
+final checks are evaluated at the final-candidate boundary. `commit-slice`
+refuses candidate fingerprint drift, staged-tree drift, and path set drift. It
+never pushes.
 
 The guard stores command output outside the repository and does not authorize
 migrations, deployment, publication, credentials, production access, or shared

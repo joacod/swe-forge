@@ -186,13 +186,21 @@ require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
 require_text 'set-pull-request' .swe-forge/tools/swe-forge-state
 require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
 require_text 'ordered commit plan' .swe-forge/policies/delivery.md
+require_text 'targeted validation and checkpoint' .swe-forge/policies/delivery.md
+require_text 'planned commits do not require independent review' SWE-FORGE.md
 require_text 'remote default branch' .swe-forge/policies/delivery.md
 require_text 'review-repair commit' .swe-forge/policies/delivery.md
+require_text 'clean committed candidate' .swe-forge/contracts/review.md
+require_text 'Run that final validation once' .swe-forge/policies/verification.md
+require_text './scripts/validate-swe-forge' .swe-forge/policies/verification.md
+require_text 'Later review, acceptance, and delivery gates consume this' .swe-forge/workflows/ticket.md
 require_text 'at most two review executions' SWE-FORGE.md
 require_text 'Remote GitHub CI is external after PR creation' SWE-FORGE.md
 require_text 'commit-plan' .swe-forge/tools/swe-forge-state
 require_text 'record-commit-step' .swe-forge/tools/swe-forge-state
 require_text 'review ceiling exhausted' .swe-forge/tools/swe-forge-state
+require_text 'PR review requires a clean committed candidate' .swe-forge/tools/swe-forge-gate
+require_text 'PR focused re-review requires a materialized review-repair commit' .swe-forge/tools/swe-forge-gate
 require_text 'Review attempts:' .swe-forge/contracts/receipt.md
 require_text 'PR creation completion boundary' .swe-forge/conformance/scenarios.md
 require_text 'not awaited or polled' .swe-forge/policies/evidence.md
@@ -206,5 +214,7 @@ require_ordered_text 'Before the first writable checkout/setup operation' 'polic
 require_ordered_text 'When the review trigger applies' 'contracts/review.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before a `BLOCKED` or `FAILED` recovery path' 'policies/failure-recovery.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'The canonical Acceptance Gate' 'Compare the final integrated diff' .swe-forge/workflows/ticket.md
+reject_text 'fresh review before commit, push' .swe-forge/policies/verification.md
+reject_text 'one reviewed local delivery-branch commit' .swe-forge/policies/delivery.md
 
 printf '%s\n' 'PASS: SWE Forge structural checks'

@@ -35,9 +35,11 @@ end.
 
 A step may contain implementation and tests that are inseparable at the
 observable boundary. Do not manufacture commits for unrelated formatting or
-ceremonial phases: a one-step ticket correctly produces one commit. Review
-repairs use `--review-repair` and remain additional atomic commits rather than a
-squash or completion of a planned step.
+ceremonial phases: a one-step ticket correctly produces one commit. Planned
+implementation commits require their targeted validation and checkpoint, not an
+independent review. Review repairs use `--review-repair` and remain additional
+atomic commits rather than a squash or completion of a planned step; the repair
+commit must exist before the focused re-review of its candidate.
 
 ### PR completion boundary
 
@@ -130,7 +132,7 @@ Each action is independently authorized:
 
 | Action | Permits | Never permits |
 | --- | --- | --- |
-| `commit` | one reviewed local delivery-branch commit (`go` or PR) | push, PR, publication, deployment, merge |
+| `commit` | one explicitly authorized, checkpointed local delivery-branch commit (`go` or PR) | push, PR, publication, deployment, merge |
 | `push` | one final delivery-branch push in PR mode | PR, publication, deployment, merge |
 | `create_pull_request` | one final PR targeting the protected default | merge, publication, deployment |
 | `publish` | nothing unless separately authorized | tag/release publication |

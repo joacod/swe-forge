@@ -1,7 +1,8 @@
 # Example: PR Delivery Ticket
 
-This example shows the low-touch delivery path. It skips human checkpoints,
-but not verification, fresh review, protected-branch rules, or merge safety.
+This example shows the low-touch delivery path. It skips interactive human
+checkpoints, but not verification, fresh review, protected-branch rules, or
+merge safety.
 
 ## Invocation
 
@@ -44,13 +45,21 @@ and is never committed.
 
 Before editing, the working spec records an ordered commit plan. Each step names
 one cohesive objective, scope, dependencies, targeted validation, and commit
-subject. The agent implements and validates one step, creates its local commit,
-and then starts the next step; it does not defer commits until the end. A single
-inseparable step remains one commit. It runs the final required checks, performs
-a fresh acceptance-first review within the review focus, repairs blocking
-in-scope findings as additional commits, and inspects the final diff. Unrelated
-improvements are recorded as deferred follow-ups rather than pulled into the
-PR. It does not stop after each slice for user approval.
+subject. The agent implements one step, runs its targeted checks, records the
+checkpoint, and creates its local commit before starting the next step; it does
+not defer commits until the end or require independent review for each commit.
+A single inseparable step remains one commit.
+
+After all planned commits exist, it runs final integrated validation once and
+performs the initial independent review against that same committed candidate.
+If the review requires changes, it repairs only the relevant finding, runs the
+affected checks, creates the explicit review-repair checkpoint and commit, then
+establishes final evidence for the repaired candidate before the focused second
+review. A passing focused review goes directly to final acceptance; acceptance
+and PR preparation consume current evidence rather than rerunning unchanged
+validation or review. Unrelated improvements are recorded as deferred
+follow-ups rather than pulled into the PR. It does not stop after each slice for
+user approval.
 
 Review is recorded through the canonical gate for at most two executions total.
 If the focused second review still returns `CHANGES_REQUIRED`, the run stops

@@ -58,7 +58,10 @@ current `HEAD` and fingerprint, and a PR URL in `PR` mode.
 For `PR`, the receipt is eligible only after the ordered commit-plan projection
 is complete and every planned step is bound to its checkpoint and commit.
 Review-repair commits are reported separately and never substitute for a
-planned step. PR creation does not add a remote validation requirement.
+planned step. Final acceptance and receipt generation consume the current
+candidate-bound validation and PASS review evidence; they do not rerun
+unchanged validation or another review. PR creation does not add a remote
+validation requirement.
 
 The read-only `receipt-verify` operation compares the receipt with the current
 repository identity, branch, `HEAD`, final candidate fingerprint, and final

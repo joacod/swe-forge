@@ -199,12 +199,13 @@ the sole detailed owner of checkout and branch ownership, commits, pushes,
 pull requests, synchronization, and cleanup.
 Implement only the bounded dependency waves selected by the architecture and
 working spec. In `PR`, use the executable commit-plan projection: implement one
-step, run its required checks, record its checkpoint and commit with that step's
-identity, and only then begin the next. Use an explicit review-repair checkpoint
-and commit for blocking review repairs; never mark a planned step complete with
-a catch-all checkpoint. In `GUIDED`, stop at the declared checkpoint. Keep task
-ownership, scope, and delivery authorization explicit and stop on a blocking
-gate.
+step, run only its required targeted checks, record its checkpoint, and create
+its materializing commit with that step's identity before beginning the next.
+Planned implementation commits do not require independent review. Use an
+explicit review-repair checkpoint and commit for blocking review repairs; never
+mark a planned step complete with a catch-all checkpoint. In `GUIDED`, stop at
+the declared checkpoint. Keep task ownership, scope, and delivery authorization
+explicit and stop on a blocking gate.
 
 Before writing, classify the checkout, record the pre-edit baseline, and use
 one permitted task/delivery branch. Preserve dirty, detached, protected, or
@@ -233,33 +234,42 @@ acceptance sequential.
 
 ### 10. Verify
 
-Run the relevant repository quality gates after implementation by following the
-loaded verification and evidence policies. In `PR`, all applicable slice and
-final checks must pass before authorized commit, push, and PR actions. In
-`GUIDED`, a checkpoint may report a passing slice while final acceptance remains
-pending. Report every check as passed, failed, skipped, unavailable, or
-not-applicable with its evidence.
+Run the relevant repository quality gates by following the loaded verification
+and evidence policies. In `PR`, each planned step's targeted checks must pass
+before its checkpoint and materializing commit. After all planned implementation
+commits exist, run final integrated validation once against that committed
+candidate. If a review repair changes the candidate, establish the required
+final evidence for that new committed candidate after the repair commit.
+`GUIDED` may report a passing slice while final acceptance remains pending.
+Report every check as passed, failed, skipped, unavailable, or not-applicable
+with its evidence. Later review, acceptance, and delivery gates consume this
+evidence; they do not rerun unchanged validation.
 
 ### 11. Review
 
 When the review trigger applies, load `.swe-forge/agents/reviewer.md` and
-`.swe-forge/contracts/review.md` before review. Use a fresh context when
-delegation, multi-component scope, or medium-or-higher risk makes it useful.
-Provide the original ticket, `review_focus`, acceptance criteria, architecture
-decisions, final diff, and validation evidence. Record every reviewer-like
+`.swe-forge/contracts/review.md` before review. In `PR`, run the initial
+independent review only after the planned implementation commits and final
+validation are complete, against that same committed candidate. If it returns
+`CHANGES_REQUIRED`, repair only the relevant finding, run the affected checks,
+record the explicit review-repair checkpoint and commit, establish required
+final evidence for the repaired candidate, and then run the focused second
+review against that committed `HEAD`. Use a fresh context when delegation,
+multi-component scope, or medium-or-higher risk makes it useful. Provide the
+original ticket, `review_focus`, acceptance criteria, architecture decisions,
+final diff, and current validation evidence. Record every reviewer-like
 execution through the canonical evidence gate, regardless of its source label.
-The normal candidate budget is two executions total: initial review, then one
-focused re-review after repair and affected validation.
+The normal candidate budget is two executions total; a passing focused second
+review goes directly to final acceptance.
 
 ### 12. Repair
 
 Before a `BLOCKED` or `FAILED` recovery path, load and follow
-`policies/failure-recovery.md`. Repair only relevant findings within the
-original scope and rerun affected validation. A second `CHANGES_REQUIRED`
-review is a stop-and-report outcome: preserve unresolved findings, evidence,
-repairs, and validation, and do not launch another reviewer, investigation,
-debug review, or fresh context automatically. Ordinary debugging of an
-unrelated implementation or test failure follows task recovery instead.
+`policies/failure-recovery.md`. A second `CHANGES_REQUIRED` review is a
+stop-and-report outcome: preserve unresolved findings, evidence, repairs, and
+validation, and do not launch another reviewer, investigation, debug review, or
+fresh context automatically. Ordinary debugging of an unrelated implementation
+or test failure follows task recovery instead.
 
 ### 13. Final Acceptance
 
@@ -268,8 +278,10 @@ review, delivery, and recovery policies contribute evidence to that gate and do
 not define a competing final gate.
 
 Compare the final integrated diff with the original ticket, acceptance criteria,
-review focus, and explicit constraints. Do not substitute worker summaries or
-passing partial checks for final integrated evidence.
+review focus, and explicit constraints. Verify and consume the current local
+validation and PASS review evidence for the exact committed candidate. Do not
+rerun unchanged broad validation, request another reviewer-like pass, or treat
+acceptance itself as a new semantic audit.
 
 ### 14. Report
 

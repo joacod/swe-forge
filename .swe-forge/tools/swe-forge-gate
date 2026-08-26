@@ -220,6 +220,52 @@ review_repair_allowed() {
     fail "review-repair activity stopped at the review ceiling: $review_attempts/$review_ceiling"
 }
 
+review_repair_commit_exists() {
+  repair_current_head=$1
+  repair_review_head=$(meta_value head "$STATE/review.env" 2>/dev/null || true)
+  [ -n "$repair_review_head" ] || return 1
+  while IFS="$TAB" read -r repair_id repair_branch repair_recorded_head repair_fp \
+    repair_paths repair_scope repair_recorded repair_checks repair_kind repair_step repair_commit; do
+    [ "$repair_kind" = review-repair ] || continue
+    [ -n "$repair_commit" ] || continue
+    [ "$repair_recorded_head" = "$repair_review_head" ] || continue
+    repair_parent=$(git -C "$CHECKOUT" rev-parse "$repair_commit^" 2>/dev/null || true)
+    [ "$repair_parent" = "$repair_recorded_head" ] || continue
+    git -C "$CHECKOUT" merge-base --is-ancestor "$repair_commit" "$repair_current_head" 2>/dev/null || continue
+    return 0
+  done <"$STATE/checkpoints.tsv"
+  return 1
+}
+
+review_candidate_ready() {
+  candidate_attempts=$1
+  candidate_head=$2
+  candidate_fp=$3
+  [ "$(delivery_mode_from_state)" = PR ] || return 0
+
+  candidate_ceiling=$(run_state_nested_value review retry_ceiling)
+  [ "$candidate_attempts" -lt "$candidate_ceiling" ] || \
+    fail "review ceiling exhausted: $candidate_attempts/$candidate_ceiling executions already recorded; automatic reviewer-like activity is stopped"
+  [ "$(run_state_nested_value commit_plan status)" = complete ] || \
+    fail "PR review requires a complete commit plan"
+  [ -z "$(status_porcelain)" ] || \
+    fail "PR review requires a clean committed candidate"
+  check_requirements "$candidate_fp" yes >/dev/null 2>&1 || \
+    fail "PR review requires passing final validation for the current candidate"
+
+  case "$candidate_attempts" in
+    0)
+      [ "$(run_state_nested_value review status)" = pending ] || \
+        fail "PR review can only start from pending review state"
+      ;;
+    *)
+      [ "$(run_state_nested_value review status)" = changes-required ] || \
+        fail "PR focused re-review requires an unresolved changes-required review"
+      review_repair_commit_exists "$candidate_head" || \
+        fail "PR focused re-review requires a materialized review-repair commit"
+      ;;
+  esac
+}
 
 
 ensure_meta_state() {
@@ -1276,6 +1322,10 @@ EOF_BLOCKED
   assert_identity
   head=$(git -C "$CHECKOUT" rev-parse HEAD)
   fp=$(fingerprint_for_checkout "$CHECKOUT")
+  current_attempts=$(run_state_nested_value review attempts)
+  review_requested_result=$result
+  review_candidate_ready "$current_attempts" "$head" "$fp"
+  result=$review_requested_result
   SWE_FORGE_REVIEW_LOCK_HELD=true "$SCRIPT_DIR/swe-forge-state" set-review \
     --state "$STATE/run-state.yaml" --result "$result" $blocked_args >/dev/null
   attempt=$(run_state_nested_value review attempts)
