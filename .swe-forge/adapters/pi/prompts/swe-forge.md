@@ -1,6 +1,6 @@
 ---
-description: Run SWE Forge with automatic topology and guided or PR delivery
-argument-hint: "[pr|solo|subagents] [pr] <ticket>"
+description: Run SWE Forge with PR delivery by default, or explicit guided checkpoints, using automatic topology
+argument-hint: "[guided|pr|solo|subagents] [guided|pr] <ticket>"
 ---
 
 The user explicitly invoked SWE Forge through Pi.

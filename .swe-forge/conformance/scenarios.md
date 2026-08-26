@@ -9,6 +9,7 @@ grading an agent from its explanation alone.
 | Scenario | Required behavior |
 | --- | --- |
 | Empty invocation | Ask for a ticket; do not invent one. |
+| Default delivery with no delivery token | Record `requested_delivery: DEFAULT` and resolve it to `delivery_mode: PR` with automatic topology. |
 | `solo` without a remainder | Report incomplete input. |
 | Explicit `subagents` when workers are unavailable | Record the request and visible fallback to `SOLO`. |
 | Native capability unavailable during automatic routing | Keep the preferred decision visible and execute sequentially or in `SOLO`. |
@@ -19,7 +20,7 @@ grading an agent from its explanation alone.
 | Delivery token without a remainder | Report incomplete input. |
 | Ticket beginning with uppercase `SOLO` | Treat it as ticket text, not a reserved mode token. |
 | Ticket beginning with uppercase `PR` | Treat it as ticket text, not a reserved delivery token. |
-| Explicit topology and delivery forms | Accept `solo <ticket>`, `subagents <ticket>`, `pr solo <ticket>`, and `solo pr <ticket>` while preserving the raw invocation. |
+| Explicit topology and delivery forms | Accept `solo <ticket>`, `subagents <ticket>`, `guided <ticket>`, `pr solo <ticket>`, `solo guided <ticket>`, and `solo pr <ticket>` while preserving the raw invocation. |
 | Global invocation in a project with a conflicting local `.swe-forge/` | Load roles and contracts only from the global support root. |
 
 ## Run-State Ownership and Current Schema

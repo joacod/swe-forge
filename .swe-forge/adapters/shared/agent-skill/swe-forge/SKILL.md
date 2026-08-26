@@ -1,6 +1,6 @@
 ---
 name: swe-forge
-description: Explicitly activate the portable SWE Forge ticket workflow with guided or PR delivery for a user-supplied software task.
+description: Explicitly activate the portable SWE Forge ticket workflow with PR delivery by default or explicit guided checkpoints for a user-supplied software task.
 disable-model-invocation: true
 ---
 

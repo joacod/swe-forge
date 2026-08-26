@@ -24,10 +24,13 @@ routing:
   current: SOLO | SUBAGENTS
 ```
 
-`requested_mode` is the immutable invocation request. `routing.preferred` is
-the current semantic preference after the latest meaningful assessment.
-`routing.current` is the currently effective topology authorized to run.
-When native capability fallback is required, `preferred: SUBAGENTS` and
+`requested_mode` is the immutable invocation request. A `requested_delivery`
+value of `DEFAULT` means no delivery token was supplied and resolves to PR
+delivery; `guided` explicitly selects GUIDED, and `pr` remains an explicit
+backwards-compatible PR alias. `routing.preferred` is the current semantic
+preference after the latest meaningful assessment. `routing.current` is the
+currently effective topology authorized to run. When native capability
+fallback is required, `preferred: SUBAGENTS` and
 `current: SOLO` remain visible with `fallback_used`; delegation is never
 reported from preference alone.
 

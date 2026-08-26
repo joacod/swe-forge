@@ -4,11 +4,12 @@
 
 Give an agent enough shared understanding to implement safely without turning
 every ticket into a persistent specification project. The working spec is
-transient, behavior-first, and proportional to the selected delivery mode.
+transient, behavior-first, and proportional to the selected delivery mode. The
+default invocation uses `PR`; an explicit `guided` token selects `GUIDED`.
 
 ## When It Runs
 
-- `GUIDED` mode derives acceptance criteria during normal ingest and asks only
+- `GUIDED` mode derives acceptance criteria during guided ingest and asks only
   blocking questions. Do not add an interview for a clear, low-risk ticket.
 - `PR` mode always builds a working spec before writable implementation. It may
   skip the interview when the ticket already contains a concrete intent,

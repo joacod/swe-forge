@@ -1,7 +1,13 @@
 # Example: Simple Ticket
 
-This example shows a small change where delegation would add overhead without
-adding useful independence.
+This example shows an explicit `GUIDED` run for a small change where delegation
+would add overhead without adding useful independence.
+
+## Invocation
+
+```text
+/swe-forge guided <ticket>
+```
 
 ## Ticket
 
@@ -36,7 +42,7 @@ requested_mode: AUTO
 routing:
   preferred: SOLO
   current: SOLO
-requested_delivery: DEFAULT
+requested_delivery: GUIDED
 delivery_mode: GUIDED
 reason: One localized formatter change with tightly coupled tests and no useful independent ownership.
 ```

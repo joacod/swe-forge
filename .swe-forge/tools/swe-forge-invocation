@@ -15,8 +15,9 @@ Usage:
 `--raw-arguments` accepts the complete, unmodified argument string as one
 value. `--stdin` reads that same value without changing whitespace. The parser
 writes one deterministic JSON object with the normalized invocation facts
-(`input_status` is `COMPLETE`, `EMPTY`, or `INCOMPLETE`) and never chooses
-automatic topology.
+(`input_status` is `COMPLETE`, `EMPTY`, or `INCOMPLETE`). Delivery defaults to
+`PR`; `guided` explicitly selects `GUIDED`. The parser never chooses automatic
+topology.
 EOF
 }
 
@@ -108,7 +109,7 @@ parse_stream() {
       raw = substr(raw, 1, length(raw) - 1)
       requested_mode = "AUTO"
       requested_delivery = "DEFAULT"
-      delivery_mode = "GUIDED"
+      delivery_mode = "PR"
       input_status = "COMPLETE"
       parsed_ticket = ""
       consumed_count = 0
