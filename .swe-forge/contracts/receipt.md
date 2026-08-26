@@ -35,6 +35,9 @@ Pull request: <URL or not-created>
 Final status: ACCEPTED | BLOCKED | FAILED
 ```
 
+`Review attempts` and `Remote CI` are emitted for `PR` receipts; a `GUIDED`
+receipt may omit those PR-specific lines.
+
 Receipts render the latest relevant status for every planned check, not an
 undifferentiated history of attempts. Historical attempts stay in the private
 ledger. The executable gate retains the default receipt at `$STATE/receipt.md`

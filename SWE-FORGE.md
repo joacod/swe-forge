@@ -285,9 +285,11 @@ repository and evidence state before resuming.
 
 The canonical `swe-forge-state init` operation owns schema-v4 shell construction.
 Use `set-routing` for deliberate preferred/effective topology changes,
-`set-continuation` for bounded semantic continuation inputs, and
+`set-continuation` for bounded semantic continuation inputs,
 `set-delivery-checkout` and `set-receipt-ref` for their purpose-specific
-updates. These helpers validate atomic replacements and derive
+updates, `set-commit-plan` and `record-commit-step` for the minimal PR plan
+projection, `set-review` for review attempts, and `set-pull-request` after PR
+creation. These helpers validate atomic replacements and derive
 `continuation.updated_at` and the delivery projection; callers must not
 hand-construct containers, timestamps, or projections in YAML.
 

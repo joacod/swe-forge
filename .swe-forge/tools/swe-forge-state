@@ -42,21 +42,25 @@ Usage:
     --step ID --checkpoint ID --commit SHA
   swe-forge-state set-review --state FILE|DIRECTORY \
     --result PASS|CHANGES_REQUIRED [--blocked-by ID...]
+  swe-forge-state set-pull-request --state FILE|DIRECTORY --url URL
+  swe-forge-state commit-plan --state FILE|DIRECTORY
+  swe-forge-state check-commit-step --state FILE|DIRECTORY \
+    --step ID --checkpoint ID
 
 `inspect` and `resolve-active` expose the validated semantic run-state
 projection as deterministic JSON. Candidate discovery remains the caller's
 responsibility; this helper owns validation, eligibility, and ordering.
-
 `init` creates the current schema-v4 structural shell from explicit routing,
 delivery, checkout, and normalized invocation facts. Pass the parser's
 requested_mode, requested_delivery, and delivery_mode values unchanged.
 `set-routing` owns deliberate preferred/effective topology changes and their
 current rationale. `set-continuation` accepts only the bounded continuation
 surface; it generates updated_at and derives the delivery projection.
-`set-delivery-checkout` and `set-receipt-ref` own their purpose-specific
-updates. All write operations validate a temporary result before atomic
-replacement. Obsolete or unknown state must be replaced by starting a fresh
-run.
+`set-delivery-checkout`, `set-receipt-ref`, and `set-pull-request` own their
+purpose-specific updates. `set-commit-plan`, `record-commit-step`, and
+`set-review` own the minimal PR plan and review projections. All write
+operations validate a temporary result before atomic replacement. Obsolete or
+unknown state must be replaced by starting a fresh run.
 EOF
 }
 
@@ -1056,13 +1060,30 @@ state_directory_for_init() {
 
 state_tmp=
 inspect_tmp=
+review_lock=
 cleanup_state_tmp() {
   [ -z "${state_tmp:-}" ] || rm -f "$state_tmp"
 }
 cleanup_inspect_tmp() {
   [ -z "${inspect_tmp:-}" ] || rm -rf "$inspect_tmp"
 }
-trap 'status=$?; cleanup_state_tmp; cleanup_inspect_tmp; exit "$status"' 0 HUP INT TERM
+cleanup_review_lock() {
+  if [ -n "${review_lock:-}" ]; then
+    rm -f "$review_lock/pid"
+    rmdir "$review_lock" 2>/dev/null || true
+  fi
+}
+acquire_review_lock() {
+  if [ "${SWE_FORGE_REVIEW_LOCK_HELD:-false}" = true ]; then
+    return 0
+  fi
+  review_lock=$(dirname "$state_path")/review.lock
+  mkdir "$review_lock" 2>/dev/null || \
+    fail 'review state is locked by another review activity; retry after it finishes'
+  printf '%s\n' "$$" >"$review_lock/pid"
+}
+
+trap 'status=$?; cleanup_state_tmp; cleanup_inspect_tmp; cleanup_review_lock; exit "$status"' 0 HUP INT TERM
 
 init_state() {
   init_state_arg=
@@ -1526,6 +1547,7 @@ set_review() {
   [ -n "$state_arg" ] || fail '--state is required'
   case "$review_result" in PASS|CHANGES_REQUIRED) ;; *) fail "invalid review result: ${review_result:-<missing>}" ;; esac
   state_path=$(state_file "$state_arg")
+  acquire_review_lock
   validate_state "$state_path" >/dev/null
   if top_level review "$state_path" 2>/dev/null; then
     validate_review "$state_path"
@@ -1553,6 +1575,9 @@ set_review() {
     else
       top_status=repairing
     fi
+  fi
+  if [ "$review_result" = PASS ] && [ "$top_status" = repairing ]; then
+    top_status=running
   fi
   blocked_yaml=[]
   if [ -n "$blocked_values" ]; then
@@ -1842,6 +1867,92 @@ set_receipt_ref() {
   state_tmp=
   printf 'PASS: receipt reference updated: %s\n' "$state_path"
 }
+set_pull_request() {
+  state_arg=
+  url_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --url|--pr-url) [ "$#" -ge 2 ] || fail '--url requires a URL'; url_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-pull-request option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$url_arg" ] || fail '--url is required'
+  case "$url_arg" in http://*|https://*) ;; *) fail 'pull-request URL must use http:// or https://' ;; esac
+  control_chars "$url_arg"
+  state_path=$(state_file "$state_arg")
+  validate_state "$state_path" >/dev/null
+  [ "$(required_scalar delivery_mode "$state_path")" = PR ] || \
+    fail 'pull-request completion is only valid in PR mode'
+  current_status=$(required_scalar status "$state_path")
+  case "$current_status" in
+    planning|running|reviewing|repairing) ;;
+    accepted)
+      [ "$(required_scalar delivery.pull_request_ref "$state_path")" = "$url_arg" ] || \
+        fail 'pull-request completion URL does not match the recorded PR'
+      ;;
+    *) fail "pull-request completion is not valid from status: $current_status" ;;
+  esac
+  state_tmp=$state_path.tmp.$$
+  awk -v url="$url_arg" '
+    BEGIN {
+      section=""
+      status_count=0
+      checkout_status_count=0
+      commit_status_count=0
+      push_status_count=0
+      pr_status_count=0
+      pr_ref_count=0
+    }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+    }
+    /^status:/ {
+      print "status: accepted"
+      status_count++
+      next
+    }
+    section == "delivery_checkout" && $0 ~ /^  status:/ {
+      print "  status: complete"
+      checkout_status_count++
+      next
+    }
+    section == "delivery" && $0 ~ /^  commit:/ {
+      print "  commit: complete"
+      commit_status_count++
+      next
+    }
+    section == "delivery" && $0 ~ /^  push:/ {
+      print "  push: complete"
+      push_status_count++
+      next
+    }
+    section == "delivery" && $0 ~ /^  create_pull_request:/ {
+      print "  create_pull_request: complete"
+      pr_status_count++
+      next
+    }
+    section == "delivery" && $0 ~ /^  pull_request_ref:/ {
+      print "  pull_request_ref: " url
+      pr_ref_count++
+      next
+    }
+    { print }
+    END {
+      if (status_count != 1 || checkout_status_count != 1 ||
+          commit_status_count != 1 || push_status_count != 1 ||
+          pr_status_count != 1 || pr_ref_count != 1) exit 1
+    }
+  ' "$state_path" >"$state_tmp" || fail 'pull-request completion could not update current run state'
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: pull-request completion recorded: %s\n' "$state_path"
+}
+
 
 set_continuation() {
   state_arg=
@@ -1979,6 +2090,7 @@ main() {
     check-commit-step) check_commit_step "$@" ;;
     record-commit-step) record_commit_step "$@" ;;
     set-review) set_review "$@" ;;
+    set-pull-request) set_pull_request "$@" ;;
     -h|--help) usage ;;
     *) fail "unknown command: $command" ;;
   esac

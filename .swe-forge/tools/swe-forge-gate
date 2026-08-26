@@ -11,6 +11,9 @@ STATE=
 CHECKOUT=
 SCOPE_TMP=
 CHANGED_TMP=
+LEDGER_TMP=
+REVIEW_LOCK=
+REVIEW_TMP=
 TAB=$(printf '\t')
 NEWLINE='
 '
@@ -18,6 +21,12 @@ NEWLINE='
 cleanup() {
   [ -z "${SCOPE_TMP:-}" ] || rm -f "$SCOPE_TMP"
   [ -z "${CHANGED_TMP:-}" ] || rm -f "$CHANGED_TMP"
+  [ -z "${LEDGER_TMP:-}" ] || rm -f "$LEDGER_TMP"
+  [ -z "${REVIEW_TMP:-}" ] || rm -f "$REVIEW_TMP"
+  if [ -n "${REVIEW_LOCK:-}" ]; then
+    rm -f "$REVIEW_LOCK/pid"
+    rmdir "$REVIEW_LOCK" 2>/dev/null || true
+  fi
 }
 
 trap 'status=$?; cleanup; exit "$status"' 0 HUP INT TERM
@@ -176,12 +185,48 @@ commit_plan_has_step() {
   printf '%s\n' "$rows" | awk -F "$TAB" -v wanted="$wanted" '$1 == wanted { found=1 } END { exit !found }'
 }
 
+validate_checkpoint_ledger() {
+  if ! awk -F "$TAB" '
+    BEGIN { valid = 1 }
+    NF == 0 { next }
+    NF != 10 && NF != 11 { valid = 0; exit }
+    $9 != "none" && $9 != "planned" && $9 != "review-repair" { valid = 0; exit }
+    $9 == "planned" && ($10 == "" || $10 == "none") { valid = 0; exit }
+    $9 != "planned" && $10 != "none" { valid = 0; exit }
+    NF == 11 && $11 != "" && (length($11) != 40 || $11 !~ /^[0-9A-Fa-f]+$/) { valid = 0; exit }
+    END { exit !valid }
+  ' "$STATE/checkpoints.tsv"; then
+    fail "evidence state is stale or unsupported; checkpoint ledger lacks current delivery fields"
+  fi
+}
+
+acquire_review_lock() {
+  REVIEW_LOCK=$STATE/review.lock
+  mkdir "$REVIEW_LOCK" 2>/dev/null || \
+    fail "review state is locked by another review activity; retry after it finishes"
+  printf '%s\n' "$$" >"$REVIEW_LOCK/pid"
+}
+review_repair_allowed() {
+  review_status=$(run_state_nested_value review status)
+  review_attempts=$(run_state_nested_value review attempts)
+  review_ceiling=$(run_state_nested_value review retry_ceiling)
+  [ "$review_status" = changes-required ] || \
+    fail "review-repair activity requires an unresolved changes-required review"
+  case "$review_attempts:$review_ceiling" in
+    ''|*[!0-9:]*|*:*:) fail "review-repair activity has invalid review budget" ;;
+  esac
+  [ "$review_attempts" -lt "$review_ceiling" ] || \
+    fail "review-repair activity stopped at the review ceiling: $review_attempts/$review_ceiling"
+}
+
+
 
 ensure_meta_state() {
   state_meta
   [ -f "$STATE/plan.tsv" ] || : >"$STATE/plan.tsv"
   [ -f "$STATE/validations.tsv" ] || : >"$STATE/validations.tsv"
   [ -f "$STATE/checkpoints.tsv" ] || : >"$STATE/checkpoints.tsv"
+  validate_checkpoint_ledger
 }
 
 ensure_safe_state_location() {
@@ -873,6 +918,23 @@ checkpoint_field() {
   field=$2
   awk -F '\t' -v wanted="$id" -v number="$field" '$1 == wanted { print $number; exit }' "$STATE/checkpoints.tsv"
 }
+record_checkpoint_commit() {
+  checkpoint_id=$1
+  commit_sha=$2
+  LEDGER_TMP=$STATE/checkpoints.tsv.tmp.$$
+  awk -F "$TAB" -v OFS="$TAB" -v wanted="$checkpoint_id" -v commit="$commit_sha" '
+    $1 == wanted {
+      $11 = commit
+      count++
+    }
+    { print }
+    END { if (count != 1) exit 1 }
+  ' "$STATE/checkpoints.tsv" >"$LEDGER_TMP" || \
+    fail "checkpoint commit evidence could not be recorded: $checkpoint_id"
+  mv "$LEDGER_TMP" "$STATE/checkpoints.tsv"
+  LEDGER_TMP=
+}
+
 
 same_path_sets() {
   first=$1
@@ -924,7 +986,6 @@ checkpoint_run() {
     esac
   done
   [ "$scope_count" -gt 0 ] || fail "at least one --scope is required"
-  ensure_meta_state
   delivery_mode=$(delivery_mode_from_state)
   if [ "$delivery_mode" = PR ]; then
     if [ -n "$plan_step" ] && [ "$review_repair" = true ]; then
@@ -939,6 +1000,7 @@ checkpoint_run() {
     else
       [ "$(run_state_nested_value commit_plan status)" = complete ] || \
         fail "review-repair checkpoint requires a complete commit plan"
+      review_repair_allowed
       checkpoint_kind=review-repair
       plan_step=none
     fi
@@ -1073,6 +1135,7 @@ commit_slice() {
     else
       [ "$(run_state_nested_value commit_plan status)" = complete ] || \
         fail "review-repair commit requires a complete commit plan"
+      review_repair_allowed
       commit_kind=review-repair
       plan_step=none
     fi
@@ -1121,6 +1184,7 @@ commit_slice() {
   [ "$staged_fp" = "$checkpoint_fp" ] || fail "staged tree fingerprint differs from checkpoint $checkpoint_id"
   git -C "$CHECKOUT" commit -m "$message"
   new_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  record_checkpoint_commit "$checkpoint_id" "$new_head"
   if [ "$commit_kind" = planned ]; then
     "$SCRIPT_DIR/swe-forge-state" record-commit-step \
       --state "$STATE/run-state.yaml" --step "$plan_step" \
@@ -1190,28 +1254,46 @@ review_run() {
   reject_control_chars "$source"
   case "$findings" in ''|*[!0-9]*) fail "findings must be a non-negative integer" ;; esac
   case "$repaired" in ''|*[!0-9]*) fail "repaired must be a non-negative integer" ;; esac
+  blocked_display=none
+  if [ -n "$blocked_values" ]; then
+    blocked_display=
+    blocked_first=true
+    while IFS= read -r blocked_id; do
+      [ -n "$blocked_id" ] || continue
+      if [ "$blocked_first" = true ]; then
+        blocked_first=false
+      else
+        blocked_display="$blocked_display,"
+      fi
+      blocked_display="$blocked_display$blocked_id"
+    done <<EOF_BLOCKED
+$blocked_values
+EOF_BLOCKED
+  fi
+  acquire_review_lock
   ensure_meta_state
   assert_identity
   head=$(git -C "$CHECKOUT" rev-parse HEAD)
   fp=$(fingerprint_for_checkout "$CHECKOUT")
-  "$SCRIPT_DIR/swe-forge-state" set-review \
+  SWE_FORGE_REVIEW_LOCK_HELD=true "$SCRIPT_DIR/swe-forge-state" set-review \
     --state "$STATE/run-state.yaml" --result "$result" $blocked_args >/dev/null
   attempt=$(run_state_nested_value review attempts)
   ceiling=$(run_state_nested_value review retry_ceiling)
-  review_tmp=$STATE/review.env.tmp.$$
+  REVIEW_TMP=$STATE/review.env.tmp.$$
   {
     printf 'result=%s\n' "$result"
     printf 'source=%s\n' "$source"
     printf 'findings=%s\n' "$findings"
     printf 'repaired=%s\n' "$repaired"
-    printf 'blocked_by=%s\n' "${blocked_values:-none}"
+    printf 'blocked_by=%s\n' "$blocked_display"
     printf 'attempt=%s\n' "$attempt"
     printf 'retry_ceiling=%s\n' "$ceiling"
     printf 'head=%s\n' "$head"
     printf 'fingerprint=%s\n' "$fp"
     printf 'recorded_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  } >"$review_tmp"
-  mv "$review_tmp" "$STATE/review.env"
+  } >"$REVIEW_TMP"
+  mv "$REVIEW_TMP" "$STATE/review.env"
+  REVIEW_TMP=
   printf 'REVIEW: %s attempt %s/%s (%s findings, %s repaired)\n' \
     "$result" "$attempt" "$ceiling" "$findings" "$repaired"
   [ "$result" = PASS ]
@@ -1260,12 +1342,18 @@ check_commit_plan_completion() {
     checkpoint_step=$(checkpoint_field "$checkpoint_id" 10)
     checkpoint_head=$(checkpoint_field "$checkpoint_id" 3)
     checkpoint_path=$(checkpoint_field "$checkpoint_id" 5)
+    checkpoint_commit=$(checkpoint_field "$checkpoint_id" 11)
+    if [ -z "$checkpoint_commit" ]; then checkpoint_commit=$commit_sha; fi
     [ "$checkpoint_kind" = planned ] || {
       blocker "planned step $step_id does not reference a planned checkpoint"
       continue
     }
     [ "$checkpoint_step" = "$step_id" ] || {
       blocker "checkpoint $checkpoint_id is not associated with planned step $step_id"
+      continue
+    }
+    [ "$checkpoint_commit" = "$commit_sha" ] || {
+      blocker "planned step $step_id is missing matching checkpoint commit evidence"
       continue
     }
     [ -f "$STATE/$checkpoint_path" ] || {
@@ -1304,7 +1392,7 @@ check_commit_plan_completion() {
 $plan_rows
 EOF_COMMIT_PLAN
 
-  while IFS="$TAB" read -r checkpoint_id _branch _head _fp _paths _scope _recorded _checks checkpoint_kind checkpoint_step; do
+  while IFS="$TAB" read -r checkpoint_id _branch recorded_head _fp paths_file _scope _recorded _checks checkpoint_kind checkpoint_step checkpoint_commit; do
     [ -n "$checkpoint_id" ] || continue
     case "$checkpoint_kind" in
       planned)
@@ -1316,6 +1404,34 @@ EOF_COMMIT_PLAN
         ;;
       review-repair)
         [ "$checkpoint_step" = none ] || blocker "review-repair checkpoint $checkpoint_id has a planned step"
+        [ -n "$checkpoint_commit" ] || {
+          blocker "review-repair checkpoint $checkpoint_id has no materializing commit"
+          continue
+        }
+        git -C "$CHECKOUT" cat-file -e "$checkpoint_commit^{commit}" 2>/dev/null || {
+          blocker "review-repair checkpoint $checkpoint_id references a missing commit"
+          continue
+        }
+        git -C "$CHECKOUT" merge-base --is-ancestor "$checkpoint_commit" "$current_head" || {
+          blocker "review-repair checkpoint $checkpoint_id commit is not in the delivered history"
+          continue
+        }
+        repair_parent=$(git -C "$CHECKOUT" rev-parse "$checkpoint_commit^" 2>/dev/null || true)
+        [ "$repair_parent" = "$recorded_head" ] || {
+          blocker "review-repair checkpoint $checkpoint_id commit does not materialize its checkpoint"
+          continue
+        }
+        [ -f "$STATE/$paths_file" ] || {
+          blocker "review-repair checkpoint paths are missing: $checkpoint_id"
+          continue
+        }
+        repair_paths=$STATE/repair-commit-paths.$$
+        git -C "$CHECKOUT" diff-tree --root --no-commit-id --name-only --find-renames -r \
+          "$checkpoint_commit" >"$repair_paths"
+        if ! same_path_sets "$STATE/$paths_file" "$repair_paths"; then
+          blocker "review-repair checkpoint $checkpoint_id commit paths differ from its checkpoint"
+        fi
+        rm -f "$repair_paths"
         ;;
       *)
         blocker "checkpoint $checkpoint_id has no PR delivery kind"
@@ -1591,6 +1707,9 @@ receipt_run() {
     case "$PR_URL" in http://*|https://*) ;; *) fail "PR URL must use http:// or https://" ;; esac
   fi
   ensure_meta_state
+  state_delivery_mode=$(delivery_mode_from_state)
+  [ "$delivery" = "$state_delivery_mode" ] || \
+    fail "receipt delivery mode $delivery does not match run state $state_delivery_mode"
   if [ -n "$output" ]; then
     reject_control_chars "$output"
     output=$(absolute_path "$output")
@@ -1604,6 +1723,10 @@ receipt_run() {
   "$SCRIPT_DIR/swe-forge-state" set-receipt-ref \
     --state "$STATE/run-state.yaml" \
     --receipt-ref "$output" >/dev/null
+  if [ "$delivery" = PR ] && [ -n "$PR_URL" ] && [ "$final_blockers" -eq 0 ]; then
+    "$SCRIPT_DIR/swe-forge-state" set-pull-request \
+      --state "$STATE/run-state.yaml" --url "$PR_URL" >/dev/null
+  fi
   cat "$output"
   [ "$final_blockers" -eq 0 ]
 }

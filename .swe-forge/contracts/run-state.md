@@ -254,6 +254,9 @@ fields and a delivery projection matching `delivery_mode`.
   owns the update timestamp and derived delivery projection.
 - Use `swe-forge-state set-delivery-checkout` and `set-receipt-ref` for their
   purpose-specific mutations; callers do not structurally edit the YAML.
+- Use `set-commit-plan` and `record-commit-step` for the minimal PR plan
+  projection, `set-review` for canonical review attempts, and
+  `set-pull-request` after local PR evidence and URL recording.
 - A resumed run inspects the real checkout and Git state before trusting this
   snapshot.
 - `continuation` is the authoritative workflow-control snapshot; conversation
