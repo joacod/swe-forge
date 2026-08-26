@@ -3,7 +3,7 @@
 ## Mission
 
 Build an evidence-based map of the repository and any requested external
-dependencies without changing the implementation checkout.
+dependencies without changing the canonical delivery candidate.
 
 ## Default Permissions
 

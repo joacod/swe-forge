@@ -87,10 +87,12 @@ budget, and a structured result contract. Workers do not write, make delivery
 or topology decisions, pass along full ticket/history, recurse, or orchestrate
 other workers. If no native capability is available, record the safe fallback
 to root-only discovery. When multiple genuinely independent questions survive
-the assessment, launch the useful ready questions together as one small bounded
-fan-out/fan-in batch, wait at one root fan-in barrier, consume the structured
-results together, and resolve contradictions in the root. Coupled questions
-stay root-only or sequential.
+the assessment, submit the useful ready questions together as one small logical
+fan-out/fan-in batch, then wait at one root fan-in barrier. The host runtime may
+execute those ready items concurrently or sequentially; Forge does not
+prescribe an active-worker count. Consume the structured results together and
+resolve contradictions in the root. Coupled questions stay root-only or
+sequential.
 
 The full evidence-backed topology decision remains in step 6 after
 specification, architecture, and useful decomposition. Early research must not
@@ -141,9 +143,11 @@ explicit. For `GUIDED`, divide broad work into cohesive review slices. For
 `PR`, record an ordered commit plan in the working spec even in `SOLO`.
 
 Parallelize only read-only questions with non-overlapping ownership and
-satisfied dependencies. Shared architecture, contracts, schemas, lockfiles,
-or generated artifacts require root-owned foundation work first. Writable
-delegation is sequential in the one delivery checkout.
+satisfied dependencies. A logical fan-out batch does not prescribe host
+scheduling; shared architecture, contracts, schemas, lockfiles, or generated
+artifacts require root-owned foundation work first. Writable delegated results
+must be materialized into and accepted sequentially against the canonical
+delivery candidate.
 
 Before launching a worker, write transient `worker-brief-input/v1` records from
 the semantic task, current run-state facts, current routing facts, and any
@@ -217,9 +221,11 @@ shared-checkout writing uses `WRITABLE` Git/change/validation evidence; review
 uses `contracts/review.md`.
 
 The orchestrator owns acceptance. Consume only results that satisfy scope,
-checkout baseline, validation, and evidence requirements. Preserve the `GUIDED`
-checkpoint boundary and keep all writes sequential in the one delivery
-checkout.
+canonical delivery-candidate baseline, validation, and evidence requirements.
+If a host executes the worker privately, materialize its bounded change into the
+canonical delivery checkout and validate it there before acceptance or any
+dependent handoff. Preserve the `GUIDED` checkpoint boundary and keep writable
+acceptance sequential.
 
 ### 10. Verify
 

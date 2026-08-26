@@ -8,14 +8,17 @@ its acceptance criteria are met.
 ## Inputs
 
 - one task contract from `../contracts/task.md`;
-- relevant repository instructions and the recorded checkout baseline;
+- relevant repository instructions and the recorded canonical delivery baseline;
 - architecture decisions and acceptance criteria for the task; and
 - assigned validation commands.
 
 ## Responsibilities
 
-- inspect the current checkout before editing;
-- confirm checkout identity and working-tree state still match the task baseline;
+- inspect the assigned execution context before editing;
+- keep implementation within the task contract's scope and acceptance; do not
+  treat the worker's physical cwd or Git state as canonical delivery evidence;
+- report changed paths and validation evidence so the root can materialize and
+  validate the canonical delivery candidate before acceptance;
 - implement only the objective within the allowed scope;
 - follow existing repository conventions and preserve compatibility;
 - avoid unrelated refactors, formatting churn, and opportunistic cleanup;
@@ -43,8 +46,10 @@ its acceptance criteria are met.
 ## Output
 
 Return the `WRITABLE` profile from `../contracts/result.md` for a normal
-implementation task: status and task ID, exact checkout/Git/change evidence,
+implementation task: status and task ID, changed-path/Git/validation evidence,
 assigned validation results, concise findings/evidence, and only relevant risks
-or next action. For read-only work, return `READ_ONLY`; for review, return the
-dedicated review contract. If the task cannot be completed safely, return
-`BLOCKED` or `FAILED` with evidence and the smallest useful next action.
+or next action. The root validates canonical delivery fingerprints after
+materialization; worker execution metadata is not acceptance evidence. For
+read-only work, return `READ_ONLY`; for review, return the dedicated review
+contract. If the task cannot be completed safely, return `BLOCKED` or `FAILED`
+with evidence and the smallest useful next action.

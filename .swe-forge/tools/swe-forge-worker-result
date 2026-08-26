@@ -59,13 +59,13 @@ schema_all() {
       "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
       "required_sections": ["FINDINGS", "EVIDENCE"],
       "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
-      "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
+      "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH"],
       "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
     },
     "WRITABLE": {
       "contract": ".swe-forge/contracts/result.md",
       "validation": "swe-forge-worker-result validate --profile WRITABLE",
-      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
+      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH"],
       "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
       "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
       "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
@@ -99,7 +99,7 @@ schema_profile() {
   "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
   "required_sections": ["FINDINGS", "EVIDENCE"],
   "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
-  "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
+  "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH"],
   "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
 }
 EOF
@@ -112,7 +112,7 @@ EOF
   "profile": "WRITABLE",
   "contract": ".swe-forge/contracts/result.md",
   "validation": "swe-forge-worker-result validate --profile WRITABLE",
-  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT"],
+  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH"],
   "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
   "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
   "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
@@ -176,7 +176,6 @@ EOF
     "BASE_SHA": {"type": "string", "pattern": "^[0-9A-Fa-f]{40}$"},
     "HEAD_SHA": {"anyOf": [{"type": "string", "pattern": "^[0-9A-Fa-f]{40}$"}, {"type": "string", "const": "none"}]},
     "BRANCH": {"type": "string", "minLength": 1},
-    "CHECKOUT": {"type": "string", "minLength": 1},
     "FILES_CHANGED": {"type": "array", "items": {"type": "string"}, "minItems": 1},
     "GIT_STATE": {"type": "array", "items": {"type": "string"}, "minItems": 1},
     "DELIVERABLE_COMMITS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
@@ -199,7 +198,7 @@ EOF
     },
     "SCOPE_EXCEPTIONS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
   },
-  "required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION", "BASE_SHA", "HEAD_SHA", "BRANCH", "CHECKOUT", "FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"],
+  "required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION", "BASE_SHA", "HEAD_SHA", "BRANCH", "FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"],
   "additionalProperties": false
 }
 EOF
@@ -317,7 +316,6 @@ validate_result_file() {
       allowed_scalar_names["BASE_SHA"] = 1
       allowed_scalar_names["HEAD_SHA"] = 1
       allowed_scalar_names["BRANCH"] = 1
-      allowed_scalar_names["CHECKOUT"] = 1
       allowed_section_names[1] = "FINDINGS"
       allowed_section_names[2] = "EVIDENCE"
       allowed_section_names[3] = "RISKS"
@@ -397,7 +395,7 @@ validate_result_file() {
 
       if (profile == "READ_ONLY") {
         for (scalar_name in scalar) {
-          if (scalar_name == "BASE_SHA" || scalar_name == "HEAD_SHA" || scalar_name == "BRANCH" || scalar_name == "CHECKOUT") {
+          if (scalar_name == "BASE_SHA" || scalar_name == "HEAD_SHA" || scalar_name == "BRANCH") {
             fail("READ_ONLY result contains implementation field: " scalar_name)
           }
         }
@@ -410,7 +408,6 @@ validate_result_file() {
         require_scalar("BASE_SHA", "BASE_SHA")
         require_scalar("HEAD_SHA", "HEAD_SHA")
         require_scalar("BRANCH", "BRANCH")
-        require_scalar("CHECKOUT", "CHECKOUT")
         valid_sha(scalar["BASE_SHA"], "BASE_SHA")
         if (scalar["HEAD_SHA"] != "none") valid_sha(scalar["HEAD_SHA"], "HEAD_SHA")
         if (!seen_section["FILES_CHANGED"] || list_count["FILES_CHANGED"] == 0) fail("FILES_CHANGED must contain at least one item")
@@ -804,11 +801,10 @@ encode_json_input() {
         require_field("BASE_SHA")
         require_field("HEAD_SHA")
         require_field("BRANCH")
-        require_field("CHECKOUT")
+        require_text(scalar["BRANCH"], "BRANCH")
         require_text(scalar["BASE_SHA"], "BASE_SHA")
         require_text(scalar["HEAD_SHA"], "HEAD_SHA")
         require_text(scalar["BRANCH"], "BRANCH")
-        require_text(scalar["CHECKOUT"], "CHECKOUT")
         valid_sha(scalar["BASE_SHA"], "BASE_SHA")
         if (scalar["HEAD_SHA"] != "none") valid_sha(scalar["HEAD_SHA"], "HEAD_SHA")
         require_array("FILES_CHANGED")
@@ -866,7 +862,6 @@ encode_json_input() {
         emit_scalar("BASE_SHA")
         emit_scalar("HEAD_SHA")
         emit_scalar("BRANCH")
-        emit_scalar("CHECKOUT")
         emit_array("FILES_CHANGED")
         emit_array("GIT_STATE")
         emit_validation()
@@ -899,7 +894,6 @@ encode_json_input() {
         scalar_fields["BASE_SHA"] = 1
         scalar_fields["HEAD_SHA"] = 1
         scalar_fields["BRANCH"] = 1
-        scalar_fields["CHECKOUT"] = 1
         array_fields["FILES_CHANGED"] = 1
         array_fields["GIT_STATE"] = 1
         array_fields["DELIVERABLE_COMMITS"] = 1

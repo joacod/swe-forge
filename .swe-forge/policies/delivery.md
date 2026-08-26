@@ -101,10 +101,13 @@ pull request. Receipts remain private run evidence.
 
 ## One delivery boundary
 
-A normal run uses one task/delivery branch and one writable delivery checkout.
-Delegated writes happen sequentially in that checkout. There is no second
-workspace or worker delivery boundary. The root orchestrator owns final
-integration, verification, review, delivery, and cleanup.
+A normal run uses one task/delivery branch and one canonical writable delivery
+checkout. Forge owns that candidate, root acceptance, deterministic integration,
+and sequential materialization/validation of delegated writes. The host may
+execute a worker through a private worktree, sandbox, overlay, container, or
+other native mechanism; that physical environment is adapter/runtime detail, not
+a second Forge delivery boundary or run-state field. The root orchestrator owns
+final integration, verification, review, delivery, and cleanup.
 
 ## Atomic actions
 

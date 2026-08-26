@@ -79,6 +79,7 @@ require_text '"required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "E
 writable_json_schema=$TMP_ROOT/writable.json-schema
 "$result_tool" schema --profile WRITABLE --task-id writable-result-profile --format json-schema >"$writable_json_schema"
 require_text '"pattern": "^[0-9A-Fa-f]{40}$"' "$writable_json_schema"
+reject_text '"CHECKOUT"' "$writable_json_schema"
 require_text '"VALIDATION"' "$writable_json_schema"
 review_transport_schema=$TMP_ROOT/review-transport.json-schema
 "$result_tool" schema --profile REVIEW --format json-schema >"$review_transport_schema"
@@ -120,7 +121,6 @@ TASK_ID: writable-result-profile
 BASE_SHA: 1111111111111111111111111111111111111111
 HEAD_SHA: 2222222222222222222222222222222222222222
 BRANCH: refactor/result-profiles
-CHECKOUT: /tmp/result-profiles
 
 FILES_CHANGED:
 - .swe-forge/contracts/result.md
@@ -145,9 +145,17 @@ EOF_WRITABLE
 "$result_tool" validate --profile WRITABLE --task-id writable-result-profile \
   --result "$writable" >"$TMP_ROOT/writable.validation"
 require_text '"profile":"WRITABLE"' "$TMP_ROOT/writable.validation"
+obsolete_checkout=$TMP_ROOT/obsolete-checkout.result
+{
+  printf '%s\n' 'CHECKOUT: /tmp/worker'
+  cat "$writable"
+} >"$obsolete_checkout"
+expect_failure 'obsolete worker checkout metadata' \
+  "$result_tool" validate --profile WRITABLE --task-id writable-result-profile \
+  --result "$obsolete_checkout"
 writable_structured=$TMP_ROOT/writable.json
 cat >"$writable_structured" <<'EOF_WRITABLE_JSON'
-{"RESULT_PROFILE":"WRITABLE","STATUS":"DONE","TASK_ID":"writable-result-profile","BASE_SHA":"1111111111111111111111111111111111111111","HEAD_SHA":"2222222222222222222222222222222222222222","BRANCH":"refactor/result-profiles","CHECKOUT":"/tmp/result-profiles","FILES_CHANGED":[".swe-forge/contracts/result.md"],"GIT_STATE":["clean"],"DELIVERABLE_COMMITS":null,"VALIDATION":[{"command":"scripts/test-swe-forge-results","requirement":"required","condition":"always","applies":true,"result":"passed","evidence":"focused profile fixture"}],"SCOPE_EXCEPTIONS":null,"FINDINGS":["The writable structured bridge returned the changed path."],"EVIDENCE":["focused structured-result fixture"],"RISKS":null,"RECOMMENDED_ACTION":null}
+{"RESULT_PROFILE":"WRITABLE","STATUS":"DONE","TASK_ID":"writable-result-profile","BASE_SHA":"1111111111111111111111111111111111111111","HEAD_SHA":"2222222222222222222222222222222222222222","BRANCH":"refactor/result-profiles","FILES_CHANGED":[".swe-forge/contracts/result.md"],"GIT_STATE":["clean"],"DELIVERABLE_COMMITS":null,"VALIDATION":[{"command":"scripts/test-swe-forge-results","requirement":"required","condition":"always","applies":true,"result":"passed","evidence":"focused profile fixture"}],"SCOPE_EXCEPTIONS":null,"FINDINGS":["The writable structured bridge returned the changed path."],"EVIDENCE":["focused structured-result fixture"],"RISKS":null,"RECOMMENDED_ACTION":null}
 EOF_WRITABLE_JSON
 "$result_tool" encode --profile WRITABLE --task-id writable-result-profile \
   --input "$writable_structured" >"$TMP_ROOT/writable.encoded"

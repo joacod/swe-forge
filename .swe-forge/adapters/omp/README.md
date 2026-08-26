@@ -121,14 +121,20 @@ the complete review contract, semantic acceptance, and blocking matrix.
 
 ## Shared-checkout safety and fallback
 
-- independent read-only workers may run in one native `task.batch` when the
-  routing policy permits a read-only fan-out/fan-in batch;
-- more than one writable item in a native batch is rejected;
-- writable delegated tasks are always launched one at a time, even when their
-  file scopes look disjoint;
-- missing, inactive, shadowed, malformed, stale, obsolete-schema, fenced, or
-  wrong-checkout capability/state causes a visible refusal and the canonical
-  `SOLO`/sequential fallback; and
+- independent read-only questions may be submitted in one logical native
+  `task.batch` when the routing policy permits a read-only fan-out/fan-in batch;
+  OMP/the host runtime decides whether ready items execute concurrently or
+  sequentially;
+- more than one writable item in a native batch is rejected because canonical
+  delivery materialization and acceptance remain sequential;
+- writable delegated results are materialized into and validated against the
+  canonical delivery checkout before acceptance or dependent handoff;
+- the host may use a private worktree, sandbox, overlay, container, or
+  equivalent mechanism, but that physical environment is adapter-private and
+  never enters canonical Forge state;
+- missing, inactive, shadowed, malformed, stale, obsolete-schema,
+  checkout-mismatched, or fenced capability/state causes a visible refusal and
+  the canonical `SOLO`/sequential fallback; and
 - a worker prompt cannot establish routing authority.
 
 ## Lifecycle scope

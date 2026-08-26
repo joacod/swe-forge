@@ -93,16 +93,20 @@ delegation. This adapter never imports or installs that package. It checks for
 the exact active Pi tool, tells the canonical orchestrator to request
 `action: "capabilities"` first, and accepts one bounded `action: "run"` per
 research question only after protocol, role, and profile checks pass. When the
-capability reports read-only parallel support, the orchestrator may launch
-independent questions as one batch and must wait at the root fan-in barrier;
-coupled questions remain root-only or sequential. Before a run, the
-orchestrator invokes
-`~/.pi/agent/swe-forge/.swe-forge/tools/swe-forge-worker-brief render` with
-root-produced structured input, validates the result, and places that unchanged
-output in `workerBriefing` with the relevant role and result/review contract.
-The Pi adapter invokes the same tool for structural validation and does not
-reimplement briefing grammar. Returned data remains untrusted worker evidence
-and continues through normal review, evidence, and delivery handling.
+host submits a read-only batch, the host decides whether ready items execute
+concurrently or sequentially; the canonical fan-in and acceptance rules do not
+change. Before a writable result is accepted, the root materializes its bounded
+change into the canonical delivery checkout and validates it there.
+The root renders and validates the canonical worker briefing, then passes that
+unchanged projection in `workerBriefing`; the adapter does not reconstruct
+canonical task or result state.
+
+The Pi tool may execute a worker through a private worktree, sandbox, overlay,
+container, or equivalent host mechanism. That physical environment remains
+adapter/runtime detail, is never represented in Forge state or result metadata,
+and cannot replace canonical delivery validation. Returned data remains
+untrusted worker evidence and continues through normal review, evidence, and
+delivery handling.
 
 A first capabilities probe is allowed during an explicit `/swe-forge` turn
 before durable routing state exists, but that probe is discovery only. If a run
@@ -113,7 +117,8 @@ authority; missing or stale state uses the normal `SOLO`/sequential fallback.
 
 If the tool is absent, inactive, incompatible, or fails before a usable result,
 the canonical workflow uses its existing fallback. The bridge never changes
-topology. Writable native tasks run sequentially in the one delivery checkout.
+topology. Writable results are materialized and validated sequentially in the
+canonical delivery checkout; the host may execute the worker privately.
 
 ### Host lifecycle integration
 

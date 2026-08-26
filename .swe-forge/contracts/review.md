@@ -15,8 +15,8 @@ scope:
   topology: SOLO | SUBAGENTS
   delivery_mode: GUIDED | PR
   delivery_checkout:
-    branch: <delivery branch or none>
-    path: <sole writable checkout or none>
+    branch: <canonical delivery branch or none>
+    path: <canonical delivery checkout or none>
 
 review_focus:
   goal: <single sentence describing what this review must establish>

@@ -58,16 +58,18 @@ follow a real dependency sequentially when separate delegation is useful. If
 the native capability cannot launch the batch safely, fall back without
 claiming parallel execution.
 
-## Worker Limits
+## Delegation fan-out and runtime scheduling
 
-- default to two to four active workers;
-- use one worker for a single bounded implementation task;
-- keep the reviewer independent from the implementer when review is required;
-- invoke security and performance specialists only for relevant surfaces; and
-- do not let workers recursively spawn workers unless a task authorizes it.
+Keep semantic fan-out small, bounded, independently evaluable, and justified
+by coordination relief. The orchestrator decides which tasks exist and which
+dependency waves are ready; it does not prescribe an exact number of active
+workers, queue slots, or simultaneous executions. The host runtime may schedule
+ready tasks concurrently or sequentially.
 
-The orchestrator may lower the limit for context, cost, or repository reasons.
-Any higher limit needs a specific reason and a result-consumption plan.
+Use one worker for a single bounded implementation task, keep the reviewer
+independent when review is required, invoke security and performance
+specialists only for relevant surfaces, and do not let workers recursively
+spawn workers unless a task authorizes it.
 
 ## Task Creation
 
@@ -79,13 +81,13 @@ contract must specify:
 - allowed and forbidden scope;
 - observable acceptance criteria;
 - assigned validation;
-- delivery-checkout baseline and expected result;
+- canonical delivery-candidate baseline and expected result;
 - per-action authorization with user-message provenance; and
 - recursive delegation disabled by default or explicitly bounded.
 
 Workers must request a contract update before expanding scope. Every writing
-task owns a non-overlapping path or symbol set and runs sequentially in the
-single delivery checkout.
+task owns a non-overlapping path or symbol set, and its accepted result is
+materialized into the canonical delivery candidate sequentially.
 
 ## Dependency Waves
 
@@ -113,8 +115,11 @@ make the workflow look more complex.
 ## Worker Runtime
 
 Worker execution uses the effective runtime chosen by the active harness or
-orchestration environment. SWE Forge does not require workers to inherit the
-root execution.
+orchestration environment. SWE Forge does not require a worker process to run
+in the canonical delivery checkout. If the host uses a private worktree,
+sandbox, overlay, container, or equivalent mechanism, the bounded result must
+be materialized into the canonical delivery candidate and validated there
+before the root accepts it or supplies it to dependent work.
 
 ## Worker Briefing Projection
 
@@ -156,7 +161,8 @@ discovery, or spawn descendants by default.
 shapes. The canonical worker-brief renderer applies the profile map:
 
 - read-only research or analysis uses `READ_ONLY`;
-- bounded shared-checkout writing uses `WRITABLE`; and
+- bounded writing whose result is materialized into the canonical delivery
+  candidate uses `WRITABLE`; and
 - independent review uses `../contracts/review.md`, not an implementation result
   profile.
 
@@ -169,9 +175,9 @@ mechanism.
 Consume every worker result using the selected canonical contract. For
 `READ_ONLY`, check status/task identity, concise findings, precise evidence, and
 only relevant risks or recommended action. For `WRITABLE`, additionally check
-checkout identity, scope, Git/change evidence, assigned validation, and
-blockers. For `REVIEW`, apply the review contract's acceptance check and
-blocking matrix.
+canonical delivery identity/fingerprint, scope, Git/change evidence, assigned
+validation, and blockers. For `REVIEW`, apply the review contract's acceptance
+check and blocking matrix.
 
 Incomplete, ambiguous, or profile-mismatched results are `BLOCKED` until
 clarified, not silently normalized with empty Git or delivery sections.
