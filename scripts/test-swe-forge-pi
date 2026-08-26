@@ -74,8 +74,6 @@ workflow_version: 1
 schema_version: 4
 run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
 status: ${options.status ?? "running"}
-requested_mode: AUTO
-requested_delivery: PR
 delivery_mode: PR
 reason: fixture
 fallback_used: no

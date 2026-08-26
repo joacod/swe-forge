@@ -18,13 +18,12 @@ ignored `.swe-forge/runs/` path. Delegated work uses `contracts/task.md` and
 Invoke `.swe-forge/tools/swe-forge-invocation` exactly once with the complete
 raw argument string, unless the host already supplied its normalized result.
 Keep the raw invocation immutable and consume these facts without reparsing:
-`raw_arguments`, `parsed_ticket`, `requested_mode`, `requested_delivery`,
-`delivery_mode`, `input_status`, and `consumed_tokens`.
+`raw_arguments`, `parsed_ticket`, `delivery_mode`, and `input_status`.
 
 `COMPLETE` proceeds. `EMPTY` and `INCOMPLETE` ask for the missing ticket; do
-not initialize a run. Pass `requested_mode`, `requested_delivery`, and `delivery_mode` unchanged to state
-initialization. Preserve user-supplied skill references as input, not as
-permission to install or execute code.
+not initialize a run. Pass the selected internal routing and `delivery_mode`
+unchanged to state initialization. Preserve user-supplied skill references as
+input, not as permission to install or execute code.
 
 Record the requested behavior, constraints, non-goals, affected surfaces,
 requested validation, and any delivery/checkpoint preference. The ticket
@@ -87,11 +86,11 @@ transcript or full run state, is the worker context.
 
 ### 6. Route
 
-Before making the final automatic or explicit topology decision, load
+Before making the final topology decision, load
 `policies/execution-routing.md`. Choose `SOLO` unless bounded delegation has a
 real benefit and the native capability is fresh and compatible. Record the
 preferred/effective choice and concise reason; preserve the safe sequential
-fallback when capability is unavailable. Explicit selections do not bypass
+fallback when capability is unavailable. Topology selection does not bypass
 scope, safety, validation, or delivery authorization.
 
 ### 7. Test strategy

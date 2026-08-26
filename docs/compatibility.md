@@ -49,7 +49,7 @@ evidence currently recorded is:
 | --- | --- | --- |
 | Pi | Yes | Pi has the strongest current maintainer validation evidence; 0.84.2 is the observed version. |
 | OpenCode | Yes | OpenCode has prior successful maintainer usage; 1.18.16 is the observed version. Its evidence does not impose parity requirements on other adapters. |
-| OMP | Yes | OMP 18.0.4 was exercised through the normal automatic `/swe-forge` path. Canonical AUTO routing selected shared-checkout `SUBAGENTS`; two native read-only workers returned strict structured results, a temporary writable worker and sequential-writer guard were exercised, and capability-unavailable fallback was observed. The adapter remains Experimental. |
+| OMP | Yes | OMP 18.0.4 was exercised through the normal automatic `/swe-forge` path. Automatic routing selected shared-checkout `SUBAGENTS`; two native read-only workers returned strict structured results, a temporary writable worker and sequential-writer guard were exercised, and capability-unavailable fallback was observed. The adapter remains Experimental. |
 | Claude Code | No | The maintainer has not actively exercised Claude Code. Projection/fixture validation must not be described as behavioral validation. |
 | Codex | No | Not installed or exercised in the validation environment. |
 | Cursor | No | Not installed or exercised in the validation environment. |
@@ -73,7 +73,7 @@ support-tier commitment:
 
 | Capability | Result | Boundary |
 | --- | --- | --- |
-| Native shared-checkout `SUBAGENTS` | Proven | AUTO state recorded `requested_mode: AUTO`, `routing.current: SUBAGENTS`, and native capability evidence. OMP emitted native task preparation and validation lifecycle records. |
+| Native shared-checkout `SUBAGENTS` | Proven | Automatic routing recorded `routing.preferred: SUBAGENTS` and `routing.current: SUBAGENTS`, along with native capability evidence. OMP emitted native task preparation and validation lifecycle records. |
 | Canonical worker briefs | Proven | The two-item read-only batch and the single writable worker used validated `worker_briefing/v1` projections; assignments remained bounded. |
 | Strict structured results | Proven | OMP returned caller-sourced strict structured data and the adapter recorded canonical `worker-result/v1` validation for every result. |
 | Read-only fan-out/fan-in | Proven | Two real workers completed in one native batch; root consumption remained centralized. |

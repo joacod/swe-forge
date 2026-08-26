@@ -17,10 +17,10 @@ harness validation.
 - Operating system:
 - SWE Forge version or commit:
 - Repository type or stack:
-- Raw invocation (including mode tokens):
+- Raw invocation (including delivery modifier):
 - Ticket size: small / medium / large
-- Requested topology: AUTO / SOLO / SUBAGENTS
-- Selected topology: SOLO / SUBAGENTS / unknown
+- Preferred topology: SOLO / SUBAGENTS / unknown
+- Effective topology: SOLO / SUBAGENTS / unknown
 - Native subagent capability, if used: available / unavailable / unknown
 - Routing fallback or revision, if any:
 - Delivery mode: GUIDED / PR

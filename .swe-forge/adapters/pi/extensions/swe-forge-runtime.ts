@@ -20,11 +20,8 @@ const SUBAGENT_CAPABILITY_MARKER = "[SWE-FORGE OPTIONAL SUBAGENT CAPABILITY]";
 interface NormalizedInvocation {
 	raw_arguments: string;
 	parsed_ticket: string;
-	requested_mode: "AUTO" | "SOLO" | "SUBAGENTS";
-	requested_delivery: "DEFAULT" | "GUIDED" | "PR";
 	delivery_mode: "GUIDED" | "PR";
 	input_status: "COMPLETE" | "EMPTY" | "INCOMPLETE";
-	consumed_tokens: string[];
 }
 
 /**
@@ -416,29 +413,19 @@ function normalizedInvocation(value: unknown, rawArguments: string): NormalizedI
 	if (!isRecord(value) || value.raw_arguments !== rawArguments || typeof value.parsed_ticket !== "string") {
 		return undefined;
 	}
-	const requestedMode = value.requested_mode;
-	const requestedDelivery = value.requested_delivery;
 	const deliveryMode = value.delivery_mode;
 	const inputStatus = value.input_status;
-	const consumedTokens = value.consumed_tokens;
 	if (
-		(requestedMode !== "AUTO" && requestedMode !== "SOLO" && requestedMode !== "SUBAGENTS") ||
-		(requestedDelivery !== "DEFAULT" && requestedDelivery !== "GUIDED" && requestedDelivery !== "PR") ||
 		(deliveryMode !== "GUIDED" && deliveryMode !== "PR") ||
-		(inputStatus !== "COMPLETE" && inputStatus !== "EMPTY" && inputStatus !== "INCOMPLETE") ||
-		!Array.isArray(consumedTokens) ||
-		!consumedTokens.every((token) => typeof token === "string")
+		(inputStatus !== "COMPLETE" && inputStatus !== "EMPTY" && inputStatus !== "INCOMPLETE")
 	) {
 		return undefined;
 	}
 	return {
 		raw_arguments: rawArguments,
 		parsed_ticket: value.parsed_ticket,
-		requested_mode: requestedMode,
-		requested_delivery: requestedDelivery,
 		delivery_mode: deliveryMode,
 		input_status: inputStatus,
-		consumed_tokens: [...consumedTokens],
 	};
 }
 
@@ -459,7 +446,7 @@ function invocationFactsPrompt(invocation: NormalizedInvocation): string {
 	return [
 		NORMALIZED_INVOCATION_MARKER,
 		JSON.stringify(invocation),
-		"The shared parser produced these invocation facts. Do not reinterpret command syntax; use requested_mode and requested_delivery as requests, and make automatic topology decisions from the software task and canonical policy.",
+		"The shared parser produced these invocation facts. Use delivery_mode as the delivery intent; choose topology after inspecting the software task and repository under canonical policy.",
 	].join("\n");
 }
 

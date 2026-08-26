@@ -7,6 +7,8 @@ change between alpha releases.
 
 ## [Unreleased]
 
+- Public invocation now accepts a ticket with optional `guided` delivery intent;
+  topology is selected internally and PR delivery remains the default.
 - Routing now defaults to `SOLO` and records only the preferred and effective
   topology, concise decision evidence, and safe native-capability fallback;
   bounded `SUBAGENTS` work remains sequential in one checkout.

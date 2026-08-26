@@ -6,9 +6,9 @@ Invocation:
 /swe-forge add-health-check
 ```
 
-The default is `PR` delivery with automatic topology; `/swe-forge pr ...` is
-an explicit alias. The root records the raw invocation, derives observable
-acceptance, and keeps the working spec temporary:
+The default is `PR` delivery with automatic topology. The root records the raw
+invocation, derives observable acceptance, and keeps the working spec
+temporary:
 
 ```yaml
 goal: Add a health-check endpoint.
