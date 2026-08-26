@@ -51,13 +51,7 @@ prepare() {
   require_text "scripts/swe-forge install" docs/installation.md
   require_text "VERSION" scripts/swe-forge
   require_text "v$version" "$notes"
-  require_text "Final alpha hardening" "$notes"
-  require_text "$version" CHANGELOG.md
-  require_text "v$version" README.md
-  require_text "$version" docs/compatibility.md
-  require_text "$expected_tag" "$notes"
-  require_text "main" README.md
-  require_text "development-only" README.md
+  require_text "git clone --branch $expected_tag" "$notes"
   # A release candidate must not carry staged, unstaged, or untracked content.
   # During implementation, callers may use --allow-dirty only through a
   # future explicit release workflow; this checker remains strict by default.

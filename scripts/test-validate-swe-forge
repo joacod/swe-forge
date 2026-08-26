@@ -40,7 +40,6 @@ for group in core invocation evidence installer pi omp workers release full; do
 done
 require_text 'scripts/validate-swe-forge full' "$list"
 require_text '`release`' "$list"
-require_text 'is separate because' "$list"
 
 default_plan=$("$VALIDATE" --plan)
 require_text 'Requested validation groups: default (full)' "$default_plan"

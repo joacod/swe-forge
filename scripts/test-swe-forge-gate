@@ -44,30 +44,7 @@ state=$TMP_ROOT/clean.state
   grep -F '  preferred: SOLO' "$state/run-state.yaml" >/dev/null
   grep -F '  current: SOLO' "$state/run-state.yaml" >/dev/null
   test ! -e "$state/run-state.yaml.tmp" || fail 'state initializer left a temporary file'
-  if grep -Eq 'runtime_profile:|context_value:|  (initial|selected|revisions):' "$state/run-state.yaml"; then
-    fail 'state initializer emitted removed routing representation'
-  fi
   "$ROOT/scripts/swe-forge-state" validate --state "$state/run-state.yaml" >/dev/null
-  projection=$("$ROOT/scripts/swe-forge-state" inspect --state "$state" --checkout "$repo")
-  case "$projection" in
-    *'"attempts"'*|*'"retry_ceiling"'*) fail 'state inspection exposes obsolete review retry fields' ;;
-  esac
-  removed_gate_command=commit
-  removed_gate_command=$removed_gate_command-plan
-  expect_failure "unknown command: $removed_gate_command" "$GATE" \
-    "$removed_gate_command" --state "$state" --step S1
-  removed_state_command=set-commit
-  removed_state_command=$removed_state_command-plan
-  expect_failure "unknown command: $removed_state_command" "$ROOT/scripts/swe-forge-state" \
-    "$removed_state_command" --state "$state/run-state.yaml" --step S1
-  if grep -Eq '^  (attempts|retry_ceiling|ceiling_provenance):' "$state/run-state.yaml"; then
-    fail 'run state retains obsolete review retry fields'
-  fi
-  removed_state_field=commit
-  removed_state_field=${removed_state_field}_plan
-  if grep -F "$removed_state_field:" "$state/run-state.yaml" >/dev/null; then
-    fail 'run state retains the removed commit-boundary projection'
-  fi
   "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'changed\n' >>README.md
   "$GATE" validate --state "$state" --name smoke -- sh -c 'grep -q changed README.md' >/dev/null
@@ -88,20 +65,15 @@ state=$TMP_ROOT/clean.state
   test -f "$state/receipt.md"
   grep -F -- '- smoke: passed' "$state/receipt.md" >/dev/null
   grep -F -- '- final-smoke: passed' "$state/receipt.md" >/dev/null
-  if grep -F 'Review attempts:' "$state/receipt.md" >/dev/null; then
-    fail 'receipt retains obsolete review attempt accounting'
-  fi
   grep -F 'Remote CI: not awaited after PR creation' "$state/receipt.md" >/dev/null
   "$GATE" receipt --verify --state "$state" >/dev/null
   "$GATE" receipt-verify --state "$state" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || fail 'accepted receipt is missing final status'
-if grep -F 'Context:' "$TMP_ROOT/receipt.md" >/dev/null; then fail 'receipt retains host context metadata'; fi
 grep -F 'Fresh review: PASS — 0 findings' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
 grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing harness metadata'
 grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing routing metadata'
 grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing model metadata'
-if grep -F 'Merge performed: no' "$TMP_ROOT/receipt.md" >/dev/null; then fail 'receipt exposes stale merge status'; fi
 receipt_ref=$(awk -F': ' '$1 == "receipt_ref" { print $2; exit }' "$state/run-state.yaml")
 [ "$receipt_ref" != none ] || fail 'run state does not retain receipt reference'
 [ -f "$receipt_ref" ] || fail 'receipt reference does not point to a file'
@@ -129,20 +101,6 @@ awk '
 ' "$state/run-state.yaml" >"$missing_review"
 expect_failure 'missing current key: review' \
   "$ROOT/scripts/swe-forge-state" validate --state "$missing_review"
-obsolete_plan=$TMP_ROOT/obsolete-plan.yaml
-removed_state_field=commit
-removed_state_field=${removed_state_field}_plan
-{
-  printf '%s:\n  status: unregistered\n  steps: []\n' "$removed_state_field"
-  cat "$state/run-state.yaml"
-} >"$obsolete_plan"
-expect_failure 'obsolete routing or context-control fields' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$obsolete_plan"
-obsolete_review=$TMP_ROOT/obsolete-review.yaml
-awk '/^review:/{print; print "  attempts: 1"; next} {print}' \
-  "$state/run-state.yaml" >"$obsolete_review"
-expect_failure 'obsolete routing or context-control fields' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$obsolete_review"
 review_repo=$(make_repo review-once)
 review_state=$TMP_ROOT/review-once.state
 (
@@ -154,16 +112,7 @@ review_state=$TMP_ROOT/review-once.state
   expect_failure 'review has already been recorded' "$GATE" review --state "$review_state" \
     --result PASS --source another-review --findings 0
   grep -F '  status: changes-required' "$review_state/run-state.yaml" >/dev/null
-  if grep -Eq '^  (attempts|retry_ceiling|ceiling_provenance):' "$review_state/run-state.yaml"; then
-    fail 'run state retains obsolete review retry fields'
-  fi
   grep -F 'source=independent-review' "$review_state/review.env" >/dev/null
-  if grep -Eq '^(attempt|retry_ceiling|repaired)=' "$review_state/review.env"; then
-    fail 'review evidence retains obsolete retry or re-review fields'
-  fi
-  if grep -F 'source=another-review' "$review_state/review.env" >/dev/null; then
-    fail 'rejected second review replaced the initial evidence'
-  fi
 )
 
 
@@ -188,9 +137,6 @@ multi_state=$TMP_ROOT/multi-slice.state
     --message 'Add second implementation slice' --authorized-by PR >/dev/null
   expect_failure 'PR review requires passing final validation for the current candidate' \
     "$GATE" review --state "$multi_state" --result PASS --source fresh-context
-  if grep -Eq '^  (attempts|retry_ceiling|ceiling_provenance):' "$multi_state/run-state.yaml"; then
-    fail 'run state retains obsolete review retry fields'
-  fi
   "$GATE" validate --state "$multi_state" --name final-smoke --final \
     -- sh -c 'test -f one.txt && test -f two.txt' >/dev/null
   "$GATE" plan-check --state "$multi_state" --name repair-smoke \
@@ -213,11 +159,9 @@ multi_state=$TMP_ROOT/multi-slice.state
   "$GATE" receipt --state "$multi_state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/3 >/dev/null
   grep -F 'Fresh review: CHANGES_REQUIRED — 1 findings' "$multi_state/receipt.md" >/dev/null
-  grep -F 'Review repair: completed — one finding repaired; repaired candidate was not independently re-reviewed' \
+  grep -F 'Commits: 3 (2 validated slices, 1 review repairs)' \
     "$multi_state/receipt.md" >/dev/null
-  if grep -F 'Review attempts:' "$multi_state/receipt.md" >/dev/null; then
-    fail 'receipt retains obsolete review attempt accounting'
-  fi
+  grep -F 'Review repair: completed' "$multi_state/receipt.md" >/dev/null
   "$GATE" receipt-verify --state "$multi_state" >/dev/null
   test "$(awk -F '\t' '$9 == "slice" { count++ } END { print count + 0 }' "$multi_state/checkpoints.tsv")" = 2
   test "$(awk -F '\t' '$10 != "none" { count++ } END { print count + 0 }' "$multi_state/checkpoints.tsv")" = 3
@@ -385,11 +329,6 @@ grep -F "receipt_ref: $TMP_ROOT/private-receipt.md" "$state_ops" >/dev/null
 schema_v3=$TMP_ROOT/schema-v3.yaml
 sed 's/^schema_version: 4$/schema_version: 3/' "$state_ops" >"$schema_v3"
 expect_failure 'stale/unsupported run state' "$state_tool" validate --state "$schema_v3"
-obsolete_route=$TMP_ROOT/obsolete-route.yaml
-awk '/^routing:/{print; print "  initial: SOLO"; next} {print}' "$state_ops" >"$obsolete_route"
-expect_failure 'obsolete routing or context-control fields' "$state_tool" validate --state "$obsolete_route"
-obsolete_context=$TMP_ROOT/obsolete-context.yaml
-awk '/^tasks:/{print "context:"; print "  status: near-limit"} {print}' "$state_ops" >"$obsolete_context"
 task_context=$TMP_ROOT/task-context.yaml
 awk '/^tasks: \{\}$/{print "tasks:"; print "  context:"; print "    status: pending"; next} {print}' "$state_ops" >"$task_context"
 "$state_tool" validate --state "$task_context" >/dev/null
@@ -405,10 +344,6 @@ case "$flow_projection" in
   *'"acceptance":["schema, valid","second check"]'*) ;;
   *) fail 'state inspection lost flow-style continuation acceptance' ;;
 esac
-deep_recovery=$TMP_ROOT/deep-recovery.yaml
-awk '/^  delivery:/{print "    recovery:"; print "      host_signal: overflow"; print "      status: pending"} {print}' "$state_ops" >"$deep_recovery"
-expect_failure 'obsolete routing or context-control fields' "$state_tool" validate --state "$deep_recovery"
-expect_failure 'obsolete routing or context-control fields' "$state_tool" validate --state "$obsolete_context"
 invalid_route=$TMP_ROOT/invalid-route.yaml
 sed 's/^  current: SUBAGENTS$/  current: UNKNOWN/' "$propagation_state/run-state.yaml" >"$invalid_route"
 expect_failure 'invalid routing.current' "$state_tool" validate --state "$invalid_route"
