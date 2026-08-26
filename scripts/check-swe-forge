@@ -105,13 +105,19 @@ done
 require_text 'fetch-depth: 0' .github/workflows/ci.yml
 require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
 require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
-require_text './scripts/validate-swe-forge' .github/workflows/ci.yml
+require_text './scripts/validate-swe-forge core invocation evidence installer workers' .github/workflows/ci.yml
+require_text './scripts/validate-swe-forge pi' .github/workflows/ci.yml
+require_text './scripts/validate-swe-forge omp' .github/workflows/ci.yml
+require_text './scripts/validate-swe-forge evidence installer' .github/workflows/ci.yml
+require_text './scripts/validate-swe-forge full' .github/workflows/ci.yml
+require_text './scripts/validate-swe-forge full release' .github/workflows/ci.yml
+require_text 'pr-validation:' .github/workflows/ci.yml
+require_text 'main-validation:' .github/workflows/ci.yml
 require_text 'pi-runtime:' .github/workflows/ci.yml
 require_text 'omp-runtime:' .github/workflows/ci.yml
+require_text 'macos-portability:' .github/workflows/ci.yml
+require_text 'release-validation:' .github/workflows/ci.yml
 require_text 'node-version: 22.19.0' .github/workflows/ci.yml
-require_text 'scripts/test-swe-forge-omp' .github/workflows/ci.yml
-require_text 'scripts/test-swe-forge-briefing' .github/workflows/ci.yml
-require_text 'scripts/test-swe-forge-results' .github/workflows/ci.yml
 validate_registry
 
 for role in orchestrator researcher architect implementer reviewer debugger test-engineer \

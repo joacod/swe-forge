@@ -1,15 +1,24 @@
 name: CI
 
-# Automatic CI is temporarily disabled while GitHub Actions is unreliable.
-# Restore the push and pull_request triggers when service health returns.
+# Feature branches are covered by pull_request only; push CI is reserved for
+# the integrated main branch and versioned release tags.
 on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  checks:
+  pr-validation:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -18,34 +27,17 @@ jobs:
           # The formatting check compares commits, not the clean checkout.
           fetch-depth: 0
 
-      - name: Run validation batch
-        run: ./scripts/validate-swe-forge
+      - name: Run PR validation
+        run: ./scripts/validate-swe-forge core invocation evidence installer workers
 
       - name: Check diff formatting
         env:
-          EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
-        run: |
-          set -eu
-          zero_sha=0000000000000000000000000000000000000000
-          if [ "$EVENT_NAME" = pull_request ]; then
-            # GITHUB_SHA is the tested pull-request merge revision.
-            git diff --check "$BASE_SHA...$CURRENT_SHA"
-          elif [ "$BEFORE_SHA" = "$zero_sha" ]; then
-            # A newly-created branch has no push range; check its pushed commit.
-            if git rev-parse "$CURRENT_SHA^" >/dev/null 2>&1; then
-              git diff --check "$CURRENT_SHA^..$CURRENT_SHA"
-            else
-              empty_tree=$(git mktree </dev/null)
-              git diff --check "$empty_tree" "$CURRENT_SHA"
-            fi
-          else
-            git diff --check "$BEFORE_SHA..$CURRENT_SHA"
-          fi
+        run: git diff --check "$BASE_SHA...$CURRENT_SHA"
 
   pi-runtime:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -59,9 +51,10 @@ jobs:
       - name: Run Pi runtime fixture
         env:
           SWE_FORGE_PI_CI: "1"
-        run: ./scripts/test-swe-forge-pi
+        run: ./scripts/validate-swe-forge pi
 
   omp-runtime:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -75,46 +68,94 @@ jobs:
       - name: Run OMP adapter runtime fixture
         env:
           SWE_FORGE_OMP_CI: "1"
-        run: ./scripts/test-swe-forge-omp
+        run: ./scripts/validate-swe-forge omp
 
-  macos-core:
+  # These checks intentionally overlap Linux validation: the question here is
+  # whether shell, date/stat, and filesystem behavior also works on macOS.
+  macos-portability:
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) || github.event_name == 'workflow_dispatch' }}
     runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Check POSIX shell syntax
+        run: |
+          sh -n \
+            scripts/lib/registry.sh \
+            scripts/swe-forge \
+            scripts/check-swe-forge \
+            scripts/test-swe-forge \
+            scripts/validate-swe-forge \
+            scripts/test-validate-swe-forge \
+            scripts/swe-forge-gate \
+            scripts/test-swe-forge-gate \
+            scripts/test-swe-forge-pi \
+            scripts/test-swe-forge-omp \
+            scripts/test-swe-forge-invocation \
+            scripts/test-swe-forge-briefing \
+            scripts/test-swe-forge-results \
+            scripts/check-swe-forge-boundary \
+            scripts/test-swe-forge-boundary \
+            scripts/swe-forge-state \
+            scripts/swe-forge-invocation \
+            scripts/check-release \
+            .swe-forge/tools/swe-forge-gate \
+            .swe-forge/tools/swe-forge-state \
+            .swe-forge/tools/swe-forge-invocation \
+            .swe-forge/tools/swe-forge-worker-brief \
+            .swe-forge/tools/swe-forge-worker-result
+
+      - name: Run state and installer portability fixtures
+        run: ./scripts/validate-swe-forge evidence installer
+
+  main-validation:
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Check shell syntax
-        run: sh -n scripts/lib/registry.sh scripts/swe-forge scripts/check-swe-forge scripts/test-swe-forge scripts/validate-swe-forge scripts/test-swe-forge-gate scripts/test-swe-forge-invocation scripts/swe-forge-gate scripts/swe-forge-state scripts/swe-forge-invocation scripts/check-swe-forge-boundary scripts/test-swe-forge-boundary scripts/test-swe-forge-pi scripts/test-swe-forge-omp scripts/test-swe-forge-briefing scripts/test-swe-forge-results .swe-forge/tools/swe-forge-gate .swe-forge/tools/swe-forge-state .swe-forge/tools/swe-forge-invocation .swe-forge/tools/swe-forge-worker-brief .swe-forge/tools/swe-forge-worker-result
+      - name: Set up supported Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.19.0
 
-      - name: Run structural checks
-        run: ./scripts/check-swe-forge
-
-      - name: Run canonical boundary fixture
-        run: ./scripts/test-swe-forge-boundary
-
-      - name: Run executable evidence fixtures
-        run: ./scripts/test-swe-forge-gate
-
-
-      - name: Run Pi runtime fixture
-        run: ./scripts/test-swe-forge-pi
-
-      - name: Run OMP runtime fixture
-        run: ./scripts/test-swe-forge-omp
-
-      - name: Run invocation parser fixture
-        run: ./scripts/test-swe-forge-invocation
-
-      - name: Run worker briefing fixture
-        run: ./scripts/test-swe-forge-briefing
-
-      - name: Run worker result-profile fixture
-        run: ./scripts/test-swe-forge-results
-
-      - name: Prepare release readiness
-        run: ./scripts/check-release prepare --allow-dirty
+      - name: Run full validation
+        env:
+          SWE_FORGE_PI_CI: "1"
+          SWE_FORGE_OMP_CI: "1"
+        run: ./scripts/validate-swe-forge full
 
       - name: Check diff formatting
-        run: git diff --check
+        if: ${{ github.event_name == 'push' }}
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: git diff --check "$BEFORE_SHA..$CURRENT_SHA"
+
+  release-validation:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up supported Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.19.0
+
+      - name: Run complete release validation
+        env:
+          SWE_FORGE_PI_CI: "1"
+          SWE_FORGE_OMP_CI: "1"
+        run: ./scripts/validate-swe-forge full release
+
+      - name: Check release commit formatting
+        run: git diff --check HEAD^..HEAD
+
