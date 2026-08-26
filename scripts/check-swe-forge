@@ -69,6 +69,7 @@ sh -n \
   "$ROOT/scripts/check-swe-forge" \
   "$ROOT/scripts/test-swe-forge" \
   "$ROOT/scripts/validate-swe-forge" \
+  "$ROOT/scripts/test-validate-swe-forge" \
   "$ROOT/scripts/test-swe-forge-gate" \
   "$ROOT/scripts/test-swe-forge-pi" \
   "$ROOT/scripts/test-swe-forge-omp" \
@@ -89,7 +90,8 @@ sh -n \
 
 for executable in \
   scripts/check-swe-forge scripts/validate-swe-forge scripts/test-swe-forge \
-  scripts/test-swe-forge-gate scripts/test-swe-forge-pi scripts/test-swe-forge-omp \
+  scripts/test-validate-swe-forge scripts/test-swe-forge-gate \
+  scripts/test-swe-forge-pi scripts/test-swe-forge-omp \
   scripts/test-swe-forge-invocation scripts/test-swe-forge-briefing \
   scripts/test-swe-forge-results scripts/check-swe-forge-boundary \
   scripts/test-swe-forge-boundary scripts/swe-forge-state scripts/swe-forge-gate \
@@ -225,7 +227,10 @@ require_text 'initial handoff' .swe-forge/workflows/ticket.md
 require_text 'focused repair context' .swe-forge/workflows/ticket.md
 require_text 'unaffected review conclusions remain context' .swe-forge/workflows/ticket.md
 require_text 'Run final validation once the' .swe-forge/policies/verification.md
+require_text 'select the smallest final validation groups' .swe-forge/policies/verification.md
 require_text './scripts/validate-swe-forge' .swe-forge/policies/verification.md
+require_text 'full` is reserved for CI' .swe-forge/policies/verification.md
+require_text '--plan' .swe-forge/policies/verification.md
 require_text 'Later review, acceptance, and delivery gates consume this' .swe-forge/workflows/ticket.md
 reject_text 'The reviewer must confirm that writable delegated results' .swe-forge/contracts/review.md
 reject_text 'Review all applicable areas:' .swe-forge/contracts/review.md

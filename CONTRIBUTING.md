@@ -24,28 +24,33 @@ establish semantic priority or require parity work.
 
 ## Validate locally
 
-Run repository checks from the project root:
+Run repository checks from the project root. The no-argument command remains
+the full fixture bundle:
 
 ```sh
 ./scripts/validate-swe-forge
 # Or use --serial when tracing a fixture failure.
-# ./scripts/validate-swe-forge --serial
-git diff --check
+# ./scripts/validate-swe-forge --serial full
 ```
 
-The validation batch runs syntax and structural checks first, then the current
-independent fixture suites. Independent suites may run in parallel where
-appropriate, and any required suite failure causes validation to fail. During
-an implementation loop, use the focused suite affected by the current slice
-and run the batch once on the final candidate. Focused changes may run:
+For implementation and final delivery, select only the groups affected by the
+change. Inspect the available groups with `./scripts/validate-swe-forge --list`
+or preview a selection with `--plan`:
 
-- `scripts/test-swe-forge-gate`;
-- `scripts/test-swe-forge-pi`;
-- `scripts/test-swe-forge-omp`;
-- `scripts/test-swe-forge-invocation`;
-- `scripts/test-swe-forge-briefing`;
-- `scripts/test-swe-forge-results`; or
-- `scripts/test-swe-forge-boundary`.
+```sh
+./scripts/validate-swe-forge core
+./scripts/validate-swe-forge evidence invocation
+./scripts/validate-swe-forge full release  # release candidate
+```
+
+The groups are `core`, `invocation`, `evidence`, `installer`, `pi`, `omp`,
+`workers`, and `release`; `full` selects the existing core, parser, evidence,
+installer, adapter, and worker fixture bundle. Independent selected suites may
+run in parallel where appropriate, and any required suite failure causes
+validation to fail. A report identifies selected checks and checks not run.
+Use `full` for CI, high-risk cross-cutting changes, or another justified broad
+risk rather than assuming every final change needs every runtime and installer
+fixture. `git diff --check` remains a separate repository check.
 
 The local Pi fixture may report `SKIP` when the installed Node runtime cannot
 execute TypeScript; the dedicated `pi-runtime` CI job pins a supported Node

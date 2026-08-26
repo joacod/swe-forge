@@ -32,7 +32,7 @@ Register the expected checks before executing them:
 .swe-forge/tools/swe-forge-gate plan-check --state "$STATE" \
   --name "integrated checks" --requirement required
 .swe-forge/tools/swe-forge-gate validate --state "$STATE" \
-  --name "integrated checks" --final -- ./scripts/validate-swe-forge
+  --name "integrated checks" --final -- ./scripts/validate-swe-forge core
 .swe-forge/tools/swe-forge-gate review --state "$STATE" \
   --result PASS --source fresh-context
 .swe-forge/tools/swe-forge-gate deliver-pr --state "$STATE"

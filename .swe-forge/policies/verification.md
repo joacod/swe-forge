@@ -40,24 +40,50 @@ Code inspection alone cannot establish that a relevant behavior works.
 
 ### Validation cadence and batching
 
-Use targeted checks for each implementation slice and reserve the complete
-repository suite for the final integrated candidate unless a slice changes a
-behavior that requires an earlier full check. Run final validation once the
-implementation candidate is complete. If a review repair materially changes
-the candidate, rerun the checks affected by that repair and establish current
-final evidence for delivery. Do not rerun an unchanged full suite merely
-because a checkpoint, commit, review, acceptance, or PR-preparation boundary was
-reached. Later gates consume current evidence rather than repeating its semantic
-work.
+Use targeted checks for each implementation slice.
+Before delivery, select the smallest final validation groups that cover the
+affected surfaces. Do not treat the complete repository bundle as the default
+final check for every ticket.
+Run final validation once the implementation candidate is complete. If a review
+repair materially changes the candidate, rerun the groups affected by that
+repair and establish current final evidence for delivery. Do not rerun an
+unchanged broad or full suite merely because a checkpoint, commit, review,
+acceptance, or PR-preparation boundary was reached. Later gates consume current
+evidence rather than repeating its semantic work.
 
-When independent checks share the same candidate and have no shared runtime or
-filesystem state, run them through one inspected batch when the repository
-provides one. For this repository, prefer `./scripts/validate-swe-forge` over
-manually serializing its component suites. A batch is only a scheduling
-optimization: it must preserve the identity and result of every check, report
-every failure or unavailable check, and return failure if any required check
-fails. It must not replace current-HEAD fingerprint binding, targeted slice
-evidence, or final review.
+The repository's validation entry point exposes this small, static group map:
+
+| Group | Covers | Typical final use |
+| --- | --- | --- |
+| `core` | shell syntax, structural checks, the selection fixture, and the canonical boundary fixture | canonical files, scripts, policies, contracts, or repository structure |
+| `invocation` | invocation parser fixture | reserved invocation tokens or parser behavior |
+| `evidence` | executable evidence-gate and run-state fixtures | evidence, checkpoints, receipts, or state semantics |
+| `installer` | installer lifecycle and rollback fixtures | installer, registry, or installation projection changes |
+| `pi` | Pi adapter/runtime fixture | Pi prompts, extensions, or runtime behavior |
+| `omp` | OMP adapter/runtime fixture | OMP prompts, extensions, or runtime behavior |
+| `workers` | worker briefing and worker-result contract fixtures | worker briefs, result schemas, or delegation contracts |
+| `release` | release consistency/readiness check | release preparation; normally combine it with `full` |
+| `full` | the existing core, invocation, evidence, installer, Pi, OMP, and worker bundle | CI, high-risk cross-cutting changes, or genuinely broad changes |
+
+Use, for example, `./scripts/validate-swe-forge core` for a narrow core
+change, `./scripts/validate-swe-forge pi workers` for coupled adapter and
+worker-contract work, and `./scripts/validate-swe-forge full release` for a
+release candidate. Calling the script with no group remains the obvious full
+bundle for compatibility, but workflow selection must be based on the changed
+surface. `full` is reserved for CI, release preparation, high-risk
+cross-cutting work, or another justified broad risk. `--plan` shows the checks
+that would run without executing them. The normal report identifies selected
+and unselected checks. The group mapping
+is intentionally understandable by inspection; it is not a dependency
+resolver or build system.
+
+When independent selected checks share the same candidate and have no shared
+runtime or filesystem state, run them through one inspected batch. A batch is
+only a scheduling optimization: it must preserve the identity and result of
+every check, report every failure, skip, unavailable check, and unselected
+check truthfully, and return failure if any required check fails. It must not
+replace current-HEAD fingerprint binding, targeted slice evidence, or final
+review.
 
 ### Testing Decision
 
@@ -85,8 +111,8 @@ upfront.
 Choose and run applicable repository checks at their required boundary:
 
 - targeted tests for the current implementation slice
-- the full test suite when justified by scope or risk, normally at final
-  integrated validation
+- the `full` validation bundle when justified by scope or risk, normally at
+  final integrated validation
 - typecheck
 - lint and formatting validation
 - build or packaging
