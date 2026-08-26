@@ -110,7 +110,7 @@ handoff and verifies that B receives selected facts without A's full result.
 | Explicit TDD request | Observe a failing test before the minimal implementation, then green and refactor in vertical slices. |
 | Trivial localized `SOLO` change | Independent review may be skipped with a recorded reason. |
 | PR implementation slice | After its targeted checks pass, optionally checkpoint and materialize the coherent slice without an independent review; implementation may continue or finish. |
-| Final PR candidate | Run final integrated validation after implementation is complete, then review that same committed candidate. |
+| Final PR candidate | Select the relevant final validation group(s), or the explicit `full` bundle when justified, run them after implementation is complete, then review that same committed candidate. |
 | Critical review finding at low confidence | Preserve the candidate and block delivery when the finding is materially uncertain; do not turn uncertainty into a reviewer/recovery loop. |
 | Repairable review finding | For one concrete, localized, clearly repairable finding, use a focused repair context, repair once, rerun affected validation, and record the repair. |
 | Fundamental review finding | Block delivery and preserve the finding rather than attempting another review or repair. |

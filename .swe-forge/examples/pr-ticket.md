@@ -54,8 +54,10 @@ slice before recording an optional checkpoint and its materializing commit. No
 commit sequence is declared in the working spec, and the agent may keep the
 whole change together rather than manufacture ceremonial commits.
 
-After implementation is complete, it runs final integrated validation once and
-performs one fresh independent review against that same committed candidate.
+After implementation is complete, it selects the relevant final validation
+groups and runs them once, then performs one fresh independent review against
+that same committed candidate. CI, release preparation, and high-risk
+cross-cutting work may select the explicit `full` bundle.
 The handoff contains the complete ticket-relevant `review_focus`, so it is the
 one comprehensive semantic review without workflow prose or the implementer's
 transcript. A `PASS` goes directly to final acceptance.

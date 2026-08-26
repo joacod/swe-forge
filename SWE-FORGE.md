@@ -235,11 +235,14 @@ stored in run state. Each implementation checkpoint still binds the current
 targeted evidence to a coherent materializing commit, and one review repair,
 when needed, uses an explicit `--review-repair` commit.
 
-After implementation is complete, the orchestrator runs final integrated
-validation once against that committed candidate and performs one independent
-review from fresh context against the same candidate. The handoff uses the
-complete ticket-relevant `review_focus`, so the review remains comprehensive
-without receiving workflow prose or the implementer's transcript.
+After implementation is complete, the orchestrator selects the relevant
+final validation groups and runs them once against that committed candidate;
+`full` (with `release` when release readiness is in scope) is reserved for
+CI, release preparation, high-risk cross-cutting work, or another justified
+broad risk. It then performs one independent review from
+fresh context against the same candidate. The handoff uses the complete
+ticket-relevant `review_focus`, so the review remains comprehensive without
+receiving workflow prose or the implementer's transcript.
 
 If the review returns `PASS`, continue to final acceptance and delivery. If it
 returns `CHANGES_REQUIRED`, repair only a concrete, localized, clearly

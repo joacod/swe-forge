@@ -277,14 +277,17 @@ acceptance sequential.
 
 Run the relevant repository quality gates by following the loaded verification
 and evidence policies. In `PR`, targeted checks must pass for any implementation
-slice before its checkpoint and materializing commit. Once implementation is
-complete, run final integrated validation once against the committed candidate.
-If a review repair changes the candidate, run the checks affected by that repair
-and establish current final evidence for the repaired candidate. `GUIDED` may
-report a passing slice while final acceptance remains pending. Report every
-check as passed, failed, skipped, unavailable, or not-applicable with its
-evidence. Later review, acceptance, and delivery gates consume this evidence;
-they do not rerun unchanged validation.
+slice before its checkpoint and materializing commit. Before delivery, select
+final validation group(s) from the affected surfaces and run that selection
+once against the committed candidate. Use the explicit `full` bundle for CI,
+release preparation, high-risk cross-cutting work, or another justified broad
+risk; a release candidate normally selects `full release`. If a review repair
+changes the candidate, run the groups affected by that repair and establish
+current final evidence for the repaired candidate. `GUIDED` may report a
+passing slice while final acceptance remains pending. Report every check as
+passed, failed, skipped, unavailable, or not-applicable, including checks that
+were not selected. Later review, acceptance, and delivery gates consume this
+evidence; they do not rerun unchanged validation.
 
 ### 11. Review
 
@@ -342,8 +345,8 @@ Compare the final integrated diff with the original ticket, acceptance criteria,
 review focus, and explicit constraints. Verify and consume current local
 validation plus either a `PASS` review for the exact candidate or the one
 recorded review-repair evidence and affected validation. Do not rerun unchanged
-broad validation, request another reviewer, or treat acceptance itself as a new
-semantic audit.
+validation groups or broad validation, request another reviewer, or treat
+acceptance itself as a new semantic audit.
 
 ### 14. Report
 

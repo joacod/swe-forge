@@ -1,0 +1,90 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+VALIDATE=$ROOT/scripts/validate-swe-forge
+
+fail() {
+  printf 'validation selection test failure: %s\n' "$*" >&2
+  exit 1
+}
+
+require_text() {
+  needle=$1
+  haystack=$2
+  printf '%s\n' "$haystack" | grep -F -- "$needle" >/dev/null 2>&1 || \
+    fail "output is missing: $needle"
+}
+
+require_run() {
+  require_text "  RUN: $1" "$2"
+}
+
+require_not_run() {
+  require_text "  NOT RUN: $1" "$2"
+}
+
+expect_failure() {
+  expected=$1
+  shift
+  if output=$("$@" 2>&1); then
+    fail "expected command to fail: $*"
+  fi
+  require_text "$expected" "$output"
+}
+
+list=$("$VALIDATE" --list)
+for group in core invocation evidence installer pi omp workers release full; do
+  require_text "  $group" "$list"
+done
+require_text 'scripts/validate-swe-forge full' "$list"
+require_text '`release`' "$list"
+require_text 'is separate because' "$list"
+
+default_plan=$("$VALIDATE" --plan)
+require_text 'Requested validation groups: default (full)' "$default_plan"
+require_text 'Full validation bundle: selected' "$default_plan"
+
+narrow=$("$VALIDATE" --plan core pi)
+require_text 'Selected validation groups: core, pi' "$narrow"
+require_text 'Full validation bundle: not selected' "$narrow"
+require_run 'shell syntax' "$narrow"
+require_run 'structural checks' "$narrow"
+require_run 'validation selection fixture' "$narrow"
+require_run 'canonical boundary fixture' "$narrow"
+require_run 'Pi runtime fixture' "$narrow"
+require_not_run 'installer fixture tests' "$narrow"
+require_not_run 'OMP runtime fixture' "$narrow"
+require_not_run 'evidence/state fixtures' "$narrow"
+require_not_run 'release readiness' "$narrow"
+
+full=$("$VALIDATE" --plan full)
+require_text 'Selected validation groups: core, invocation, evidence, installer, pi, omp, workers' "$full"
+require_text 'Full validation bundle: selected' "$full"
+for check in \
+  'shell syntax' 'structural checks' 'validation selection fixture' \
+  'canonical boundary fixture' 'invocation parser fixture' \
+  'evidence/state fixtures' 'installer fixture tests' 'Pi runtime fixture' \
+  'OMP runtime fixture' 'worker briefing fixture' 'worker result fixture'; do
+  require_run "$check" "$full"
+done
+require_not_run 'release readiness' "$full"
+
+release=$("$VALIDATE" --plan full release)
+require_text 'Selected validation groups: core, invocation, evidence, installer, pi, omp, workers, release' "$release"
+require_run 'release readiness' "$release"
+require_text 'Checks not run (groups not selected): none' "$release"
+
+aliases=$("$VALIDATE" --plan structural worker-contracts state)
+require_text 'Selected validation groups: core, evidence, workers' "$aliases"
+require_run 'structural checks' "$aliases"
+require_run 'evidence/state fixtures' "$aliases"
+require_run 'worker result fixture' "$aliases"
+require_not_run 'Pi runtime fixture' "$aliases"
+
+expect_failure 'unknown validation group' "$VALIDATE" --plan not-a-group
+expect_failure '--group requires a group name' "$VALIDATE" --group
+expect_failure '--list cannot be combined with validation groups' "$VALIDATE" --list core
+
+printf '%s\n' 'PASS: validation group selection fixture'
