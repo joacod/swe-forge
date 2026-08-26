@@ -118,19 +118,25 @@ function discoverStatePaths(cwd: string): Set<string> {
 	addRunDirectory(paths, projectRuns);
 	addStatePath(paths, path.join(cwd, ".swe-forge", "run-state.yaml"));
 
-	// The normal external location is $TMPDIR/swe-forge/<run-id>/run-state.yaml.
-	// Also inspect the temporary directories used by development fixtures, but
-	// keep the scan bounded and filter candidates by checkout below.
-	const tempRoot = os.tmpdir();
-	addRunDirectory(paths, path.join(tempRoot, "swe-forge"));
-	try {
-		for (const entry of fs.readdirSync(tempRoot, { withFileTypes: true })) {
-			if (!entry.isDirectory() || !entry.name.startsWith("swe-forge")) continue;
-			addRunDirectory(paths, path.join(tempRoot, entry.name));
-			if (paths.size >= MAX_STATE_FILES) break;
+	// An explicit run-state environment variable is a deliberate host pointer.
+	// Avoid broad temporary-state discovery overriding it with an unrelated
+	// concurrent fixture or run.
+	const hasExplicitRunState = RUN_STATE_ENV_VARS.some((variable) => Boolean(process.env[variable]?.trim()));
+	if (!hasExplicitRunState) {
+		// The normal external location is $TMPDIR/swe-forge/<run-id>/run-state.yaml.
+		// Also inspect the temporary directories used by development fixtures, but
+		// keep the scan bounded and filter candidates by checkout below.
+		const tempRoot = os.tmpdir();
+		addRunDirectory(paths, path.join(tempRoot, "swe-forge"));
+		try {
+			for (const entry of fs.readdirSync(tempRoot, { withFileTypes: true })) {
+				if (!entry.isDirectory() || !entry.name.startsWith("swe-forge")) continue;
+				addRunDirectory(paths, path.join(tempRoot, entry.name));
+				if (paths.size >= MAX_STATE_FILES) break;
+			}
+		} catch {
+			// Unknown temporary-state capability is handled as no active state.
 		}
-	} catch {
-		// Unknown temporary-state capability is handled as no active state.
 	}
 	return paths;
 }
