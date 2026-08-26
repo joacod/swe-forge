@@ -29,7 +29,7 @@ a successful projection does not establish harness behavior.
 
 ## Evidence
 
-Include the relevant acceptance criteria, validation result, receipt, or
+Include the relevant acceptance criteria, validation/review result, PR, or
 short redacted log. Do not include transcripts, credentials, or private
 repository data.
 

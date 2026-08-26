@@ -134,7 +134,6 @@ for required_file in \
   .swe-forge/examples/simple-ticket.md \
   .swe-forge/examples/scope-decision.md \
   .swe-forge/workflows/ticket.md \
-  .swe-forge/contracts/receipt.md \
   .swe-forge/contracts/result.md \
   .swe-forge/contracts/review.md \
   .swe-forge/contracts/run-state.md \

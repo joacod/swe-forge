@@ -34,7 +34,7 @@ roles or workflow instructions. On activation:
 | `SWE-FORGE.md` | activation, lifecycle, Acceptance Gate, and final report |
 | `.swe-forge/workflows/` | procedure and load order |
 | `.swe-forge/agents/` | role responsibilities |
-| `.swe-forge/contracts/` | task, result, review, receipt, working-spec, and run-state shapes |
+| `.swe-forge/contracts/` | task, result, review, working-spec, and run-state shapes |
 | `.swe-forge/policies/` | specification, routing, delegation, verification, evidence, delivery, recovery, and optional skills |
 | `.swe-forge/adapters/` | host syntax, capability observation, and projections |
 
@@ -57,8 +57,8 @@ canonical.
 - Writable delegated results are materialized into the canonical delivery
   candidate and validated there before acceptance or dependent work. Never
   mutate that candidate concurrently.
-- Treat validation and Git/evidence state as stronger than confidence or code
-  inspection; make a risk-proportional testing decision for every ticket.
+- Treat validation and Git state as stronger than confidence or code inspection;
+  make a risk-proportional testing decision for every ticket.
 - Inspect commands before execution and separately authorize migrations,
   deployment, publication, production access, and other shared effects.
 - Keep specialist skills optional and load them on demand.
@@ -87,8 +87,8 @@ routing outcomes, not invocation arguments.
 `SOLO` keeps the work in one root flow. `SUBAGENTS` uses demonstrated native
 workers only for bounded, independently evaluable work; unavailable capability
 falls back to root-owned sequential work. Topology and delivery mode are
-orthogonal. `GUIDED` stops at declared checkpoints. `PR` is the normal low-touch
-path: after local gates, it may push one branch and create one PR.
+orthogonal. `GUIDED` stops at declared human checkpoints. `PR` is the normal
+low-touch path: after local gates, it may push one branch and create one PR.
 In PR mode, no commit sequence is predeclared. Neither mode merges
 automatically. PR uses one independent review when the review trigger applies.
 `GUIDED` may finish with a reviewed local diff when delivery actions are not
@@ -123,7 +123,7 @@ scope/specification        -> policies/specification.md
 routing/capability         -> policies/execution-routing.md
 delegation                 -> policies/delegation.md
 verification               -> policies/verification.md
-evidence/checkpoints       -> policies/evidence.md
+evidence/validation       -> policies/evidence.md
 delivery/authorization     -> policies/delivery.md
 failure/recovery           -> policies/failure-recovery.md
 specialist skills          -> policies/specialist-skills.md
@@ -168,9 +168,9 @@ Declare `ACCEPTED` only when all applicable conditions hold:
   or one recorded focused repair with affected validation;
 - A repaired candidate is explicitly not independently re-reviewed; a
   fundamental or uncertain finding blocks;
-- PR delivery has the required checkpoint/commit evidence, current final
-  validation, one push, and one PR; and
-- any receipt is generated from that evidence and reports the same status.
+- PR delivery has a clean committed final candidate, current final validation,
+  one push, and one PR; and
+- the final harness report truthfully names the delivered candidate and results.
 
 Final acceptance consumes current evidence; it does not rerun unchanged work or
 authorize another review. Do not claim a check passed when it was not run.
@@ -178,8 +178,9 @@ Use `BLOCKED` when safe continuation needs a decision, authorization, access, or
 environment change. Use `FAILED` when attempted work remains incorrect or the
 gate cannot be met within recovery limits.
 
-After PR creation, local receipt and reporting complete the synchronous run.
-Remote GitHub CI is external after PR creation and is not awaited or polled.
+After PR creation, URL recording and the final harness report complete the
+synchronous run. Remote GitHub CI is external after PR creation and is not
+awaited or polled.
 
 ## Final report
 
@@ -189,7 +190,6 @@ Begin with a short plain human `Work summary`, then report:
 - approach, changed files, assumptions, risks, and continuity/recovery facts;
 - testing decision, exact validation results, review/repair result, and any
   skipped or unavailable checks; and
-- delivery, PR/receipt, cleanup, and remaining temporary-state status.
+- delivery, PR, cleanup, and remaining temporary-state status.
 
-Keep worker transcripts, private receipts, and workflow metadata out of
-project-facing PR content.
+Keep worker transcripts and workflow metadata out of project-facing PR content.

@@ -39,14 +39,12 @@ fallback_used: no | <preferred -> effective reason>
 routing:
   preferred: SOLO | SUBAGENTS
   current: SOLO | SUBAGENTS
-receipt_ref: <receipt path or none>
 
 delivery_checkout:
   path: <absolute canonical writable delivery checkout>
   branch: <delivery branch>
   base_sha: <ticket base>
   head_sha: <current HEAD>
-  checkpoint_sha: <last clean checkpoint>
   status: ready | running | blocked | dirty | complete
   branch_setup: auto-created | reused | user-provided | provided | blocked
   remote_default_evidence: <classification reference>
@@ -109,11 +107,6 @@ review:
   status: pending | pass | changes-required | repaired | skipped
   blocked_by: []
   contract_ref: <canonical review contract>
-checkpoint:
-  status: not-applicable | awaiting-user | resumed | complete
-  number: 0
-  next_slice: <slice or none>
-  requested_action: continue | revise | go | commit | none
 cleanup:
   status: pending | complete | incomplete | not-needed
   remaining_resources: []
@@ -127,21 +120,23 @@ retries:
 fields; invocation syntax never supplies a topology override. `delivery_mode`
 owns delivery and comes from the normalized delivery intent;
 `continuation.delivery.mode`, when present, is a derived matching projection.
-`delivery_checkout` is the only canonical candidate. A host-private worker
-path is not state, and no second workspace, worker branch, or transfer record is
-added.
+`delivery_checkout` is the only canonical candidate. For a clean committed
+candidate, Git `HEAD` is the canonical identity used by validation, review, and
+delivery. A host-private worker path is not state, and no second workspace,
+worker branch, or transfer record is added.
 
 The `init` operation constructs the schema from semantic input and actual
 checkout facts. Use the purpose-specific helpers—`set-routing`,
-`set-continuation`, `set-delivery-checkout`, `set-receipt-ref`, `set-review`,
-`set-review-repair`, and `set-pull-request`—instead of hand-editing containers,
-timestamps, or projections. `set-continuation` owns `updated_at` and the
-matching delivery projection.
+`set-continuation`, `set-delivery-checkout`, `set-review`, `set-review-repair`,
+and `set-pull-request`—instead of hand-editing containers, timestamps, or
+projections. `set-continuation` owns `updated_at` and the matching delivery
+projection. A committed candidate's Git `HEAD` is its identity; the
+`delivery_checkout.head_sha` field is a recovery projection of that value.
 
-A resumed run first inspects real Git and evidence. After a context
-discontinuity or recovery, re-read the working spec and state, inspect `HEAD`
-and the diff, and resume only from the recorded next action. Conversation
-summaries and adapter reminders are recovery aids, not authority.
+A resumed run first inspects real Git and validation/review evidence. After
+a context discontinuity or recovery, re-read the working spec and state,
+inspect `HEAD` and the diff, and resume only from the recorded next action.
+Conversation summaries and adapter reminders are recovery aids, not authority.
 
 Only a `done` dependency with an accepted result may supply a dependent digest.
 Writable delegated results are materialized and validated in the canonical

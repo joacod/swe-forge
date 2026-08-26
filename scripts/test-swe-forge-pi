@@ -82,14 +82,12 @@ delivery_checkout:
   branch: feature/fixture
   base_sha: none
   head_sha: none
-  checkpoint_sha: none
   status: ready
   branch_setup: reused
   remote_default_evidence: fixture
 routing:
   preferred: ${preferred}
   current: ${current}
-receipt_ref: none
 delivery:
   authorization:
     commit: PR

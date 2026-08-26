@@ -7,9 +7,10 @@ and stage-triggered loading; the linked policies and contracts own the details.
 
 Use only the state needed for the current ticket. Keep a PR working spec and
 worker briefs in restricted temporary storage or active context; never commit
-them. Keep run state and evidence outside the repository or under an already
-ignored `.swe-forge/runs/` path. Delegated work uses `contracts/task.md` and
-`contracts/result.md`; an independent review uses `contracts/review.md`.
+them. Keep run state and validation evidence outside the repository or under an
+already ignored `.swe-forge/runs/` path. Delegated work uses
+`contracts/task.md` and `contracts/result.md`; an independent review uses
+`contracts/review.md`.
 
 ## Procedure
 
@@ -43,11 +44,10 @@ machinery. If `PROCEED`, continue.
 
 Before broad discovery, load `policies/execution-routing.md` for its separate
 discovery-shape assessment. This is not the final topology decision. Use
-`DELEGATED_RESEARCH` only for bounded,
-independent, read-only questions with concise evidence; keep coupled questions
-in the root. A logical batch has one root fan-in barrier, while the host may
-schedule ready work concurrently or sequentially. Do not use this assessment
-as the final topology decision.
+`DELEGATED_RESEARCH` only for bounded, independent, read-only questions with
+concise evidence; keep coupled questions in the root. A logical batch has one
+root fan-in barrier, while the host may schedule ready work concurrently or
+sequentially. Do not use this assessment as the final topology decision.
 
 After `PROCEED`, inspect relevant entry points, dependencies, analogous code,
 tests, conventions, and quality gates. Load `policies/specialist-skills.md`
@@ -96,26 +96,26 @@ scope, safety, validation, or delivery authorization.
 ### 7. Test strategy
 
 Before selecting or executing validation, load `policies/verification.md`.
-When using executable evidence, candidate fingerprints, freshness, checkpoints,
-or receipts, also load `policies/evidence.md`.
+When recording executable validation evidence or relying on Git candidate
+identity, also load `policies/evidence.md`.
 
 Before implementation, record a concise testing decision: observable behavior,
 test seam, existing coverage, smallest useful approach, and rationale. Classify
 checks as required, conditional, or informational and inspect their side
-effects. Reconcile actual Git/evidence state after any context discontinuity or
-recovery; do not repeat completed semantic work from memory.
+effects. Reconcile actual Git and evidence state after any context
+discontinuity or recovery; do not repeat completed semantic work from memory.
 
 ### 8. Implement
 
 Before the first writable checkout/setup operation, load
 `policies/delivery.md`. It owns checkout, branch, commit, push, PR, and cleanup
 rules. Implement only the bounded approach and selected dependency waves.
-Targeted checks precede any implementation checkpoint; PR commit boundaries
-may be one coherent slice or several as the work develops.
 
 Preserve dirty, detached, protected, or ambiguous state. Delegated writes are
 materialized, validated, and accepted sequentially in the canonical delivery
 checkout. Workers return structured evidence and cannot authorize delivery.
+Use ordinary Git commits as the work requires; no implementation checkpoint,
+predeclared commit slice, or process proof is required in PR mode.
 
 ### 9. Integrate
 
@@ -128,27 +128,26 @@ per-ticket handoff files.
 ### 10. Verify
 
 Select the smallest final validation groups covering the changed surfaces and
-run them once against the completed committed candidate. Use `full` only for
-CI, release preparation, high-risk cross-cutting work, or another justified
-broad risk. A review repair reruns only affected checks and establishes current
-evidence. Report passed, failed, skipped, unavailable, and not-applicable
-checks distinctly. Later review, acceptance, and delivery gates consume this
-evidence; they do not rerun unchanged validation.
+run them once against the completed clean committed candidate. Record each
+result against its full Git `HEAD`. A review repair reruns only affected checks
+against the new committed `HEAD`; it establishes current evidence but does not
+start another review. Report passed, failed, skipped, unavailable, and
+not-applicable checks distinctly. Later review, acceptance, and delivery gates
+consume this evidence; they do not rerun unchanged validation.
 
 ### 11. Review
 
 When the review trigger applies, load the reviewer role and
 `contracts/review.md`. In PR mode, review the final validated candidate from
-fresh read-only context. The initial handoff contains the candidate identity,
-original ticket, complete initial `review_focus`, final diff, and validation
-evidence—one concise **initial handoff**, not workflow prose or a transcript.
+fresh read-only context. The initial handoff contains the Git `HEAD`, original
+ticket, complete initial `review_focus`, final diff, and validation evidence—one
+concise **initial handoff**, not workflow prose or a transcript.
 
 A `CHANGES_REQUIRED` result permits one **focused repair context** only when
-the finding is concrete, localized, and clearly repairable. Include only the
-finding, repair delta, directly affected criteria/checks, and needed original
-context. For the root, unaffected review conclusions remain context. Do not
-launch a second reviewer or replay unrelated criteria; the repaired candidate
-is not independently re-reviewed.
+the finding is concrete, localized, and clearly repairable. Commit the repair,
+rerun only affected validation, and mark the review repaired in run state. The
+repaired candidate is not independently re-reviewed; fundamental or uncertain
+findings block delivery.
 
 ### 12. Recover
 
@@ -160,15 +159,15 @@ delivery rather than starting a review/recovery loop.
 ### 13. Final acceptance and delivery
 
 The canonical Acceptance Gate is in `SWE-FORGE.md`; policies and contracts
-supply evidence but do not define competing gates.
-Compare the final integrated diff with the original ticket, acceptance, review
-focus, and constraints. Use current validation and the allowed review/repair evidence, then perform only
-authorized delivery actions.
+supply evidence but do not define competing gates. Compare the final integrated
+diff with the original ticket, acceptance, review focus, and constraints. Use
+the current validation and allowed review/repair evidence for the exact Git
+`HEAD`, then perform only authorized delivery actions.
 
 ### 14. Report
 
 Use the final-report requirements in `SWE-FORGE.md`. Keep the report separate
-from private receipts, worker results, and project-facing PR content.
+from worker results and project-facing PR content.
 
 ## Blocking
 

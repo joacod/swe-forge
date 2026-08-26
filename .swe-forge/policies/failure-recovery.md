@@ -44,11 +44,11 @@ blocker is removed. It must report uncommitted changes and exact state. A worker
 cannot declare `DONE` from code inspection alone.
 
 A review finding follows `contracts/review.md`. Repair only one concrete,
-localized, clearly repairable blocking finding, in a focused context; record its
-repair checkpoint/commit in PR mode and rerun affected checks. The repaired
-candidate is not independently re-reviewed. Fundamental, materially uncertain,
-unsafe, or unrepairable findings block; do not launch another reviewer or a
-review/recovery loop.
+localized, clearly repairable blocking finding, in a focused context; create
+one repair commit in PR mode and rerun affected checks against its new Git
+`HEAD`. The repaired candidate is not independently re-reviewed. Fundamental,
+materially uncertain, unsafe, or unrepairable findings block; do not launch
+another reviewer or a review/recovery loop.
 
 ## Cleanup Handoff
 

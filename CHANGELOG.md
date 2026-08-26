@@ -16,17 +16,14 @@ change between alpha releases.
   that state around host lifecycle events and active-PR shorthand recovery.
 - Model/provider/reasoning-mode optimization remains intentionally out of scope
   for this change.
-- Final alpha hardening adds exact candidate-content evidence binding,
-  schema-v4 run state, machine-valid worker results, executable Git conformance,
-  head-bound receipts, and release-readiness checks.
+- Final alpha hardening adds schema-v4 run state, machine-valid worker
+  results, executable Git/validation safeguards, and release-readiness checks.
 - PR runs now let agents choose one or more coherent implementation commits
-  during the work while retaining candidate-bound validation and checkpoint
-  evidence without repeating unchanged run-state validation.
+  during the work while binding final validation and review to the committed
+  candidate's Git `HEAD` without requiring process checkpoints.
 - PR review recovery now uses one fresh independent review and, only for a
   concrete localized finding, one focused repair with affected validation; it
   does not automatically re-review the repaired candidate.
-- Receipt generation now keeps a run-local copy by default without adding
-  workflow metadata to pull requests.
 - Continue collecting real-run reports across harness adapters; projection
   fixtures are not a substitute for real harness evidence.
 - The planned first alpha, `v0.1.0-alpha.1`, remains unpublished. Its tagged
@@ -48,7 +45,7 @@ compatibility, and known limitations.
   Codex, and Cursor adapters, with no feature-parity requirement.
 - Transactional source-link installation and verification with collision and
   rollback checks.
-- Executable evidence gates and compact run receipts.
+- Executable validation and delivery gates.
 - Installer lifecycle inspection and safe update/uninstall support.
 
 ### Known limitations

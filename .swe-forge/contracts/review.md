@@ -3,8 +3,9 @@
 This contract owns review result shape, finding fields, severity/confidence, and
 blocking semantics. The reviewer role owns investigation. Use it for one fresh,
 ticket-focused review of the clean committed candidate after final validation.
-The agent may use one or more coherent commits; individual implementation
-commits do not receive separate reviews.
+For that candidate, the full Git `HEAD` is the identity shared with validation
+and delivery. The agent may use one or more coherent commits; individual
+implementation commits do not receive separate reviews.
 
 ## Result shape
 

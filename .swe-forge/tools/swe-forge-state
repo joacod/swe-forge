@@ -32,11 +32,9 @@ Usage:
     --fallback-used TEXT
   swe-forge-state set-continuation --state FILE|DIRECTORY [options]
   swe-forge-state set-delivery-checkout --state FILE|DIRECTORY \
-    --head-sha SHA --checkpoint-sha SHA
+    --head-sha SHA
   swe-forge-state set-delivery-checkout --state FILE|DIRECTORY \
-    --path PATH --branch BRANCH --base-sha SHA \
-    --head-sha SHA --checkpoint-sha SHA
-  swe-forge-state set-receipt-ref --state FILE|DIRECTORY --receipt-ref REF
+    --path PATH --branch BRANCH --base-sha SHA --head-sha SHA
   swe-forge-state set-review --state FILE|DIRECTORY \
     --result PASS|CHANGES_REQUIRED [--blocked-by ID...]
   swe-forge-state set-review-repair --state FILE|DIRECTORY
@@ -52,10 +50,10 @@ parser's `delivery_mode` unchanged; it defaults to `PR`, while an explicit
 `set-routing` owns deliberate preferred/effective topology changes and their
 current rationale. `set-continuation` accepts only the bounded continuation
 surface; it generates updated_at and derives the delivery projection.
-`set-delivery-checkout`, `set-receipt-ref`, `set-review`,
-`set-review-repair`, and `set-pull-request` own their purpose-specific updates.
-All write operations validate a temporary result before atomic replacement.
-Obsolete or unknown state must be replaced by starting a fresh run.
+`set-delivery-checkout`, `set-review`, `set-review-repair`, and
+`set-pull-request` own their purpose-specific updates. All write operations
+validate a temporary result before atomic replacement. Obsolete or unknown
+state must be replaced by starting a fresh run.
 EOF
 }
 
@@ -333,25 +331,26 @@ reject_obsolete_fields() {
       under_next_action = 0
       under_routing = 0
       under_review = 0
+      under_delivery_checkout = 0
       for (i = 1; i < depth; i++) {
         if (keys[i] == "continuation") under_continuation = 1
         if (keys[i] == "next_action") under_next_action = 1
         if (keys[i] == "routing") under_routing = 1
         if (keys[i] == "review") under_review = 1
+        if (keys[i] == "delivery_checkout") under_delivery_checkout = 1
       }
       if (current_indent == 0 &&
           current_key != "workflow" && current_key != "workflow_version" &&
           current_key != "schema_version" && current_key != "run_id" &&
           current_key != "status" && current_key != "delivery_mode" &&
           current_key != "reason" && current_key != "fallback_used" &&
-          current_key != "routing" && current_key != "receipt_ref" &&
-          current_key != "delivery_checkout" && current_key != "delivery" &&
-          current_key != "review" && current_key != "tasks" &&
-          current_key != "ticket_ref" && current_key != "parsed_ticket_ref" &&
-          current_key != "specialist_skills" && current_key != "working_spec_ref" &&
-          current_key != "acceptance_ref" && current_key != "current_phase" &&
-          current_key != "continuation" && current_key != "validation_ref" &&
-          current_key != "checkpoint" && current_key != "cleanup" &&
+          current_key != "routing" && current_key != "delivery_checkout" &&
+          current_key != "delivery" && current_key != "review" &&
+          current_key != "tasks" && current_key != "ticket_ref" &&
+          current_key != "parsed_ticket_ref" && current_key != "specialist_skills" &&
+          current_key != "working_spec_ref" && current_key != "acceptance_ref" &&
+          current_key != "current_phase" && current_key != "continuation" &&
+          current_key != "validation_ref" && current_key != "cleanup" &&
           current_key != "retries") found=1
       if (under_routing &&
           (current_key == "initial" || current_key == "selected" ||
@@ -359,6 +358,7 @@ reject_obsolete_fields() {
            current_key == "runtime_profile_ref")) found=1
       if (under_continuation && current_key == "recovery") found=1
       if (under_next_action && current_key == "expected_context_tokens") found=1
+      if (under_delivery_checkout && current_key == "checkpoint_sha") found=1
       if (under_review &&
           (current_key == "attempts" || current_key == "retry_ceiling" ||
            current_key == "ceiling_provenance")) found=1
@@ -393,7 +393,7 @@ validate_state() {
   reject_obsolete_fields "$file"
 
   for key in workflow workflow_version schema_version run_id status delivery_mode \
-    reason fallback_used routing delivery_checkout delivery receipt_ref review tasks; do
+    reason fallback_used routing delivery_checkout delivery review tasks; do
     top_level "$key" "$file" || fail "stale/unsupported run state: schema-v4 state is missing current key: $key; start a fresh run"
   done
 
@@ -411,7 +411,7 @@ validate_state() {
     "$(required_scalar routing.preferred "$file")" \
     "$(required_scalar routing.current "$file")"
 
-  for field in path branch base_sha head_sha checkpoint_sha status branch_setup \
+  for field in path branch base_sha head_sha status branch_setup \
     remote_default_evidence; do
     nested_key delivery_checkout "$field" "$file" || \
       fail "delivery_checkout is missing $field"
@@ -440,7 +440,7 @@ validate_state() {
     *) fail 'invalid delivery_checkout.status' ;;
   esac
   validate_enum delivery_checkout.branch_setup "$file" auto-created reused user-provided provided blocked
-  for field in delivery_checkout.base_sha delivery_checkout.head_sha delivery_checkout.checkpoint_sha; do
+  for field in delivery_checkout.base_sha delivery_checkout.head_sha; do
     value=$(required_scalar "$field" "$file")
     case "$value" in
       none|NONE|null) ;;
@@ -1071,13 +1071,11 @@ init_state() {
     printf 'routing:\n'
     printf '  preferred: %s\n' "$init_routing_preferred"
     printf '  current: %s\n' "$init_routing_current"
-    printf 'receipt_ref: none\n'
     printf 'delivery_checkout:\n'
     printf '  path: %s\n' "$init_checkout_root"
     printf '  branch: %s\n' "$init_branch"
     printf '  base_sha: %s\n' "$init_base_sha"
     printf '  head_sha: %s\n' "$init_head"
-    printf '  checkpoint_sha: %s\n' "$init_head"
     printf '  status: %s\n' "$init_delivery_status"
     printf '  branch_setup: %s\n' "$init_delivery_branch_setup"
     printf '  remote_default_evidence: %s\n' "$init_remote_default_evidence"
@@ -1209,6 +1207,15 @@ set_review_repair() {
     fail "review repair requires an unresolved changes-required review: $current_review_status"
   contract_ref=$(required_scalar review.contract_ref "$state_path")
   blocked_yaml=$(required_scalar review.blocked_by "$state_path")
+  case "$blocked_yaml" in
+    \[*\]) ;;
+    *) fail 'review repair requires a valid blocking-finding list' ;;
+  esac
+  blocked_values=${blocked_yaml#\[}
+  blocked_values=${blocked_values%\]}
+  blocked_count=$(printf '%s\n' "$blocked_values" | awk -F',' 'NF { count++ } END { print count + 0 }')
+  [ "$blocked_count" -eq 1 ] || \
+    fail 'review repair requires exactly one blocking finding'
   state_tmp=$state_path.tmp.$$
   awk '
     BEGIN { section=""; skip=0; status_count=0 }
@@ -1332,12 +1339,10 @@ set_delivery_checkout() {
   branch_arg=
   base_arg=
   head_arg=
-  checkpoint_arg=
   path_supplied=false
   branch_supplied=false
   base_supplied=false
   head_supplied=false
-  checkpoint_supplied=false
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1370,12 +1375,6 @@ set_delivery_checkout() {
         head_supplied=true
         shift 2
         ;;
-      --checkpoint-sha|--checkpoint)
-        [ "$#" -ge 2 ] || fail "$1 requires a SHA"
-        checkpoint_arg=$2
-        checkpoint_supplied=true
-        shift 2
-        ;;
       -h|--help)
         usage
         exit 0
@@ -1385,6 +1384,7 @@ set_delivery_checkout() {
   done
 
   [ -n "$state_arg" ] || fail '--state is required'
+  [ "$head_supplied" = true ] || fail '--head-sha is required'
   state_path=$(state_file "$state_arg")
   validate_state "$state_path" >/dev/null
   identity_update=false
@@ -1398,36 +1398,28 @@ set_delivery_checkout() {
     case "$path_arg" in /*) ;; *) fail 'delivery_checkout.path must be absolute' ;; esac
     require_scalar_arg delivery_checkout.branch "$branch_arg"
     validate_sha_field delivery_checkout.base_sha "$base_arg"
-  else
-    [ "$head_supplied" = true ] || fail 'checkpoint update requires --head-sha'
-    [ "$checkpoint_supplied" = true ] || fail 'checkpoint update requires --checkpoint-sha'
   fi
   require_scalar_arg delivery_checkout.head_sha "$head_arg"
-  require_scalar_arg delivery_checkout.checkpoint_sha "$checkpoint_arg"
   validate_sha_field delivery_checkout.head_sha "$head_arg"
-  validate_sha_field delivery_checkout.checkpoint_sha "$checkpoint_arg"
 
   state_tmp=$state_path.tmp.$$
   awk \
     -v update_path="$path_supplied" -v update_branch="$branch_supplied" \
-    -v update_base="$base_supplied" -v update_head="$head_supplied" \
-    -v update_checkpoint="$checkpoint_supplied" -v path_value="$path_arg" \
+    -v update_base="$base_supplied" -v path_value="$path_arg" \
     -v branch_value="$branch_arg" -v base_value="$base_arg" \
-    -v head_value="$head_arg" -v checkpoint_value="$checkpoint_arg" '
+    -v head_value="$head_arg" '
     BEGIN { section="" }
     /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
     section == "delivery_checkout" && update_path == "true" && $0 ~ /^  path:/ { print "  path: " path_value; path_count++; next }
     section == "delivery_checkout" && update_branch == "true" && $0 ~ /^  branch:/ { print "  branch: " branch_value; branch_count++; next }
     section == "delivery_checkout" && update_base == "true" && $0 ~ /^  base_sha:/ { print "  base_sha: " base_value; base_count++; next }
-    section == "delivery_checkout" && update_head == "true" && $0 ~ /^  head_sha:/ { print "  head_sha: " head_value; head_count++; next }
-    section == "delivery_checkout" && update_checkpoint == "true" && $0 ~ /^  checkpoint_sha:/ { print "  checkpoint_sha: " checkpoint_value; checkpoint_count++; next }
+    section == "delivery_checkout" && $0 ~ /^  head_sha:/ { print "  head_sha: " head_value; head_count++; next }
     { print }
     END {
       if (update_path == "true" && path_count != 1) exit 1
       if (update_branch == "true" && branch_count != 1) exit 1
       if (update_base == "true" && base_count != 1) exit 1
-      if (update_head == "true" && head_count != 1) exit 1
-      if (update_checkpoint == "true" && checkpoint_count != 1) exit 1
+      if (head_count != 1) exit 1
     }
   ' "$state_path" >"$state_tmp" || fail 'delivery checkout update could not locate the current state fields'
   validate_state "$state_tmp" >/dev/null
@@ -1436,47 +1428,6 @@ set_delivery_checkout() {
   printf 'PASS: delivery checkout updated: %s\n' "$state_path"
 }
 
-set_receipt_ref() {
-  state_arg=
-  receipt_arg=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --state)
-        [ "$#" -ge 2 ] || fail '--state requires a file or directory'
-        state_arg=$2
-        shift 2
-        ;;
-      --receipt-ref)
-        [ "$#" -ge 2 ] || fail '--receipt-ref requires a reference'
-        receipt_arg=$2
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      *) fail "unknown set-receipt-ref option: $1" ;;
-    esac
-  done
-  [ -n "$state_arg" ] || fail '--state is required'
-  [ -n "$receipt_arg" ] || fail '--receipt-ref is required'
-  state_path=$(state_file "$state_arg")
-  validate_state "$state_path" >/dev/null
-  require_scalar_arg receipt_ref "$receipt_arg"
-  state_tmp=$state_path.tmp.$$
-  awk -v wanted="$receipt_arg" '
-    /^receipt_ref:/ {
-      count++
-      if (count == 1) { print "receipt_ref: " wanted; next }
-    }
-    { print }
-    END { if (count != 1) exit 1 }
-  ' "$state_path" >"$state_tmp" || fail 'current state contains an invalid receipt reference'
-  validate_state "$state_tmp" >/dev/null
-  mv "$state_tmp" "$state_path"
-  state_tmp=
-  printf 'PASS: receipt reference updated: %s\n' "$state_path"
-}
 set_pull_request() {
   state_arg=
   url_arg=
@@ -1672,7 +1623,6 @@ main() {
     set-routing) set_routing "$@" ;;
     set-continuation) set_continuation "$@" ;;
     set-delivery-checkout) set_delivery_checkout "$@" ;;
-    set-receipt-ref) set_receipt_ref "$@" ;;
     set-review) set_review "$@" ;;
     set-review-repair) set_review_repair "$@" ;;
     set-pull-request) set_pull_request "$@" ;;
