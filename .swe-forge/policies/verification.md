@@ -136,8 +136,17 @@ block acceptance.
 
 The ticket workflow decides when independent review is required. When it is,
 load `.swe-forge/agents/reviewer.md` and `../contracts/review.md` before review.
-Verification supplies current validation evidence; the reviewer role owns review
-behavior and the contract owns the result shape and blocking matrix.
+Verification supplies current validation evidence; the reviewer role owns how
+to investigate, and the contract owns result shape, coverage semantics,
+severity, blocking behavior, and attempt accounting.
+
+For the initial review, the handoff uses the complete ticket-relevant
+`review_focus`. After a repair, the handoff uses a newly derived focused subset
+with the prior blocking findings, repair delta, directly affected criteria and
+risks, and only the original context needed to interpret them. Unaffected
+previous `PASS` conclusions carry forward. Adapters forward this bounded
+handoff; they do not append workflow policy, authorization, delivery, or
+transcript content.
 
 ## Acceptance handoff
 

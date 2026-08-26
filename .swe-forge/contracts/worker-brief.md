@@ -38,9 +38,11 @@ The renderer mechanically owns schema/version, projection shape, mode and
 recursion defaults, permissions, result-profile and contract selection, and
 dependency-result eligibility. Profile selection is deterministic: reviewer
 plus read-only is `REVIEW`, other read-only is `READ_ONLY`, and read-write is
-`WRITABLE`. It does not decide whether an objective is good, whether acceptance
-is sufficient, whether a dependency fact is relevant, or whether delegation is
-appropriate.
+`WRITABLE`. A `REVIEW` projection is read-only for supplied evidence: it does
+not grant a validation action, so the reviewer cannot run tests, formatters,
+linters, builds, or project-wide checks. It does not decide whether an
+objective is good, whether acceptance is sufficient, whether a dependency fact
+is relevant, or whether delegation is appropriate.
 
 Pass the validated output unchanged with the canonical role and applicable
 result or review contract. After a worker returns, the accountable consumer
@@ -148,9 +150,13 @@ contract files point here rather than repeating it.
 | Worker | Include | Omit |
 | --- | --- | --- |
 | Read-only | common semantic fields, read-only permissions, selected result/review contract | writable scope/actions, checkout and delivery state |
+| Review | the supplied review focus, only necessary ticket context, prior findings or repair delta when focused, read-only permissions, review contract, and validation evidence to inspect | edit or validation actions, unrelated ticket criteria, workflow state, and transcript |
 | Read-write | common fields, allowed writes, canonical delivery-candidate permissions, writable result contract | delivery actions, physical host execution details, unrelated run state, transcript |
 
 Workers discover implementation details through their allowed paths and
-symbols. They must request a contract revision before expanding scope and must
-not create PRs, push, merge, publish, deploy, reroute, redo root discovery, or
+symbols. Reviewers receive the complete ticket-relevant focus for the initial
+review and only the prior blockers, repair delta, and directly affected focus
+for a focused re-review; unaffected PASS conclusions carry forward. They must
+request a contract revision before expanding scope and must not create PRs,
+push, merge, publish, deploy, reroute, redo root discovery, run validation, or
 spawn descendants by default.

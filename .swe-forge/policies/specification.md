@@ -13,9 +13,12 @@ transient, behavior-first, and proportional to the selected delivery mode.
 - `PR` mode always builds a working spec before writable implementation. It may
   skip the interview when the ticket already contains a concrete intent,
   bounded scope, observable behavior, non-goals, and validation expectations.
-  The spec also records a `review_focus` with one review goal, the acceptance
-  criteria to check, relevant in-scope quality concerns, non-goals, and a rule
-  for separating actionable findings from deferred follow-ups.
+  The spec also records an initial `review_focus` with one review goal, every
+  ticket-relevant acceptance criterion, relevant architecture decisions and
+  constraints, quality concerns, non-goals, and a rule for separating
+  actionable findings from deferred follow-ups. A focused subset is derived transiently after a
+  repair; it contains only the prior blockers, repair delta, and directly
+  affected criteria and risks.
 - Any mode may pause for a decision when an ambiguity changes behavior, scope,
   compatibility, safety, or delivery authorization.
 
@@ -64,8 +67,9 @@ Before implementation, the working spec must expose:
 - in-scope behavior and explicit non-goals
 - a small set of observable requirements and scenarios
 - acceptance and validation evidence to collect
-- a `review_focus` that names the review goal, criteria, relevant quality
-  concerns, non-goals, and finding boundary
+- an initial `review_focus` that names the complete ticket-relevant review
+  goal, criteria, relevant constraints and quality concerns, non-goals, and
+  finding boundary; a focused re-review uses a transient affected subset
 - compatibility, external-effect, and delivery risks
 - unresolved decisions and their recovery path
 

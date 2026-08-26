@@ -39,7 +39,9 @@ Input records are tab-separated and use these forms:
   digest    <task_id> <category> <selected dependency fact>
 
 Repeated task fields provide ordered lists. Values may not contain tabs or
-newlines. The tool owns the projection grammar and profile selection.
+newlines. For a reviewer task, validation records identify evidence supplied
+for inspection; they do not grant permission to execute checks. The tool owns
+the projection grammar and profile selection.
 EOF
 }
 
@@ -252,7 +254,8 @@ render_input() {
       print "    allowed_actions:"
       print "      - read"
       if (access == "read-write") print "      - edit"
-      print "      - validation"
+      # Reviewers inspect supplied validation evidence but do not execute checks.
+      if (profile != "REVIEW") print "      - validation"
       print "    forbidden_actions:"
       print "      - delivery"
       print "      - recursive delegation"
@@ -413,10 +416,15 @@ structural_validate() {
       required(profile == "READ_ONLY" || profile == "WRITABLE" || profile == "REVIEW", "return.profile")
       required(expected_output && expected_output_items > 0, "return.expected_output")
       required(forbidden_actions, "permissions.forbidden_actions")
-      required(read_action && validation_action, "read and validation permissions")
+      required(read_action, "read permission")
+      if (profile != "REVIEW") required(validation_action, "validation permission")
       required(forbidden_action_count == 5 && forbidden_delivery && forbidden_recursion && forbidden_peer && forbidden_scope && forbidden_topology, "canonical forbidden permissions")
-      if (profile == "READ_ONLY" || profile == "REVIEW") {
-        if (profile == "REVIEW") required(role == "reviewer", "reviewer role for REVIEW profile")
+      if (profile == "REVIEW") {
+        required(role == "reviewer", "reviewer role for REVIEW profile")
+        required(write_access == "read-only", "read-only profile permissions")
+        required(!edit_action && !validation_action && allowed_action_count == 1, "review-only allowed actions")
+        required(repository_none_write && !repository_non_none_write, "read-only allowed_writes")
+      } else if (profile == "READ_ONLY") {
         required(write_access == "read-only", "read-only profile permissions")
         required(!edit_action && allowed_action_count == 2, "read-only allowed actions")
         required(repository_none_write && !repository_non_none_write, "read-only allowed_writes")

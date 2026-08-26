@@ -35,9 +35,10 @@ $TMPDIR/swe-forge/<run-id>/working-spec.md
 ```
 
 The spec contains observable requirements, scenarios, assumptions, affected
-paths, a testing decision, validation, a `review_focus` brief, and delivery
-authorization. The review focus names the ticket goal, acceptance criteria,
-relevant quality concerns, non-goals, and the boundary for actionable findings.
+paths, a testing decision, validation, an initial `review_focus` brief, and
+delivery authorization. The review focus names the complete ticket-relevant
+goal, acceptance criteria, constraints, relevant architecture and quality
+concerns, non-goals, and the boundary for actionable findings.
 It is deleted during cleanup
 and is never committed.
 
@@ -52,14 +53,17 @@ A single inseparable step remains one commit.
 
 After all planned commits exist, it runs final integrated validation once and
 performs the initial independent review against that same committed candidate.
-If the review requires changes, it repairs only the relevant finding, runs the
-affected checks, creates the explicit review-repair checkpoint and commit, then
-establishes final evidence for the repaired candidate before the focused second
-review. A passing focused review goes directly to final acceptance; acceptance
-and PR preparation consume current evidence rather than rerunning unchanged
-validation or review. Unrelated improvements are recorded as deferred
-follow-ups rather than pulled into the PR. It does not stop after each slice for
-user approval.
+The initial handoff contains the complete ticket-relevant `review_focus`, so it
+is the one comprehensive semantic review. If the review requires changes, it
+repairs only the relevant finding, runs the affected checks, creates the
+explicit review-repair checkpoint and commit, then establishes final evidence
+for the repaired candidate before the focused second review. That handoff
+contains the prior blocking finding, repair delta, and directly affected focus;
+unaffected prior `PASS` conclusions carry forward. A passing focused review
+goes directly to final acceptance; acceptance and PR preparation consume
+current evidence rather than rerunning unchanged validation or review.
+Unrelated improvements are recorded as deferred follow-ups rather than pulled
+into the PR. It does not stop after each slice for user approval.
 
 Review is recorded through the canonical gate for at most two executions total.
 If the focused second review still returns `CHANGES_REQUIRED`, the run stops

@@ -191,9 +191,18 @@ require_text 'planned commits do not require independent review' SWE-FORGE.md
 require_text 'remote default branch' .swe-forge/policies/delivery.md
 require_text 'review-repair commit' .swe-forge/policies/delivery.md
 require_text 'clean committed candidate' .swe-forge/contracts/review.md
+require_text 'mode: initial | focused' .swe-forge/contracts/review.md
+require_text 'Previously established, unaffected `PASS` criteria' .swe-forge/contracts/review.md
+require_text 'does not require unrelated criteria' .swe-forge/contracts/review.md
+require_text 'not run tests, formatters, linters' .swe-forge/agents/reviewer.md
+require_text 'initial handoff' .swe-forge/workflows/ticket.md
+require_text 'focused handoff is a new narrow assignment' .swe-forge/workflows/ticket.md
+require_text 'unaffected `PASS` conclusions carry forward' .swe-forge/workflows/ticket.md
 require_text 'Run that final validation once' .swe-forge/policies/verification.md
 require_text './scripts/validate-swe-forge' .swe-forge/policies/verification.md
 require_text 'Later review, acceptance, and delivery gates consume this' .swe-forge/workflows/ticket.md
+reject_text 'The reviewer must confirm that writable delegated results' .swe-forge/contracts/review.md
+reject_text 'Review all applicable areas:' .swe-forge/contracts/review.md
 require_text 'at most two review executions' SWE-FORGE.md
 require_text 'Remote GitHub CI is external after PR creation' SWE-FORGE.md
 require_text 'commit-plan' .swe-forge/tools/swe-forge-state

@@ -251,16 +251,40 @@ git diff --check                 passed
 
 ## 10. Independent Review
 
-The reviewer receives the original ticket, acceptance criteria, architecture
-brief, final diff, and the output above. It returns:
+The initial reviewer handoff contains the candidate identity, original ticket,
+complete ticket-relevant `review_focus`, final diff, and current validation
+evidence. The focus is authoritative and names the criteria and relevant risks
+without replaying the worker transcript or general workflow policy:
+
+```yaml
+review_focus:
+  mode: initial
+  goal: Confirm compatible API and URL-backed pagination behavior.
+  acceptance_criteria_checked:
+    - unfiltered callers remain compatible
+    - invalid limits are rejected
+    - cursor and URL state reset correctly
+  relevant_architecture_decisions:
+    - Keep pagination state at the API and admin URL boundaries.
+  relevant_constraints:
+    - Existing callers that omit new parameters remain compatible.
+  relevant_quality_checks:
+    - compatibility and stale-cursor handling
+  non_goals:
+    - unrelated query-string helpers or a full browser audit
+```
+
+It returns:
 
 ```yaml
 status: PASS
 findings: []
 ```
 
-The review specifically checks compatibility for unfiltered callers, stale
-cursor reset behavior, invalid input handling, and unrelated modifications.
+If the initial review returns `CHANGES_REQUIRED`, the second handoff replaces
+that complete focus with only the prior blocking finding, the repair delta, and
+the directly affected criteria and risks. Unaffected prior `PASS` conclusions
+carry forward; attempt 2 does not restart the complete ticket review.
 
 ## 11. Final Acceptance
 

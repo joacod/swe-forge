@@ -118,10 +118,11 @@ Before specification or clarification behavior is needed, load and follow
 Translate the ticket into observable acceptance criteria and separate facts,
 assumptions, compatibility constraints, and blocking decisions. In `PR`, make
 the working spec ready before writable work without creating a repository
-artifact. Record its review focus, non-goals, testing decision, validation plan,
-and assumptions. Ask only blocking user questions and record low-risk
-assumptions. Host context preservation, compaction, retry, and restoration are
-runtime concerns, not canonical Forge controls.
+artifact. Record its initial `review_focus` with the complete ticket-relevant
+criteria, relevant quality concerns and non-goals, alongside the testing
+decision, validation plan, and assumptions. Ask only blocking user questions
+and record low-risk assumptions. Host context preservation, compaction, retry,
+and restoration are runtime concerns, not canonical Forge controls.
 
 
 
@@ -254,13 +255,51 @@ validation are complete, against that same committed candidate. If it returns
 `CHANGES_REQUIRED`, repair only the relevant finding, run the affected checks,
 record the explicit review-repair checkpoint and commit, establish required
 final evidence for the repaired candidate, and then run the focused second
-review against that committed `HEAD`. Use a fresh context when delegation,
-multi-component scope, or medium-or-higher risk makes it useful. Provide the
-original ticket, `review_focus`, acceptance criteria, architecture decisions,
-final diff, and current validation evidence. Record every reviewer-like
-execution through the canonical evidence gate, regardless of its source label.
-The normal candidate budget is two executions total; a passing focused second
-review goes directly to final acceptance.
+review against that committed `HEAD`.
+
+The root owns the semantic handoff. Load the reviewer role and result contract
+as canonical references, but do not paste their methodology into the
+assignment or combine it with workflow, state, authorization, delivery, CI,
+or generic risk-checklist prose. Do not forward the implementer's transcript.
+`review_focus` is the authoritative structured scope; do not add duplicate
+"ticket scope" or "check specifically" summaries.
+
+The initial handoff is one concise comprehensive assignment containing:
+
+- candidate identity (`HEAD`, fingerprint, branch, and delivery path), plus the
+  read-only/no-tests constraint;
+- the original ticket;
+- the complete ticket-relevant `review_focus`, including its acceptance
+  criteria, relevant architecture decisions and constraints, quality checks,
+  and non-goals;
+- the final diff and existing validation evidence; and
+- references to the reviewer role and canonical result contract.
+
+The focused handoff is a new narrow assignment, not a replay of the initial
+one. It contains:
+
+- the repaired candidate identity and read-only/no-tests constraint;
+- the prior blocking finding or findings, with enough evidence to re-establish
+  each one;
+- the repair delta and changed files;
+- a focused `review_focus` containing only the directly affected acceptance
+  criteria, constraints, quality or risk checks, and scope-protecting
+  non-goals;
+- current affected/final validation evidence; and
+- only the original ticket context needed to interpret those items, plus
+  references to the reviewer role and canonical result contract.
+
+Previously established, unaffected `PASS` conclusions carry forward. Do not
+send the full original assignment, unrelated criteria, workflow invariants,
+or a full transcript to the focused reviewer. The focused reviewer may block
+on a new issue only when the repair introduces it, reveals it on the affected
+surface, or its resolution is necessary to close a prior blocker. Use a fresh
+context for the independent initial review; use one for the focused review when
+delegation, multi-component scope, or medium-or-higher risk makes it useful.
+Record every reviewer-like execution through the canonical evidence
+gate, regardless of its source label. The normal candidate budget is two
+executions total; a passing focused second review goes directly to final
+acceptance.
 
 ### 12. Repair
 

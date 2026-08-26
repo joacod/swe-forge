@@ -194,31 +194,39 @@ one-step ticket remains one commit, while review repairs use explicit additional
 
 After all planned implementation commits exist, the orchestrator runs final
 integrated validation once against that committed candidate and performs the
-initial independent review against the same candidate. If that review returns
-`CHANGES_REQUIRED`, it repairs only the relevant finding, runs the affected
-checks, records the review-repair checkpoint and commit, establishes the
-required final evidence for the repaired candidate, and performs the focused
-second review against that committed `HEAD`. A passing second review goes
-directly to final acceptance; acceptance consumes current evidence rather than
-rerunning unchanged validation or review. Normal review-repair activity allows
-at most two review executions for the candidate, including independent, focused,
-investigation, or other reviewer-like passes. The gate records the attempts in
-canonical run state; a second `CHANGES_REQUIRED` result stops automatic repair
-or review activity and reports the unresolved evidence. Ordinary debugging of
-an unrelated implementation or test failure is separate task recovery and does
-not consume this review budget. PR mode never merges; project-facing PR content
-follows the delivery policy, while evidence and receipts remain private.
-`/git-pr draft` requests a draft PR without changing normal `/git-pr` behavior.
+initial independent review from fresh context against the same candidate. The
+initial handoff uses
+the complete ticket-relevant `review_focus`, so it remains the primary
+comprehensive semantic review while broader quality concerns stay relevant to
+the change. If that review returns `CHANGES_REQUIRED`, it repairs only the
+relevant finding, runs the affected checks, records the review-repair checkpoint
+and commit, establishes the required final evidence for the repaired candidate,
+and performs the focused second review against that committed `HEAD`. The
+focused handoff contains only the prior blockers, repair delta, and directly
+affected focus; unaffected `PASS` conclusions carry forward. A passing second
+review goes directly to final acceptance; acceptance consumes current evidence
+rather than rerunning unchanged validation or review. Normal review-repair
+activity allows at most two review executions for the candidate, including
+independent, focused, investigation, or other reviewer-like passes. The gate
+records the attempts in canonical run state; a second `CHANGES_REQUIRED` result
+stops automatic repair or review activity and reports the unresolved evidence.
+Ordinary debugging of an unrelated implementation or test failure is separate
+task recovery and does not consume this review budget. PR mode never merges;
+project-facing PR content follows the delivery policy, while evidence and
+receipts remain private. `/git-pr draft` requests a draft PR without changing
+normal `/git-pr` behavior.
 
 After the local gates pass, PR delivery pushes the branch, creates the one
 authorized PR, records its URL and a local receipt, reports `ACCEPTED`, and
 stops. Remote GitHub CI is external after PR creation: it may be reported as
 pending, but SWE Forge does not await or poll it synchronously.
 
-The PR mental model is: plan, targeted-validate/checkpoint/commit each step,
-final-validate, review, repair/validate/checkpoint/commit when required,
-final-validate the changed candidate, focused re-review, accept, push, create
-the PR, and report.
+The working spec's `review_focus` is the sole structured review scope. The
+root derives a transient focused subset after a repair instead of mutating the
+original ticket or replaying unrelated criteria. The PR mental model is: plan,
+targeted-validate/checkpoint/commit each step, final-validate, review,
+repair/validate/checkpoint/commit when required, final-validate the changed
+candidate, focused re-review, accept, push, create the PR, and report.
 
 ## Ticket Lifecycle
 

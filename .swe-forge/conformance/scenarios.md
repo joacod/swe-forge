@@ -47,7 +47,10 @@ grading an agent from its explanation alone.
 | Bug ticket with a usable test seam | Load verification before strategy selection and choose a regression test where practical. |
 | Executable evidence and candidate binding | Load evidence policy before fingerprints, freshness, checkpoints, or receipts; evidence remains bound to the exact candidate and stale evidence is rejected. |
 | Delegated implementer with reduced context | Load the task contract and implementer role; invoke the canonical worker-brief renderer and pass only its validated projection with local scope, write ownership, relevant instructions, validation, permissions, no opportunistic expansion, no unauthorized delivery, required result/evidence fields, and blocking escalation. |
-| Independent review | Load the reviewer role and review contract before a fresh, read-only review; review remains independent and checks the review focus before general quality concerns. |
+| Independent review | Load the reviewer role and review contract before a fresh, read-only review; review remains independent and checks the complete initial `review_focus` before relevant quality concerns. |
+| Initial review handoff | Include the candidate identity, original ticket, complete ticket-relevant focus, relevant architecture decisions, final diff, and validation evidence without concatenating workflow-policy or contract prose. |
+| Focused second-review handoff | After repair, include prior blocking findings, the repair delta and files, directly affected focus/criteria/risks, current evidence, and only the original context needed; do not replay the initial assignment. |
+| Focused review carry-forward | Treat unaffected prior `PASS` conclusions as established and do not independently re-prove unrelated criteria. |
 | Context discontinuity or recovery path | Re-read authoritative run state and inspect actual Git/evidence state before continuing; do not trust a conversational summary or repeat completed semantic work. |
 | `BLOCKED`/`FAILED` recovery path | Load failure-recovery before recovery and apply its bounded retry and preservation rules rather than looping or changing status silently. |
 | Final acceptance | Verification, evidence, review, delivery, and recovery contribute evidence to the one canonical Acceptance Gate in `SWE-FORGE.md`; no policy defines a competing final gate. |
@@ -108,6 +111,9 @@ handoff and verifies that B receives selected facts without A's full result.
 | Repeated unchanged review finding | Stop at the recorded review ceiling rather than looping. |
 | Review attempt 1 and 2 both require changes | Record attempts 1 and 2 in canonical state, preserve the second findings, and reject a third reviewer-like execution without replacing evidence. |
 | Successful focused second review | After an initial repair commit and required final evidence for its candidate, record attempt 2 as `PASS` and allow acceptance without a third review. |
+| Repair regression during focused review | Permit attempt 2 to return `CHANGES_REQUIRED` for a concrete regression introduced by the repair or necessary to establish the prior blocker is resolved; unrelated new audits remain deferred. |
+| Focused review attempt accounting | Record the focused execution through the same canonical second/final review attempt, regardless of source label. |
+| Final acceptance review boundary | Consume the current passing review and evidence without launching another reviewer-like execution or broad semantic audit. |
 | Reviewer-like recovery alias | An investigation, debug review, or focused-review source still consumes the shared review budget; ordinary unrelated test debugging does not. |
 | PR commit plan with multiple steps | Require each ordered step to have its own validated checkpoint and materializing commit; reject one catch-all checkpoint. |
 | PR commit plan with one step | Allow one cohesive implementation step and one commit without ceremonial extra commits. |
