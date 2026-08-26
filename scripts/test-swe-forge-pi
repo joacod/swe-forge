@@ -171,6 +171,7 @@ if (mismatchInspection.active !== false || mismatchInspection.reason !== "checko
 
 process.env.HOME = path.join(fixtureCwd, "home");
 fs.mkdirSync(path.join(process.env.HOME, ".pi", "agent"), { recursive: true });
+delete process.env.SWE_FORGE_STATE;
 process.env.SWE_FORGE_RUN_STATE = oldState;
 const handlers = new Map();
 const entries = [];
