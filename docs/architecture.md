@@ -84,11 +84,13 @@ review to the committed candidate's Git `HEAD`. Review is one fresh
 ticket-focused review; one concrete localized repair may be validated without a
 second review.
 
-Run state is temporary or ignored, schema-v4 only, and authoritative for
-continuation after a host context discontinuity. The host owns context
-preservation, compaction, retry, and restoration. Before resuming, the
-workflow re-reads state and reconciles actual Git and validation/review
-evidence.
+Run state is temporary or ignored, schema-v5 only, and authoritative for
+continuation after a host context discontinuity. It records the run fence,
+route, canonical checkout, compact continuation, candidate-bound validation and
+review facts, and PR delivery reference—rather than a second workflow log. The
+host owns context preservation, compaction, retry, and restoration. Before
+resuming, the workflow re-reads state and reconciles actual Git and
+validation/review evidence.
 
 ## Installation
 

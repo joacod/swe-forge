@@ -10,13 +10,11 @@ PROGRAM=${0##*/}
 STATE=
 CHECKOUT=
 REVIEW_LOCK=
-REVIEW_TMP=
 TAB=$(printf '\t')
 NEWLINE='
 '
 
 cleanup() {
-  [ -z "${REVIEW_TMP:-}" ] || rm -f "$REVIEW_TMP"
   if [ -n "${REVIEW_LOCK:-}" ]; then
     rm -f "$REVIEW_LOCK/pid"
     rmdir "$REVIEW_LOCK" 2>/dev/null || true
@@ -85,40 +83,19 @@ git_root_from_cwd() {
   git rev-parse --show-toplevel 2>/dev/null || fail "not inside a Git checkout"
 }
 
-meta_value() {
-  key=$1
-  file=$2
-  awk -F= -v wanted="$key" '$1 == wanted { sub(/^[^=]*=/, ""); print; exit }' "$file"
-}
-
-state_signature() {
-  cksum "$STATE/run-state.yaml" | awk '{ print $1 ":" $2 }'
-}
-
 validate_run_state() {
-  [ -f "$STATE/run-state.yaml" ] || return 0
-  [ -x "$SCRIPT_DIR/swe-forge-state" ] || return 0
-  signature=$(state_signature)
-  marker=$STATE/run-state.valid
-  if [ -f "$marker" ] && [ "$(cat "$marker")" = "$signature" ]; then
-    return 0
-  fi
+  [ -f "$STATE/run-state.yaml" ] || fail "state has not been initialized: $STATE"
+  [ -x "$SCRIPT_DIR/swe-forge-state" ] || fail "canonical state validator is unavailable"
   "$SCRIPT_DIR/swe-forge-state" validate --state "$STATE/run-state.yaml" >/dev/null
-  marker_tmp=$marker.tmp.$$
-  printf '%s\n' "$signature" >"$marker_tmp"
-  mv "$marker_tmp" "$marker"
 }
 
 state_meta() {
   [ -n "${STATE:-}" ] || fail "--state is required"
-  [ -f "$STATE/meta.env" ] || fail "state has not been initialized: $STATE"
-  if grep -Eq '^state_version=1([[:space:]]|$)' "$STATE/meta.env"; then
-    fail "evidence state is stale or unsupported; start a fresh run"
-  fi
-  CHECKOUT=$(meta_value checkout_path "$STATE/meta.env")
-  [ -n "$CHECKOUT" ] || fail "state is missing checkout_path"
-  [ -d "$CHECKOUT" ] || fail "recorded checkout no longer exists: $CHECKOUT"
   validate_run_state
+  CHECKOUT=$(run_state_nested_value checkout path)
+  [ -n "$CHECKOUT" ] || fail "state is missing checkout.path"
+  [ -d "$CHECKOUT" ] || fail "recorded checkout no longer exists: $CHECKOUT"
+  CHECKOUT=$(CDPATH= cd "$CHECKOUT" && pwd -P) || fail "recorded checkout is not accessible: $CHECKOUT"
 }
 
 run_state_value() {
@@ -195,9 +172,9 @@ identity_safe() {
   [ "$actual_root" = "$CHECKOUT" ] || return 1
   branch=$(current_branch)
   [ -n "$branch" ] || return 1
-  baseline_branch=$(meta_value baseline_branch "$STATE/meta.env")
-  [ "$branch" = "$baseline_branch" ] || return 1
-  remote_default=$(meta_value remote_default "$STATE/meta.env")
+  recorded_branch=$(run_state_nested_value checkout branch)
+  [ "$branch" = "$recorded_branch" ] || return 1
+  remote_default=$(remote_default_branch)
   [ "$branch" != main ] || return 1
   [ "$branch" != master ] || return 1
   [ -z "$remote_default" ] || [ "$branch" != "$remote_default" ] || return 1
@@ -206,22 +183,6 @@ identity_safe() {
 assert_identity() {
   state_meta
   identity_safe || fail "checkout identity, branch, or protection state changed"
-}
-
-write_meta() {
-  baseline=$1
-  branch=$2
-  remote_default=$3
-  meta_tmp=$STATE/meta.env.tmp.$$
-  {
-    printf 'state_version=2\n'
-    printf 'checkout_path=%s\n' "$CHECKOUT"
-    printf 'baseline_head=%s\n' "$baseline"
-    printf 'baseline_branch=%s\n' "$branch"
-    printf 'remote_default=%s\n' "$remote_default"
-    printf 'created_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  } >"$meta_tmp"
-  mv "$meta_tmp" "$STATE/meta.env"
 }
 
 ensure_safe_state_location() {
@@ -252,8 +213,12 @@ validate_validation_ledger() {
   fi
 }
 
-ensure_meta_state() {
+ensure_state() {
   state_meta
+  for obsolete in meta.env review.env run-state.valid; do
+    [ ! -e "$STATE/$obsolete" ] || \
+      fail "state contains obsolete persisted data: $obsolete; start a fresh state directory"
+  done
   [ -f "$STATE/validations.tsv" ] || : >"$STATE/validations.tsv"
   validate_validation_ledger
 }
@@ -323,7 +288,11 @@ preflight() {
   [ -n "${STATE:-}" ] || fail "--state is required"
   CHECKOUT=$(git_root_from_cwd)
   ensure_safe_state_location "$CHECKOUT"
-  [ ! -e "$STATE/meta.env" ] || fail "state is already initialized: $STATE"
+  [ ! -e "$STATE/run-state.yaml" ] || fail "state is already initialized: $STATE"
+  for obsolete in meta.env review.env run-state.valid validations.tsv; do
+    [ ! -e "$STATE/$obsolete" ] || \
+      fail "state contains obsolete persisted data: $obsolete; start with a fresh state directory"
+  done
   umask 077
   branch=$(current_branch)
   [ -n "$branch" ] || fail "checkout is detached"
@@ -339,8 +308,6 @@ preflight() {
   git -C "$CHECKOUT" merge-base --is-ancestor "$base_head" "$head" || \
     fail "base revision is not an ancestor of the current checkout: $baseline_ref"
   mkdir -p "$STATE"
-  write_meta "$base_head" "$branch" "$remote_default"
-  : >"$STATE/validations.tsv"
   "$SCRIPT_DIR/swe-forge-state" init \
     --state "$STATE" \
     --checkout "$CHECKOUT" \
@@ -350,10 +317,8 @@ preflight() {
     --routing-preferred "$routing_preferred" \
     --routing-current "$routing_current" \
     --reason "$state_reason" \
-    --fallback-used "$fallback_used" \
-    --delivery-status ready \
-    --delivery-branch-setup reused \
-    --remote-default-evidence "${remote_default:-none}" >/dev/null
+    --fallback-used "$fallback_used" >/dev/null
+  : >"$STATE/validations.tsv"
   "$SCRIPT_DIR/swe-forge-state" set-continuation \
     --state "$STATE/run-state.yaml" \
     --workflow-active true \
@@ -472,10 +437,31 @@ EOF_VALIDATIONS
 
 sync_delivery_head() {
   head=$1
-  recorded=$(run_state_nested_value delivery_checkout head_sha)
+  recorded=$(run_state_nested_value checkout head_sha)
   [ "$recorded" = "$head" ] || \
     "$SCRIPT_DIR/swe-forge-state" set-delivery-checkout \
       --state "$STATE/run-state.yaml" --head-sha "$head" >/dev/null
+}
+
+validation_summary_for_head() {
+  head=$1
+  final_count=$(awk -F "$TAB" -v wanted="$head" '$10 == wanted && $12 == "yes" { count++ } END { print count + 0 }' \
+    "$STATE/validations.tsv")
+  if [ "$final_count" -eq 0 ]; then
+    printf 'pending\n'
+  elif check_final_validations "$head" >/dev/null 2>&1; then
+    printf 'passed\n'
+  else
+    printf 'failed\n'
+  fi
+}
+
+sync_validation_state() {
+  head=$1
+  validation_status=$(validation_summary_for_head "$head")
+  "$SCRIPT_DIR/swe-forge-state" set-validation \
+    --state "$STATE/run-state.yaml" --head-sha "$head" \
+    --status "$validation_status" --reference validations.tsv >/dev/null
 }
 
 validate_run() {
@@ -527,7 +513,7 @@ validate_run() {
   esac
   [ "$requirement" != conditional ] || [ -n "$condition" ] || \
     fail "conditional checks require a condition"
-  ensure_meta_state
+  ensure_state
   assert_identity
   before_status=$(status_porcelain)
   [ "$final_run" != yes ] || [ -z "$before_status" ] || \
@@ -558,10 +544,9 @@ validate_run() {
   fi
   append_validation "$name" "$requirement" "$condition" "$result" "$code" \
     "$evidence_file" "$command_display" "$head_before" "$head_after" "$final_run" "$reason"
+  sync_delivery_head "$head_after"
+  sync_validation_state "$head_after"
   printf '%s: %s (%s)\n' "$name" "$result" "$evidence_file"
-  if [ "$result" = passed ]; then
-    sync_delivery_head "$head_after"
-  fi
   [ "$result" = passed ]
 }
 
@@ -612,7 +597,7 @@ record_check_status() {
       *) fail "unknown record-check-status option: $1" ;;
     esac
   done
-  ensure_meta_state
+  ensure_state
   assert_identity
   [ -n "$name" ] || fail "--name is required"
   reject_control_chars "$name"
@@ -642,7 +627,8 @@ record_check_status() {
   printf 'recorded status %s for %s\n' "$status" "$name" >"$evidence"
   append_validation "$name" "$requirement" "$condition" "$status" 0 "$evidence" \
     "record-check-status $name $status" "$head" "$head" "$final_run" "$reason"
-  if [ "$final_run" = yes ]; then sync_delivery_head "$head"; fi
+  sync_delivery_head "$head"
+  sync_validation_state "$head"
   printf 'PASS: recorded %s for %s\n' "$status" "$name"
 }
 
@@ -720,44 +706,18 @@ review_run() {
   if [ "$result" = CHANGES_REQUIRED ] && [ "$findings" -eq 0 ]; then
     fail "CHANGES_REQUIRED review must report at least one finding"
   fi
-  blocked_display=none
-  if [ -n "$blocked_values" ]; then
-    blocked_display=
-    blocked_first=true
-    while IFS= read -r blocked_id; do
-      [ -n "$blocked_id" ] || continue
-      if [ "$blocked_first" = true ]; then
-        blocked_first=false
-      else
-        blocked_display="$blocked_display,"
-      fi
-      blocked_display="$blocked_display$blocked_id"
-    done <<EOF_BLOCKED
-$blocked_values
-EOF_BLOCKED
-  fi
   if [ "$result" = CHANGES_REQUIRED ] && [ -z "$blocked_values" ]; then
     fail "CHANGES_REQUIRED review must identify at least one blocking finding"
   fi
   acquire_review_lock
-  ensure_meta_state
+  ensure_state
   assert_identity
   head=$(git -C "$CHECKOUT" rev-parse HEAD)
   review_candidate_ready "$head"
   sync_delivery_head "$head"
-  SWE_FORGE_REVIEW_LOCK_HELD=true "$SCRIPT_DIR/swe-forge-state" set-review \
-    --state "$STATE/run-state.yaml" --result "$result" $blocked_args >/dev/null
-  REVIEW_TMP=$STATE/review.env.tmp.$$
-  {
-    printf 'result=%s\n' "$result"
-    printf 'source=%s\n' "$source"
-    printf 'findings=%s\n' "$findings"
-    printf 'blocked_by=%s\n' "$blocked_display"
-    printf 'head=%s\n' "$head"
-    printf 'recorded_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  } >"$REVIEW_TMP"
-  mv "$REVIEW_TMP" "$STATE/review.env"
-  REVIEW_TMP=
+  "$SCRIPT_DIR/swe-forge-state" set-review \
+    --state "$STATE/run-state.yaml" --head-sha "$head" \
+    --result "$result" $blocked_args >/dev/null
   printf 'REVIEW: %s (%s findings)\n' "$result" "$findings"
   [ "$result" = PASS ]
 }
@@ -770,51 +730,49 @@ blocker() {
 
 check_final_state() {
   final_blockers=0
-  ensure_meta_state
+  ensure_state
   if ! identity_safe; then blocker "checkout identity, branch, or protection state is not safe"; fi
   status=$(status_porcelain)
   [ -z "$status" ] || blocker "checkout is dirty"
-  baseline_head=$(meta_value baseline_head "$STATE/meta.env")
+  baseline_head=$(run_state_nested_value checkout base_sha)
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
   git -C "$CHECKOUT" merge-base --is-ancestor "$baseline_head" "$current_head" || \
     blocker "current HEAD is not based on the recorded baseline"
   if ! check_final_validations "$current_head" >/dev/null 2>&1; then
     blocker "required or applicable final validation is not passing for current HEAD"
   fi
+  validation_head=$(run_state_nested_value validation head_sha)
+  validation_status=$(run_state_nested_value validation status)
+  [ "$validation_head" = "$current_head" ] || \
+    blocker "validation state is not for current HEAD"
+  [ "$validation_status" = passed ] || \
+    blocker "validation state does not record a passing final candidate: ${validation_status:-missing}"
+
   review_state_status=$(run_state_nested_value review status)
+  reviewed_head=$(run_state_nested_value review reviewed_head)
+  repair_used=$(run_state_nested_value review repair_used)
   case "$review_state_status" in
-    pass|repaired) ;;
+    pass)
+      [ "$repair_used" = false ] || blocker "review PASS cannot record a repair"
+      [ "$reviewed_head" = "$current_head" ] || blocker "review evidence is not for current HEAD"
+      ;;
+    repaired)
+      [ "$(delivery_mode_from_state)" = PR ] || \
+        blocker "review repair is only supported for PR delivery"
+      [ "$repair_used" = true ] || blocker "repaired review state lacks repair evidence"
+      [ "$(review_blocker_count)" -eq 1 ] || \
+        blocker "repaired review state must retain one blocking finding"
+      [ "$reviewed_head" != "$current_head" ] || \
+        blocker "review repair did not produce a new candidate"
+      git -C "$CHECKOUT" cat-file -e "$reviewed_head^{commit}" 2>/dev/null || \
+        blocker "review evidence references a missing commit"
+      if ! git -C "$CHECKOUT" merge-base --is-ancestor "$reviewed_head" "$current_head" 2>/dev/null; then
+        blocker "repaired candidate is not based on the reviewed HEAD"
+      fi
+      ;;
     changes-required) blocker "review has unresolved findings" ;;
     *) blocker "canonical review state does not permit delivery: ${review_state_status:-missing}" ;;
   esac
-  if [ -f "$STATE/review.env" ]; then
-    review_result=$(meta_value result "$STATE/review.env")
-    review_head=$(meta_value head "$STATE/review.env")
-    case "$review_state_status" in
-      pass)
-        [ "$review_result" = PASS ] || blocker "fresh review is not PASS: ${review_result:-missing}"
-        [ "$review_head" = "$current_head" ] || blocker "review evidence is not for current HEAD"
-        ;;
-      repaired)
-        [ "$(delivery_mode_from_state)" = PR ] || \
-          blocker "review repair is only supported for PR delivery"
-        [ "$review_result" = CHANGES_REQUIRED ] || \
-          blocker "repaired review state lacks its changes-required review evidence"
-        [ "$(review_blocker_count)" -eq 1 ] || \
-          blocker "repaired review state must retain one blocking finding"
-        [ "$review_head" != "$current_head" ] || \
-          blocker "review repair did not produce a new candidate"
-        git -C "$CHECKOUT" cat-file -e "$review_head^{commit}" 2>/dev/null || \
-          blocker "review evidence references a missing commit"
-        if ! git -C "$CHECKOUT" merge-base --is-ancestor "$review_head" "$current_head" 2>/dev/null; then
-          blocker "repaired candidate is not based on the reviewed HEAD"
-        fi
-        ;;
-      *) blocker "review evidence cannot complete delivery from state: $review_state_status" ;;
-    esac
-  else
-    blocker "review evidence is missing"
-  fi
 }
 
 deliver_pr() {
@@ -829,7 +787,7 @@ deliver_pr() {
       *) fail "unknown deliver-pr option: $1" ;;
     esac
   done
-  ensure_meta_state
+  ensure_state
   [ "$(delivery_mode_from_state)" = PR ] || fail "deliver-pr is only valid in PR mode"
   check_final_state
   [ "$final_blockers" -eq 0 ] || exit 1

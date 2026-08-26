@@ -31,29 +31,23 @@ Usage:
     --preferred TOPOLOGY --current TOPOLOGY --reason TEXT \
     --fallback-used TEXT
   swe-forge-state set-continuation --state FILE|DIRECTORY [options]
-  swe-forge-state set-delivery-checkout --state FILE|DIRECTORY \
-    --head-sha SHA
-  swe-forge-state set-delivery-checkout --state FILE|DIRECTORY \
-    --path PATH --branch BRANCH --base-sha SHA --head-sha SHA
+  swe-forge-state set-delivery-checkout --state FILE|DIRECTORY --head-sha SHA
+  swe-forge-state set-validation --state FILE|DIRECTORY \
+    --head-sha SHA --status pending|passed|failed --reference REF
   swe-forge-state set-review --state FILE|DIRECTORY \
-    --result PASS|CHANGES_REQUIRED [--blocked-by ID...]
-  swe-forge-state set-review-repair --state FILE|DIRECTORY
+    --head-sha SHA --result PASS|CHANGES_REQUIRED [--blocked-by ID...]
+  swe-forge-state set-review-repair --state FILE|DIRECTORY --head-sha SHA
   swe-forge-state set-pull-request --state FILE|DIRECTORY --url URL
 
 `inspect` and `resolve-active` expose the validated semantic run-state
 projection as deterministic JSON. Candidate discovery remains the caller's
 responsibility; this helper owns validation, eligibility, and ordering.
-`init` creates the current schema-v4 structural shell from the selected
-internal routing, delivery, checkout, and normalized invocation facts. Pass the
-parser's `delivery_mode` unchanged; it defaults to `PR`, while an explicit
-`guided` modifier selects `GUIDED`.
-`set-routing` owns deliberate preferred/effective topology changes and their
-current rationale. `set-continuation` accepts only the bounded continuation
-surface; it generates updated_at and derives the delivery projection.
-`set-delivery-checkout`, `set-review`, `set-review-repair`, and
-`set-pull-request` own their purpose-specific updates. All write operations
-validate a temporary result before atomic replacement. Obsolete or unknown
-state must be replaced by starting a fresh run.
+`init` creates the current schema-v5 state from actual checkout facts and
+semantic routing and delivery input. `set-continuation` owns its timestamp.
+`set-delivery-checkout`, `set-validation`, `set-review`,
+`set-review-repair`, and `set-pull-request` own purpose-specific updates. All
+write operations are serialized per state, validated before atomic replacement,
+and never migrate stale state.
 EOF
 }
 
@@ -165,13 +159,6 @@ top_level() {
   ' "$file"
 }
 
-nested_key() {
-  section=$1
-  key=$2
-  file=$3
-  scalar_value "$section.$key" "$file" >/dev/null
-}
-
 value_for() {
   key=$1
   file=$2
@@ -213,10 +200,16 @@ scalar_value() {
   ' "$file"
 }
 
+nested_key() {
+  scalar_value "$1.$2" "$3" >/dev/null
+}
+
 required_scalar() {
   field=$1
   file=$2
-  scalar_value "$field" "$file" || fail "current schema is missing $field"
+  value=$(scalar_value "$field" "$file") || fail "current schema is missing $field"
+  [ -n "$value" ] || fail "current schema has an empty $field"
+  printf '%s\n' "$value"
 }
 
 validate_enum() {
@@ -256,15 +249,6 @@ require_scalar_arg() {
   control_chars "$candidate"
 }
 
-absolute_path() {
-  candidate=$1
-  control_chars "$candidate"
-  case "$candidate" in
-    /*) printf '%s\n' "$candidate" ;;
-    *) printf '%s/%s\n' "$PWD" "$candidate" ;;
-  esac
-}
-
 validate_sha_field() {
   field=$1
   value=$2
@@ -274,12 +258,25 @@ validate_sha_field() {
   [ "${#value}" -eq 40 ] || fail "$field must contain a full 40-character SHA"
 }
 
-validate_delivery_projection() {
-  file=$1
-  projection=$(required_scalar continuation.delivery.mode "$file")
-  canonical=$(required_scalar delivery_mode "$file")
-  [ "$projection" = "$canonical" ] || fail 'continuation.delivery.mode must match delivery_mode'
+validate_sha_or_none() {
+  field=$1
+  value=$2
+  case "$value" in
+    none|NONE|null) ;;
+    *) validate_sha_field "$field" "$value" ;;
+  esac
 }
+
+validate_url_or_none() {
+  field=$1
+  value=$2
+  case "$value" in
+    none) ;;
+    http://*|https://*) control_chars "$value" ;;
+    *) fail "invalid $field" ;;
+  esac
+}
+
 identifier_valid() {
   value=$1
   case "$value" in
@@ -288,24 +285,7 @@ identifier_valid() {
   return 0
 }
 
-validate_review() {
-  file=$1
-  for field in status blocked_by contract_ref; do
-    nested_key review "$field" "$file" || fail "review is missing $field"
-  done
-  validate_enum review.status "$file" pending pass changes-required repaired skipped
-  blocked_by=$(required_scalar review.blocked_by "$file")
-  review_status=$(required_scalar review.status "$file")
-  case "$review_status" in
-    changes-required|repaired)
-      [ "$blocked_by" != '[]' ] || fail "review.$review_status requires a blocking finding" ;;
-    pass|pending|skipped)
-      [ "$review_status" != pass ] || [ "$blocked_by" = '[]' ] || \
-        fail 'review.pass may not retain blocking findings' ;;
-  esac
-  required_scalar review.contract_ref "$file" >/dev/null
-}
-reject_obsolete_fields() {
+reject_unknown_fields() {
   file=$1
   if awk '
     function indentation(value, stripped) {
@@ -319,61 +299,61 @@ reject_obsolete_fields() {
       sub(/:.*/, "", stripped)
       return stripped
     }
+    function allowed_top(key) {
+      return key == "workflow" || key == "workflow_version" ||
+        key == "schema_version" || key == "run_id" || key == "status" ||
+        key == "delivery_mode" || key == "routing" || key == "checkout" ||
+        key == "continuation" || key == "validation" || key == "review" ||
+        key == "delivery" || key == "tasks"
+    }
+    function allowed_task(key) {
+      return key == "status" || key == "dependencies" || key == "accepted_result_ref"
+    }
+    function allowed_child(parent, key) {
+      if (parent == "routing") return key == "preferred" || key == "current" || key == "reason" || key == "fallback"
+      if (parent == "checkout") return key == "path" || key == "branch" || key == "base_sha" || key == "head_sha"
+      if (parent == "delivery") return key == "status" || key == "pull_request_ref" || key == "pr_number" || key == "pr_state"
+      if (parent == "validation") return key == "head_sha" || key == "status" || key == "reference"
+      if (parent == "review") return key == "status" || key == "reviewed_head" || key == "repair_used" || key == "blocked_by"
+      if (parent == "continuation") return key == "workflow_active" || key == "workflow" || key == "phase" ||
+        key == "step" || key == "awaiting" || key == "next_action" || key == "safe_boundary" || key == "updated_at"
+      if (parent == "next_action") return key == "kind" || key == "target" || key == "acceptance"
+      return parent == "tasks"
+    }
     {
-      if ($0 ~ /^[[:space:]]*(#|$)/) next
+      if ($0 ~ /^[[:space:]]*(#|$|-)/) next
       current_indent = indentation($0)
-      while (depth > 0 && indents[depth] >= current_indent) depth--
       current_key = key_name($0)
+      while (depth > 0 && indents[depth] >= current_indent) depth--
       depth++
       indents[depth] = current_indent
       keys[depth] = current_key
-      under_continuation = 0
-      under_next_action = 0
-      under_routing = 0
-      under_review = 0
-      under_delivery_checkout = 0
-      for (i = 1; i < depth; i++) {
-        if (keys[i] == "continuation") under_continuation = 1
-        if (keys[i] == "next_action") under_next_action = 1
-        if (keys[i] == "routing") under_routing = 1
-        if (keys[i] == "review") under_review = 1
-        if (keys[i] == "delivery_checkout") under_delivery_checkout = 1
+      if (current_indent == 0) {
+        if (!allowed_top(current_key)) found=1
+        next
       }
-      if (current_indent == 0 &&
-          current_key != "workflow" && current_key != "workflow_version" &&
-          current_key != "schema_version" && current_key != "run_id" &&
-          current_key != "status" && current_key != "delivery_mode" &&
-          current_key != "reason" && current_key != "fallback_used" &&
-          current_key != "routing" && current_key != "delivery_checkout" &&
-          current_key != "delivery" && current_key != "review" &&
-          current_key != "tasks" && current_key != "ticket_ref" &&
-          current_key != "parsed_ticket_ref" && current_key != "specialist_skills" &&
-          current_key != "working_spec_ref" && current_key != "acceptance_ref" &&
-          current_key != "current_phase" && current_key != "continuation" &&
-          current_key != "validation_ref" && current_key != "cleanup" &&
-          current_key != "retries") found=1
-      if (under_routing &&
-          (current_key == "initial" || current_key == "selected" ||
-           current_key == "revisions" || current_key == "context_value" ||
-           current_key == "runtime_profile_ref")) found=1
-      if (under_continuation && current_key == "recovery") found=1
-      if (under_next_action && current_key == "expected_context_tokens") found=1
-      if (under_delivery_checkout && current_key == "checkpoint_sha") found=1
-      if (under_review &&
-          (current_key == "attempts" || current_key == "retry_ceiling" ||
-           current_key == "ceiling_provenance")) found=1
+      parent = keys[depth - 1]
+      if (keys[1] == "tasks") {
+        if (current_indent == 2) next
+        if (current_indent == 4 && !allowed_task(current_key)) found=1
+        if (current_indent >= 6 && keys[depth - 1] != "dependencies") found=1
+        next
+      }
+      if (current_indent == 2 && !allowed_child(parent, current_key)) found=1
+      if (current_indent == 4 && parent == "next_action" && !allowed_child(parent, current_key)) found=1
+      if (current_indent >= 6) {
+        if (keys[2] != "next_action" && keys[3] != "acceptance") found=1
+      }
     }
     END { if (found) exit 0; exit 1 }
   ' "$file"; then
-    fail 'stale/unsupported run state: obsolete routing, delivery, or context-control fields; start a fresh run'
+    fail 'stale/unsupported run state: unknown or removed state fields; start a fresh run'
   fi
 }
-
 
 validate_routing() {
   preferred=$1
   current=$2
-
   case "$preferred" in
     SOLO|SUBAGENTS) ;;
     *) fail "invalid routing.preferred: $preferred" ;;
@@ -384,86 +364,187 @@ validate_routing() {
   esac
 }
 
+validate_review() {
+  file=$1
+  for field in status reviewed_head repair_used blocked_by; do
+    nested_key review "$field" "$file" || fail "review is missing $field"
+  done
+  validate_enum review.status "$file" pending pass changes-required repaired skipped
+  validate_enum review.repair_used "$file" true false
+  reviewed_head=$(required_scalar review.reviewed_head "$file")
+  validate_sha_or_none review.reviewed_head "$reviewed_head"
+  blocked_by=$(required_scalar review.blocked_by "$file")
+  case "$blocked_by" in
+    \[*\]) ;;
+    *) fail 'review.blocked_by must be a list' ;;
+  esac
+  review_status=$(required_scalar review.status "$file")
+  case "$review_status" in
+    pending|skipped)
+      [ "$reviewed_head" = none ] || fail "review.$review_status must not have a reviewed candidate"
+      [ "$blocked_by" = '[]' ] || fail "review.$review_status may not retain blocking findings"
+      [ "$(required_scalar review.repair_used "$file")" = false ] || fail "review.$review_status may not be repaired" ;;
+    pass)
+      [ "$reviewed_head" != none ] || fail 'review.pass requires a reviewed candidate'
+      [ "$blocked_by" = '[]' ] || fail 'review.pass may not retain blocking findings'
+      [ "$(required_scalar review.repair_used "$file")" = false ] || fail 'review.pass may not be repaired' ;;
+    changes-required)
+      [ "$reviewed_head" != none ] || fail 'review.changes-required requires a reviewed candidate'
+      [ "$blocked_by" != '[]' ] || fail 'review.changes-required requires a blocking finding'
+      [ "$(required_scalar review.repair_used "$file")" = false ] || fail 'review.changes-required may not be repaired' ;;
+    repaired)
+      [ "$reviewed_head" != none ] || fail 'review.repaired requires a reviewed candidate'
+      [ "$blocked_by" != '[]' ] || fail 'review.repaired requires a blocking finding'
+      [ "$(required_scalar review.repair_used "$file")" = true ] || fail 'review.repaired requires repair_used: true' ;;
+  esac
+}
+
+validate_delivery() {
+  file=$1
+  for field in status pull_request_ref pr_number pr_state; do
+    nested_key delivery "$field" "$file" || fail "delivery is missing $field"
+  done
+  validate_enum delivery.status "$file" not-applicable pending complete blocked
+  validate_url_or_none delivery.pull_request_ref "$(required_scalar delivery.pull_request_ref "$file")"
+  pr_number=$(required_scalar delivery.pr_number "$file")
+  case "$pr_number" in
+    none|''|*[!0-9]*) [ "$pr_number" = none ] || fail 'invalid delivery.pr_number' ;;
+  esac
+  validate_enum delivery.pr_state "$file" DRAFT OPEN MERGED CLOSED none
+  delivery_mode=$(required_scalar delivery_mode "$file")
+  delivery_status=$(required_scalar delivery.status "$file")
+  pull_request_ref=$(required_scalar delivery.pull_request_ref "$file")
+  if [ "$delivery_mode" = GUIDED ]; then
+    [ "$delivery_status" = not-applicable ] || [ "$delivery_status" = complete ] || \
+      fail 'GUIDED delivery must be not-applicable or complete'
+    [ "$pull_request_ref" = none ] || fail 'GUIDED delivery may not record a pull request'
+  else
+    [ "$delivery_status" != not-applicable ] || fail 'PR delivery must have a delivery status'
+  fi
+  if [ "$delivery_status" = complete ]; then
+    [ "$pull_request_ref" != none ] || [ "$delivery_mode" = GUIDED ] || \
+      fail 'complete PR delivery requires a pull-request reference'
+  fi
+}
+
+validate_validation() {
+  file=$1
+  for field in head_sha status reference; do
+    nested_key validation "$field" "$file" || fail "validation is missing $field"
+  done
+  head=$(required_scalar validation.head_sha "$file")
+  validate_sha_or_none validation.head_sha "$head"
+  validate_enum validation.status "$file" pending passed failed
+  reference=$(required_scalar validation.reference "$file")
+  status=$(required_scalar validation.status "$file")
+  if [ "$status" != pending ]; then
+    [ "$reference" != none ] || fail "validation.$status requires a result reference"
+    [ "$head" != none ] || fail "validation.$status requires a candidate"
+  fi
+}
+
+assert_recorded_checkout() {
+  state_file_arg=$1
+  recorded_checkout=$(required_scalar checkout.path "$state_file_arg")
+  actual_root=$(git -C "$recorded_checkout" rev-parse --show-toplevel 2>/dev/null) || \
+    fail "recorded checkout is not a Git checkout: $recorded_checkout"
+  [ "$actual_root" = "$recorded_checkout" ] || \
+    fail 'recorded checkout root does not match the canonical checkout'
+  recorded_branch=$(required_scalar checkout.branch "$state_file_arg")
+  actual_branch=$(git -C "$recorded_checkout" symbolic-ref --quiet --short HEAD 2>/dev/null) || \
+    fail 'recorded checkout is detached'
+  [ "$actual_branch" = "$recorded_branch" ] || \
+    fail 'recorded checkout branch does not match run state'
+}
+
+assert_recorded_head() {
+  expected=$1
+  state_file_arg=$2
+  assert_recorded_checkout "$state_file_arg"
+  recorded_checkout=$(required_scalar checkout.path "$state_file_arg")
+  actual_head=$(git -C "$recorded_checkout" rev-parse HEAD 2>/dev/null) || \
+    fail "recorded checkout is not a Git checkout: $recorded_checkout"
+  [ "$actual_head" = "$expected" ] || \
+    fail "candidate HEAD does not match the recorded checkout: $expected"
+}
+
+validate_continuation() {
+  file=$1
+  for key in workflow_active workflow phase step awaiting next_action safe_boundary updated_at; do
+    nested_key continuation "$key" "$file" || fail "continuation is missing $key"
+  done
+  validate_enum continuation.workflow_active "$file" true false
+  validate_enum continuation.workflow "$file" ticket delivery other
+  validate_enum continuation.phase "$file" planning discovery implementation review delivery awaiting_merge recovery complete
+  step=$(required_scalar continuation.step "$file")
+  case "$step" in
+    none|*[!0-9]*) [ "$step" = none ] || fail 'invalid continuation.step' ;;
+  esac
+  validate_enum continuation.awaiting "$file" none user_merge user_decision recovery
+  validate_enum continuation.safe_boundary "$file" true false
+  required_scalar continuation.updated_at "$file" >/dev/null
+  for key in kind target acceptance; do
+    nested_key continuation.next_action "$key" "$file" || fail "continuation.next_action is missing $key"
+  done
+  validate_enum continuation.next_action.kind "$file" specify discover implement validate review verify_and_sync_merge recover none
+  required_scalar continuation.next_action.target "$file" >/dev/null
+  acceptance=$(required_scalar continuation.next_action.acceptance "$file")
+  case "$acceptance" in \[*\]) ;; *) fail 'continuation.next_action.acceptance must be a list' ;; esac
+}
 
 validate_state() {
   file=$(state_file "$1")
   schema=$(value_for schema_version "$file" || true)
-  [ "$schema" = 4 ] || \
-    fail 'stale/unsupported run state: only schema_version: 4 is supported; start a fresh run'
-  reject_obsolete_fields "$file"
+  [ "$schema" = 5 ] || \
+    fail 'stale/unsupported run state: only schema_version: 5 is supported; start a fresh run'
+  reject_unknown_fields "$file"
 
   for key in workflow workflow_version schema_version run_id status delivery_mode \
-    reason fallback_used routing delivery_checkout delivery review tasks; do
-    top_level "$key" "$file" || fail "stale/unsupported run state: schema-v4 state is missing current key: $key; start a fresh run"
+    routing checkout continuation validation review delivery; do
+    top_level "$key" "$file" || fail "stale/unsupported run state: schema-v5 state is missing current key: $key; start a fresh run"
   done
 
   [ "$(value_for workflow "$file")" = swe-forge ] || fail 'workflow must be swe-forge'
   [ "$(value_for workflow_version "$file")" = 1 ] || fail 'workflow_version must be 1'
+  required_scalar run_id "$file" >/dev/null
   validate_enum status "$file" planning running blocked reviewing repairing accepted failed
   validate_enum delivery_mode "$file" GUIDED PR
 
-  for field in preferred current; do
+  for field in preferred current reason fallback; do
     nested_key routing "$field" "$file" || fail "routing is missing $field"
-    validate_enum "routing.$field" "$file" SOLO SUBAGENTS
   done
-
   validate_routing \
     "$(required_scalar routing.preferred "$file")" \
     "$(required_scalar routing.current "$file")"
+  required_scalar routing.reason "$file" >/dev/null
+  required_scalar routing.fallback "$file" >/dev/null
 
-  for field in path branch base_sha head_sha status branch_setup \
-    remote_default_evidence; do
-    nested_key delivery_checkout "$field" "$file" || \
-      fail "delivery_checkout is missing $field"
+  for field in path branch base_sha head_sha; do
+    nested_key checkout "$field" "$file" || fail "checkout is missing $field"
   done
-  for field in commit push create_pull_request sync pull_request_ref; do
-    nested_key delivery "$field" "$file" || fail "delivery is missing $field"
-  done
-  for action in commit push create_pull_request publish deploy merge; do
-    scalar_value "delivery.authorization.$action" "$file" >/dev/null || \
-      fail "delivery.authorization is missing $action"
-  done
-  validate_enum delivery.authorization.commit "$file" not-authorized go PR
-  validate_enum delivery.authorization.push "$file" not-authorized PR
-  validate_enum delivery.authorization.create_pull_request "$file" not-authorized PR
-  validate_enum delivery.authorization.publish "$file" not-authorized
-  validate_enum delivery.authorization.deploy "$file" not-authorized
-  validate_enum delivery.authorization.merge "$file" not-authorized
-  validate_enum delivery.commit "$file" not-authorized pending complete blocked
-  validate_enum delivery.push "$file" not-authorized pending complete blocked
-  validate_enum delivery.create_pull_request "$file" not-authorized pending complete blocked
-  validate_enum delivery.sync "$file" not-authorized pending complete blocked
+  checkout_path=$(required_scalar checkout.path "$file")
+  case "$checkout_path" in /*) ;; *) fail 'checkout.path must be absolute' ;; esac
+  required_scalar checkout.branch "$file" >/dev/null
+  validate_sha_or_none checkout.base_sha "$(required_scalar checkout.base_sha "$file")"
+  validate_sha_or_none checkout.head_sha "$(required_scalar checkout.head_sha "$file")"
+
+  validate_delivery "$file"
+  validate_validation "$file"
   validate_review "$file"
-
-  classification=$(required_scalar delivery_checkout.status "$file")
-  case "$classification" in ready|running|blocked|dirty|complete) ;;
-    *) fail 'invalid delivery_checkout.status' ;;
-  esac
-  validate_enum delivery_checkout.branch_setup "$file" auto-created reused user-provided provided blocked
-  for field in delivery_checkout.base_sha delivery_checkout.head_sha; do
-    value=$(required_scalar "$field" "$file")
-    case "$value" in
-      none|NONE|null) ;;
-      *) validate_sha_field "$field" "$value" ;;
-    esac
-  done
-
-  if top_level continuation "$file" 2>/dev/null; then
-    for key in workflow_active workflow phase step awaiting safe_boundary updated_at; do
-      nested_key continuation "$key" "$file" || fail "continuation is missing $key"
-    done
-    validate_enum continuation.workflow_active "$file" true false
-    validate_enum continuation.workflow "$file" ticket delivery other
-    validate_enum continuation.phase "$file" planning discovery implementation review delivery awaiting_merge recovery complete
-    validate_enum continuation.awaiting "$file" none user_merge user_decision recovery
-    validate_enum continuation.safe_boundary "$file" true false
-    required_scalar continuation.updated_at "$file" >/dev/null
-    required_scalar continuation.delivery.mode "$file" >/dev/null
-    validate_enum continuation.delivery.mode "$file" GUIDED PR
-    validate_delivery_projection "$file"
+  validate_continuation "$file"
+  if [ "$(required_scalar delivery.status "$file")" = complete ] && \
+    [ "$(required_scalar continuation.workflow_active "$file")" = true ]; then
+    fail 'complete delivery must have inactive continuation'
   fi
 
-  printf 'PASS: schema-v4 run state is structurally valid: %s\n' "$file"
+  if top_level tasks "$file" 2>/dev/null; then
+    preferred=$(required_scalar routing.preferred "$file")
+    current=$(required_scalar routing.current "$file")
+    [ "$preferred" = SUBAGENTS ] || [ "$current" = SUBAGENTS ] || \
+      fail 'delegated task state is only valid when SUBAGENTS routing is selected'
+  fi
+
+  printf 'PASS: schema-v5 run state is structurally valid: %s\n' "$file"
 }
 
 inspection_valid=false
@@ -475,6 +556,7 @@ inspection_checkout=
 inspection_recorded_checkout=
 inspection_run_id=
 inspection_status=
+inspection_workflow_active=
 inspection_workflow_active_json=false
 inspection_updated_at=
 inspection_updated_epoch=
@@ -483,7 +565,22 @@ inspection_modified_epoch=
 inspection_modified_at_ms=0
 inspection_preferred=
 inspection_current=
+inspection_route_reason=
+inspection_route_fallback=
 inspection_delivery_mode=
+inspection_checkout_branch=
+inspection_checkout_base=
+inspection_checkout_head=
+inspection_validation_head=
+inspection_validation_status=
+inspection_validation_reference=
+inspection_review_status=
+inspection_reviewed_head=
+inspection_review_repair_used=false
+inspection_delivery_status=
+inspection_pull_request_ref=
+inspection_pr_number=
+inspection_pr_state=
 inspection_phase=
 inspection_step=
 inspection_awaiting=
@@ -491,9 +588,6 @@ inspection_next_kind=
 inspection_next_target=
 inspection_acceptance_json=[]
 inspection_safe_boundary_json=false
-inspection_pr_number=
-inspection_pr_state=
-inspection_review_status=
 
 inspection_scalar() {
   scalar_value "$1" "$2" 2>/dev/null || true
@@ -509,6 +603,7 @@ inspection_defaults() {
   inspection_recorded_checkout=
   inspection_run_id=
   inspection_status=
+  inspection_workflow_active=
   inspection_workflow_active_json=false
   inspection_updated_at=
   inspection_updated_epoch=
@@ -517,7 +612,22 @@ inspection_defaults() {
   inspection_modified_at_ms=0
   inspection_preferred=
   inspection_current=
+  inspection_route_reason=
+  inspection_route_fallback=
   inspection_delivery_mode=
+  inspection_checkout_branch=
+  inspection_checkout_base=
+  inspection_checkout_head=
+  inspection_validation_head=
+  inspection_validation_status=
+  inspection_validation_reference=
+  inspection_review_status=none
+  inspection_reviewed_head=none
+  inspection_review_repair_used=false
+  inspection_delivery_status=
+  inspection_pull_request_ref=none
+  inspection_pr_number=none
+  inspection_pr_state=none
   inspection_phase=none
   inspection_step=none
   inspection_awaiting=none
@@ -525,138 +635,8 @@ inspection_defaults() {
   inspection_next_target=none
   inspection_acceptance_json=[]
   inspection_safe_boundary_json=false
-  inspection_pr_number=none
-  inspection_pr_state=none
-  inspection_review_status=none
 }
 
-inspect_state_data() {
-  state_arg=$1
-  checkout_arg=$2
-  inspection_defaults
-  inspection_state_file=$(state_file "$state_arg")
-  inspection_state_file=$(canonical_path "$inspection_state_file")
-  inspection_checkout=$(canonical_path "$checkout_arg")
-
-  if ! "$0" validate --state "$inspection_state_file" >/dev/null 2>/dev/null; then
-    return 0
-  fi
-
-  inspection_valid=true
-  inspection_run_id=$(required_scalar run_id "$inspection_state_file")
-  inspection_status=$(required_scalar status "$inspection_state_file")
-  inspection_recorded_checkout=$(canonical_path "$(required_scalar delivery_checkout.path "$inspection_state_file")")
-  inspection_preferred=$(required_scalar routing.preferred "$inspection_state_file")
-  inspection_current=$(required_scalar routing.current "$inspection_state_file")
-  inspection_delivery_mode=$(required_scalar delivery_mode "$inspection_state_file")
-  inspection_workflow_active=$(inspection_scalar continuation.workflow_active "$inspection_state_file")
-  inspection_updated_at=$(inspection_scalar continuation.updated_at "$inspection_state_file")
-  inspection_phase=$(inspection_scalar continuation.phase "$inspection_state_file")
-  inspection_step=$(inspection_scalar continuation.step "$inspection_state_file")
-  inspection_awaiting=$(inspection_scalar continuation.awaiting "$inspection_state_file")
-  inspection_next_kind=$(inspection_scalar continuation.next_action.kind "$inspection_state_file")
-  inspection_review_status=$(inspection_scalar review.status "$inspection_state_file")
-  [ -n "$inspection_review_status" ] || inspection_review_status=none
-  inspection_next_target=$(inspection_scalar continuation.next_action.target "$inspection_state_file")
-  inspection_acceptance_json=$(inspection_acceptance "$inspection_state_file")
-  inspection_safe_boundary=$(inspection_scalar continuation.safe_boundary "$inspection_state_file")
-  inspection_pr_number=$(inspection_scalar continuation.delivery.pr_number "$inspection_state_file")
-  inspection_pr_state=$(inspection_scalar continuation.delivery.pr_state "$inspection_state_file")
-
-  [ -n "$inspection_phase" ] || inspection_phase=none
-  [ -n "$inspection_step" ] || inspection_step=none
-  [ -n "$inspection_awaiting" ] || inspection_awaiting=none
-  [ -n "$inspection_next_kind" ] || inspection_next_kind=none
-  [ -n "$inspection_next_target" ] || inspection_next_target=none
-  [ -n "$inspection_pr_number" ] || inspection_pr_number=none
-  [ -n "$inspection_pr_state" ] || inspection_pr_state=none
-  inspection_phase=$(projection_value "$inspection_phase")
-  inspection_step=$(projection_value "$inspection_step")
-  inspection_awaiting=$(projection_value "$inspection_awaiting")
-  inspection_next_kind=$(projection_value "$inspection_next_kind")
-  inspection_next_target=$(projection_value "$inspection_next_target")
-  inspection_pr_number=$(projection_value "$inspection_pr_number")
-  inspection_pr_state=$(projection_value "$inspection_pr_state")
-
-  case "$inspection_workflow_active" in
-    true) inspection_workflow_active_json=true ;;
-    false|'') inspection_workflow_active_json=false ;;
-    *) inspection_reason='invalid continuation activity marker'; return 0 ;;
-  esac
-  case "$inspection_safe_boundary" in
-    true) inspection_safe_boundary_json=true ;;
-    false|'') inspection_safe_boundary_json=false ;;
-    *) inspection_reason='invalid continuation boundary marker'; return 0 ;;
-  esac
-  if [ "$inspection_workflow_active_json" != true ]; then
-    inspection_reason='inactive workflow continuation'
-    return 0
-  fi
-
-  if [ "$inspection_recorded_checkout" != "$inspection_checkout" ]; then
-    inspection_reason='checkout mismatch'
-    return 0
-  fi
-  if ! inspection_updated_epoch=$(timestamp_epoch "$inspection_updated_at" 2>/dev/null); then
-    inspection_reason='stale or malformed continuation timestamp'
-    return 0
-  fi
-  inspection_updated_at_ms=$((inspection_updated_epoch * 1000))
-  if ! inspection_modified_epoch=$(file_mtime_seconds "$inspection_state_file" 2>/dev/null); then
-    inspection_reason='state file modification time is unavailable'
-    return 0
-  fi
-  inspection_modified_at_ms=$((inspection_modified_epoch * 1000))
-
-  case "$inspection_status" in
-    planning|running|blocked|reviewing|repairing)
-      inspection_active=true
-      ;;
-    accepted|failed)
-      inspection_reason='terminal or inactive run state'
-      return 0
-      ;;
-    *)
-      inspection_reason='unsupported run-state status'
-      return 0
-      ;;
-  esac
-  case "$inspection_status" in
-    planning|running|reviewing|repairing) inspection_delegation_authorized=true ;;
-    blocked) inspection_delegation_authorized=false ;;
-  esac
-  if [ "$inspection_delegation_authorized" = true ]; then
-    inspection_reason=eligible
-  else
-    inspection_reason='active continuation without delegation authorization'
-  fi
-}
-
-emit_state_json() {
-  printf '{"schema":"swe-forge-state/v1","valid":%s,"active":%s,"delegation_authorized":%s,"reason":%s' \
-    "$inspection_valid" "$inspection_active" "$inspection_delegation_authorized" \
-    "$(json_quote "$inspection_reason")"
-  printf ',"state_file":%s,"run_id":%s,"status":%s,"checkout":%s' \
-    "$(json_quote "$inspection_state_file")" "$(json_quote "$inspection_run_id")" \
-    "$(json_quote "$inspection_status")" "$(json_quote "$inspection_recorded_checkout")"
-  printf ',"updated_at":%s,"updated_at_ms":%s,"modified_at_ms":%s' \
-    "$(json_quote "$inspection_updated_at")" \
-    "$inspection_updated_at_ms" "$inspection_modified_at_ms"
-  printf ',"routing":{"preferred":%s,"current":%s},"delivery_mode":%s' \
-    "$(json_quote "$inspection_preferred")" "$(json_quote "$inspection_current")" \
-    "$(json_quote "$inspection_delivery_mode")"
-  printf ',"review":{"status":%s}' \
-    "$(json_quote "$inspection_review_status")"
-  printf ',"continuation":{"workflow_active":%s,"phase":%s,"step":%s,"awaiting":%s' \
-    "$inspection_workflow_active_json" "$(json_quote "$inspection_phase")" \
-    "$(json_quote "$inspection_step")" "$(json_quote "$inspection_awaiting")"
-  printf ',"next_action":{"kind":%s,"target":%s,"acceptance":%s},"safe_boundary":%s' \
-    "$(json_quote "$inspection_next_kind")" "$(json_quote "$inspection_next_target")" \
-    "$inspection_acceptance_json" "$inspection_safe_boundary_json"
-  printf ',"delivery":{"mode":%s,"pr_number":%s,"pr_state":%s}}}' \
-    "$(json_quote "$inspection_delivery_mode")" "$(json_quote "$inspection_pr_number")" \
-    "$(json_quote "$inspection_pr_state")"
-}
 inspection_acceptance() {
   file=$1
   awk -v maximum="$MAX_PROJECTION_LENGTH" -v maximum_items="$MAX_ACCEPTANCE_ITEMS" '
@@ -788,11 +768,190 @@ inspection_acceptance() {
 }
 
 projection_value() {
-  awk -v value="$1" -v maximum="$MAX_PROJECTION_LENGTH" '
-    BEGIN {
-      print substr(value, 1, maximum)
-    }
-  '
+  awk -v value="$1" -v maximum="$MAX_PROJECTION_LENGTH" 'BEGIN { print substr(value, 1, maximum) }'
+}
+
+inspect_checkout_identity() {
+  if [ ! -d "$inspection_checkout" ]; then
+    inspection_reason='checkout unavailable'
+    return 1
+  fi
+  inspection_actual_root=$(git -C "$inspection_checkout" rev-parse --show-toplevel 2>/dev/null || true)
+  [ -n "$inspection_actual_root" ] || return 0
+  if [ "$inspection_actual_root" != "$inspection_checkout" ]; then
+    inspection_reason='checkout root mismatch'
+    return 1
+  fi
+  inspection_actual_branch=$(git -C "$inspection_checkout" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -z "$inspection_actual_branch" ]; then
+    inspection_reason='checkout is detached'
+    return 1
+  fi
+  if [ "$inspection_actual_branch" != "$inspection_checkout_branch" ]; then
+    inspection_reason='checkout branch mismatch'
+    return 1
+  fi
+  inspection_actual_head=$(git -C "$inspection_checkout" rev-parse HEAD 2>/dev/null || true)
+  case "$inspection_checkout_head" in
+    none|NONE|null) ;;
+    *)
+      if [ -n "$inspection_actual_head" ] && [ "$inspection_actual_head" != "$inspection_checkout_head" ]; then
+        inspection_reason='checkout HEAD mismatch'
+        return 1
+      fi
+      ;;
+  esac
+  case "$inspection_checkout_base" in
+    none|NONE|null) ;;
+    *)
+      if ! git -C "$inspection_checkout" merge-base --is-ancestor "$inspection_checkout_base" HEAD 2>/dev/null; then
+        inspection_reason='checkout baseline mismatch'
+        return 1
+      fi
+      ;;
+  esac
+  return 0
+}
+
+inspect_state_data() {
+  state_arg=$1
+  checkout_arg=$2
+  inspection_defaults
+  inspection_state_file=$(state_file "$state_arg")
+  inspection_state_file=$(canonical_path "$inspection_state_file")
+  inspection_checkout=$(canonical_path "$checkout_arg")
+
+  if ! "$0" validate --state "$inspection_state_file" >/dev/null 2>/dev/null; then
+    return 0
+  fi
+
+  inspection_valid=true
+  inspection_run_id=$(required_scalar run_id "$inspection_state_file")
+  inspection_status=$(required_scalar status "$inspection_state_file")
+  inspection_recorded_checkout=$(canonical_path "$(required_scalar checkout.path "$inspection_state_file")")
+  inspection_preferred=$(required_scalar routing.preferred "$inspection_state_file")
+  inspection_current=$(required_scalar routing.current "$inspection_state_file")
+  inspection_route_reason=$(required_scalar routing.reason "$inspection_state_file")
+  inspection_route_fallback=$(required_scalar routing.fallback "$inspection_state_file")
+  inspection_delivery_mode=$(required_scalar delivery_mode "$inspection_state_file")
+  inspection_checkout_branch=$(required_scalar checkout.branch "$inspection_state_file")
+  inspection_checkout_base=$(required_scalar checkout.base_sha "$inspection_state_file")
+  inspection_checkout_head=$(required_scalar checkout.head_sha "$inspection_state_file")
+  inspection_workflow_active=$(required_scalar continuation.workflow_active "$inspection_state_file")
+  inspection_updated_at=$(required_scalar continuation.updated_at "$inspection_state_file")
+  inspection_phase=$(required_scalar continuation.phase "$inspection_state_file")
+  inspection_step=$(required_scalar continuation.step "$inspection_state_file")
+  inspection_awaiting=$(required_scalar continuation.awaiting "$inspection_state_file")
+  inspection_next_kind=$(required_scalar continuation.next_action.kind "$inspection_state_file")
+  inspection_next_target=$(required_scalar continuation.next_action.target "$inspection_state_file")
+  inspection_acceptance_json=$(inspection_acceptance "$inspection_state_file")
+  inspection_safe_boundary=$(required_scalar continuation.safe_boundary "$inspection_state_file")
+  inspection_validation_head=$(required_scalar validation.head_sha "$inspection_state_file")
+  inspection_validation_status=$(required_scalar validation.status "$inspection_state_file")
+  inspection_validation_reference=$(required_scalar validation.reference "$inspection_state_file")
+  inspection_review_status=$(required_scalar review.status "$inspection_state_file")
+  inspection_reviewed_head=$(required_scalar review.reviewed_head "$inspection_state_file")
+  inspection_review_repair_used=$(required_scalar review.repair_used "$inspection_state_file")
+  inspection_delivery_status=$(required_scalar delivery.status "$inspection_state_file")
+  inspection_pull_request_ref=$(required_scalar delivery.pull_request_ref "$inspection_state_file")
+  inspection_pr_number=$(required_scalar delivery.pr_number "$inspection_state_file")
+  inspection_pr_state=$(required_scalar delivery.pr_state "$inspection_state_file")
+
+  if ! inspect_checkout_identity; then return 0; fi
+
+  inspection_phase=$(projection_value "$inspection_phase")
+  inspection_step=$(projection_value "$inspection_step")
+  inspection_awaiting=$(projection_value "$inspection_awaiting")
+  inspection_next_kind=$(projection_value "$inspection_next_kind")
+  inspection_next_target=$(projection_value "$inspection_next_target")
+  inspection_validation_reference=$(projection_value "$inspection_validation_reference")
+  inspection_reviewed_head=$(projection_value "$inspection_reviewed_head")
+  inspection_pull_request_ref=$(projection_value "$inspection_pull_request_ref")
+  inspection_pr_number=$(projection_value "$inspection_pr_number")
+  inspection_pr_state=$(projection_value "$inspection_pr_state")
+
+  case "$inspection_workflow_active" in
+    true) inspection_workflow_active_json=true ;;
+    false) inspection_workflow_active_json=false ;;
+    *) inspection_reason='invalid continuation activity marker'; return 0 ;;
+  esac
+  case "$inspection_safe_boundary" in
+    true) inspection_safe_boundary_json=true ;;
+    false) inspection_safe_boundary_json=false ;;
+    *) inspection_reason='invalid continuation boundary marker'; return 0 ;;
+  esac
+  if [ "$inspection_workflow_active_json" != true ]; then
+    inspection_reason='inactive workflow continuation'
+    return 0
+  fi
+  if [ "$inspection_recorded_checkout" != "$inspection_checkout" ]; then
+    inspection_reason='checkout mismatch'
+    return 0
+  fi
+  if ! inspection_updated_epoch=$(timestamp_epoch "$inspection_updated_at" 2>/dev/null); then
+    inspection_reason='stale or malformed continuation timestamp'
+    return 0
+  fi
+  inspection_updated_at_ms=$((inspection_updated_epoch * 1000))
+  if ! inspection_modified_epoch=$(file_mtime_seconds "$inspection_state_file" 2>/dev/null); then
+    inspection_reason='state file modification time is unavailable'
+    return 0
+  fi
+  inspection_modified_at_ms=$((inspection_modified_epoch * 1000))
+
+  case "$inspection_status" in
+    planning|running|blocked|reviewing|repairing)
+      inspection_active=true ;;
+    accepted|failed)
+      inspection_reason='terminal or inactive run state'
+      return 0 ;;
+    *)
+      inspection_reason='unsupported run-state status'
+      return 0 ;;
+  esac
+  case "$inspection_status" in
+    planning|running|reviewing|repairing) inspection_delegation_authorized=true ;;
+    blocked) inspection_delegation_authorized=false ;;
+  esac
+  if [ "$inspection_delegation_authorized" = true ]; then
+    inspection_reason=eligible
+  else
+    inspection_reason='active continuation without delegation authorization'
+  fi
+}
+
+emit_state_json() {
+  printf '{"schema":"swe-forge-state/v1","valid":%s,"active":%s,"delegation_authorized":%s,"reason":%s' \
+    "$inspection_valid" "$inspection_active" "$inspection_delegation_authorized" \
+    "$(json_quote "$inspection_reason")"
+  printf ',"state_file":%s,"run_id":%s,"status":%s,"checkout":%s' \
+    "$(json_quote "$inspection_state_file")" "$(json_quote "$inspection_run_id")" \
+    "$(json_quote "$inspection_status")" "$(json_quote "$inspection_recorded_checkout")"
+  printf ',"updated_at":%s,"updated_at_ms":%s,"modified_at_ms":%s' \
+    "$(json_quote "$inspection_updated_at")" \
+    "$inspection_updated_at_ms" "$inspection_modified_at_ms"
+  printf ',"routing":{"preferred":%s,"current":%s,"reason":%s,"fallback":%s},"delivery_mode":%s' \
+    "$(json_quote "$inspection_preferred")" "$(json_quote "$inspection_current")" \
+    "$(json_quote "$inspection_route_reason")" "$(json_quote "$inspection_route_fallback")" \
+    "$(json_quote "$inspection_delivery_mode")"
+  printf ',"checkout_state":{"branch":%s,"base_sha":%s,"head_sha":%s}' \
+    "$(json_quote "$inspection_checkout_branch")" "$(json_quote "$inspection_checkout_base")" \
+    "$(json_quote "$inspection_checkout_head")"
+  printf ',"validation":{"head_sha":%s,"status":%s,"reference":%s}' \
+    "$(json_quote "$inspection_validation_head")" "$(json_quote "$inspection_validation_status")" \
+    "$(json_quote "$inspection_validation_reference")"
+  printf ',"review":{"status":%s,"reviewed_head":%s,"repair_used":%s}' \
+    "$(json_quote "$inspection_review_status")" "$(json_quote "$inspection_reviewed_head")" \
+    "$([ "$inspection_review_repair_used" = true ] && printf true || printf false)"
+  printf ',"continuation":{"workflow_active":%s,"phase":%s,"step":%s,"awaiting":%s' \
+    "$inspection_workflow_active_json" "$(json_quote "$inspection_phase")" \
+    "$(json_quote "$inspection_step")" "$(json_quote "$inspection_awaiting")"
+  printf ',"next_action":{"kind":%s,"target":%s,"acceptance":%s},"safe_boundary":%s}' \
+    "$(json_quote "$inspection_next_kind")" "$(json_quote "$inspection_next_target")" \
+    "$inspection_acceptance_json" "$inspection_safe_boundary_json"
+  printf ',"delivery":{"status":%s,"pull_request_ref":%s,"pr_number":%s,"pr_state":%s}}\n' \
+    "$(json_quote "$inspection_delivery_status")" "$(json_quote "$inspection_pull_request_ref")" \
+    "$(json_quote "$inspection_pr_number")" "$(json_quote "$inspection_pr_state")"
 }
 
 inspect_command() {
@@ -836,10 +995,12 @@ resolve_active_command() {
   candidate_file=$inspect_tmp/candidates
   records_file=$inspect_tmp/records
   seen_file=$inspect_tmp/seen
+  duplicate_ids=$inspect_tmp/duplicate-ids
   sorted_file=$inspect_tmp/sorted
   : >"$candidate_file"
   : >"$records_file"
   : >"$seen_file"
+  : >"$duplicate_ids"
   if [ -n "$resolve_candidates" ]; then printf '%s\n' "$resolve_candidates" >"$candidate_file"; fi
 
   index=0
@@ -855,15 +1016,20 @@ resolve_active_command() {
     index=$((index + 1))
     json_file=$inspect_tmp/state.$index.json
     emit_state_json >"$json_file"
-    printf '%s\t%s\t%s\t%s\n' "$inspection_state_file" "$inspection_updated_epoch" \
-      "$inspection_modified_epoch" "$json_file" >>"$records_file"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$inspection_state_file" "$inspection_updated_epoch" \
+      "$inspection_modified_epoch" "$inspection_run_id" "$json_file" >>"$records_file"
   done <"$candidate_file"
 
   LC_ALL=C sort -t "$TAB" -k2,2nr -k3,3nr -k1,1 "$records_file" >"$sorted_file"
+  awk -F "$TAB" '{ count[$4]++ } END { for (id in count) if (count[id] > 1) print id }' \
+    "$records_file" | LC_ALL=C sort -u >"$duplicate_ids"
   printf '{"schema":"swe-forge-state/v1","checkout":%s,"states":[' "$(json_quote "$resolve_checkout")"
   selected=0
-  while IFS="$TAB" read -r _state _updated _modified json_file; do
+  while IFS="$TAB" read -r _state _updated _modified run_id json_file; do
     [ -n "$json_file" ] || continue
+    if awk -v id="$run_id" '$0 == id { found = 1 } END { exit(found ? 0 : 1) }' "$duplicate_ids"; then
+      continue
+    fi
     if [ "$resolve_all" != true ] && [ "$selected" -gt 0 ]; then break; fi
     [ "$selected" -eq 0 ] || printf ','
     cat "$json_file"
@@ -898,36 +1064,39 @@ state_directory_for_init() {
   CDPATH= cd "$parent" && printf '%s/%s\n' "$(pwd -P)" "$(basename "$candidate")"
 }
 
+absolute_path() {
+  value=$1
+  control_chars "$value"
+  case "$value" in
+    /*) printf '%s\n' "$value" ;;
+    *) printf '%s/%s\n' "$PWD" "$value" ;;
+  esac
+}
+
 state_tmp=
 inspect_tmp=
-review_lock=
+state_lock=
 cleanup_state_tmp() {
   [ -z "${state_tmp:-}" ] || rm -f "$state_tmp"
 }
 cleanup_inspect_tmp() {
   [ -z "${inspect_tmp:-}" ] || rm -rf "$inspect_tmp"
 }
-cleanup_review_lock() {
-  if [ -n "${review_lock:-}" ]; then
-    rm -f "$review_lock/pid"
-    rmdir "$review_lock" 2>/dev/null || true
+cleanup_state_lock() {
+  if [ -n "${state_lock:-}" ]; then
+    rm -f "$state_lock/pid"
+    rmdir "$state_lock" 2>/dev/null || true
   fi
 }
-acquire_review_lock() {
-  lock_path=$(dirname "$state_path")/review.lock
-  if [ "${SWE_FORGE_REVIEW_LOCK_HELD:-false}" = true ]; then
-    owner_pid=$(cat "$lock_path/pid" 2>/dev/null || true)
-    [ "$owner_pid" = "${PPID:-}" ] || \
-      fail 'review lock is not owned by the invoking gate'
-    return 0
-  fi
+acquire_state_lock() {
+  lock_path=$(dirname "$state_path")/.run-state.lock
   mkdir "$lock_path" 2>/dev/null || \
-    fail 'review state is locked by another review activity; retry after it finishes'
-  review_lock=$lock_path
-  printf '%s\n' "$$" >"$review_lock/pid"
+    fail 'run state is being mutated by another activity; retry after it finishes'
+  state_lock=$lock_path
+  printf '%s\n' "$$" >"$state_lock/pid"
 }
 
-trap 'status=$?; cleanup_state_tmp; cleanup_inspect_tmp; cleanup_review_lock; exit "$status"' 0 HUP INT TERM
+trap 'status=$?; cleanup_state_tmp; cleanup_inspect_tmp; cleanup_state_lock; exit "$status"' 0 HUP INT TERM
 
 init_state() {
   init_state_arg=
@@ -936,97 +1105,42 @@ init_state() {
   init_baseline_ref=HEAD
   init_status=running
   init_delivery_mode=PR
-  init_reason='initial schema-v4 state'
-  init_fallback_used=no
+  init_reason='initial routing decision'
+  init_fallback=no
   init_routing_preferred=
   init_routing_current=
-  init_delivery_status=ready
-  init_delivery_branch_setup=reused
-  init_remote_default_evidence=none
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --state)
-        [ "$#" -ge 2 ] || fail '--state requires a directory'
-        init_state_arg=$2
-        shift 2
-        ;;
-      --checkout)
-        [ "$#" -ge 2 ] || fail '--checkout requires a path'
-        init_checkout_arg=$2
-        shift 2
-        ;;
-      --run-id)
-        [ "$#" -ge 2 ] || fail '--run-id requires an ID'
-        init_run_id=$2
-        shift 2
-        ;;
-      --baseline-ref|--base|--base-sha)
-        [ "$#" -ge 2 ] || fail "$1 requires a Git revision"
-        init_baseline_ref=$2
-        shift 2
-        ;;
-      --status)
-        [ "$#" -ge 2 ] || fail '--status requires a lifecycle status'
-        init_status=$2
-        shift 2
-        ;;
-      --delivery-mode)
-        [ "$#" -ge 2 ] || fail '--delivery-mode requires GUIDED or PR'
-        init_delivery_mode=$2
-        shift 2
-        ;;
-      --reason)
-        [ "$#" -ge 2 ] || fail '--reason requires text'
-        init_reason=$2
-        shift 2
-        ;;
-      --fallback-used)
-        [ "$#" -ge 2 ] || fail '--fallback-used requires text'
-        init_fallback_used=$2
-        shift 2
-        ;;
-      --routing-preferred)
-        [ "$#" -ge 2 ] || fail '--routing-preferred requires a topology'
-        init_routing_preferred=$2
-        shift 2
-        ;;
-      --routing-current)
-        [ "$#" -ge 2 ] || fail '--routing-current requires a topology'
-        init_routing_current=$2
-        shift 2
-        ;;
-      --delivery-status)
-        [ "$#" -ge 2 ] || fail '--delivery-status requires a checkout status'
-        init_delivery_status=$2
-        shift 2
-        ;;
-      --delivery-branch-setup)
-        [ "$#" -ge 2 ] || fail '--delivery-branch-setup requires a setup status'
-        init_delivery_branch_setup=$2
-        shift 2
-        ;;
-      --remote-default-evidence)
-        [ "$#" -ge 2 ] || fail '--remote-default-evidence requires text'
-        init_remote_default_evidence=$2
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
+      --state) [ "$#" -ge 2 ] || fail '--state requires a directory'; init_state_arg=$2; shift 2 ;;
+      --checkout) [ "$#" -ge 2 ] || fail '--checkout requires a path'; init_checkout_arg=$2; shift 2 ;;
+      --run-id) [ "$#" -ge 2 ] || fail '--run-id requires an ID'; init_run_id=$2; shift 2 ;;
+      --baseline-ref|--base|--base-sha) [ "$#" -ge 2 ] || fail "$1 requires a Git revision"; init_baseline_ref=$2; shift 2 ;;
+      --status) [ "$#" -ge 2 ] || fail '--status requires a lifecycle status'; init_status=$2; shift 2 ;;
+      --delivery-mode) [ "$#" -ge 2 ] || fail '--delivery-mode requires GUIDED or PR'; init_delivery_mode=$2; shift 2 ;;
+      --reason) [ "$#" -ge 2 ] || fail '--reason requires text'; init_reason=$2; shift 2 ;;
+      --fallback-used) [ "$#" -ge 2 ] || fail '--fallback-used requires text'; init_fallback=$2; shift 2 ;;
+      --routing-preferred) [ "$#" -ge 2 ] || fail '--routing-preferred requires a topology'; init_routing_preferred=$2; shift 2 ;;
+      --routing-current) [ "$#" -ge 2 ] || fail '--routing-current requires a topology'; init_routing_current=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
       *) fail "unknown init option: $1" ;;
     esac
   done
 
   [ -n "$init_state_arg" ] || fail '--state is required'
   init_state_dir=$(state_directory_for_init "$init_state_arg")
-  init_state_file=$init_state_dir/run-state.yaml
-  [ ! -e "$init_state_file" ] || fail "run state is already initialized: $init_state_file"
   mkdir -p "$init_state_dir"
+  state_path=$init_state_dir/run-state.yaml
+  acquire_state_lock
+  [ ! -e "$state_path" ] || fail "run state is already initialized: $state_path"
+  for obsolete in meta.env review.env run-state.valid validations.tsv; do
+    [ ! -e "$init_state_dir/$obsolete" ] || \
+      fail "state contains obsolete persisted data: $obsolete; start with a fresh state directory"
+  done
 
   init_checkout_root=$(checkout_root_for_init "$init_checkout_arg")
   init_branch=$(CDPATH= cd "$init_checkout_root" && git_branch_for_init)
+  [ "$init_branch" != none ] || fail 'checkout is detached'
   init_head=$(git -C "$init_checkout_root" rev-parse HEAD 2>/dev/null) || \
     fail 'checkout has no commit baseline'
   init_base_sha=$(git -C "$init_checkout_root" rev-parse "$init_baseline_ref" 2>/dev/null) || \
@@ -1042,208 +1156,72 @@ init_state() {
   [ -n "$init_routing_current" ] || init_routing_current=$init_routing_preferred
   require_enum_arg routing.preferred "$init_routing_preferred" SOLO SUBAGENTS
   require_enum_arg routing.current "$init_routing_current" SOLO SUBAGENTS
-  require_scalar_arg reason "$init_reason"
-  require_scalar_arg fallback_used "$init_fallback_used"
-  require_enum_arg delivery_checkout.status "$init_delivery_status" ready running blocked dirty complete
-  require_enum_arg delivery_checkout.branch_setup "$init_delivery_branch_setup" auto-created reused user-provided provided blocked
-  control_chars "$init_remote_default_evidence"
+  require_scalar_arg routing.reason "$init_reason"
+  require_scalar_arg routing.fallback "$init_fallback"
   validate_routing "$init_routing_preferred" "$init_routing_current"
 
   if [ "$init_delivery_mode" = PR ]; then
-    delivery_authorization=PR
-    delivery_status_value=pending
+    delivery_status=pending
   else
-    delivery_authorization=not-authorized
-    delivery_status_value=not-authorized
+    delivery_status=not-applicable
+  fi
+  if [ "$init_routing_current" = SUBAGENTS ]; then
+    include_tasks=true
+  else
+    include_tasks=false
   fi
 
-  state_tmp=$init_state_dir/run-state.yaml.tmp.$$
+  state_tmp=$state_path.tmp.$$
   umask 077
   {
     printf 'workflow: swe-forge\n'
     printf 'workflow_version: 1\n'
-    printf 'schema_version: 4\n'
+    printf 'schema_version: 5\n'
     printf 'run_id: %s\n' "$init_run_id"
     printf 'status: %s\n' "$init_status"
     printf 'delivery_mode: %s\n' "$init_delivery_mode"
-    printf 'reason: %s\n' "$init_reason"
-    printf 'fallback_used: %s\n' "$init_fallback_used"
     printf 'routing:\n'
     printf '  preferred: %s\n' "$init_routing_preferred"
     printf '  current: %s\n' "$init_routing_current"
-    printf 'delivery_checkout:\n'
+    printf '  reason: %s\n' "$init_reason"
+    printf '  fallback: %s\n' "$init_fallback"
+    printf 'checkout:\n'
     printf '  path: %s\n' "$init_checkout_root"
     printf '  branch: %s\n' "$init_branch"
     printf '  base_sha: %s\n' "$init_base_sha"
     printf '  head_sha: %s\n' "$init_head"
-    printf '  status: %s\n' "$init_delivery_status"
-    printf '  branch_setup: %s\n' "$init_delivery_branch_setup"
-    printf '  remote_default_evidence: %s\n' "$init_remote_default_evidence"
-    printf 'delivery:\n'
-    printf '  authorization:\n'
-    printf '    commit: %s\n' "$delivery_authorization"
-    printf '    push: %s\n' "$delivery_authorization"
-    printf '    create_pull_request: %s\n' "$delivery_authorization"
-    printf '    publish: not-authorized\n'
-    printf '    deploy: not-authorized\n'
-    printf '    merge: not-authorized\n'
-    printf '  commit: %s\n' "$delivery_status_value"
-    printf '  push: %s\n' "$delivery_status_value"
-    printf '  create_pull_request: %s\n' "$delivery_status_value"
-    printf '  sync: not-authorized\n'
-    printf '  pull_request_ref: none\n'
+    printf 'continuation:\n'
+    printf '  workflow_active: true\n'
+    printf '  workflow: ticket\n'
+    printf '  phase: planning\n'
+    printf '  step: 0\n'
+    printf '  awaiting: none\n'
+    printf '  next_action:\n'
+    printf '    kind: specify\n'
+    printf '    target: working-spec\n'
+    printf '    acceptance: []\n'
+    printf '  safe_boundary: true\n'
+    printf '  updated_at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf 'validation:\n'
+    printf '  head_sha: none\n'
+    printf '  status: pending\n'
+    printf '  reference: validations.tsv\n'
     printf 'review:\n'
     printf '  status: pending\n'
+    printf '  reviewed_head: none\n'
+    printf '  repair_used: false\n'
     printf '  blocked_by: []\n'
-    printf '  contract_ref: .swe-forge/contracts/review.md\n'
-    printf 'tasks: {}\n'
+    printf 'delivery:\n'
+    printf '  status: %s\n' "$delivery_status"
+    printf '  pull_request_ref: none\n'
+    printf '  pr_number: none\n'
+    printf '  pr_state: none\n'
+    if [ "$include_tasks" = true ]; then printf 'tasks: {}\n'; fi
   } >"$state_tmp"
   validate_state "$state_tmp" >/dev/null
-  mv "$state_tmp" "$init_state_file"
-  state_tmp=
-  printf 'PASS: schema-v4 run state initialized: %s\n' "$init_state_file"
-}
-set_review() {
-  state_arg=
-  review_result=
-  blocked_values=
-  blocked_seen=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
-      --result) [ "$#" -ge 2 ] || fail '--result requires PASS or CHANGES_REQUIRED'; review_result=$2; shift 2 ;;
-      --blocked-by)
-        [ "$#" -ge 2 ] || fail '--blocked-by requires an ID'
-        blocked_id=$2
-        identifier_valid "$blocked_id" || fail "invalid blocked finding id: $blocked_id"
-        case "$blocked_seen" in *"|$blocked_id|"*) fail "duplicate blocked finding id: $blocked_id" ;; esac
-        blocked_seen="$blocked_seen|$blocked_id|"
-        if [ -n "$blocked_values" ]; then blocked_values="$blocked_values$NEWLINE$blocked_id"; else blocked_values=$blocked_id; fi
-        shift 2
-        ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown set-review option: $1" ;;
-    esac
-  done
-  [ -n "$state_arg" ] || fail '--state is required'
-  case "$review_result" in PASS|CHANGES_REQUIRED) ;; *) fail "invalid review result: ${review_result:-<missing>}" ;; esac
-  if [ "$review_result" = CHANGES_REQUIRED ] && [ -z "$blocked_values" ]; then
-    fail 'CHANGES_REQUIRED review must identify at least one blocking finding'
-  fi
-  if [ "$review_result" = PASS ] && [ -n "$blocked_values" ]; then
-    fail 'PASS review may not identify blocking findings'
-  fi
-  state_path=$(state_file "$state_arg")
-  acquire_review_lock
-  validate_state "$state_path" >/dev/null
-  current_review_status=$(required_scalar review.status "$state_path")
-  [ "$current_review_status" = pending ] || \
-    fail "review has already been recorded: $current_review_status"
-  contract_ref=$(required_scalar review.contract_ref "$state_path")
-  case "$review_result" in
-    PASS) review_status=pass ;;
-    CHANGES_REQUIRED) review_status=changes-required ;;
-  esac
-  top_status=$(required_scalar status "$state_path")
-  [ "$review_result" != CHANGES_REQUIRED ] || top_status=repairing
-  blocked_yaml=[]
-  if [ -n "$blocked_values" ]; then
-    blocked_yaml="["
-    blocked_first=true
-    while IFS= read -r blocked_id; do
-      [ -n "$blocked_id" ] || continue
-      if [ "$blocked_first" = true ]; then blocked_first=false; else blocked_yaml="$blocked_yaml, "; fi
-      blocked_yaml="$blocked_yaml$blocked_id"
-    done <<EOF_BLOCKED
-$blocked_values
-EOF_BLOCKED
-    blocked_yaml="$blocked_yaml]"
-  fi
-
-  state_tmp=$state_path.tmp.$$
-  awk -v top_status="$top_status" '
-    BEGIN { section=""; skip=0; status_count=0 }
-    /^[^[:space:]#][^:]*:/ {
-      section=$1
-      sub(/:$/, "", section)
-      if (section == "review") { skip=1; next }
-      skip=0
-    }
-    skip { next }
-    /^status:/ {
-      print "status: " top_status
-      status_count++
-      next
-    }
-    { print }
-    END { if (status_count != 1) exit 1 }
-  ' "$state_path" >"$state_tmp" || fail 'review update could not locate the current state status'
-  {
-    printf 'review:\n'
-    printf '  status: %s\n' "$review_status"
-    printf '  blocked_by: %s\n' "$blocked_yaml"
-    printf '  contract_ref: %s\n' "$contract_ref"
-  } >>"$state_tmp"
-  validate_state "$state_tmp" >/dev/null
   mv "$state_tmp" "$state_path"
   state_tmp=
-  printf 'PASS: review recorded: %s\n' "$review_result"
-}
-set_review_repair() {
-  state_arg=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown set-review-repair option: $1" ;;
-    esac
-  done
-  [ -n "$state_arg" ] || fail '--state is required'
-  state_path=$(state_file "$state_arg")
-  acquire_review_lock
-  validate_state "$state_path" >/dev/null
-  current_review_status=$(required_scalar review.status "$state_path")
-  [ "$current_review_status" = changes-required ] || \
-    fail "review repair requires an unresolved changes-required review: $current_review_status"
-  contract_ref=$(required_scalar review.contract_ref "$state_path")
-  blocked_yaml=$(required_scalar review.blocked_by "$state_path")
-  case "$blocked_yaml" in
-    \[*\]) ;;
-    *) fail 'review repair requires a valid blocking-finding list' ;;
-  esac
-  blocked_values=${blocked_yaml#\[}
-  blocked_values=${blocked_values%\]}
-  blocked_count=$(printf '%s\n' "$blocked_values" | awk -F',' 'NF { count++ } END { print count + 0 }')
-  [ "$blocked_count" -eq 1 ] || \
-    fail 'review repair requires exactly one blocking finding'
-  state_tmp=$state_path.tmp.$$
-  awk '
-    BEGIN { section=""; skip=0; status_count=0 }
-    /^[^[:space:]#][^:]*:/ {
-      section=$1
-      sub(/:$/, "", section)
-      if (section == "review") { skip=1; next }
-      skip=0
-    }
-    skip { next }
-    /^status:/ {
-      print "status: running"
-      status_count++
-      next
-    }
-    { print }
-    END { if (status_count != 1) exit 1 }
-  ' "$state_path" >"$state_tmp" || fail 'review repair update could not locate the current state status'
-  {
-    printf 'review:\n'
-    printf '  status: repaired\n'
-    printf '  blocked_by: %s\n' "$blocked_yaml"
-    printf '  contract_ref: %s\n' "$contract_ref"
-  } >>"$state_tmp"
-  validate_state "$state_tmp" >/dev/null
-  mv "$state_tmp" "$state_path"
-  state_tmp=
-  printf 'PASS: review repair recorded: %s\n' "$state_path"
+  printf 'PASS: schema-v5 run state initialized: %s\n' "$state_path"
 }
 
 set_routing() {
@@ -1252,79 +1230,42 @@ set_routing() {
   current_arg=
   reason_arg=
   fallback_arg=
-
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --state)
-        [ "$#" -ge 2 ] || fail '--state requires a file or directory'
-        state_arg=$2
-        shift 2
-        ;;
-      --preferred)
-        [ "$#" -ge 2 ] || fail '--preferred requires a topology'
-        preferred_arg=$2
-        shift 2
-        ;;
-      --current)
-        [ "$#" -ge 2 ] || fail '--current requires a topology'
-        current_arg=$2
-        shift 2
-        ;;
-      --reason)
-        [ "$#" -ge 2 ] || fail '--reason requires text'
-        reason_arg=$2
-        shift 2
-        ;;
-      --fallback-used)
-        [ "$#" -ge 2 ] || fail '--fallback-used requires text'
-        fallback_arg=$2
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --preferred) [ "$#" -ge 2 ] || fail '--preferred requires a topology'; preferred_arg=$2; shift 2 ;;
+      --current) [ "$#" -ge 2 ] || fail '--current requires a topology'; current_arg=$2; shift 2 ;;
+      --reason) [ "$#" -ge 2 ] || fail '--reason requires text'; reason_arg=$2; shift 2 ;;
+      --fallback-used) [ "$#" -ge 2 ] || fail '--fallback-used requires text'; fallback_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
       *) fail "unknown set-routing option: $1" ;;
     esac
   done
-
   [ -n "$state_arg" ] || fail '--state is required'
   [ -n "$preferred_arg" ] || fail '--preferred is required'
   [ -n "$current_arg" ] || fail '--current is required'
   [ -n "$reason_arg" ] || fail '--reason is required'
   [ -n "$fallback_arg" ] || fail '--fallback-used is required'
   state_path=$(state_file "$state_arg")
+  acquire_state_lock
   validate_state "$state_path" >/dev/null
   require_enum_arg routing.preferred "$preferred_arg" SOLO SUBAGENTS
   require_enum_arg routing.current "$current_arg" SOLO SUBAGENTS
-  require_scalar_arg reason "$reason_arg"
-  require_scalar_arg fallback_used "$fallback_arg"
-  validate_routing "$preferred_arg" "$current_arg"
+  require_scalar_arg routing.reason "$reason_arg"
+  require_scalar_arg routing.fallback "$fallback_arg"
 
   state_tmp=$state_path.tmp.$$
   awk -v preferred="$preferred_arg" -v current="$current_arg" \
     -v reason="$reason_arg" -v fallback="$fallback_arg" '
     BEGIN { section="" }
-    /^[^[:space:]#][^:]*:/ {
-      section=$1
-      sub(/:$/, "", section)
-    }
-    /^reason:/ { print "reason: " reason; reason_count++; next }
-    /^fallback_used:/ { print "fallback_used: " fallback; fallback_count++; next }
-    section == "routing" && $0 ~ /^  preferred:/ {
-      print "  preferred: " preferred
-      preferred_count++
-      next
-    }
-    section == "routing" && $0 ~ /^  current:/ {
-      print "  current: " current
-      current_count++
-      next
-    }
+    /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
+    section == "routing" && $0 ~ /^  preferred:/ { print "  preferred: " preferred; preferred_count++; next }
+    section == "routing" && $0 ~ /^  current:/ { print "  current: " current; current_count++; next }
+    section == "routing" && $0 ~ /^  reason:/ { print "  reason: " reason; reason_count++; next }
+    section == "routing" && $0 ~ /^  fallback:/ { print "  fallback: " fallback; fallback_count++; next }
     { print }
     END {
-      if (reason_count != 1 || fallback_count != 1 ||
-          preferred_count != 1 || current_count != 1) exit 1
+      if (preferred_count != 1 || current_count != 1 || reason_count != 1 || fallback_count != 1) exit 1
     }
   ' "$state_path" >"$state_tmp" || fail 'routing update could not locate the current state fields'
   validate_state "$state_tmp" >/dev/null
@@ -1332,166 +1273,6 @@ set_routing() {
   state_tmp=
   printf 'PASS: routing updated: %s\n' "$state_path"
 }
-
-set_delivery_checkout() {
-  state_arg=
-  path_arg=
-  branch_arg=
-  base_arg=
-  head_arg=
-  path_supplied=false
-  branch_supplied=false
-  base_supplied=false
-  head_supplied=false
-
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --state)
-        [ "$#" -ge 2 ] || fail '--state requires a file or directory'
-        state_arg=$2
-        shift 2
-        ;;
-      --path|--checkout)
-        [ "$#" -ge 2 ] || fail "$1 requires a path"
-        path_arg=$2
-        path_supplied=true
-        shift 2
-        ;;
-      --branch)
-        [ "$#" -ge 2 ] || fail '--branch requires a name'
-        branch_arg=$2
-        branch_supplied=true
-        shift 2
-        ;;
-      --base-sha|--base)
-        [ "$#" -ge 2 ] || fail "$1 requires a SHA"
-        base_arg=$2
-        base_supplied=true
-        shift 2
-        ;;
-      --head-sha|--head)
-        [ "$#" -ge 2 ] || fail "$1 requires a SHA"
-        head_arg=$2
-        head_supplied=true
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      *) fail "unknown set-delivery-checkout option: $1" ;;
-    esac
-  done
-
-  [ -n "$state_arg" ] || fail '--state is required'
-  [ "$head_supplied" = true ] || fail '--head-sha is required'
-  state_path=$(state_file "$state_arg")
-  validate_state "$state_path" >/dev/null
-  identity_update=false
-  for supplied in "$path_supplied" "$branch_supplied" "$base_supplied"; do
-    [ "$supplied" = true ] && identity_update=true
-  done
-  if [ "$identity_update" = true ]; then
-    [ "$path_supplied" = true ] || fail 'checkout identity update requires --path'
-    [ "$branch_supplied" = true ] || fail 'checkout identity update requires --branch'
-    [ "$base_supplied" = true ] || fail 'checkout identity update requires --base-sha'
-    case "$path_arg" in /*) ;; *) fail 'delivery_checkout.path must be absolute' ;; esac
-    require_scalar_arg delivery_checkout.branch "$branch_arg"
-    validate_sha_field delivery_checkout.base_sha "$base_arg"
-  fi
-  require_scalar_arg delivery_checkout.head_sha "$head_arg"
-  validate_sha_field delivery_checkout.head_sha "$head_arg"
-
-  state_tmp=$state_path.tmp.$$
-  awk \
-    -v update_path="$path_supplied" -v update_branch="$branch_supplied" \
-    -v update_base="$base_supplied" -v path_value="$path_arg" \
-    -v branch_value="$branch_arg" -v base_value="$base_arg" \
-    -v head_value="$head_arg" '
-    BEGIN { section="" }
-    /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
-    section == "delivery_checkout" && update_path == "true" && $0 ~ /^  path:/ { print "  path: " path_value; path_count++; next }
-    section == "delivery_checkout" && update_branch == "true" && $0 ~ /^  branch:/ { print "  branch: " branch_value; branch_count++; next }
-    section == "delivery_checkout" && update_base == "true" && $0 ~ /^  base_sha:/ { print "  base_sha: " base_value; base_count++; next }
-    section == "delivery_checkout" && $0 ~ /^  head_sha:/ { print "  head_sha: " head_value; head_count++; next }
-    { print }
-    END {
-      if (update_path == "true" && path_count != 1) exit 1
-      if (update_branch == "true" && branch_count != 1) exit 1
-      if (update_base == "true" && base_count != 1) exit 1
-      if (head_count != 1) exit 1
-    }
-  ' "$state_path" >"$state_tmp" || fail 'delivery checkout update could not locate the current state fields'
-  validate_state "$state_tmp" >/dev/null
-  mv "$state_tmp" "$state_path"
-  state_tmp=
-  printf 'PASS: delivery checkout updated: %s\n' "$state_path"
-}
-
-set_pull_request() {
-  state_arg=
-  url_arg=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
-      --url|--pr-url) [ "$#" -ge 2 ] || fail '--url requires a URL'; url_arg=$2; shift 2 ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown set-pull-request option: $1" ;;
-    esac
-  done
-  [ -n "$state_arg" ] || fail '--state is required'
-  [ -n "$url_arg" ] || fail '--url is required'
-  case "$url_arg" in http://*|https://*) ;; *) fail 'pull-request URL must use http:// or https://' ;; esac
-  control_chars "$url_arg"
-  state_path=$(state_file "$state_arg")
-  validate_state "$state_path" >/dev/null
-  [ "$(required_scalar delivery_mode "$state_path")" = PR ] || \
-    fail 'pull-request completion is only valid in PR mode'
-  current_status=$(required_scalar status "$state_path")
-  case "$current_status" in
-    planning|running|reviewing|repairing) ;;
-    accepted)
-      [ "$(required_scalar delivery.pull_request_ref "$state_path")" = "$url_arg" ] || \
-        fail 'pull-request completion URL does not match the recorded PR'
-      ;;
-    *) fail "pull-request completion is not valid from status: $current_status" ;;
-  esac
-  existing_ref=$(required_scalar delivery.pull_request_ref "$state_path")
-  [ "$existing_ref" = none ] || [ "$existing_ref" = "$url_arg" ] || \
-    fail 'pull-request completion URL does not match the recorded PR'
-  state_tmp=$state_path.tmp.$$
-  awk -v url="$url_arg" '
-    BEGIN { section=""; active_count=0; pr_status_count=0; pr_ref_count=0 }
-    /^[^[:space:]#][^:]*:/ {
-      section=$1
-      sub(/:$/, "", section)
-    }
-    section == "continuation" && $0 ~ /^  workflow_active:/ {
-      print "  workflow_active: false"
-      active_count++
-      next
-    }
-    section == "delivery" && $0 ~ /^  create_pull_request:/ {
-      print "  create_pull_request: complete"
-      pr_status_count++
-      next
-    }
-    section == "delivery" && $0 ~ /^  pull_request_ref:/ {
-      print "  pull_request_ref: " url
-      pr_ref_count++
-      next
-    }
-    { print }
-    END {
-      if (active_count != 1 || pr_status_count != 1 || pr_ref_count != 1) exit 1
-    }
-  ' "$state_path" >"$state_tmp" || fail 'pull-request completion could not update current run state'
-  validate_state "$state_tmp" >/dev/null
-  mv "$state_tmp" "$state_path"
-  state_tmp=
-  printf 'PASS: pull-request completion recorded: %s\n' "$state_path"
-}
-
 
 set_continuation() {
   state_arg=
@@ -1504,8 +1285,10 @@ set_continuation() {
   next_target=
   acceptance=
   safe_boundary=
-  pr_number=none
-  pr_state=none
+  pr_number_supplied=false
+  pr_state_supplied=false
+  pr_number=
+  pr_state=
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1524,8 +1307,8 @@ set_continuation() {
         shift 2
         ;;
       --safe-boundary) [ "$#" -ge 2 ] || fail '--safe-boundary requires true or false'; safe_boundary=$2; shift 2 ;;
-      --pr-number) [ "$#" -ge 2 ] || fail '--pr-number requires a number or none'; pr_number=$2; shift 2 ;;
-      --pr-state) [ "$#" -ge 2 ] || fail '--pr-state requires a state or none'; pr_state=$2; shift 2 ;;
+      --pr-number) [ "$#" -ge 2 ] || fail '--pr-number requires a number or none'; pr_number=$2; pr_number_supplied=true; shift 2 ;;
+      --pr-state) [ "$#" -ge 2 ] || fail '--pr-state requires a state or none'; pr_state=$2; pr_state_supplied=true; shift 2 ;;
       -h|--help) usage; exit 0 ;;
       *) fail "unknown set-continuation option: $1" ;;
     esac
@@ -1540,10 +1323,9 @@ set_continuation() {
   [ -n "$next_kind" ] || fail '--next-action-kind is required'
   [ -n "$next_target" ] || fail '--next-action-target is required'
   [ -n "$safe_boundary" ] || fail '--safe-boundary is required'
-  for value in "$workflow" "$phase" "$step" "$awaiting" "$next_kind" "$next_target"; do
-    control_chars "$value"
-  done
+  for value in "$workflow" "$phase" "$step" "$awaiting" "$next_kind" "$next_target"; do control_chars "$value"; done
   state_path=$(state_file "$state_arg")
+  acquire_state_lock
   validate_state "$state_path" >/dev/null
   require_bool_arg continuation.workflow_active "$workflow_active"
   require_enum_arg continuation.workflow "$workflow" ticket delivery other
@@ -1552,10 +1334,11 @@ set_continuation() {
   require_enum_arg continuation.awaiting "$awaiting" none user_merge user_decision recovery
   require_enum_arg continuation.next_action.kind "$next_kind" specify discover implement validate review verify_and_sync_merge recover none
   require_bool_arg continuation.safe_boundary "$safe_boundary"
-  case "$pr_number" in none|''|*[!0-9]*) [ "$pr_number" = none ] || fail 'invalid continuation.delivery.pr_number' ;; esac
-  require_enum_arg continuation.delivery.pr_state "$pr_state" DRAFT OPEN MERGED CLOSED none
+  [ "$pr_number_supplied" = true ] || pr_number=$(required_scalar delivery.pr_number "$state_path")
+  [ "$pr_state_supplied" = true ] || pr_state=$(required_scalar delivery.pr_state "$state_path")
+  case "$pr_number" in none|*[!0-9]*) [ "$pr_number" = none ] || fail 'invalid delivery.pr_number' ;; esac
+  require_enum_arg delivery.pr_state "$pr_state" DRAFT OPEN MERGED CLOSED none
 
-  delivery_mode=$(required_scalar delivery_mode "$state_path")
   state_tmp=$state_path.tmp.$$
   awk '
     BEGIN { skip=0 }
@@ -1580,24 +1363,305 @@ set_continuation() {
     printf '    target: %s\n' "$next_target"
     if [ -n "$acceptance" ]; then
       printf '    acceptance:\n'
-      printf '%s\n' "$acceptance" | while IFS= read -r check; do
-        [ -n "$check" ] || continue
-        printf '      - %s\n' "$check"
-      done
+      printf '%s\n' "$acceptance" | while IFS= read -r check; do [ -n "$check" ] || continue; printf '      - %s\n' "$check"; done
     else
       printf '    acceptance: []\n'
     fi
     printf '  safe_boundary: %s\n' "$safe_boundary"
     printf '  updated_at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    printf '  delivery:\n'
-    printf '    mode: %s\n' "$delivery_mode"
-    printf '    pr_number: %s\n' "$pr_number"
-    printf '    pr_state: %s\n' "$pr_state"
   } >>"$state_tmp"
+  # Continuation owns the PR's compact external-state projection when callers
+  # provide it; keep it in delivery rather than duplicating delivery_mode.
+  if [ "$pr_number_supplied" = true ] || [ "$pr_state_supplied" = true ]; then
+    delivery_tmp=$state_path.delivery.$$
+    awk -v pr_number="$pr_number" -v pr_state="$pr_state" '
+      BEGIN { section="" }
+      /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
+      section == "delivery" && $0 ~ /^  pr_number:/ { print "  pr_number: " pr_number; number_count++; next }
+      section == "delivery" && $0 ~ /^  pr_state:/ { print "  pr_state: " pr_state; state_count++; next }
+      { print }
+      END { if (number_count != 1 || state_count != 1) exit 1 }
+    ' "$state_tmp" >"$delivery_tmp" || { rm -f "$delivery_tmp"; fail 'continuation update could not locate delivery PR state'; }
+    mv "$delivery_tmp" "$state_tmp"
+  fi
   validate_state "$state_tmp" >/dev/null
   mv "$state_tmp" "$state_path"
   state_tmp=
   printf 'PASS: continuation updated: %s\n' "$state_path"
+}
+
+set_delivery_checkout() {
+  state_arg=
+  head_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --head-sha) [ "$#" -ge 2 ] || fail '--head-sha requires a SHA'; head_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-delivery-checkout option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$head_arg" ] || fail '--head-sha is required'
+  state_path=$(state_file "$state_arg")
+  acquire_state_lock
+  validate_state "$state_path" >/dev/null
+  validate_sha_field checkout.head_sha "$head_arg"
+  assert_recorded_head "$head_arg" "$state_path"
+
+  state_tmp=$state_path.tmp.$$
+  awk -v head_value="$head_arg" '
+    BEGIN { section="" }
+    /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
+    section == "checkout" && $0 ~ /^  head_sha:/ { print "  head_sha: " head_value; head_count++; next }
+    { print }
+    END { if (head_count != 1) exit 1 }
+  ' "$state_path" >"$state_tmp" || fail 'checkout update could not locate checkout.head_sha'
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: checkout head updated: %s\n' "$state_path"
+}
+
+set_validation() {
+  state_arg=
+  head_arg=
+  validation_status=
+  reference_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --head-sha) [ "$#" -ge 2 ] || fail '--head-sha requires a SHA'; head_arg=$2; shift 2 ;;
+      --status) [ "$#" -ge 2 ] || fail '--status requires pending, passed, or failed'; validation_status=$2; shift 2 ;;
+      --reference|--ref) [ "$#" -ge 2 ] || fail '--reference requires a value'; reference_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-validation option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$head_arg" ] || fail '--head-sha is required'
+  [ -n "$validation_status" ] || fail '--status is required'
+  [ -n "$reference_arg" ] || fail '--reference is required'
+  state_path=$(state_file "$state_arg")
+  acquire_state_lock
+  validate_state "$state_path" >/dev/null
+  require_enum_arg validation.status "$validation_status" pending passed failed
+  validate_sha_or_none validation.head_sha "$head_arg"
+  [ "$head_arg" = none ] || assert_recorded_head "$head_arg" "$state_path"
+  if [ "$validation_status" != pending ] && [ "$head_arg" = none ]; then
+    fail 'validation status and candidate identity do not match'
+  fi
+  require_scalar_arg validation.reference "$reference_arg"
+
+  state_tmp=$state_path.tmp.$$
+  awk -v head_value="$head_arg" -v status_value="$validation_status" -v ref_value="$reference_arg" '
+    BEGIN { section="" }
+    /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }
+    section == "validation" && $0 ~ /^  head_sha:/ { print "  head_sha: " head_value; head_count++; next }
+    section == "validation" && $0 ~ /^  status:/ { print "  status: " status_value; status_count++; next }
+    section == "validation" && $0 ~ /^  reference:/ { print "  reference: " ref_value; ref_count++; next }
+    { print }
+    END { if (head_count != 1 || status_count != 1 || ref_count != 1) exit 1 }
+  ' "$state_path" >"$state_tmp" || fail 'validation update could not locate current validation fields'
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: validation updated: %s\n' "$state_path"
+}
+
+set_review() {
+  state_arg=
+  review_result=
+  head_arg=
+  blocked_values=
+  blocked_seen=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --head-sha) [ "$#" -ge 2 ] || fail '--head-sha requires a SHA'; head_arg=$2; shift 2 ;;
+      --result) [ "$#" -ge 2 ] || fail '--result requires PASS or CHANGES_REQUIRED'; review_result=$2; shift 2 ;;
+      --blocked-by)
+        [ "$#" -ge 2 ] || fail '--blocked-by requires an ID'
+        blocked_id=$2
+        identifier_valid "$blocked_id" || fail "invalid blocked finding id: $blocked_id"
+        case "$blocked_seen" in *"|$blocked_id|"*) fail "duplicate blocked finding id: $blocked_id" ;; esac
+        blocked_seen="$blocked_seen|$blocked_id|"
+        if [ -n "$blocked_values" ]; then blocked_values="$blocked_values$NEWLINE$blocked_id"; else blocked_values=$blocked_id; fi
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-review option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$head_arg" ] || fail '--head-sha is required'
+  case "$review_result" in PASS|CHANGES_REQUIRED) ;; *) fail "invalid review result: ${review_result:-<missing>}" ;; esac
+  [ "$review_result" != CHANGES_REQUIRED ] || [ -n "$blocked_values" ] || fail 'CHANGES_REQUIRED review must identify at least one blocking finding'
+  [ "$review_result" != PASS ] || [ -z "$blocked_values" ] || fail 'PASS review may not identify blocking findings'
+  validate_sha_field review.reviewed_head "$head_arg"
+  state_path=$(state_file "$state_arg")
+  acquire_state_lock
+  validate_state "$state_path" >/dev/null
+  assert_recorded_head "$head_arg" "$state_path"
+  current_review_status=$(required_scalar review.status "$state_path")
+  [ "$current_review_status" = pending ] || fail "review has already been recorded: $current_review_status"
+
+  review_status=pass
+  [ "$review_result" = CHANGES_REQUIRED ] && review_status=changes-required
+  blocked_yaml=[]
+  if [ -n "$blocked_values" ]; then
+    blocked_yaml="["
+    blocked_first=true
+    while IFS= read -r blocked_id; do
+      [ -n "$blocked_id" ] || continue
+      if [ "$blocked_first" = true ]; then blocked_first=false; else blocked_yaml="$blocked_yaml, "; fi
+      blocked_yaml="$blocked_yaml$blocked_id"
+    done <<EOF_BLOCKED
+$blocked_values
+EOF_BLOCKED
+    blocked_yaml="$blocked_yaml]"
+  fi
+
+  top_status=$(required_scalar status "$state_path")
+  [ "$review_result" != CHANGES_REQUIRED ] || top_status=repairing
+  state_tmp=$state_path.tmp.$$$$
+  awk -v top_status="$top_status" '
+    BEGIN { section=""; skip=0; status_count=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      if (section == "review") { skip=1; next }
+      skip=0
+    }
+    skip { next }
+    /^[^ ]*status:/ {
+      print "status: " top_status
+      status_count++
+      next
+    }
+    { print }
+    END { if (status_count != 1) exit 1 }
+  ' "$state_path" >"$state_tmp" || fail 'review update could not locate the current state status'
+  {
+    printf 'review:\n'
+    printf '  status: %s\n' "$review_status"
+    printf '  reviewed_head: %s\n' "$head_arg"
+    printf '  repair_used: false\n'
+    printf '  blocked_by: %s\n' "$blocked_yaml"
+  } >>"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: review recorded: %s\n' "$review_result"
+}
+
+set_review_repair() {
+  state_arg=
+  head_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --head-sha) [ "$#" -ge 2 ] || fail '--head-sha requires a SHA'; head_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-review-repair option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$head_arg" ] || fail '--head-sha is required'
+  validate_sha_field review.reviewed_head "$head_arg"
+  state_path=$(state_file "$state_arg")
+  acquire_state_lock
+  validate_state "$state_path" >/dev/null
+  assert_recorded_head "$head_arg" "$state_path"
+  current_review_status=$(required_scalar review.status "$state_path")
+  [ "$current_review_status" = changes-required ] || fail "review repair requires an unresolved changes-required review: $current_review_status"
+  [ "$(required_scalar review.repair_used "$state_path")" = false ] || fail 'review repair has already been used'
+  blocked_yaml=$(required_scalar review.blocked_by "$state_path")
+  case "$blocked_yaml" in \[*\]) ;; *) fail 'review repair requires a valid blocking-finding list' ;; esac
+  blocked_values=${blocked_yaml#\[}
+  blocked_values=${blocked_values%\]}
+  blocked_count=$(printf '%s\n' "$blocked_values" | awk -F',' 'NF { count++ } END { print count + 0 }')
+  [ "$blocked_count" -eq 1 ] || fail 'review repair requires exactly one blocking finding'
+  reviewed_head=$(required_scalar review.reviewed_head "$state_path")
+  [ "$reviewed_head" != "$head_arg" ] || fail 'review repair must produce a new candidate'
+
+  state_tmp=$state_path.tmp.$$$$
+  awk '
+    BEGIN { section=""; skip=0; status_count=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      if (section == "review") { skip=1; next }
+      skip=0
+    }
+    skip { next }
+    /^[^ ]*status:/ { print "status: running"; status_count++; next }
+    { print }
+    END { if (status_count != 1) exit 1 }
+  ' "$state_path" >"$state_tmp" || fail 'review repair update could not locate the current state status'
+  {
+    printf 'review:\n'
+    printf '  status: repaired\n'
+    printf '  reviewed_head: %s\n' "$reviewed_head"
+    printf '  repair_used: true\n'
+    printf '  blocked_by: %s\n' "$blocked_yaml"
+  } >>"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: review repair recorded: %s\n' "$state_path"
+}
+
+set_pull_request() {
+  state_arg=
+  url_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --url) [ "$#" -ge 2 ] || fail '--url requires a URL'; url_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-pull-request option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$url_arg" ] || fail '--url is required'
+  case "$url_arg" in http://*|https://*) ;; *) fail 'pull-request URL must use http:// or https://' ;; esac
+  control_chars "$url_arg"
+  state_path=$(state_file "$state_arg")
+  acquire_state_lock
+  validate_state "$state_path" >/dev/null
+  [ "$(required_scalar delivery_mode "$state_path")" = PR ] || fail 'pull-request completion is only valid in PR mode'
+  existing_ref=$(required_scalar delivery.pull_request_ref "$state_path")
+  [ "$existing_ref" = none ] || [ "$existing_ref" = "$url_arg" ] || fail 'pull-request completion URL does not match the recorded PR'
+  current_delivery_status=$(required_scalar delivery.status "$state_path")
+  [ "$current_delivery_status" = complete ] || [ "$current_delivery_status" = pending ] || [ "$current_delivery_status" = blocked ] || \
+    fail "pull-request completion is not valid from delivery status: $current_delivery_status"
+
+  state_tmp=$state_path.tmp.$$$$
+  awk '
+    BEGIN { section=""; skip_delivery=0; active_count=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      if (section == "delivery") { skip_delivery=1; next }
+      skip_delivery=0
+    }
+    skip_delivery { next }
+    section == "continuation" && $0 ~ /^  workflow_active:/ { print "  workflow_active: false"; active_count++; next }
+    { print }
+    END { if (active_count != 1) exit 1 }
+  ' "$state_path" >"$state_tmp" || fail 'pull-request completion could not update continuation state'
+  {
+    printf 'delivery:\n'
+    printf '  status: complete\n'
+    printf '  pull_request_ref: %s\n' "$url_arg"
+    printf '  pr_number: %s\n' "$(required_scalar delivery.pr_number "$state_path")"
+    printf '  pr_state: %s\n' "$(required_scalar delivery.pr_state "$state_path")"
+  } >>"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: pull-request completion recorded: %s\n' "$state_path"
 }
 
 main() {
@@ -1623,6 +1687,7 @@ main() {
     set-routing) set_routing "$@" ;;
     set-continuation) set_continuation "$@" ;;
     set-delivery-checkout) set_delivery_checkout "$@" ;;
+    set-validation) set_validation "$@" ;;
     set-review) set_review "$@" ;;
     set-review-repair) set_review_repair "$@" ;;
     set-pull-request) set_pull_request "$@" ;;

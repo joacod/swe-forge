@@ -71,40 +71,20 @@ function writeRuntimeState(filePath, options = {}) {
   const preferred = options.preferred ?? "SOLO";
   const yaml = `workflow: swe-forge
 workflow_version: 1
-schema_version: 4
+schema_version: 5
 run_id: ${options.runId ?? path.basename(path.dirname(filePath))}
 status: ${options.status ?? "running"}
 delivery_mode: PR
-reason: fixture
-fallback_used: no
-delivery_checkout:
+routing:
+  preferred: ${preferred}
+  current: ${current}
+  reason: fixture
+  fallback: no
+checkout:
   path: ${cwd}
   branch: feature/fixture
   base_sha: none
   head_sha: none
-  status: ready
-  branch_setup: reused
-  remote_default_evidence: fixture
-routing:
-  preferred: ${preferred}
-  current: ${current}
-delivery:
-  authorization:
-    commit: PR
-    push: PR
-    create_pull_request: PR
-    publish: not-authorized
-    deploy: not-authorized
-    merge: not-authorized
-  commit: pending
-  push: pending
-  create_pull_request: pending
-  sync: not-authorized
-  pull_request_ref: none
-review:
-  status: pending
-  blocked_by: []
-  contract_ref: .swe-forge/contracts/review.md
 continuation:
   workflow_active: ${options.workflowActive ?? "true"}
   workflow: ticket
@@ -118,11 +98,20 @@ continuation:
       - fixture continuation remains authoritative
   safe_boundary: true
   updated_at: ${options.updatedAt ?? "2040-01-01T00:00:00Z"}
-  delivery:
-    mode: PR
-    pr_number: ${options.prNumber ?? "none"}
-    pr_state: ${options.prState ?? "none"}
-tasks: {}
+validation:
+  head_sha: none
+  status: pending
+  reference: validations.tsv
+review:
+  status: pending
+  reviewed_head: none
+  repair_used: false
+  blocked_by: []
+delivery:
+  status: pending
+  pull_request_ref: none
+  pr_number: ${options.prNumber ?? "none"}
+  pr_state: ${options.prState ?? "none"}
 `;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, yaml);
@@ -231,7 +220,7 @@ if (newerTransform) throw new Error("stale state overrode newer continuation");
 
 const staleState = path.join(fixtureCwd, "states", "stale", "run-state.yaml");
 fs.mkdirSync(path.dirname(staleState), { recursive: true });
-fs.writeFileSync(staleState, `workflow: swe-forge\nschema_version: 3\nstatus: running\n`);
+fs.writeFileSync(staleState, `workflow: swe-forge\nschema_version: 4\nstatus: running\n`);
 process.env.SWE_FORGE_RUN_STATE = staleState;
 const staleInjection = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
 if (staleInjection?.systemPrompt.includes("SWE-FORGE ACTIVE RUN")) throw new Error("stale schema was accepted");

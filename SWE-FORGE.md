@@ -136,9 +136,11 @@ harness integration        -> adapters/*
 
 Use the contracts when delegation or a context discontinuity makes state
 necessary. The transient working spec is not a repository artifact. Run state
-is temporary or ignored, schema-v4 only, and authoritative for continuation;
-obsolete state is rejected rather than migrated. Use the canonical state helper
-for schema construction and updates.
+is temporary or ignored, schema-v5 only, and authoritative for continuation;
+obsolete or unknown state is rejected rather than migrated. It contains only
+the run fence, route, canonical checkout, compact continuation, candidate-bound
+validation/review facts, and PR delivery reference needed for recovery. Use the
+canonical state helper for schema construction and updates.
 
 Before any writable setup or edit, load `policies/delivery.md`. A normal run
 has one delivery branch and one writable delivery checkout. Dirty, detached,

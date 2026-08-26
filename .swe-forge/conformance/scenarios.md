@@ -19,10 +19,10 @@ scenario records the observable outcome rather than repeating its procedure.
 
 | Scenario | Required outcome | Owner |
 | --- | --- | --- |
-| Current run state | Schema v4 validates with only `routing.preferred/current` as durable topology facts. | run-state |
+| Current run state | Schema v5 validates the compact run fence, route, canonical checkout, continuation, candidate-bound validation/review, and delivery facts. | run-state |
 | Old, future, malformed, or obsolete state | Reject clearly; never migrate, normalize, or guess. | run-state |
 | Preferred/effective divergence | Permit preferred `SUBAGENTS` with effective `SOLO` after safe fallback. | routing/run-state |
-| Delivery projection | Matching `continuation.delivery.mode` validates; contradiction rejects. | run-state |
+| Duplicate workflow projections | Do not persist requested modes, receipt/checkpoint/fingerprint state, or a copied delivery-mode continuation projection. | run-state |
 | Active-state selection | Ignore stale, terminal, wrong-checkout, or obsolete candidates; choose the newest valid candidate. | state tool |
 | Normal ticket load | Load specification before clarification, routing before final topology, verification before checks, delivery before the first write, and recovery only on trigger. | workflow |
 | PR specification | Load `contracts/working-spec.md` before building the transient spec. | workflow |
