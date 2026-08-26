@@ -76,15 +76,6 @@ delivery:
   sync: not-authorized | pending | complete | blocked
   pull_request_ref: <URL or none>
 
-commit_plan:
-  status: not-applicable | unregistered | pending | complete
-  steps:
-    - id: <ordered working-spec step identity>
-      status: pending | complete
-      checkpoint: none | <checkpoint ID>
-      commit: none | <full commit SHA>
-
-
 tasks:
   <task_id>:
     status: pending | ready | running | blocked | done | failed | skipped
@@ -141,8 +132,6 @@ fresh schema-v4 snapshot initialized by the helper always contains:
 - `receipt_ref`;
 - the complete `delivery_checkout` mapping;
 - the complete `delivery` authorization and action mapping;
-- the `commit_plan` projection, marked `not-applicable` in `GUIDED` and
-  `unregistered` until the ready PR working spec registers its ordered steps;
 - the `review` budget, initialized with `attempts: 0`, `retry_ceiling: 2`,
   `ceiling_provenance: default`, and the canonical review contract reference;
   and
@@ -232,17 +221,12 @@ two; a `CHANGES_REQUIRED` result at the ceiling leaves the run blocked and
 preserves the latest evidence. Ordinary unrelated debugging is not a review
 execution.
 
-In `PR`, `commit_plan` is a minimal projection of the transient working spec,
-not a second semantic plan. The state helper records only ordered step
-identity, status, checkpoint, and commit evidence. A complete projection is
-required before `deliver-pr`; review-repair evidence is recorded separately in
-the private ledger and does not complete a planned step.
-
 A state whose `schema_version` is not `4` must be rejected as stale or
 unsupported, including older and future versions. No helper guesses a
 migration, normalizes an obsolete snapshot, or rewrites it in place. The
-validator also rejects the removed routing fields from earlier schema-v4
-representations; callers must start a fresh run rather than migrate them.
+validator also rejects removed workflow fields from earlier schema-v4
+representations, including the former commit lifecycle; callers must start a
+fresh run rather than migrate them.
 When `continuation` is present, the validator requires its workflow-control
 fields and a delivery projection matching `delivery_mode`.
 
@@ -257,9 +241,8 @@ fields and a delivery projection matching `delivery_mode`.
   owns the update timestamp and derived delivery projection.
 - Use `swe-forge-state set-delivery-checkout` and `set-receipt-ref` for their
   purpose-specific mutations; callers do not structurally edit the YAML.
-- Use `set-commit-plan` and `record-commit-step` for the minimal PR plan
-  projection, `set-review` for canonical review attempts, and
-  `set-pull-request` after local PR evidence and URL recording.
+- Use `set-review` for canonical review attempts and `set-pull-request`
+  after local PR evidence and URL recording.
 - A resumed run inspects the real checkout and Git state before trusting this
   snapshot.
 - `continuation` is the authoritative workflow-control snapshot; conversation

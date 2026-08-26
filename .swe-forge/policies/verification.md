@@ -32,17 +32,17 @@ Code inspection alone cannot establish that a relevant behavior works.
   ceremonial test scaffolding
 - `GUIDED` checkpoint: validate the completed slice and label final acceptance
   as pending until the whole ticket is integrated
-- `PR` delivery: validate and commit each planned step with its targeted checks;
-  after the plan is complete, establish final evidence and review the committed
-  candidate before delivery; after the PR exists, remote CI is external and is
-  not awaited by this workflow
+- `PR` delivery: use targeted validation for each implementation slice when
+  useful, commit coherent slices as they are completed, then establish final
+  evidence and review the committed candidate before delivery; after the PR
+  exists, remote CI is external and is not awaited by this workflow
 
 ### Validation cadence and batching
 
 Use targeted checks for each implementation slice and reserve the complete
 repository suite for the final integrated candidate unless a slice changes a
-behavior that requires an earlier full check. Run that final validation once
-after the planned implementation commits. If a review repair materially changes
+behavior that requires an earlier full check. Run final validation once the
+implementation candidate is complete. If a review repair materially changes
 the candidate, establish the required final evidence again for that new
 candidate before focused re-review. Do not rerun an unchanged full suite merely
 because a checkpoint, commit, review, acceptance, or PR-preparation boundary was

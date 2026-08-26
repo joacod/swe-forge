@@ -44,16 +44,15 @@ Usage:
     [--requested-delivery DELIVERY] [--delivery-mode MODE]
   scripts/swe-forge-gate plan-check --state DIR --name NAME --requirement TYPE \
     [--condition TEXT] [--final-required true|false]
-  scripts/swe-forge-gate commit-plan --state DIR --step ID [--step ID...]
   scripts/swe-forge-gate validate --state DIR --name NAME [--final] \
     [--mutation-producing --mutation-scope PATH --mutation-reason TEXT] -- COMMAND [ARGS...]
   scripts/swe-forge-gate record-check-status --state DIR --name NAME \
     --status passed|failed|unavailable|not-applicable [--reason TEXT] [--final]
   scripts/swe-forge-gate fingerprint [--checkout PATH]
   scripts/swe-forge-gate checkpoint --state DIR --scope PATH [--scope PATH...] \
-    [--plan-step ID|--review-repair]
+    [--review-repair]
   scripts/swe-forge-gate commit-slice --state DIR --checkpoint ID \
-    --message MESSAGE --authorized-by PR|GO [--plan-step ID|--review-repair]
+    --message MESSAGE --authorized-by PR|GO [--review-repair]
   scripts/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED \
     --source SOURCE [--findings N] [--repaired N] [--blocked-by ID...]
   scripts/swe-forge-gate deliver-pr --state DIR
@@ -175,28 +174,16 @@ delivery_mode_from_state() {
   run_state_value delivery_mode
 }
 
-commit_plan_rows_from_state() {
-  "$SCRIPT_DIR/swe-forge-state" commit-plan --state "$STATE/run-state.yaml" 2>/dev/null
-}
-
-commit_plan_has_step() {
-  wanted=$1
-  rows=$(commit_plan_rows_from_state) || return 1
-  printf '%s\n' "$rows" | awk -F "$TAB" -v wanted="$wanted" '$1 == wanted { found=1 } END { exit !found }'
-}
-
 validate_checkpoint_ledger() {
   if ! awk -F "$TAB" '
     BEGIN { valid = 1 }
     NF == 0 { next }
-    NF != 10 && NF != 11 { valid = 0; exit }
-    $9 != "none" && $9 != "planned" && $9 != "review-repair" { valid = 0; exit }
-    $9 == "planned" && ($10 == "" || $10 == "none") { valid = 0; exit }
-    $9 != "planned" && $10 != "none" { valid = 0; exit }
-    NF == 11 && $11 != "" && (length($11) != 40 || $11 !~ /^[0-9A-Fa-f]+$/) { valid = 0; exit }
+    NF != 10 { valid = 0; exit }
+    $9 != "none" && $9 != "slice" && $9 != "review-repair" { valid = 0; exit }
+    $10 != "none" && (length($10) != 40 || $10 !~ /^[0-9A-Fa-f]+$/) { valid = 0; exit }
     END { exit !valid }
   ' "$STATE/checkpoints.tsv"; then
-    fail "evidence state is stale or unsupported; checkpoint ledger lacks current delivery fields"
+    fail "evidence state is stale or unsupported; checkpoint ledger has an invalid format"
   fi
 }
 
@@ -225,7 +212,7 @@ review_repair_commit_exists() {
   repair_review_head=$(meta_value head "$STATE/review.env" 2>/dev/null || true)
   [ -n "$repair_review_head" ] || return 1
   while IFS="$TAB" read -r repair_id repair_branch repair_recorded_head repair_fp \
-    repair_paths repair_scope repair_recorded repair_checks repair_kind repair_step repair_commit; do
+    repair_paths repair_scope repair_recorded repair_checks repair_kind repair_commit; do
     [ "$repair_kind" = review-repair ] || continue
     [ -n "$repair_commit" ] || continue
     [ "$repair_recorded_head" = "$repair_review_head" ] || continue
@@ -246,8 +233,6 @@ review_candidate_ready() {
   candidate_ceiling=$(run_state_nested_value review retry_ceiling)
   [ "$candidate_attempts" -lt "$candidate_ceiling" ] || \
     fail "review ceiling exhausted: $candidate_attempts/$candidate_ceiling executions already recorded; automatic reviewer-like activity is stopped"
-  [ "$(run_state_nested_value commit_plan status)" = complete ] || \
-    fail "PR review requires a complete commit plan"
   [ -z "$(status_porcelain)" ] || \
     fail "PR review requires a clean committed candidate"
   check_requirements "$candidate_fp" yes >/dev/null 2>&1 || \
@@ -594,34 +579,6 @@ scope_allows() {
 plan_values() {
   name=$1
   awk -F '\t' -v wanted="$name" '$1 == wanted { print; exit }' "$STATE/plan.tsv"
-}
-
-commit_plan_run() {
-  state_arg=
-  step_args=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --state)
-        [ "$#" -ge 2 ] || fail "--state requires a directory"
-        state_arg=$2
-        shift 2
-        ;;
-      --step)
-        [ "$#" -ge 2 ] || fail "--step requires an ID"
-        reject_control_chars "$2"
-        step_args="$step_args --step $2"
-        shift 2
-        ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown commit-plan option: $1" ;;
-    esac
-  done
-  [ -n "$state_arg" ] || fail "--state is required"
-  [ -n "$step_args" ] || fail "at least one --step is required"
-  STATE=$(state_path "$state_arg")
-  ensure_meta_state
-  "$SCRIPT_DIR/swe-forge-state" set-commit-plan \
-    --state "$STATE/run-state.yaml" $step_args
 }
 
 plan_check() {
@@ -971,7 +928,7 @@ record_checkpoint_commit() {
   LEDGER_TMP=$STATE/checkpoints.tsv.tmp.$$
   awk -F "$TAB" -v OFS="$TAB" -v wanted="$checkpoint_id" -v commit="$commit_sha" '
     $1 == wanted {
-      $11 = commit
+      $10 = commit
       count++
     }
     { print }
@@ -998,7 +955,6 @@ same_path_sets() {
 checkpoint_run() {
   scope_count=0
   SCOPE_VALUES=
-  plan_step=
   review_repair=false
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1016,13 +972,6 @@ checkpoint_run() {
         scope_count=$((scope_count + 1))
         shift 2
         ;;
-      --plan-step)
-        [ "$#" -ge 2 ] || fail "--plan-step requires an ID"
-        [ -z "$plan_step" ] || fail "--plan-step may be provided only once"
-        plan_step=$2
-        reject_control_chars "$plan_step"
-        shift 2
-        ;;
       --review-repair)
         [ "$review_repair" = false ] || fail "--review-repair may be provided only once"
         review_repair=true
@@ -1035,27 +984,17 @@ checkpoint_run() {
   [ "$scope_count" -gt 0 ] || fail "at least one --scope is required"
   delivery_mode=$(delivery_mode_from_state)
   if [ "$delivery_mode" = PR ]; then
-    if [ -n "$plan_step" ] && [ "$review_repair" = true ]; then
-      fail "checkpoint must be a planned step or a review repair, not both"
-    fi
-    if [ -z "$plan_step" ] && [ "$review_repair" = false ]; then
-      fail "PR checkpoint requires --plan-step or --review-repair"
-    fi
-    if [ -n "$plan_step" ]; then
-      commit_plan_has_step "$plan_step" || fail "checkpoint refers to an unregistered commit plan step: $plan_step"
-      checkpoint_kind=planned
-    else
-      [ "$(run_state_nested_value commit_plan status)" = complete ] || \
-        fail "review-repair checkpoint requires a complete commit plan"
+    if [ "$review_repair" = true ]; then
       review_repair_allowed
       checkpoint_kind=review-repair
-      plan_step=none
+    else
+      [ "$(run_state_nested_value review status)" != changes-required ] || \
+        fail "PR checkpoint after a review finding requires --review-repair"
+      checkpoint_kind=slice
     fi
   else
-    [ -z "$plan_step" ] || fail "--plan-step is only valid in PR mode"
     [ "$review_repair" = false ] || fail "--review-repair is only valid in PR mode"
     checkpoint_kind=none
-    plan_step=none
   fi
   SCOPE_TMP=$STATE/scope.$$
   printf '%s\n' "$SCOPE_VALUES" >"$SCOPE_TMP"
@@ -1108,10 +1047,10 @@ checkpoint_run() {
     esac
   done <"$STATE/plan.tsv"
   branch=$(current_branch)
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$current_head" \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tnone\n' "$id" "$branch" "$current_head" \
     "$candidate_fp" "$(basename "$paths_file")" "$(basename "$scope_file")" \
     "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$(basename "$checks_file")" \
-    "$checkpoint_kind" "$plan_step" >>"$STATE/checkpoints.tsv"
+    "$checkpoint_kind" >>"$STATE/checkpoints.tsv"
   printf 'PASS: checkpoint %s recorded (%s changed files, %s)\n' "$id" "$changed_count" "$checkpoint_kind"
   printf 'CHECKPOINT_ID: %s\n' "$id"
   rm -f "$committed_tmp"
@@ -1121,7 +1060,6 @@ commit_slice() {
   checkpoint_id=
   message=
   authorized_by=
-  plan_step=
   review_repair=false
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1145,13 +1083,6 @@ commit_slice() {
         authorized_by=$2
         shift 2
         ;;
-      --plan-step)
-        [ "$#" -ge 2 ] || fail "--plan-step requires an ID"
-        [ -z "$plan_step" ] || fail "--plan-step may be provided only once"
-        plan_step=$2
-        reject_control_chars "$plan_step"
-        shift 2
-        ;;
       --review-repair)
         [ "$review_repair" = false ] || fail "--review-repair may be provided only once"
         review_repair=true
@@ -1169,28 +1100,17 @@ commit_slice() {
   ensure_meta_state
   delivery_mode=$(delivery_mode_from_state)
   if [ "$delivery_mode" = PR ]; then
-    if [ -n "$plan_step" ] && [ "$review_repair" = true ]; then
-      fail "commit must be a planned step or a review repair, not both"
-    fi
-    if [ -z "$plan_step" ] && [ "$review_repair" = false ]; then
-      fail "PR commit requires --plan-step or --review-repair"
-    fi
-    if [ -n "$plan_step" ]; then
-      commit_kind=planned
-      "$SCRIPT_DIR/swe-forge-state" check-commit-step \
-        --state "$STATE/run-state.yaml" --step "$plan_step" --checkpoint "$checkpoint_id" >/dev/null
-    else
-      [ "$(run_state_nested_value commit_plan status)" = complete ] || \
-        fail "review-repair commit requires a complete commit plan"
+    if [ "$review_repair" = true ]; then
       review_repair_allowed
       commit_kind=review-repair
-      plan_step=none
+    else
+      [ "$(run_state_nested_value review status)" != changes-required ] || \
+        fail "PR commit after a review finding requires --review-repair"
+      commit_kind=slice
     fi
   else
-    [ -z "$plan_step" ] || fail "--plan-step is only valid in PR mode"
     [ "$review_repair" = false ] || fail "--review-repair is only valid in PR mode"
     commit_kind=none
-    plan_step=none
   fi
   assert_identity
   case "$checkpoint_id" in ''|*[!0-9]*) fail "checkpoint must be a numeric ID" ;; esac
@@ -1198,11 +1118,11 @@ commit_slice() {
   checkpoint_fp=$(checkpoint_field "$checkpoint_id" 4)
   checkpoint_head=$(checkpoint_field "$checkpoint_id" 3)
   checkpoint_kind=$(checkpoint_field "$checkpoint_id" 9)
-  checkpoint_plan_step=$(checkpoint_field "$checkpoint_id" 10)
+  checkpoint_commit=$(checkpoint_field "$checkpoint_id" 10)
   [ -n "$checkpoint_path" ] || fail "unknown checkpoint: $checkpoint_id"
   [ -f "$STATE/$checkpoint_path" ] || fail "checkpoint paths are missing: $checkpoint_path"
   [ "$checkpoint_kind" = "$commit_kind" ] || fail "checkpoint $checkpoint_id is not a $commit_kind checkpoint"
-  [ "$checkpoint_plan_step" = "$plan_step" ] || fail "checkpoint $checkpoint_id is not for commit plan step $plan_step"
+  [ "$checkpoint_commit" = none ] || fail "checkpoint $checkpoint_id already has a materializing commit"
   current_fp=$(fingerprint_for_checkout "$CHECKOUT")
   [ "$current_fp" = "$checkpoint_fp" ] || fail "candidate fingerprint differs from checkpoint $checkpoint_id"
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
@@ -1232,11 +1152,6 @@ commit_slice() {
   git -C "$CHECKOUT" commit -m "$message"
   new_head=$(git -C "$CHECKOUT" rev-parse HEAD)
   record_checkpoint_commit "$checkpoint_id" "$new_head"
-  if [ "$commit_kind" = planned ]; then
-    "$SCRIPT_DIR/swe-forge-state" record-commit-step \
-      --state "$STATE/run-state.yaml" --step "$plan_step" \
-      --checkpoint "$checkpoint_id" --commit "$new_head" >/dev/null
-  fi
   "$SCRIPT_DIR/swe-forge-state" set-delivery-checkout \
     --state "$STATE/run-state.yaml" \
     --head-sha "$new_head" \
@@ -1366,128 +1281,46 @@ repository_identity() {
   fi
 }
 
-check_commit_plan_completion() {
+check_checkpoint_completion() {
   [ "$(delivery_mode_from_state)" = PR ] || return 0
-  plan_status=$(run_state_nested_value commit_plan status)
-  [ "$plan_status" = complete ] || {
-    blocker "PR commit plan is incomplete: ${plan_status:-not registered}"
-    return 0
-  }
-  if ! plan_rows=$(commit_plan_rows_from_state); then
-    blocker "PR commit plan evidence is missing or invalid"
-    return 0
-  fi
-  [ -n "$plan_rows" ] || {
-    blocker "PR commit plan has no planned steps"
-    return 0
-  }
-  seen_checkpoints=
-  seen_commits=
-  while IFS="$TAB" read -r step_id step_status checkpoint_id commit_sha; do
-    [ -n "$step_id" ] || continue
-    [ "$step_status" = complete ] || {
-      blocker "PR commit plan step is incomplete: $step_id"
-      continue
-    }
-    checkpoint_kind=$(checkpoint_field "$checkpoint_id" 9)
-    checkpoint_step=$(checkpoint_field "$checkpoint_id" 10)
-    checkpoint_head=$(checkpoint_field "$checkpoint_id" 3)
-    checkpoint_path=$(checkpoint_field "$checkpoint_id" 5)
-    checkpoint_commit=$(checkpoint_field "$checkpoint_id" 11)
-    if [ -z "$checkpoint_commit" ]; then checkpoint_commit=$commit_sha; fi
-    [ "$checkpoint_kind" = planned ] || {
-      blocker "planned step $step_id does not reference a planned checkpoint"
-      continue
-    }
-    [ "$checkpoint_step" = "$step_id" ] || {
-      blocker "checkpoint $checkpoint_id is not associated with planned step $step_id"
-      continue
-    }
-    [ "$checkpoint_commit" = "$commit_sha" ] || {
-      blocker "planned step $step_id is missing matching checkpoint commit evidence"
-      continue
-    }
-    [ -f "$STATE/$checkpoint_path" ] || {
-      blocker "checkpoint paths are missing for planned step $step_id"
-      continue
-    }
-    case "$seen_checkpoints" in
-      *"|$checkpoint_id|"*) blocker "checkpoint $checkpoint_id is reused by multiple planned steps" ;;
-    esac
-    case "$seen_commits" in
-      *"|$commit_sha|"*) blocker "commit $commit_sha is reused by multiple planned steps" ;;
-    esac
-    seen_checkpoints="$seen_checkpoints|$checkpoint_id|"
-    seen_commits="$seen_commits|$commit_sha|"
-    git -C "$CHECKOUT" cat-file -e "$commit_sha^{commit}" 2>/dev/null || {
-      blocker "planned step $step_id references a missing commit: $commit_sha"
-      continue
-    }
-    git -C "$CHECKOUT" merge-base --is-ancestor "$commit_sha" "$current_head" || {
-      blocker "planned step $step_id commit is not in the delivered history"
-      continue
-    }
-    commit_parent=$(git -C "$CHECKOUT" rev-parse "$commit_sha^" 2>/dev/null || true)
-    [ "$commit_parent" = "$checkpoint_head" ] || {
-      blocker "planned step $step_id commit does not materialize its checkpoint"
-      continue
-    }
-    commit_paths=$STATE/plan-commit-paths.$$
-    git -C "$CHECKOUT" diff-tree --root --no-commit-id --name-only --find-renames -r \
-      "$commit_sha" >"$commit_paths"
-    if ! same_path_sets "$STATE/$checkpoint_path" "$commit_paths"; then
-      blocker "planned step $step_id commit paths differ from its checkpoint"
-    fi
-    rm -f "$commit_paths"
-  done <<EOF_COMMIT_PLAN
-$plan_rows
-EOF_COMMIT_PLAN
-
-  while IFS="$TAB" read -r checkpoint_id _branch recorded_head _fp paths_file _scope _recorded _checks checkpoint_kind checkpoint_step checkpoint_commit; do
+  current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
+  while IFS="$TAB" read -r checkpoint_id _branch recorded_head _fp paths_file _scope _recorded _checks checkpoint_kind checkpoint_commit; do
     [ -n "$checkpoint_id" ] || continue
     case "$checkpoint_kind" in
-      planned)
-        case "$seen_checkpoints" in
-          *"|$checkpoint_id|"*) ;;
-          *) blocker "planned checkpoint $checkpoint_id is not traceable to a completed plan step" ;;
-        esac
-        [ "$checkpoint_step" != none ] || blocker "planned checkpoint $checkpoint_id has no plan step"
-        ;;
-      review-repair)
-        [ "$checkpoint_step" = none ] || blocker "review-repair checkpoint $checkpoint_id has a planned step"
-        [ -n "$checkpoint_commit" ] || {
-          blocker "review-repair checkpoint $checkpoint_id has no materializing commit"
-          continue
-        }
-        git -C "$CHECKOUT" cat-file -e "$checkpoint_commit^{commit}" 2>/dev/null || {
-          blocker "review-repair checkpoint $checkpoint_id references a missing commit"
-          continue
-        }
-        git -C "$CHECKOUT" merge-base --is-ancestor "$checkpoint_commit" "$current_head" || {
-          blocker "review-repair checkpoint $checkpoint_id commit is not in the delivered history"
-          continue
-        }
-        repair_parent=$(git -C "$CHECKOUT" rev-parse "$checkpoint_commit^" 2>/dev/null || true)
-        [ "$repair_parent" = "$recorded_head" ] || {
-          blocker "review-repair checkpoint $checkpoint_id commit does not materialize its checkpoint"
-          continue
-        }
-        [ -f "$STATE/$paths_file" ] || {
-          blocker "review-repair checkpoint paths are missing: $checkpoint_id"
-          continue
-        }
-        repair_paths=$STATE/repair-commit-paths.$$
-        git -C "$CHECKOUT" diff-tree --root --no-commit-id --name-only --find-renames -r \
-          "$checkpoint_commit" >"$repair_paths"
-        if ! same_path_sets "$STATE/$paths_file" "$repair_paths"; then
-          blocker "review-repair checkpoint $checkpoint_id commit paths differ from its checkpoint"
-        fi
-        rm -f "$repair_paths"
-        ;;
+      slice|review-repair) ;;
       *)
         blocker "checkpoint $checkpoint_id has no PR delivery kind"
+        continue
         ;;
     esac
+    [ "$checkpoint_commit" != none ] || {
+      blocker "checkpoint $checkpoint_id has no materializing commit"
+      continue
+    }
+    git -C "$CHECKOUT" cat-file -e "$checkpoint_commit^{commit}" 2>/dev/null || {
+      blocker "checkpoint $checkpoint_id references a missing commit"
+      continue
+    }
+    git -C "$CHECKOUT" merge-base --is-ancestor "$checkpoint_commit" "$current_head" || {
+      blocker "checkpoint $checkpoint_id commit is not in the delivered history"
+      continue
+    }
+    commit_parent=$(git -C "$CHECKOUT" rev-parse "$checkpoint_commit^" 2>/dev/null || true)
+    [ "$commit_parent" = "$recorded_head" ] || {
+      blocker "checkpoint $checkpoint_id commit does not materialize its checkpoint"
+      continue
+    }
+    [ -f "$STATE/$paths_file" ] || {
+      blocker "checkpoint paths are missing: $checkpoint_id"
+      continue
+    }
+    commit_paths=$STATE/checkpoint-commit-paths.$$
+    git -C "$CHECKOUT" diff-tree --root --no-commit-id --name-only --find-renames -r \
+      "$checkpoint_commit" >"$commit_paths"
+    if ! same_path_sets "$STATE/$paths_file" "$commit_paths"; then
+      blocker "checkpoint $checkpoint_id commit paths differ from its checkpoint"
+    fi
+    rm -f "$commit_paths"
   done <"$STATE/checkpoints.tsv"
 }
 
@@ -1504,7 +1337,7 @@ check_final_state() {
   checkpoint_count=$(awk 'NF { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
   [ "$checkpoint_count" -gt 0 ] || blocker "no checkpoint evidence was recorded"
   if [ "$(delivery_mode_from_state)" = PR ]; then
-    check_commit_plan_completion
+    check_checkpoint_completion
   fi
   fp=$(fingerprint_for_checkout "$CHECKOUT")
   if ! check_requirements "$fp" yes >/dev/null 2>&1; then blocker "required or applicable final validation is not passing for current candidate"; fi
@@ -1595,7 +1428,7 @@ receipt_text() {
   short_fp=$(printf '%s' "$current_fp" | cut -c 1-12)
   commit_count=$(git -C "$CHECKOUT" rev-list --count "$baseline_head..$current_head")
   checkpoint_count=$(awk 'NF { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
-  planned_checkpoint_count=$(awk -F "$TAB" '$9 == "planned" { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
+  slice_checkpoint_count=$(awk -F "$TAB" '$9 == "slice" { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
   repair_checkpoint_count=$(awk -F "$TAB" '$9 == "review-repair" { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
   printf '## SWE Forge receipt\n\n'
   printf 'Execution: %s\n' "$execution"
@@ -1621,8 +1454,8 @@ receipt_text() {
   printf 'Evidence fingerprint: %s\n' "$short_fp"
   printf 'Generated at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   if [ "$delivery" = PR ]; then
-    printf 'Commits: %s (%s validated planned slices, %s review repairs)\n' \
-      "$commit_count" "$planned_checkpoint_count" "$repair_checkpoint_count"
+    printf 'Commits: %s (%s validated slices, %s review repairs)\n' \
+      "$commit_count" "$slice_checkpoint_count" "$repair_checkpoint_count"
   elif [ "$checkpoint_count" -eq 1 ]; then
     printf 'Commits: %s (1 validated slice)\n' "$commit_count"
   else
@@ -1862,7 +1695,6 @@ main() {
   case "$command" in
     preflight) preflight "$@" ;;
     plan-check) plan_check "$@" ;;
-    commit-plan) commit_plan_run "$@" ;;
     validate) validate_run "$@" ;;
     record-check-status) record_check_status "$@" ;;
     fingerprint) fingerprint_run "$@" ;;

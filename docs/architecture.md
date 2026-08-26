@@ -200,14 +200,14 @@ committed coordination artifact.
 `policies/delivery.md` is the sole owner of local-resource and delivery
 authorization. In `GUIDED`, branch setup and edits stop at declared checkpoints;
 `continue` and `go` never authorize push, PR creation, publication, deployment,
-or merge. `PR` authorizes the accepted local setup, validated per-slice
-commits, one final push, and one final PR, never publication, deployment, or
-merge. The same policy resolves repository branch, commit, title, template, and
-draft conventions at each delivery boundary.
+or merge. `PR` authorizes the accepted local setup, any coherent validated
+commits selected during implementation, one final push, and one final PR, never
+publication, deployment, or merge. The same policy resolves repository branch,
+commit, title, template, and draft conventions at each delivery boundary.
 
 `policies/evidence.md` owns evidence semantics. The executable gate registers
 planned checks, binds validation/checkpoints/commits to exact candidate
-fingerprints, supports sequential slice checkpoints, rejects undeclared
+fingerprints, supports optional coherent slice checkpoints, rejects undeclared
 mutations and missing required checks, and renders latest statuses. Receipts are
 private run evidence, include final `Head`, evidence fingerprint, and UTC
 generation time, and are never project-facing PR content.
