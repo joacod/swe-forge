@@ -67,6 +67,9 @@ and runtime selection; SWE Forge never chooses models.
   never selects a topology;
 - delegate only independently evaluable work whose concise result materially
   reduces root coordination;
+- make an early semantic scope decision before downstream workflow machinery;
+  allow substantial cohesive work and reject only independently splittable or
+  open-ended requests;
 
 - keep canonical workflow logic dependent on semantic capabilities, not harness
   identity when the distinction can be expressed as a capability;
@@ -102,6 +105,43 @@ and runtime selection; SWE Forge never chooses models.
 - keep a transient working spec proportional to the ticket; and
 - preserve human checkpoints in `GUIDED` mode while keeping delivery actions
   separately authorized.
+
+## Early Scope Decision
+
+After enough lightweight, root-owned repository discovery to understand the
+requested outcomes and relevant surfaces, but before broad discovery or any
+downstream workflow machinery, the root/orchestrator makes exactly one
+transient semantic decision:
+
+```text
+scope_decision: PROCEED | TOO_BROAD
+```
+
+The decision asks:
+
+> Can this request reasonably produce one cohesive reviewable PR with one
+> primary outcome and a bounded implementation surface?
+
+Choose `PROCEED` when the answer is yes. A substantial implementation, many
+changed files, or several ordered implementation steps can still be one
+cohesive outcome. Do not use work amount, prompt length, or file count as a
+proxy for breadth.
+
+Choose `TOO_BROAD` when the request is effectively an epic, bundles multiple
+independently implementable improvements, asks for an open-ended rewrite, or
+should obviously be split into multiple tickets. `TOO_BROAD` does not mean "a
+large amount of work". This is a semantic judgment, not a score, size
+threshold, topology choice, or delivery choice.
+
+For `TOO_BROAD`, stop before specification, architecture, decomposition,
+routing, validation planning, implementation, review, and delivery. Briefly
+explain why the request is too broad, then suggest its major independent chunks
+as separate tickets. Do not create a working spec, task graph, worker
+assignment, review handoff, or delivery artifact for the rejected request.
+
+For `PROCEED`, continue the normal ticket lifecycle. Automatic topology
+selection still happens later, and `PR` remains the normal/default delivery
+path.
 
 ## Execution Topology
 
@@ -238,8 +278,10 @@ Follow the detailed procedure in `.swe-forge/workflows/ticket.md`. The lifecycle
 is:
 
 1. ingest the immutable raw invocation and parsed ticket constraints;
-2. assess discovery shape, then discover repository evidence, quality gates, and
-   any explicitly named optional skill;
+2. perform lightweight root-owned discovery and the early semantic scope
+   decision; if it is `TOO_BROAD`, explain the split and stop before downstream
+   workflow machinery; for `PROCEED`, assess discovery shape, then discover
+   repository evidence, quality gates, and any explicitly named optional skill;
 3. specify observable acceptance criteria and, in `PR`, build the transient
    working spec;
 4. architect the smallest compatible approach and identify risks;
@@ -265,7 +307,7 @@ multiple workers, or a ceremonial test plan.
 ```text
 activation and lifecycle -> SWE-FORGE.md
 ticket procedure -> workflows/ticket.md
-specification and clarification -> policies/specification.md
+early scope decision, specification and clarification -> policies/specification.md
 execution routing and capability -> policies/execution-routing.md
 delegation boundaries -> policies/delegation.md
 verification strategy and quality gates -> policies/verification.md

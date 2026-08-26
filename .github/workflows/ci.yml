@@ -1,8 +1,9 @@
 name: CI
 
+# Automatic CI is temporarily disabled while GitHub Actions is unreliable.
+# Restore the push and pull_request triggers when service health returns.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

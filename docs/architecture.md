@@ -127,9 +127,18 @@ adapter/root responsibilities.
 
 ## Routing boundary
 
-Automatic routing does not use prompt length alone. Before broad discovery, the
-orchestrator makes a lightweight, transient discovery-shape assessment:
-clearly independent read-only questions may use bounded
+An early semantic scope decision precedes broad discovery and routing. After
+lightweight, root-owned repository discovery, the root/orchestrator decides
+`PROCEED` or `TOO_BROAD` by asking whether the request can reasonably produce
+one cohesive reviewable PR with one primary outcome and a bounded
+implementation surface. It does not reject substantial work or many files by
+size alone. `TOO_BROAD` stops downstream workflow machinery and returns major
+independent chunks to submit separately; `PROCEED` reaches the normal automatic
+topology decision.
+
+Automatic routing does not use prompt length alone. After `PROCEED` and before
+broad discovery, the orchestrator makes a lightweight, transient discovery-
+shape assessment: clearly independent read-only questions may use bounded
 `DELEGATED_RESEARCH`, while coupled questions remain `ROOT_ONLY`. The
 assessment records bounded objectives and concise evidence limits; it does not
 choose delivery or duplicate the final topology router.
@@ -226,6 +235,7 @@ projection.
 ```text
 ticket/raw invocation
   -> shared parser facts and immutable raw ticket
+  -> lightweight repository discovery and semantic scope decision
   -> acceptance and transient PR working spec
   -> durable continuation state and recovery plan
   -> architecture, ownership, and validation plan

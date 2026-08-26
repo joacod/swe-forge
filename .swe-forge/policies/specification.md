@@ -7,8 +7,53 @@ every ticket into a persistent specification project. The working spec is
 transient, behavior-first, and proportional to the selected delivery mode. The
 default invocation uses `PR`; an explicit `guided` token selects `GUIDED`.
 
+## Early Scope Decision
+
+After enough lightweight, root-owned repository discovery to understand the
+requested outcomes and likely affected surfaces, and before broad discovery or
+specification, the root/orchestrator makes one transient semantic decision:
+
+```text
+scope_decision: PROCEED | TOO_BROAD
+```
+
+Use this question rather than a size estimate:
+
+> Can this request reasonably produce one cohesive reviewable PR with one
+> primary outcome and a bounded implementation surface?
+
+`PROCEED` means yes. Substantial work, many files, and several ordered
+implementation steps are allowed when they serve one cohesive outcome. Prompt
+length, file count, and estimated effort are not rejection criteria.
+
+`TOO_BROAD` means the request is an epic, combines multiple independently
+implementable improvements, is an open-ended rewrite, or should obviously be
+split into multiple tickets. It is a semantic judgment, not a score or a
+second topology decision.
+
+For `TOO_BROAD`, do not build a working spec or enter architecture,
+decomposition, routing, validation, implementation, review, or delivery.
+Return a brief explanation and suggest the major independent chunks as separate
+tickets:
+
+```text
+scope_decision: TOO_BROAD
+reason: <why the outcomes are independent or the request is open-ended>
+submit separately:
+- <major independent chunk>
+- <major independent chunk>
+```
+
+For `PROCEED`, continue the normal workflow. Automatic topology selection
+remains later in the lifecycle, and `PR` remains the normal/default delivery
+path. Do not add this transient decision to run state, task contracts, worker
+briefings, or routing records.
+
 ## When It Runs
 
+- The early scope decision runs after lightweight root-owned discovery and
+  before broad discovery, specification, decomposition, routing, validation,
+  implementation, review, or delivery.
 - `GUIDED` mode derives acceptance criteria during guided ingest and asks only
   blocking questions. Do not add an interview for a clear, low-risk ticket.
 - `PR` mode always builds a working spec before writable implementation. It may
