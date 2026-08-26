@@ -48,14 +48,25 @@ state=$TMP_ROOT/clean.state
     fail 'state initializer emitted removed routing representation'
   fi
   "$ROOT/scripts/swe-forge-state" validate --state "$state/run-state.yaml" >/dev/null
+  removed_gate_command=commit
+  removed_gate_command=$removed_gate_command-plan
+  expect_failure "unknown command: $removed_gate_command" "$GATE" \
+    "$removed_gate_command" --state "$state" --step S1
+  removed_state_command=set-commit
+  removed_state_command=$removed_state_command-plan
+  expect_failure "unknown command: $removed_state_command" "$ROOT/scripts/swe-forge-state" \
+    "$removed_state_command" --state "$state/run-state.yaml" --step S1
   grep -F '  retry_ceiling: 2' "$state/run-state.yaml" >/dev/null
-  grep -F '  status: unregistered' "$state/run-state.yaml" >/dev/null
-  "$GATE" commit-plan --state "$state" --step S1 >/dev/null
+  removed_state_field=commit
+  removed_state_field=${removed_state_field}_plan
+  if grep -F "$removed_state_field:" "$state/run-state.yaml" >/dev/null; then
+    fail 'run state retains the removed commit-boundary projection'
+  fi
   "$GATE" plan-check --state "$state" --name smoke --requirement required --final-required false >/dev/null
   printf 'changed\n' >>README.md
   "$GATE" validate --state "$state" --name smoke -- sh -c 'grep -q changed README.md' >/dev/null
-  "$GATE" checkpoint --scope README.md --state "$state" --plan-step S1 >/dev/null
-  "$GATE" commit-slice --state "$state" --checkpoint 1 --plan-step S1 --message 'Record gate evidence' --authorized-by PR >/dev/null
+  "$GATE" checkpoint --scope README.md --state "$state" >/dev/null
+  "$GATE" commit-slice --state "$state" --checkpoint 1 --message 'Record gate evidence' --authorized-by PR >/dev/null
   "$GATE" plan-check --state "$state" --name final-smoke --requirement required >/dev/null
   "$GATE" validate --state "$state" --name final-smoke --final -- sh -c 'grep -q changed README.md' >/dev/null
   "$GATE" review --state "$state" --result PASS --source fresh-context --findings 0 --repaired 0 >/dev/null
@@ -100,7 +111,7 @@ cp -R "$state" "$legacy_state"
 awk -F '\t' 'BEGIN { OFS="\t" } { NF=8; print }' \
   "$legacy_state/checkpoints.tsv" >"$legacy_state/checkpoints.tsv.tmp"
 mv "$legacy_state/checkpoints.tsv.tmp" "$legacy_state/checkpoints.tsv"
-expect_failure 'checkpoint ledger lacks current delivery fields' \
+expect_failure 'checkpoint ledger has an invalid format' \
   "$GATE" deliver-pr --state "$legacy_state"
 missing_review=$TMP_ROOT/missing-review.yaml
 awk '
@@ -110,14 +121,15 @@ awk '
 ' "$state/run-state.yaml" >"$missing_review"
 expect_failure 'missing current key: review' \
   "$ROOT/scripts/swe-forge-state" validate --state "$missing_review"
-missing_plan=$TMP_ROOT/missing-plan.yaml
-awk '
-  /^commit_plan:/ { skip=1; next }
-  /^[^ ]/ { skip=0 }
-  !skip { print }
-' "$state/run-state.yaml" >"$missing_plan"
-expect_failure 'missing current key: commit_plan' \
-  "$ROOT/scripts/swe-forge-state" validate --state "$missing_plan"
+obsolete_plan=$TMP_ROOT/obsolete-plan.yaml
+removed_state_field=commit
+removed_state_field=${removed_state_field}_plan
+{
+  printf '%s:\n  status: unregistered\n  steps: []\n' "$removed_state_field"
+  cat "$state/run-state.yaml"
+} >"$obsolete_plan"
+expect_failure 'obsolete routing or context-control fields' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$obsolete_plan"
 review_repo=$(make_repo review-ceiling)
 review_state=$TMP_ROOT/review-ceiling.state
 (
@@ -154,26 +166,25 @@ second_review_state=$TMP_ROOT/second-review.state
 )
 
 
-multi_repo=$(make_repo multi-step)
-multi_state=$TMP_ROOT/multi-step.state
+multi_repo=$(make_repo multi-slice)
+multi_state=$TMP_ROOT/multi-slice.state
 (
   cd "$multi_repo"
   "$GATE" preflight --state "$multi_state" >/dev/null
-  "$GATE" commit-plan --state "$multi_state" --step S1 --step S2 >/dev/null
   "$GATE" plan-check --state "$multi_state" --name slice-smoke \
     --requirement required --final-required false >/dev/null
   "$GATE" plan-check --state "$multi_state" --name final-smoke \
     --requirement required >/dev/null
   printf 'one\n' >one.txt
   "$GATE" validate --state "$multi_state" --name slice-smoke -- sh -c 'test -f one.txt' >/dev/null
-  "$GATE" checkpoint --state "$multi_state" --scope one.txt --plan-step S1 >/dev/null
-  "$GATE" commit-slice --state "$multi_state" --checkpoint 1 --plan-step S1 \
-    --message 'Add first planned step' --authorized-by PR >/dev/null
+  "$GATE" checkpoint --state "$multi_state" --scope one.txt >/dev/null
+  "$GATE" commit-slice --state "$multi_state" --checkpoint 1 \
+    --message 'Add first implementation slice' --authorized-by PR >/dev/null
   printf 'two\n' >two.txt
   "$GATE" validate --state "$multi_state" --name slice-smoke -- sh -c 'test -f two.txt' >/dev/null
-  "$GATE" checkpoint --state "$multi_state" --scope two.txt --plan-step S2 >/dev/null
-  "$GATE" commit-slice --state "$multi_state" --checkpoint 2 --plan-step S2 \
-    --message 'Add second planned step' --authorized-by PR >/dev/null
+  "$GATE" checkpoint --state "$multi_state" --scope two.txt >/dev/null
+  "$GATE" commit-slice --state "$multi_state" --checkpoint 2 \
+    --message 'Add second implementation slice' --authorized-by PR >/dev/null
   expect_failure 'PR review requires passing final validation for the current candidate' \
     "$GATE" review --state "$multi_state" --result PASS --source fresh-context
   grep -F '  attempts: 0' "$multi_state/run-state.yaml" >/dev/null
@@ -201,10 +212,8 @@ multi_state=$TMP_ROOT/multi-step.state
     --pr-url https://github.com/example/repo/pull/3 >/dev/null
   grep -F 'Review attempts: 2/2' "$multi_state/receipt.md" >/dev/null
   "$GATE" receipt-verify --state "$multi_state" >/dev/null
-  "$ROOT/scripts/swe-forge-state" commit-plan --state "$multi_state/run-state.yaml" |
-    awk -F '\t' '$1 == "S1" && $2 == "complete" && $3 == "1" && $4 != "none" { first=1 }
-      $1 == "S2" && $2 == "complete" && $3 == "2" && $4 != "none" { second=1 }
-      END { exit !(first && second) }'
+  test "$(awk -F '\t' '$9 == "slice" { count++ } END { print count + 0 }' "$multi_state/checkpoints.tsv")" = 2
+  test "$(awk -F '\t' '$10 != "none" { count++ } END { print count + 0 }' "$multi_state/checkpoints.tsv")" = 3
   test "$(awk -F '\t' '$9 == "review-repair" { count++ } END { print count + 0 }' "$multi_state/checkpoints.tsv")" = 1
   grep -F 'status: running' "$multi_state/run-state.yaml" >/dev/null
 )
@@ -214,9 +223,6 @@ collapsed_state=$TMP_ROOT/collapsed.state
 (
   cd "$collapsed_repo"
   "$GATE" preflight --state "$collapsed_state" >/dev/null
-  "$GATE" commit-plan --state "$collapsed_state" --step S1 --step S2 >/dev/null
-  expect_failure 'PR review requires a complete commit plan' \
-    "$GATE" review --state "$collapsed_state" --result PASS --source fresh-context
   "$GATE" plan-check --state "$collapsed_state" --name slice-smoke \
     --requirement required --final-required false >/dev/null
   "$GATE" plan-check --state "$collapsed_state" --name final-smoke \
@@ -225,31 +231,27 @@ collapsed_state=$TMP_ROOT/collapsed.state
   printf 'two\n' >two.txt
   "$GATE" validate --state "$collapsed_state" --name slice-smoke \
     -- sh -c 'test -f one.txt && test -f two.txt' >/dev/null
-  "$GATE" checkpoint --state "$collapsed_state" --scope one.txt --scope two.txt \
-    --plan-step S1 >/dev/null
-  "$GATE" commit-slice --state "$collapsed_state" --checkpoint 1 --plan-step S1 \
-    --message 'Collapse planned steps' --authorized-by PR >/dev/null
+  "$GATE" checkpoint --state "$collapsed_state" --scope one.txt --scope two.txt >/dev/null
+  "$GATE" commit-slice --state "$collapsed_state" --checkpoint 1 \
+    --message 'Implement cohesive change' --authorized-by PR >/dev/null
   "$GATE" validate --state "$collapsed_state" --name final-smoke --final \
     -- sh -c 'test -f one.txt && test -f two.txt' >/dev/null
-  expect_failure 'PR commit plan is incomplete' "$GATE" deliver-pr --state "$collapsed_state"
-  "$ROOT/scripts/swe-forge-state" commit-plan --state "$collapsed_state/run-state.yaml" |
-    awk -F '\t' '$1 == "S2" && $2 == "pending" && $3 == "none" && $4 == "none" { found=1 }
-      END { exit !found }'
+  "$GATE" review --state "$collapsed_state" --result PASS --source fresh-context >/dev/null
+  "$GATE" deliver-pr --state "$collapsed_state" >/dev/null
+  test "$(awk -F '\t' '$9 == "slice" { count++ } END { print count + 0 }' "$collapsed_state/checkpoints.tsv")" = 1
 )
 repair_ceiling_repo=$(make_repo repair-ceiling)
 repair_ceiling_state=$TMP_ROOT/repair-ceiling.state
 (
   cd "$repair_ceiling_repo"
   "$GATE" preflight --state "$repair_ceiling_state" >/dev/null
-  "$GATE" commit-plan --state "$repair_ceiling_state" --step S1 >/dev/null
   "$GATE" plan-check --state "$repair_ceiling_state" --name implementation-smoke \
     --requirement required --final-required false >/dev/null
   printf 'implementation\n' >implementation.txt
   "$GATE" validate --state "$repair_ceiling_state" --name implementation-smoke \
     -- sh -c 'test -f implementation.txt' >/dev/null
-  "$GATE" checkpoint --state "$repair_ceiling_state" --scope implementation.txt \
-    --plan-step S1 >/dev/null
-  "$GATE" commit-slice --state "$repair_ceiling_state" --checkpoint 1 --plan-step S1 \
+  "$GATE" checkpoint --state "$repair_ceiling_state" --scope implementation.txt >/dev/null
+  "$GATE" commit-slice --state "$repair_ceiling_state" --checkpoint 1 \
     --message 'Implement repair ceiling fixture' --authorized-by PR >/dev/null
   "$GATE" plan-check --state "$repair_ceiling_state" --name final-smoke \
     --requirement required >/dev/null
@@ -282,14 +284,13 @@ orphan_state=$TMP_ROOT/orphan-repair.state
 (
   cd "$orphan_repo"
   "$GATE" preflight --state "$orphan_state" >/dev/null
-  "$GATE" commit-plan --state "$orphan_state" --step S1 >/dev/null
   "$GATE" plan-check --state "$orphan_state" --name implementation-smoke \
     --requirement required --final-required false >/dev/null
   printf 'implementation\n' >implementation.txt
   "$GATE" validate --state "$orphan_state" --name implementation-smoke \
     -- sh -c 'test -f implementation.txt' >/dev/null
-  "$GATE" checkpoint --state "$orphan_state" --scope implementation.txt --plan-step S1 >/dev/null
-  "$GATE" commit-slice --state "$orphan_state" --checkpoint 1 --plan-step S1 \
+  "$GATE" checkpoint --state "$orphan_state" --scope implementation.txt >/dev/null
+  "$GATE" commit-slice --state "$orphan_state" --checkpoint 1 \
     --message 'Implement orphan repair fixture' --authorized-by PR >/dev/null
   "$GATE" plan-check --state "$orphan_state" --name final-smoke --requirement required >/dev/null
   "$GATE" plan-check --state "$orphan_state" --name repair-smoke \
@@ -305,7 +306,7 @@ orphan_state=$TMP_ROOT/orphan-repair.state
   rm repair.txt
   "$GATE" validate --state "$orphan_state" --name final-smoke --final \
     -- sh -c 'test -f implementation.txt' >/dev/null
-  expect_failure 'review-repair checkpoint 2 has no materializing commit' \
+  expect_failure 'checkpoint 2 has no materializing commit' \
     "$GATE" deliver-pr --state "$orphan_state"
 )
 

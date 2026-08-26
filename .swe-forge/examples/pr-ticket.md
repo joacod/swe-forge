@@ -47,14 +47,14 @@ and is never committed.
 
 ## Execution
 
-Before editing, the working spec records an ordered commit plan. Each step names
-one cohesive objective, scope, dependencies, targeted validation, and commit
-subject. The agent implements one step, runs its targeted checks, records the
-checkpoint, and creates its local commit before starting the next step; it does
-not defer commits until the end or require independent review for each commit.
-A single inseparable step remains one commit.
+During implementation, the agent uses its judgment about commit boundaries.
+A small cohesive ticket may use one checkpoint and commit; a larger cohesive
+result may use several. It runs targeted checks for the current implementation
+slice before recording an optional checkpoint and its materializing commit. No
+commit sequence is declared in the working spec, and the agent may keep the
+whole change together rather than manufacture ceremonial commits.
 
-After all planned commits exist, it runs final integrated validation once and
+After implementation is complete, it runs final integrated validation once and
 performs the initial independent review against that same committed candidate.
 The initial handoff contains the complete ticket-relevant `review_focus`, so it
 is the one comprehensive semantic review. If the review requires changes, it

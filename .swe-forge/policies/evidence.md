@@ -20,16 +20,15 @@ Register the expected checks before executing them:
 
 ```sh
 .swe-forge/tools/swe-forge-gate preflight --state "$STATE" --branch "$BRANCH" --base "$BASE"
-.swe-forge/tools/swe-forge-gate commit-plan --state "$STATE" --step S1
 .swe-forge/tools/swe-forge-gate plan-check --state "$STATE" \
-  --name "structural checks" --requirement required --final-required false \
+  --name "targeted checks" --requirement required --final-required false \
   --condition always
 .swe-forge/tools/swe-forge-gate validate --state "$STATE" \
-  --name "structural checks" -- ./scripts/check-swe-forge
+  --name "targeted checks" -- ./scripts/check-swe-forge
 .swe-forge/tools/swe-forge-gate checkpoint --state "$STATE" \
-  --plan-step S1 --scope .swe-forge/policies/** --scope README.md
+  --scope .swe-forge/policies/** --scope README.md
 .swe-forge/tools/swe-forge-gate commit-slice --state "$STATE" \
-  --checkpoint 1 --plan-step S1 --message "Document evidence policy" --authorized-by PR
+  --checkpoint 1 --message "Document evidence policy" --authorized-by PR
 .swe-forge/tools/swe-forge-gate plan-check --state "$STATE" \
   --name "integrated checks" --requirement required
 .swe-forge/tools/swe-forge-gate validate --state "$STATE" \
@@ -47,15 +46,15 @@ checks remain visible and do not block. `validate` and
 `record-check-status` reject unregistered check names. Receipts render the
 latest status per planned check; attempt history remains private.
 
-In `PR`, the private commit-plan projection is registered before implementation.
-Every planned checkpoint and commit names one ordered step; a plan with missing
-step evidence fails `deliver-pr`. A review-repair checkpoint and commit use the
-explicit repair kind and never satisfy a planned step.
+In `PR`, implementation checkpoints and commits are boundaries chosen as the
+work develops. Every recorded checkpoint must have matching candidate,
+path, validation, and commit evidence before `deliver-pr`; a review-repair
+checkpoint and commit use the explicit repair kind.
 
 `deliver-pr` and receipt generation inspect only local checkout, validation,
-review, plan, and authorization evidence. Final validation evidence is
-established after the planned implementation commits, and again only when a
-repair changes the candidate; review, acceptance, and PR preparation consume
+review, validation, and authorization evidence. Final validation evidence is
+established after implementation is complete, and again only when a repair
+changes the candidate; review, acceptance, and PR preparation consume
 that exact evidence without rerunning its command. Creating the PR and recording
 its URL ends the synchronous run; remote CI is not awaited or polled.
 
@@ -74,8 +73,8 @@ Git, sorted untracked paths, and content hashes.
 
 A checkpoint records its exact path boundary and candidate fingerprint.
 Required current-slice and applicable conditional checks must pass for that
-candidate. Planned implementation checkpoints need only their targeted checks;
-final checks are evaluated at the final-candidate boundary. `commit-slice`
+candidate. Implementation checkpoints need only their targeted checks; final
+checks are evaluated at the final-candidate boundary. `commit-slice`
 refuses candidate fingerprint drift, staged-tree drift, and path set drift. It
 never pushes.
 

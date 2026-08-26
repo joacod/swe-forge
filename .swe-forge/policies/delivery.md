@@ -14,32 +14,24 @@ detached, protected, or ambiguous checkout state is preserved and reported
 rather than reset, stashed, cleaned, or overwritten.
 
 `PR` is the default low-touch path. It authorizes the bounded local setup
-recorded in the accepted plan, validated local commits on the one delivery
-branch, one final branch push, and one final PR. It never authorizes
+selected for the ticket, validated local commits on the one delivery branch,
+one final branch push, and one final PR. It never authorizes
 publication, deployment, force-push, or merge. Publication and merge remain
 separate human actions.
 
-### PR commit plan
+### PR commits and checkpoints
 
-Before the first edit, a ready `PR` working spec records an ordered commit plan.
-Each step has one cohesive objective, owned paths, dependencies, targeted
-validation, and a repository-appropriate commit subject. Register only the
-step identities in the private run-state projection with `commit-plan`.
-The orchestrator implements one step, runs that step's required checks, records
-`checkpoint --plan-step <id>`, and creates its matching
-`commit-slice --plan-step <id>` before starting the next. The executable gate
-requires steps in plan order, refuses missing or reused step evidence, and
-`deliver-pr` requires every planned step to have its checkpoint and materializing
-commit. It must not accumulate all steps and create one catch-all commit at the
-end.
+The agent decides during implementation whether the candidate is best represented
+by one coherent commit or several. A small ticket may use one checkpoint and
+commit; a larger cohesive ticket may use multiple checkpoints and commits. Do
+not manufacture commits for unrelated formatting or ceremonial phases, and do
+not require a predeclared commit sequence. Each implementation checkpoint
+binds its current candidate, exact path scope, targeted validation, and
+materializing `commit-slice` through the executable gate before delivery.
 
-A step may contain implementation and tests that are inseparable at the
-observable boundary. Do not manufacture commits for unrelated formatting or
-ceremonial phases: a one-step ticket correctly produces one commit. Planned
-implementation commits require their targeted validation and checkpoint, not an
-independent review. Review repairs use `--review-repair` and remain additional
-atomic commits rather than a squash or completion of a planned step; the repair
-commit must exist before the focused re-review of its candidate.
+Review repairs use `--review-repair` and remain additional atomic commits. The
+repair commit must exist before the focused re-review of its candidate; it is
+validated by the same candidate and path safeguards as other delivery commits.
 
 ### PR completion boundary
 

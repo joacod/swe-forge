@@ -226,20 +226,19 @@ publication, deployment, or merge.
 the transient working spec. Before writable work or delivery choices, load
 `.swe-forge/policies/delivery.md`.
 
-The transient spec owns a validated ordered commit plan and `review_focus`. A
-`PR` working spec is not ready for implementation until it contains at least one
-cohesive step with an identity, scope, dependencies, targeted validation, and
-commit subject. The orchestrator registers only the minimal step projection in
-run state. Each planned implementation step is validated with its targeted
-checks, checkpointed, and materialized as an explicitly authorized commit
-before the next step; planned commits do not require independent review. A
-one-step ticket remains one commit, while review repairs use explicit additional
-`--review-repair` commits.
+The transient spec owns `review_focus` and the ticket's validation decision. A
+`PR` working spec is ready for implementation once its intent, scope,
+acceptance, testing decision, validation plan, and review focus are clear. The
+agent chooses during implementation whether the cohesive result is best
+represented by one commit or several; no commit sequence is predeclared or
+stored in run state. Each implementation checkpoint still binds the current
+targeted evidence to a coherent materializing commit, and review
+repairs use explicit additional `--review-repair` commits.
 
-After all planned implementation commits exist, the orchestrator runs final
-integrated validation once against that committed candidate and performs the
-initial independent review from fresh context against the same candidate. The
-initial handoff uses
+After implementation is complete, the orchestrator runs final integrated
+validation once against that committed candidate and performs the initial
+independent review from fresh context against the same candidate. The initial
+handoff uses
 the complete ticket-relevant `review_focus`, so it remains the primary
 comprehensive semantic review while broader quality concerns stay relevant to
 the change. If that review returns `CHANGES_REQUIRED`, it repairs only the
@@ -267,10 +266,11 @@ pending, but SWE Forge does not await or poll it synchronously.
 
 The working spec's `review_focus` is the sole structured review scope. The
 root derives a transient focused subset after a repair instead of mutating the
-original ticket or replaying unrelated criteria. The PR mental model is: plan,
-targeted-validate/checkpoint/commit each step, final-validate, review,
-repair/validate/checkpoint/commit when required, final-validate the changed
-candidate, focused re-review, accept, push, create the PR, and report.
+original ticket or replaying unrelated criteria. The PR mental model is:
+implement, use targeted validation and materialize one or more coherent
+checkpoint/commit boundaries, final-validate the candidate, review, repair/validate/checkpoint/
+commit when required, final-validate the changed candidate, focused re-review,
+accept, push, create the PR, and report.
 
 ## Ticket Lifecycle
 
@@ -348,8 +348,7 @@ The canonical `swe-forge-state init` operation owns schema-v4 shell construction
 Use `set-routing` for deliberate preferred/effective topology changes,
 `set-continuation` for bounded semantic continuation inputs,
 `set-delivery-checkout` and `set-receipt-ref` for their purpose-specific
-updates, `set-commit-plan` and `record-commit-step` for the minimal PR plan
-projection, `set-review` for review attempts, and `set-pull-request` after PR
+updates, `set-review` for review attempts, and `set-pull-request` after PR
 creation. These helpers validate atomic replacements and derive
 `continuation.updated_at` and the delivery projection; callers must not
 hand-construct containers, timestamps, or projections in YAML.
@@ -399,11 +398,12 @@ Declare success only when all applicable conditions are met:
 - any generated receipt is truthful and reports `ACCEPTED` only when its
   required evidence gate passes;
 - a normal ticket has one dedicated delivery branch; and
-- when `delivery_mode: PR`, every planned cohesive step has targeted validation,
-  checkpoint, and commit evidence before final acceptance and delivery; final
-  validation and review evidence are current for the delivered candidate, or
-  the run is reported `BLOCKED`; `GUIDED` may finish with a reviewed local diff
-  when delivery actions are not authorized;
+- when `delivery_mode: PR`, any recorded implementation or review-repair
+  checkpoint has targeted validation, checkpoint, and commit evidence before
+  final acceptance and delivery; final validation and review evidence are
+  current for the delivered candidate, or the run is reported `BLOCKED`;
+  `GUIDED` may finish with a reviewed local diff when delivery actions are not
+  authorized;
 - after a PR is created, local receipt generation and reporting complete the
   synchronous run; remote CI is not an acceptance wait or polling phase.
 

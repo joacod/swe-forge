@@ -191,7 +191,7 @@ require_text 'risk-proportional testing decision' SWE-FORGE.md
 require_text 'scope_decision: PROCEED | TOO_BROAD' SWE-FORGE.md
 require_text 'one cohesive reviewable PR' SWE-FORGE.md
 require_text 'substantial cohesive work' .swe-forge/agents/orchestrator.md
-require_text 'early semantic scope decision' .swe-forge/workflows/ticket.md
+require_text 'Early semantic scope decision' .swe-forge/workflows/ticket.md
 require_text 'submit separately' .swe-forge/policies/specification.md
 require_text 'Work summary' SWE-FORGE.md
 require_text 'plain human' SWE-FORGE.md
@@ -209,12 +209,13 @@ require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-state
 require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
 require_text 'set-pull-request' .swe-forge/tools/swe-forge-state
 require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
-require_text 'ordered commit plan' .swe-forge/policies/delivery.md
-require_text 'targeted validation and checkpoint' .swe-forge/policies/delivery.md
-require_text 'planned commits do not require independent review' SWE-FORGE.md
+require_text 'one coherent commit or several' .swe-forge/policies/delivery.md
+require_text 'materializing `commit-slice`' .swe-forge/policies/delivery.md
+require_text 'no commit sequence is predeclared' SWE-FORGE.md
 require_text 'remote default branch' .swe-forge/policies/delivery.md
 require_text 'review-repair commit' .swe-forge/policies/delivery.md
 require_text 'clean committed candidate' .swe-forge/contracts/review.md
+require_text 'coherent commits' .swe-forge/contracts/review.md
 require_text 'mode: initial | focused' .swe-forge/contracts/review.md
 require_text 'Previously established, unaffected `PASS` criteria' .swe-forge/contracts/review.md
 require_text 'does not require unrelated criteria' .swe-forge/contracts/review.md
@@ -222,15 +223,13 @@ require_text 'not run tests, formatters, linters' .swe-forge/agents/reviewer.md
 require_text 'initial handoff' .swe-forge/workflows/ticket.md
 require_text 'focused handoff is a new narrow assignment' .swe-forge/workflows/ticket.md
 require_text 'unaffected `PASS` conclusions carry forward' .swe-forge/workflows/ticket.md
-require_text 'Run that final validation once' .swe-forge/policies/verification.md
+require_text 'Run final validation once the' .swe-forge/policies/verification.md
 require_text './scripts/validate-swe-forge' .swe-forge/policies/verification.md
 require_text 'Later review, acceptance, and delivery gates consume this' .swe-forge/workflows/ticket.md
 reject_text 'The reviewer must confirm that writable delegated results' .swe-forge/contracts/review.md
 reject_text 'Review all applicable areas:' .swe-forge/contracts/review.md
 require_text 'at most two review executions' SWE-FORGE.md
 require_text 'Remote GitHub CI is external after PR creation' SWE-FORGE.md
-require_text 'commit-plan' .swe-forge/tools/swe-forge-state
-require_text 'record-commit-step' .swe-forge/tools/swe-forge-state
 require_text 'review ceiling exhausted' .swe-forge/tools/swe-forge-state
 require_text 'PR review requires a clean committed candidate' .swe-forge/tools/swe-forge-gate
 require_text 'PR focused re-review requires a materialized review-repair commit' .swe-forge/tools/swe-forge-gate

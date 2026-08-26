@@ -25,9 +25,9 @@ Branch: <delivery branch>
 Head: <short final SHA>
 Evidence fingerprint: <short final fingerprint>
 Generated at: <UTC timestamp>
-Commits: <count> (<validated planned slices>, <review-repair commits>)
+Commits: <count> (<validated slices>, <review-repair commits>)
 Verification:
-- <planned check>: passed | failed | skipped | unavailable | not-applicable
+- <registered check>: passed | failed | skipped | unavailable | not-applicable
 Fresh review: PASS | CHANGES_REQUIRED | NOT RUN — <findings> findings, <repaired> repaired
 Review attempts: <attempts>/<ceiling>
 Remote CI: not awaited after PR creation
@@ -55,13 +55,12 @@ one checkpoint, every required and applicable conditional final check passing
 for the exact current candidate fingerprint, fresh review `PASS` for the exact
 current `HEAD` and fingerprint, and a PR URL in `PR` mode.
 
-For `PR`, the receipt is eligible only after the ordered commit-plan projection
-is complete and every planned step is bound to its checkpoint and commit.
-Review-repair commits are reported separately and never substitute for a
-planned step. Final acceptance and receipt generation consume the current
-candidate-bound validation and PASS review evidence; they do not rerun
-unchanged validation or another review. PR creation does not add a remote
-validation requirement.
+For `PR`, every recorded implementation or review-repair checkpoint must be
+bound to a materializing commit before delivery. The agent may use one or more
+coherent checkpoints and commits; no predeclared commit sequence is required.
+Final acceptance and receipt generation consume the current candidate-bound
+validation and PASS review evidence; they do not rerun unchanged validation or
+another review. PR creation does not add a remote validation requirement.
 
 The read-only `receipt-verify` operation compares the receipt with the current
 repository identity, branch, `HEAD`, final candidate fingerprint, and final

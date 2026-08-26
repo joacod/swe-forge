@@ -6,11 +6,11 @@ result validation. The reviewer role owns how to investigate and reason; this
 contract does not turn every review into a generic quality checklist.
 
 Use this contract for an independent review after implementation and
-verification. For `PR`, review the clean committed candidate only after the
-ordered implementation plan is complete and its final validation has passed;
-planned implementation commits do not receive independent review individually.
-The root supplies a bounded handoff and the reviewer returns the focus and
-evidence used, not an implementation result or a transcript.
+verification. For `PR`, review the clean committed candidate after
+implementation and final validation have passed. The agent may have made one or
+more coherent commits; individual implementation commits do not require
+independent review. The root supplies a bounded handoff and the reviewer
+returns the focus and evidence used, not an implementation result or a transcript.
 
 ## Template
 

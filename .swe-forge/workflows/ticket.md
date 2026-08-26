@@ -181,8 +181,9 @@ When delegation or independent review is useful, first load
 Create bounded tasks only where the loaded delegation policy and contracts
 provide useful independence. Keep each task's ownership and validation
 explicit. For `GUIDED`, divide broad work into cohesive review slices. For
-`PR`, record a valid non-empty ordered commit plan in the ready working spec even
-in `SOLO`; register only its minimal step projection before the first edit.
+`PR`, let implementation boundaries emerge from the work; do not create a
+separate artifact for commit boundaries or require a particular number or order
+of commits.
 
 Parallelize only read-only questions with non-overlapping ownership and
 satisfied dependencies. A logical fan-out batch does not prescribe host
@@ -239,12 +240,11 @@ commit/push/PR-related decision, load and follow `policies/delivery.md`. It is
 the sole detailed owner of checkout and branch ownership, commits, pushes,
 pull requests, synchronization, and cleanup.
 Implement only the bounded dependency waves selected by the architecture and
-working spec. In `PR`, use the executable commit-plan projection: implement one
-step, run only its required targeted checks, record its checkpoint, and create
-its materializing commit with that step's identity before beginning the next.
-Planned implementation commits do not require independent review. Use an
-explicit review-repair checkpoint and commit for blocking review repairs; never
-mark a planned step complete with a catch-all checkpoint. In `GUIDED`, stop at
+working spec. In `PR`, use targeted checks and, when useful, record a checkpoint
+and materializing commit for each coherent implementation slice. A ticket may
+naturally result in one commit or several; delivery does not require a
+predeclared commit sequence. Use an explicit review-repair checkpoint and
+commit for blocking review repairs. In `GUIDED`, stop at
 the declared checkpoint. Keep task ownership, scope, and delivery authorization
 explicit and stop on a blocking gate.
 
@@ -276,10 +276,10 @@ acceptance sequential.
 ### 10. Verify
 
 Run the relevant repository quality gates by following the loaded verification
-and evidence policies. In `PR`, each planned step's targeted checks must pass
-before its checkpoint and materializing commit. After all planned implementation
-commits exist, run final integrated validation once against that committed
-candidate. If a review repair changes the candidate, establish the required
+and evidence policies. In `PR`, targeted checks must pass for any implementation
+slice before its checkpoint and materializing commit. Once implementation is
+complete, run final integrated validation once against the committed candidate.
+If a review repair changes the candidate, establish the required
 final evidence for that new committed candidate after the repair commit.
 `GUIDED` may report a passing slice while final acceptance remains pending.
 Report every check as passed, failed, skipped, unavailable, or not-applicable
@@ -290,8 +290,8 @@ evidence; they do not rerun unchanged validation.
 
 When the review trigger applies, load `.swe-forge/agents/reviewer.md` and
 `.swe-forge/contracts/review.md` before review. In `PR`, run the initial
-independent review only after the planned implementation commits and final
-validation are complete, against that same committed candidate. If it returns
+independent review only after implementation and final validation are complete,
+against that same committed candidate. If it returns
 `CHANGES_REQUIRED`, repair only the relevant finding, run the affected checks,
 record the explicit review-repair checkpoint and commit, establish required
 final evidence for the repaired candidate, and then run the focused second

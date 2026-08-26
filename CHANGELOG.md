@@ -17,9 +17,9 @@ change between alpha releases.
 - Final alpha hardening adds exact candidate-content evidence binding,
   schema-v4 run state, machine-valid worker results, executable Git conformance,
   head-bound receipts, and release-readiness checks.
-- PR runs now plan meaningful implementation slices before editing, preserve one
-  validated commit per slice, and support sequential slice evidence without
-  repeating unchanged run-state validation.
+- PR runs now let agents choose one or more coherent implementation commits
+  during the work while retaining candidate-bound validation and checkpoint
+  evidence without repeating unchanged run-state validation.
 - Receipt generation now keeps a run-local copy by default without adding
   workflow metadata to pull requests.
 - Continue collecting real-run reports across harness adapters; projection

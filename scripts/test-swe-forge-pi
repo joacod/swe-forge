@@ -105,9 +105,6 @@ delivery:
   create_pull_request: pending
   sync: not-authorized
   pull_request_ref: none
-commit_plan:
-  status: unregistered
-  steps: []
 review:
   status: pending
   blocked_by: []

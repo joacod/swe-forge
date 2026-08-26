@@ -24,7 +24,7 @@ ticket's intent or scope.
 - Never write a ticket-specific working spec to the repository, commit it, or
   add an ignore rule just to hide it.
 - Delete external working-spec files during cleanup and report a cleanup failure.
-- A working spec may record the task DAG and commit dependencies, but it does
+- A working spec may record the task DAG and task dependencies, but it does
   not store worker-to-worker messages or dependency digests. The root derives
   each transient digest from an accepted structured result when rendering the
   dependent worker's briefing.
@@ -96,22 +96,6 @@ review_focus:
     the changed behavior; record useful out-of-scope observations as deferred
     follow-ups.
 
-commit_plan:
-  - id: S1
-    objective: <one cohesive observable step>
-    scope: [<owned path or symbol>]
-    depends_on: []
-    validation: [<targeted check>]
-    commit_subject: <imperative subject>
-
-In `PR`, `commit_plan` is required before the spec can be `ready`: it must
-contain at least one ordered step, and every step must have a unique identity,
-cohesive objective, owned scope, dependencies, targeted validation, and commit
-subject. The plan is the semantic authority; run state may retain only the
-minimal step identity/status/checkpoint/commit projection needed for executable
-delivery checks.
-
-
 routing:
   requested_mode: AUTO | SOLO | SUBAGENTS
   preferred: SOLO | SUBAGENTS
@@ -180,9 +164,9 @@ blocking findings, repair delta, and directly affected criteria and risks; it
 does not rewrite the original ticket or broaden the initial focus. It records
 the preferred and current topology, concise routing reason, and fallback
 evidence; native capability is freshly observed at the delegation boundary
-rather than cached as a routing profile. For `PR`, readiness also requires a
-valid non-empty ordered `commit_plan`; implementation must not begin while the
-plan is absent, ambiguous, or missing per-step validation and commit subjects.
+rather than cached as a routing profile. Implementation may be organized into
+one or more cohesive commits as the work develops; commit boundaries are not
+part of working-spec readiness.
 
 For a long-running ticket, the durable run state records the next valid
 workflow action. Host context preservation, compaction, retry, and restoration

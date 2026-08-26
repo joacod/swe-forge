@@ -47,7 +47,7 @@ grading an agent from its explanation alone.
 | Scenario | Required behavior |
 | --- | --- |
 | Normal `SOLO` ticket | Preserve lightweight discovery, load the specification policy before specification/clarification, perform proportional verification, final-diff inspection, and evidence reporting. |
-| `PR` specification and delivery | Load the specification policy and working-spec contract before clarification/specification, load delivery before the first writable operation, and retain task-branch, per-slice commit, final push, and one PR behavior. |
+| `PR` specification and delivery | Load the specification policy and working-spec contract before clarification/specification, load delivery before the first writable operation, and retain task-branch, coherent commit, final push, and one PR behavior. |
 | Delivery before first write | Expose a stage-triggered delivery-policy load before checkout setup, branch creation, editing, or any commit/push/PR decision. |
 | Bug ticket with a usable test seam | Load verification before strategy selection and choose a regression test where practical. |
 | Executable evidence and candidate binding | Load evidence policy before fingerprints, freshness, checkpoints, or receipts; evidence remains bound to the exact candidate and stale evidence is rejected. |
@@ -110,8 +110,8 @@ handoff and verifies that B receives selected facts without A's full result.
 | No meaningful test surface | Record `not-applicable` or focused manual validation and do not add ceremonial tests. |
 | Explicit TDD request | Observe a failing test before the minimal implementation, then green and refactor in vertical slices. |
 | Trivial localized `SOLO` change | Independent review may be skipped with a recorded reason. |
-| Planned PR implementation step | After its targeted checks pass, checkpoint and materialize the step without an independent review; the next step may then begin. |
-| Final PR candidate | Run final integrated validation after all planned implementation commits, then review that same committed candidate. |
+| PR implementation slice | After its targeted checks pass, optionally checkpoint and materialize the coherent slice without an independent review; implementation may continue or finish. |
+| Final PR candidate | Run final integrated validation after implementation is complete, then review that same committed candidate. |
 | Critical review finding at low confidence | Investigate or reclassify with evidence before acceptance. |
 | Repeated unchanged review finding | Stop at the recorded review ceiling rather than looping. |
 | Review attempt 1 and 2 both require changes | Record attempts 1 and 2 in canonical state, preserve the second findings, and reject a third reviewer-like execution without replacing evidence. |
@@ -120,9 +120,9 @@ handoff and verifies that B receives selected facts without A's full result.
 | Focused review attempt accounting | Record the focused execution through the same canonical second/final review attempt, regardless of source label. |
 | Final acceptance review boundary | Consume the current passing review and evidence without launching another reviewer-like execution or broad semantic audit. |
 | Reviewer-like recovery alias | An investigation, debug review, or focused-review source still consumes the shared review budget; ordinary unrelated test debugging does not. |
-| PR commit plan with multiple steps | Require each ordered step to have its own validated checkpoint and materializing commit; reject one catch-all checkpoint. |
-| PR commit plan with one step | Allow one cohesive implementation step and one commit without ceremonial extra commits. |
-| Review-repair delivery commit | Record a repair checkpoint/commit separately before focused re-review; it does not complete or replace a planned implementation step. |
+| PR with multiple natural commit boundaries | Allow the agent to choose multiple coherent validated checkpoints and commits during implementation. |
+| PR with one cohesive commit | Allow one catch-all checkpoint and commit for a small ticket without ceremonial extra commits. |
+| Review-repair delivery commit | Record a repair checkpoint/commit separately before focused re-review; it is an additional coherent commit. |
 | Unchanged PR candidate at a phase boundary | Consume current validation and review evidence; do not rerun an unchanged broad suite for review, acceptance, or PR preparation. |
 | PR creation completion boundary | After local gates pass and the PR URL is recorded, report completion without awaiting or polling remote GitHub CI. |
 
