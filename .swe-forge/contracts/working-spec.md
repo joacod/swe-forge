@@ -89,6 +89,14 @@ commit_plan:
     validation: [<targeted check>]
     commit_subject: <imperative subject>
 
+In `PR`, `commit_plan` is required before the spec can be `ready`: it must
+contain at least one ordered step, and every step must have a unique identity,
+cohesive objective, owned scope, dependencies, targeted validation, and commit
+subject. The plan is the semantic authority; run state may retain only the
+minimal step identity/status/checkpoint/commit projection needed for executable
+delivery checks.
+
+
 routing:
   requested_mode: AUTO | SOLO | SUBAGENTS
   preferred: SOLO | SUBAGENTS
@@ -153,6 +161,10 @@ in-scope quality concerns, non-goals, and a finding rule that keeps unrelated
 work out of the current review. It records the preferred and current topology,
 concise routing reason, and fallback evidence; native capability is freshly
 observed at the delegation boundary rather than cached as a routing profile.
+For `PR`, readiness also requires a valid non-empty ordered `commit_plan`;
+implementation must not begin while the plan is absent, ambiguous, or missing
+per-step validation and commit subjects.
+
 For a long-running ticket, the durable run state records the next valid
 workflow action. Host context preservation, compaction, retry, and restoration
 remain outside the working spec; after a context discontinuity, recovery

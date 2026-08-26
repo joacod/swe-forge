@@ -20,15 +20,16 @@ Register the expected checks before executing them:
 
 ```sh
 .swe-forge/tools/swe-forge-gate preflight --state "$STATE" --branch "$BRANCH" --base "$BASE"
+.swe-forge/tools/swe-forge-gate commit-plan --state "$STATE" --step S1
 .swe-forge/tools/swe-forge-gate plan-check --state "$STATE" \
   --name "structural checks" --requirement required --final-required false \
   --condition always
 .swe-forge/tools/swe-forge-gate validate --state "$STATE" \
   --name "structural checks" -- ./scripts/check-swe-forge
 .swe-forge/tools/swe-forge-gate checkpoint --state "$STATE" \
-  --scope .swe-forge/policies/** --scope README.md
+  --plan-step S1 --scope .swe-forge/policies/** --scope README.md
 .swe-forge/tools/swe-forge-gate commit-slice --state "$STATE" \
-  --checkpoint 1 --message "Document evidence policy" --authorized-by PR
+  --checkpoint 1 --plan-step S1 --message "Document evidence policy" --authorized-by PR
 .swe-forge/tools/swe-forge-gate review --state "$STATE" \
   --result PASS --source fresh-context
 .swe-forge/tools/swe-forge-gate deliver-pr --state "$STATE"
@@ -41,6 +42,15 @@ unavailable required or applicable conditional check blocks. Informational
 checks remain visible and do not block. `validate` and
 `record-check-status` reject unregistered check names. Receipts render the
 latest status per planned check; attempt history remains private.
+
+In `PR`, the private commit-plan projection is registered before implementation.
+Every planned checkpoint and commit names one ordered step; a plan with missing
+step evidence fails `deliver-pr`. A review-repair checkpoint and commit use the
+explicit repair kind and never satisfy a planned step.
+
+`deliver-pr` and receipt generation inspect only local checkout, validation,
+review, plan, and authorization evidence. Creating the PR and recording its URL
+ends the synchronous run; remote CI is not awaited or polled.
 
 Use `--final-required false` for a targeted check owned by the current
 implementation slice and the default `--final-required true` for final checks.

@@ -25,13 +25,18 @@ Branch: <delivery branch>
 Head: <short final SHA>
 Evidence fingerprint: <short final fingerprint>
 Generated at: <UTC timestamp>
-Commits: <count> (<validated slice count> validated slices)
+Commits: <count> (<validated planned slices>, <review-repair commits>)
 Verification:
 - <planned check>: passed | failed | skipped | unavailable | not-applicable
 Fresh review: PASS | CHANGES_REQUIRED | NOT RUN — <findings> findings, <repaired> repaired
+Review attempts: <attempts>/<ceiling>
+Remote CI: not awaited after PR creation
 Pull request: <URL or not-created>
 Final status: ACCEPTED | BLOCKED | FAILED
 ```
+
+`Review attempts` and `Remote CI` are emitted for `PR` receipts; a `GUIDED`
+receipt may omit those PR-specific lines.
 
 Receipts render the latest relevant status for every planned check, not an
 undifferentiated history of attempts. Historical attempts stay in the private
@@ -49,6 +54,11 @@ private paths, raw transcripts, or private ticket details.
 one checkpoint, every required and applicable conditional final check passing
 for the exact current candidate fingerprint, fresh review `PASS` for the exact
 current `HEAD` and fingerprint, and a PR URL in `PR` mode.
+
+For `PR`, the receipt is eligible only after the ordered commit-plan projection
+is complete and every planned step is bound to its checkpoint and commit.
+Review-repair commits are reported separately and never substitute for a
+planned step. PR creation does not add a remote validation requirement.
 
 The read-only `receipt-verify` operation compares the receipt with the current
 repository identity, branch, `HEAD`, final candidate fingerprint, and final

@@ -37,21 +37,30 @@ Usage:
     --path PATH --branch BRANCH --base-sha SHA \
     --head-sha SHA --checkpoint-sha SHA
   swe-forge-state set-receipt-ref --state FILE|DIRECTORY --receipt-ref REF
+  swe-forge-state set-commit-plan --state FILE|DIRECTORY --step ID [--step ID...]
+  swe-forge-state record-commit-step --state FILE|DIRECTORY \
+    --step ID --checkpoint ID --commit SHA
+  swe-forge-state set-review --state FILE|DIRECTORY \
+    --result PASS|CHANGES_REQUIRED [--blocked-by ID...]
+  swe-forge-state set-pull-request --state FILE|DIRECTORY --url URL
+  swe-forge-state commit-plan --state FILE|DIRECTORY
+  swe-forge-state check-commit-step --state FILE|DIRECTORY \
+    --step ID --checkpoint ID
 
 `inspect` and `resolve-active` expose the validated semantic run-state
 projection as deterministic JSON. Candidate discovery remains the caller's
 responsibility; this helper owns validation, eligibility, and ordering.
-
 `init` creates the current schema-v4 structural shell from explicit routing,
 delivery, checkout, and normalized invocation facts. Pass the parser's
 requested_mode, requested_delivery, and delivery_mode values unchanged.
 `set-routing` owns deliberate preferred/effective topology changes and their
 current rationale. `set-continuation` accepts only the bounded continuation
 surface; it generates updated_at and derives the delivery projection.
-`set-delivery-checkout` and `set-receipt-ref` own their purpose-specific
-updates. All write operations validate a temporary result before atomic
-replacement. Obsolete or unknown state must be replaced by starting a fresh
-run.
+`set-delivery-checkout`, `set-receipt-ref`, and `set-pull-request` own their
+purpose-specific updates. `set-commit-plan`, `record-commit-step`, and
+`set-review` own the minimal PR plan and review projections. All write
+operations validate a temporary result before atomic replacement. Obsolete or
+unknown state must be replaced by starting a fresh run.
 EOF
 }
 
@@ -278,6 +287,149 @@ validate_delivery_projection() {
   canonical=$(required_scalar delivery_mode "$file")
   [ "$projection" = "$canonical" ] || fail 'continuation.delivery.mode must match delivery_mode'
 }
+step_id_valid() {
+  value=$1
+  case "$value" in
+    ''|[!A-Za-z0-9]*|*[!A-Za-z0-9._-]*) return 1 ;;
+  esac
+  return 0
+}
+
+commit_plan_rows() {
+  file=$1
+  awk '
+    BEGIN {
+      in_plan = 0
+      id = ""
+      step_status = ""
+      checkpoint = ""
+      commit = ""
+    }
+    function emit() {
+      if (id != "") printf "%s\t%s\t%s\t%s\n", id, step_status, checkpoint, commit
+    }
+    /^[^ ]/ {
+      key = $1
+      sub(/:$/, "", key)
+      if (in_plan) emit()
+      in_plan = key == "commit_plan"
+      id = ""
+      step_status = ""
+      checkpoint = ""
+      commit = ""
+      next
+    }
+    !in_plan { next }
+    /^    - id:/ {
+      emit()
+      id = $0
+      sub(/^    - id:[[:space:]]*/, "", id)
+      step_status = ""
+      checkpoint = ""
+      commit = ""
+      next
+    }
+    id != "" && /^      status:/ {
+      step_status = $0
+      sub(/^      status:[[:space:]]*/, "", step_status)
+      next
+    }
+    id != "" && /^      checkpoint:/ {
+      checkpoint = $0
+      sub(/^      checkpoint:[[:space:]]*/, "", checkpoint)
+      next
+    }
+    id != "" && /^      commit:/ {
+      commit = $0
+      sub(/^      commit:[[:space:]]*/, "", commit)
+      next
+    }
+    END {
+      if (in_plan) emit()
+    }
+  ' "$file"
+}
+
+validate_commit_plan() {
+  file=$1
+  plan_status=$(required_scalar commit_plan.status "$file")
+  case "$plan_status" in
+    not-applicable|unregistered|pending|complete) ;;
+    *) fail 'invalid commit_plan.status' ;;
+  esac
+  rows=$(commit_plan_rows "$file")
+  seen=
+  step_count=0
+  pending_count=0
+  complete_count=0
+  while IFS="$TAB" read -r step_id step_status checkpoint commit; do
+    [ -n "$step_id" ] || continue
+    step_id_valid "$step_id" || fail "invalid commit plan step id: $step_id"
+    case "$seen" in
+      *"|$step_id|"*) fail "duplicate commit plan step id: $step_id" ;;
+    esac
+    seen="$seen|$step_id|"
+    case "$step_status" in
+      pending) pending_count=$((pending_count + 1)) ;;
+      complete) complete_count=$((complete_count + 1)) ;;
+      *) fail "invalid commit plan step status: $step_id" ;;
+    esac
+    case "$checkpoint" in
+      none) ;;
+      ''|*[!0-9]*) fail "invalid commit plan checkpoint: $step_id" ;;
+    esac
+    case "$commit" in
+      none) ;;
+      *)
+        validate_sha_field "commit_plan.$step_id.commit" "$commit"
+        ;;
+    esac
+    if [ "$step_status" = pending ]; then
+      [ "$checkpoint" = none ] || fail "pending commit plan step has checkpoint evidence: $step_id"
+      [ "$commit" = none ] || fail "pending commit plan step has commit evidence: $step_id"
+    else
+      [ "$checkpoint" != none ] || fail "complete commit plan step is missing checkpoint evidence: $step_id"
+      [ "$commit" != none ] || fail "complete commit plan step is missing commit evidence: $step_id"
+    fi
+    step_count=$((step_count + 1))
+  done <<EOF_COMMIT_PLAN
+$rows
+EOF_COMMIT_PLAN
+  case "$plan_status" in
+    not-applicable|unregistered)
+      [ "$step_count" -eq 0 ] || fail "unregistered or not-applicable commit plan has steps"
+      ;;
+    pending)
+      [ "$step_count" -gt 0 ] || fail "pending commit plan has no steps"
+      [ "$pending_count" -gt 0 ] || fail "pending commit plan has no pending steps"
+      ;;
+    complete)
+      [ "$step_count" -gt 0 ] || fail "complete commit plan has no steps"
+      [ "$pending_count" -eq 0 ] || fail "complete commit plan still has pending steps"
+      ;;
+  esac
+}
+
+validate_review() {
+  file=$1
+  for field in status blocked_by attempts retry_ceiling ceiling_provenance contract_ref; do
+    nested_key review "$field" "$file" || fail "review is missing $field"
+  done
+  validate_enum review.status "$file" pending running pass changes-required skipped
+  attempts=$(required_scalar review.attempts "$file")
+  case "$attempts" in ''|*[!0-9]*) fail 'review.attempts must be a non-negative integer' ;; esac
+  retry_ceiling=$(required_scalar review.retry_ceiling "$file")
+  case "$retry_ceiling" in ''|*[!0-9]*) fail 'review.retry_ceiling must be a positive integer' ;; esac
+  [ "$retry_ceiling" -gt 0 ] || fail 'review.retry_ceiling must be a positive integer'
+  [ "$attempts" -le "$retry_ceiling" ] || fail 'review.attempts exceeds review.retry_ceiling'
+  ceiling_provenance=$(required_scalar review.ceiling_provenance "$file")
+  case "$ceiling_provenance" in
+    default) [ "$retry_ceiling" -eq 2 ] || fail 'default review.retry_ceiling must be 2' ;;
+    explicit-*) ;;
+    *) fail 'invalid review.ceiling_provenance' ;;
+  esac
+  required_scalar review.contract_ref "$file" >/dev/null
+}
 reject_obsolete_fields() {
   file=$1
   if awk '
@@ -362,8 +514,8 @@ validate_state() {
 
   for key in workflow workflow_version schema_version run_id status requested_mode \
     requested_delivery delivery_mode reason fallback_used routing delivery_checkout \
-    delivery receipt_ref tasks; do
-    top_level "$key" "$file" || fail "schema-v4 state is missing top-level key: $key"
+    delivery receipt_ref commit_plan review tasks; do
+    top_level "$key" "$file" || fail "stale/unsupported run state: schema-v4 state is missing current key: $key; start a fresh run"
   done
 
   [ "$(value_for workflow "$file")" = swe-forge ] || fail 'workflow must be swe-forge'
@@ -407,6 +559,16 @@ validate_state() {
   validate_enum delivery.push "$file" not-authorized pending complete blocked
   validate_enum delivery.create_pull_request "$file" not-authorized pending complete blocked
   validate_enum delivery.sync "$file" not-authorized pending complete blocked
+  validate_review "$file"
+  validate_commit_plan "$file"
+  plan_status=$(required_scalar commit_plan.status "$file")
+  delivery_mode=$(required_scalar delivery_mode "$file")
+  if [ "$delivery_mode" = PR ]; then
+    [ "$plan_status" != not-applicable ] || fail 'PR commit plan cannot be not-applicable'
+  else
+    [ "$plan_status" = not-applicable ] || fail 'GUIDED commit plan must be not-applicable'
+  fi
+
 
   classification=$(required_scalar delivery_checkout.status "$file")
   case "$classification" in ready|running|blocked|dirty|complete) ;;
@@ -466,6 +628,11 @@ inspection_acceptance_json=[]
 inspection_safe_boundary_json=false
 inspection_pr_number=
 inspection_pr_state=
+inspection_review_status=
+inspection_review_attempts=0
+inspection_review_ceiling=0
+inspection_commit_plan_status=
+inspection_commit_plan_step_count=0
 
 inspection_scalar() {
   scalar_value "$1" "$2" 2>/dev/null || true
@@ -499,6 +666,11 @@ inspection_defaults() {
   inspection_safe_boundary_json=false
   inspection_pr_number=none
   inspection_pr_state=none
+  inspection_review_status=none
+  inspection_review_attempts=0
+  inspection_review_ceiling=0
+  inspection_commit_plan_status=none
+  inspection_commit_plan_step_count=0
 }
 
 inspect_state_data() {
@@ -526,6 +698,17 @@ inspect_state_data() {
   inspection_step=$(inspection_scalar continuation.step "$inspection_state_file")
   inspection_awaiting=$(inspection_scalar continuation.awaiting "$inspection_state_file")
   inspection_next_kind=$(inspection_scalar continuation.next_action.kind "$inspection_state_file")
+  inspection_review_status=$(inspection_scalar review.status "$inspection_state_file")
+  inspection_review_attempts=$(inspection_scalar review.attempts "$inspection_state_file")
+  inspection_review_ceiling=$(inspection_scalar review.retry_ceiling "$inspection_state_file")
+  inspection_commit_plan_status=$(inspection_scalar commit_plan.status "$inspection_state_file")
+  if top_level commit_plan "$inspection_state_file" 2>/dev/null; then
+    inspection_commit_plan_step_count=$(commit_plan_rows "$inspection_state_file" | awk 'NF { count++ } END { print count + 0 }')
+  fi
+  [ -n "$inspection_review_status" ] || inspection_review_status=none
+  [ -n "$inspection_review_attempts" ] || inspection_review_attempts=0
+  [ -n "$inspection_review_ceiling" ] || inspection_review_ceiling=0
+  [ -n "$inspection_commit_plan_status" ] || inspection_commit_plan_status=none
   inspection_next_target=$(inspection_scalar continuation.next_action.target "$inspection_state_file")
   inspection_acceptance_json=$(inspection_acceptance "$inspection_state_file")
   inspection_safe_boundary=$(inspection_scalar continuation.safe_boundary "$inspection_state_file")
@@ -614,6 +797,12 @@ emit_state_json() {
   printf ',"routing":{"preferred":%s,"current":%s},"delivery_mode":%s' \
     "$(json_quote "$inspection_preferred")" "$(json_quote "$inspection_current")" \
     "$(json_quote "$inspection_delivery_mode")"
+  printf ',"review":{"status":%s,"attempts":%s,"retry_ceiling":%s}' \
+    "$(json_quote "$inspection_review_status")" "$inspection_review_attempts" \
+    "$inspection_review_ceiling"
+  printf ',"commit_plan":{"status":%s,"step_count":%s}' \
+    "$(json_quote "$inspection_commit_plan_status")" \
+    "$inspection_commit_plan_step_count"
   printf ',"continuation":{"workflow_active":%s,"phase":%s,"step":%s,"awaiting":%s' \
     "$inspection_workflow_active_json" "$(json_quote "$inspection_phase")" \
     "$(json_quote "$inspection_step")" "$(json_quote "$inspection_awaiting")"
@@ -867,13 +1056,34 @@ state_directory_for_init() {
 
 state_tmp=
 inspect_tmp=
+review_lock=
 cleanup_state_tmp() {
   [ -z "${state_tmp:-}" ] || rm -f "$state_tmp"
 }
 cleanup_inspect_tmp() {
   [ -z "${inspect_tmp:-}" ] || rm -rf "$inspect_tmp"
 }
-trap 'status=$?; cleanup_state_tmp; cleanup_inspect_tmp; exit "$status"' 0 HUP INT TERM
+cleanup_review_lock() {
+  if [ -n "${review_lock:-}" ]; then
+    rm -f "$review_lock/pid"
+    rmdir "$review_lock" 2>/dev/null || true
+  fi
+}
+acquire_review_lock() {
+  lock_path=$(dirname "$state_path")/review.lock
+  if [ "${SWE_FORGE_REVIEW_LOCK_HELD:-false}" = true ]; then
+    owner_pid=$(cat "$lock_path/pid" 2>/dev/null || true)
+    [ "$owner_pid" = "${PPID:-}" ] || \
+      fail 'review lock is not owned by the invoking gate'
+    return 0
+  fi
+  mkdir "$lock_path" 2>/dev/null || \
+    fail 'review state is locked by another review activity; retry after it finishes'
+  review_lock=$lock_path
+  printf '%s\n' "$$" >"$review_lock/pid"
+}
+
+trap 'status=$?; cleanup_state_tmp; cleanup_inspect_tmp; cleanup_review_lock; exit "$status"' 0 HUP INT TERM
 
 init_state() {
   init_state_arg=
@@ -1068,12 +1278,344 @@ init_state() {
     printf '  create_pull_request: %s\n' "$delivery_status_value"
     printf '  sync: not-authorized\n'
     printf '  pull_request_ref: none\n'
+    if [ "$init_delivery_mode" = PR ]; then
+      printf 'commit_plan:\n'
+      printf '  status: unregistered\n'
+    else
+      printf 'commit_plan:\n'
+      printf '  status: not-applicable\n'
+    fi
+    printf '  steps: []\n'
+    printf 'review:\n'
+    printf '  status: pending\n'
+    printf '  blocked_by: []\n'
+    printf '  attempts: 0\n'
+    printf '  retry_ceiling: 2\n'
+    printf '  ceiling_provenance: default\n'
+    printf '  contract_ref: .swe-forge/contracts/review.md\n'
     printf 'tasks: {}\n'
   } >"$state_tmp"
   validate_state "$state_tmp" >/dev/null
   mv "$state_tmp" "$init_state_file"
   state_tmp=
   printf 'PASS: schema-v4 run state initialized: %s\n' "$init_state_file"
+}
+commit_plan_status_for_file() {
+  file=$1
+  scalar_value commit_plan.status "$file" 2>/dev/null || printf '%s\n' unregistered
+}
+
+assert_next_commit_step() {
+  file=$1
+  requested_step=$2
+  checkpoint_id=$3
+  delivery_mode=$(required_scalar delivery_mode "$file")
+  [ "$delivery_mode" = PR ] || fail 'commit plan steps are only valid in PR mode'
+  top_level commit_plan "$file" || fail 'PR commit plan is not registered'
+  validate_commit_plan "$file"
+  plan_status=$(required_scalar commit_plan.status "$file")
+  [ "$plan_status" = pending ] || fail "commit plan is not accepting steps: $plan_status"
+  step_id_valid "$requested_step" || fail "invalid commit plan step id: $requested_step"
+  case "$checkpoint_id" in ''|*[!0-9]*) fail 'commit plan checkpoint must be a numeric ID' ;; esac
+  rows=$(commit_plan_rows "$file")
+  first_pending=
+  requested_status=
+  while IFS="$TAB" read -r step_id step_status checkpoint commit; do
+    [ -n "$step_id" ] || continue
+    if [ "$step_status" = pending ] && [ -z "$first_pending" ]; then
+      first_pending=$step_id
+    fi
+    if [ "$step_id" = "$requested_step" ]; then
+      requested_status=$step_status
+    fi
+  done <<EOF_COMMIT_PLAN
+$rows
+EOF_COMMIT_PLAN
+  [ -n "$requested_status" ] || fail "unknown commit plan step: $requested_step"
+  [ "$requested_status" = pending ] || fail "commit plan step is already complete: $requested_step"
+  [ "$requested_step" = "$first_pending" ] || \
+    fail "commit plan step is out of order: expected $first_pending, got $requested_step"
+}
+
+set_commit_plan() {
+  state_arg=
+  plan_steps=
+  plan_step_values=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state)
+        [ "$#" -ge 2 ] || fail '--state requires a file or directory'
+        state_arg=$2
+        shift 2
+        ;;
+      --step)
+        [ "$#" -ge 2 ] || fail '--step requires an ID'
+        step_id=$2
+        step_id_valid "$step_id" || fail "invalid commit plan step id: $step_id"
+        case "$plan_steps" in
+          *"|$step_id|"*) fail "duplicate commit plan step id: $step_id" ;;
+        esac
+        plan_steps="$plan_steps|$step_id|"
+        if [ -n "${plan_step_values:-}" ]; then
+          plan_step_values="$plan_step_values$NEWLINE$step_id"
+        else
+          plan_step_values=$step_id
+        fi
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-commit-plan option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "${plan_step_values:-}" ] || fail 'at least one --step is required'
+  state_path=$(state_file "$state_arg")
+  validate_state "$state_path" >/dev/null
+  [ "$(required_scalar delivery_mode "$state_path")" = PR ] || \
+    fail 'commit plans are only valid in PR mode'
+  current_status=$(commit_plan_status_for_file "$state_path")
+  [ "$current_status" = unregistered ] || \
+    fail "commit plan is already registered: $current_status"
+
+  state_tmp=$state_path.tmp.$$
+  awk '
+    BEGIN { skip=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      if (section == "commit_plan") { skip=1; next }
+      skip=0
+    }
+    skip { next }
+    { print }
+  ' "$state_path" >"$state_tmp"
+  {
+    printf 'commit_plan:\n'
+    printf '  status: pending\n'
+    printf '  steps:\n'
+    printf '%s\n' "$plan_step_values" | while IFS= read -r step_id; do
+      [ -n "$step_id" ] || continue
+      printf '    - id: %s\n' "$step_id"
+      printf '      status: pending\n'
+      printf '      checkpoint: none\n'
+      printf '      commit: none\n'
+    done
+  } >>"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: commit plan registered: %s\n' "$state_path"
+}
+
+check_commit_step() {
+  state_arg=
+  step_arg=
+  checkpoint_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --step) [ "$#" -ge 2 ] || fail '--step requires an ID'; step_arg=$2; shift 2 ;;
+      --checkpoint) [ "$#" -ge 2 ] || fail '--checkpoint requires an ID'; checkpoint_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown check-commit-step option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$step_arg" ] || fail '--step is required'
+  [ -n "$checkpoint_arg" ] || fail '--checkpoint is required'
+  state_path=$(state_file "$state_arg")
+  validate_state "$state_path" >/dev/null
+  assert_next_commit_step "$state_path" "$step_arg" "$checkpoint_arg"
+  printf 'PASS: commit plan step is ready: %s\n' "$step_arg"
+}
+
+record_commit_step() {
+  state_arg=
+  step_arg=
+  checkpoint_arg=
+  commit_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --step) [ "$#" -ge 2 ] || fail '--step requires an ID'; step_arg=$2; shift 2 ;;
+      --checkpoint) [ "$#" -ge 2 ] || fail '--checkpoint requires an ID'; checkpoint_arg=$2; shift 2 ;;
+      --commit) [ "$#" -ge 2 ] || fail '--commit requires a SHA'; commit_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown record-commit-step option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$step_arg" ] || fail '--step is required'
+  [ -n "$checkpoint_arg" ] || fail '--checkpoint is required'
+  [ -n "$commit_arg" ] || fail '--commit is required'
+  validate_sha_field commit "$commit_arg"
+  state_path=$(state_file "$state_arg")
+  validate_state "$state_path" >/dev/null
+  assert_next_commit_step "$state_path" "$step_arg" "$checkpoint_arg"
+  rows=$(commit_plan_rows "$state_path")
+  pending_count=$(printf '%s\n' "$rows" | awk -F "$TAB" '$2 == "pending" { count++ } END { print count + 0 }')
+  [ "$pending_count" -gt 0 ] || fail 'commit plan has no pending steps'
+  if [ "$pending_count" -eq 1 ]; then
+    new_plan_status=complete
+  else
+    new_plan_status=pending
+  fi
+
+  state_tmp=$state_path.tmp.$$
+  awk -v wanted="$step_arg" -v checkpoint="$checkpoint_arg" \
+    -v commit="$commit_arg" -v plan_status="$new_plan_status" '
+    BEGIN { section=""; current=""; plan_status_count=0; step_status_count=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      current=""
+    }
+    section == "commit_plan" && $0 ~ /^  status:/ {
+      print "  status: " plan_status
+      plan_status_count++
+      next
+    }
+    section == "commit_plan" && $0 ~ /^    - id:/ {
+      current=$0
+      sub(/^    - id:[[:space:]]*/, "", current)
+      print
+      next
+    }
+    section == "commit_plan" && current == wanted && $0 ~ /^      status:/ {
+      print "      status: complete"
+      step_status_count++
+      next
+    }
+    section == "commit_plan" && current == wanted && $0 ~ /^      checkpoint:/ {
+      print "      checkpoint: " checkpoint
+      next
+    }
+    section == "commit_plan" && current == wanted && $0 ~ /^      commit:/ {
+      print "      commit: " commit
+      next
+    }
+    { print }
+    END {
+      if (plan_status_count != 1 || step_status_count != 1) exit 1
+    }
+  ' "$state_path" >"$state_tmp" || fail 'commit plan update could not locate the requested step'
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: commit plan step completed: %s\n' "$step_arg"
+}
+
+commit_plan_command() {
+  state_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown commit-plan option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  state_path=$(state_file "$state_arg")
+  validate_state "$state_path" >/dev/null
+  top_level commit_plan "$state_path" || fail 'commit plan is not registered'
+  validate_commit_plan "$state_path"
+  commit_plan_rows "$state_path"
+}
+
+set_review() {
+  state_arg=
+  review_result=
+  blocked_values=
+  blocked_seen=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --result) [ "$#" -ge 2 ] || fail '--result requires PASS or CHANGES_REQUIRED'; review_result=$2; shift 2 ;;
+      --blocked-by)
+        [ "$#" -ge 2 ] || fail '--blocked-by requires an ID'
+        blocked_id=$2
+        step_id_valid "$blocked_id" || fail "invalid blocked finding id: $blocked_id"
+        case "$blocked_seen" in *"|$blocked_id|"*) fail "duplicate blocked finding id: $blocked_id" ;; esac
+        blocked_seen="$blocked_seen|$blocked_id|"
+        if [ -n "$blocked_values" ]; then blocked_values="$blocked_values$NEWLINE$blocked_id"; else blocked_values=$blocked_id; fi
+        shift 2
+        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-review option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  case "$review_result" in PASS|CHANGES_REQUIRED) ;; *) fail "invalid review result: ${review_result:-<missing>}" ;; esac
+  state_path=$(state_file "$state_arg")
+  acquire_review_lock
+  validate_state "$state_path" >/dev/null
+  current_attempts=$(required_scalar review.attempts "$state_path")
+  review_ceiling=$(required_scalar review.retry_ceiling "$state_path")
+  ceiling_provenance=$(required_scalar review.ceiling_provenance "$state_path")
+  contract_ref=$(required_scalar review.contract_ref "$state_path")
+  [ "$current_attempts" -lt "$review_ceiling" ] || \
+    fail "review ceiling exhausted: $current_attempts/$review_ceiling executions already recorded; automatic reviewer-like activity is stopped"
+  next_attempt=$((current_attempts + 1))
+  case "$review_result" in
+    PASS) review_status=pass ;;
+    CHANGES_REQUIRED) review_status=changes-required ;;
+  esac
+  top_status=$(required_scalar status "$state_path")
+  if [ "$review_result" = CHANGES_REQUIRED ]; then
+    if [ "$next_attempt" -ge "$review_ceiling" ]; then
+      top_status=blocked
+    else
+      top_status=repairing
+    fi
+  fi
+  if [ "$review_result" = PASS ] && [ "$top_status" = repairing ]; then
+    top_status=running
+  fi
+  blocked_yaml=[]
+  if [ -n "$blocked_values" ]; then
+    blocked_yaml="["
+    blocked_first=true
+    while IFS= read -r blocked_id; do
+      [ -n "$blocked_id" ] || continue
+      if [ "$blocked_first" = true ]; then blocked_first=false; else blocked_yaml="$blocked_yaml, "; fi
+      blocked_yaml="$blocked_yaml$blocked_id"
+    done <<EOF_BLOCKED
+$blocked_values
+EOF_BLOCKED
+    blocked_yaml="$blocked_yaml]"
+  fi
+
+  state_tmp=$state_path.tmp.$$
+  awk -v top_status="$top_status" '
+    BEGIN { section=""; skip=0; status_count=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      if (section == "review") { skip=1; next }
+      skip=0
+    }
+    skip { next }
+    /^status:/ {
+      print "status: " top_status
+      status_count++
+      next
+    }
+    { print }
+    END { if (status_count != 1) exit 1 }
+  ' "$state_path" >"$state_tmp" || fail 'review update could not locate the current state status'
+  {
+    printf 'review:\n'
+    printf '  status: %s\n' "$review_status"
+    printf '  blocked_by: %s\n' "$blocked_yaml"
+    printf '  attempts: %s\n' "$next_attempt"
+    printf '  retry_ceiling: %s\n' "$review_ceiling"
+    printf '  ceiling_provenance: %s\n' "$ceiling_provenance"
+    printf '  contract_ref: %s\n' "$contract_ref"
+  } >>"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: review recorded: attempt %s/%s (%s)\n' "$next_attempt" "$review_ceiling" "$review_result"
 }
 
 set_routing() {
@@ -1317,6 +1859,70 @@ set_receipt_ref() {
   state_tmp=
   printf 'PASS: receipt reference updated: %s\n' "$state_path"
 }
+set_pull_request() {
+  state_arg=
+  url_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      --url|--pr-url) [ "$#" -ge 2 ] || fail '--url requires a URL'; url_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-pull-request option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  [ -n "$url_arg" ] || fail '--url is required'
+  case "$url_arg" in http://*|https://*) ;; *) fail 'pull-request URL must use http:// or https://' ;; esac
+  control_chars "$url_arg"
+  state_path=$(state_file "$state_arg")
+  validate_state "$state_path" >/dev/null
+  [ "$(required_scalar delivery_mode "$state_path")" = PR ] || \
+    fail 'pull-request completion is only valid in PR mode'
+  current_status=$(required_scalar status "$state_path")
+  case "$current_status" in
+    planning|running|reviewing|repairing) ;;
+    accepted)
+      [ "$(required_scalar delivery.pull_request_ref "$state_path")" = "$url_arg" ] || \
+        fail 'pull-request completion URL does not match the recorded PR'
+      ;;
+    *) fail "pull-request completion is not valid from status: $current_status" ;;
+  esac
+  existing_ref=$(required_scalar delivery.pull_request_ref "$state_path")
+  [ "$existing_ref" = none ] || [ "$existing_ref" = "$url_arg" ] || \
+    fail 'pull-request completion URL does not match the recorded PR'
+  state_tmp=$state_path.tmp.$$
+  awk -v url="$url_arg" '
+    BEGIN { section=""; active_count=0; pr_status_count=0; pr_ref_count=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+    }
+    section == "continuation" && $0 ~ /^  workflow_active:/ {
+      print "  workflow_active: false"
+      active_count++
+      next
+    }
+    section == "delivery" && $0 ~ /^  create_pull_request:/ {
+      print "  create_pull_request: complete"
+      pr_status_count++
+      next
+    }
+    section == "delivery" && $0 ~ /^  pull_request_ref:/ {
+      print "  pull_request_ref: " url
+      pr_ref_count++
+      next
+    }
+    { print }
+    END {
+      if (active_count != 1 || pr_status_count != 1 || pr_ref_count != 1) exit 1
+    }
+  ' "$state_path" >"$state_tmp" || fail 'pull-request completion could not update current run state'
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: pull-request completion recorded: %s\n' "$state_path"
+}
+
 
 set_continuation() {
   state_arg=
@@ -1444,11 +2050,17 @@ main() {
       ;;
     inspect) inspect_command "$@" ;;
     resolve-active) resolve_active_command "$@" ;;
+    commit-plan) commit_plan_command "$@" ;;
     init) init_state "$@" ;;
     set-routing) set_routing "$@" ;;
     set-continuation) set_continuation "$@" ;;
     set-delivery-checkout) set_delivery_checkout "$@" ;;
     set-receipt-ref) set_receipt_ref "$@" ;;
+    set-commit-plan) set_commit_plan "$@" ;;
+    check-commit-step) check_commit_step "$@" ;;
+    record-commit-step) record_commit_step "$@" ;;
+    set-review) set_review "$@" ;;
+    set-pull-request) set_pull_request "$@" ;;
     -h|--help) usage ;;
     *) fail "unknown command: $command" ;;
   esac

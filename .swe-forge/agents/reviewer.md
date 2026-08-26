@@ -28,6 +28,13 @@ Read-only. Do not modify the checkout, tests, configuration, or run state.
    tests, and checkout state.
 4. Classify each observation as an in-scope finding or a deferred follow-up.
 
+
+The root must record this execution through the canonical review gate, which
+counts all reviewer-like passes against the candidate's shared two-execution
+budget. A reviewer must not relabel an additional pass as investigation or
+debug review, and must return `CHANGES_REQUIRED` without requesting another
+automatic context after the budget is exhausted.
+
 ## Review Areas
 
 - correctness and missing requirements for the ticket;

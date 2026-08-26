@@ -32,8 +32,9 @@ Code inspection alone cannot establish that a relevant behavior works.
   ceremonial test scaffolding
 - `GUIDED` checkpoint: validate the completed slice and label final acceptance
   as pending until the whole ticket is integrated
-- `PR` delivery: complete all required local checks and fresh review before
-  commit, push, or pull-request creation
+- `PR` delivery: complete all required local checks, the ordered commit plan,
+  and fresh review before commit, push, or pull-request creation; after the PR
+  exists, remote CI is external and is not awaited by this workflow
 
 ### Validation cadence and batching
 
