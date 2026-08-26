@@ -2,11 +2,10 @@
 
 This adapter exposes SWE Forge through Pi's prompt-template convention plus one
 optional runtime extension. Pi has the strongest current validation confidence,
-and this adapter may provide richer capabilities than other adapters without
-making them canonical requirements. Canonical workflow behavior remains in the
-support tree; the extension translates Pi lifecycle capabilities into generic
-context and continuation contracts and feature-detects the optional
-`swe_forge_subagent` capability.
+and this adapter may provide richer host integration than other adapters
+without making it a canonical requirement. Canonical workflow behavior remains
+in the support tree; the extension consumes the canonical continuation
+projection and maps Pi's native lifecycle hooks to adapter-local state refresh.
 
 ## Installation
 
@@ -40,8 +39,7 @@ above. Until that package is published to npm, use the
 from the main repository. The package is optional: without it, `SUBAGENTS`
 falls back to `SOLO`/sequential execution.
 
-Continuation and compaction behavior is inert unless the extension receives an
-active semantic projection from the canonical
+The extension consumes an active semantic projection from the canonical
 `swe-forge-state inspect`/`resolve-active` port for a checkout-matching
 schema-v4 run. The canonical tool owns schema, obsolete-field, lifecycle,
 timestamp, checkout, and newest-state ordering semantics; Pi only consumes the
@@ -79,28 +77,16 @@ or reasoning-level routing. It:
 
 - executes the canonical invocation parser once at the explicit prompt
   boundary and appends normalized facts to the first agent system prompt;
-- reads only the compact durable continuation state;
+- reads only the bounded durable continuation state;
 - appends a bounded deterministic `SWE-FORGE ACTIVE RUN` block from
   `before_agent_start` without copying the ticket;
 - transforms exact user shorthand `merged` into `/git-sync merged` only when the
   newest active run is PR mode and awaits merge;
-- observes `session_before_compact` and `session_compact` without replacing
-  Pi's summarizer;
+- observes Pi's native lifecycle hooks and refreshes the canonical continuation
+  projection after a host lifecycle event;
 - observes `swe_forge_subagent` through Pi's public tool metadata and lifecycle
   events, gates it to canonical `SUBAGENTS` runs, negotiates its protocol and
-  result profile, and blocks it for `SOLO`; and
-- uses `ctx.getContextUsage()` and `ctx.compact()` only when those capabilities
-  are present, the run state marks a safe boundary, and remaining headroom is
-  insufficient for the persisted next action.
-
-The extension resolves Pi's effective compaction reserve from trusted project
-`.pi/settings.json` over global `~/.pi/agent/settings.json`, matching Pi's
-nested settings precedence, with the documented default as a safe fallback.
-Malformed or unavailable files are ignored. A reliable `near-limit` state at a
-safe boundary is strong enough to request compaction without an estimate;
-projected pressure alone cannot trigger it. Host overflow and compacting states
-remain under Pi's native recovery lifecycle, and unchanged state/cooldown
-protection prevents duplicate requests.
+  result profile, and blocks it for `SOLO`.
 
 The optional `swe_forge_subagent` package may provide native `SUBAGENTS`
 delegation. This adapter never imports or installs that package. It checks for
@@ -129,17 +115,22 @@ If the tool is absent, inactive, incompatible, or fails before a usable result,
 the canonical workflow uses its existing fallback. The bridge never changes
 topology. Writable native tasks run sequentially in the one delivery checkout.
 
-### Context management
+### Host lifecycle integration
 
-The inspected Pi 0.84.2 runtime provides
-`ExtensionContext.getContextUsage()`, `ExtensionContext.compact()`,
-`before_agent_start`, `session_before_compact`, `session_compact`, and
-`agent_settled`. These are host capabilities, not portable SWE Forge
- guarantees. The extension requests proactive compaction only after state
-persistence at a safe boundary; it never fights host threshold compaction or
-launches a duplicate retry. After compaction or overflow recovery, the canonical
-context policy requires re-reading the external working spec and run state,
-inspecting Git `HEAD`/diff, and resuming only from `continuation.next_action`.
+The inspected Pi 0.84.2 runtime exposes `before_agent_start`,
+`session_before_compact`, and `session_compact`. These are host lifecycle hooks,
+not portable SWE Forge guarantees. The extension uses them only to
+refresh the canonical continuation projection so the next agent turn can
+reinject the bounded active-run reminder.
+When Pi reports `willRetry`, the adapter queues one bounded custom continuation
+message before the host retry; it never decides whether compaction or retry
+occurs.
+
+The host decides when and how context is preserved, compacted, retried, or
+restored. This adapter does not inspect usage, estimate headroom, request
+compaction, or implement host retries. After a lifecycle discontinuity, the
+continuation projection and the canonical workflow require re-reading run state
+and actual Git/evidence state before resuming.
 
 If a usable `SUBAGENTS` capability is unavailable, the canonical workflow
 records preferred `SUBAGENTS` and effective `SOLO`/sequential execution. Native
@@ -151,8 +142,6 @@ The adapter was verified against installed Pi documentation and type surface on
 2026-08-15:
 
 - https://pi.dev/docs/latest/extensions
-- https://pi.dev/docs/latest/compaction
 - https://pi.dev/docs/latest/prompt-templates
-- https://pi.dev/docs/latest/settings
 
 The observed runtime package was `@earendil-works/pi-coding-agent` 0.84.2.

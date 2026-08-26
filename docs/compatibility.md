@@ -58,24 +58,13 @@ Observed CLI versions identify the environment for this compatibility record;
 they do not turn an adapter into an actively maintained behavioral support
 target.
 
-## Context and optional capabilities
+## Host lifecycle boundary
 
-Context behavior has no common harness API. These are demonstrated adapter
-capabilities, not canonical requirements:
-
-| Harness | Observed context capability | Adapter consequence |
-| --- | --- | --- |
-| Pi 0.84.2 | `getContextUsage()`, `compact()`, lifecycle hooks, state reinjection, and optional subagent negotiation are implemented by the Pi adapter | Pi can provide proactive compaction, lifecycle recovery, and optional native delegation; missing or incompatible negotiation falls back to canonical `SOLO`/sequential behavior. |
-| OpenCode 1.18.16 | Not measured by the current adapter integration | Do not claim proactive detection; use documented host behavior or manual checkpoint/resume until revalidated. |
-| OMP 18.0.4 | Native task/profile/strict-output observations were exercised at runtime; read-only batch fan-out, canonical brief/result validation, shared-checkout writer serialization, and headless blocking workers were exercised | The adapter bridges native shared-checkout `SUBAGENTS` only after active task/profile/validator and matching schema-v4 state checks. A controlled malformed result was rejected and a fresh process with task disabled fell back visibly to `SOLO`/sequential. Full mounted-tool confinement is not proven because a read-only worker accessed the mounted `mcp__node_repl_js` tool; context telemetry, state reinjection, and proactive compaction remain unavailable/unknown. |
-| Claude Code 2.1.37 | Not measured by the current adapter integration | Do not claim proactive detection or behavioral support from projection checks. |
-| Codex | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
-| Cursor | Not installed in the validation environment | Revalidate context telemetry and compaction behavior with the target release. |
-
-Pi-specific context telemetry, compaction, lifecycle support, and optional
-subagent negotiation remain inside the Pi adapter/runtime integration. The
-canonical workflow consumes semantic capabilities and uses safe fallbacks when
-those capabilities are unavailable.
+Host runtimes own context preservation, compaction, retry, restoration, and
+related lifecycle mechanics. Adapter documentation may record observed native
+hooks and continuation-reload behavior, but the canonical workflow does not
+negotiate host context telemetry or compaction capabilities. Differences in
+host lifecycle support do not create a parity requirement.
 
 ## OMP capability evidence
 
@@ -90,7 +79,6 @@ support-tier commitment:
 | Read-only fan-out/fan-in | Proven | Two real workers completed in one native batch; root consumption remained centralized. |
 | Shared-checkout writer safety | Proven for the tested boundary | One real native writable worker changed only a temporary Git fixture; a two-writer native batch was refused before launch. |
 | Capability-unavailable fallback | Proven | A fresh OMP process with `task` disabled reported the missing native capability and visible `SUBAGENTS` to `SOLO`/sequential fallback. |
-| Context telemetry/reinjection/compaction | Not proven | The OMP adapter reports these capabilities as unknown or unavailable. |
 | Complete worker confinement | Not proven | Declared OMP profiles restrict built-in tools and recursion, but the tested child also accessed mounted `mcp__node_repl_js`; no stronger claim is justified. |
 | Headless approval behavior | Proven for supported native workers | Blocking native workers completed without an interactive approval prompt; approval was not treated as SWE Forge delivery authorization. |
 

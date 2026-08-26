@@ -12,6 +12,7 @@ NEWLINE='
 '
 
 MAX_PROJECTION_LENGTH=160
+MAX_ACCEPTANCE_ITEMS=8
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -277,17 +278,49 @@ validate_delivery_projection() {
   canonical=$(required_scalar delivery_mode "$file")
   [ "$projection" = "$canonical" ] || fail 'continuation.delivery.mode must match delivery_mode'
 }
-reject_obsolete_routing() {
+reject_obsolete_fields() {
   file=$1
   if awk '
-    /^[[:space:]]*runtime_profile:/ ||
-    /^[[:space:]]*discovery_strategy:/ ||
-    /^  (initial|selected|revisions|context_value|runtime_profile_ref):/ {
-      found=1
+    function indentation(value, stripped) {
+      stripped = value
+      sub(/^[ ]*/, "", stripped)
+      return length(value) - length(stripped)
+    }
+    function key_name(value, stripped) {
+      stripped = value
+      sub(/^[ ]*/, "", stripped)
+      sub(/:.*/, "", stripped)
+      return stripped
+    }
+    {
+      if ($0 ~ /^[[:space:]]*(#|$)/) next
+      current_indent = indentation($0)
+      while (depth > 0 && indents[depth] >= current_indent) depth--
+      current_key = key_name($0)
+      depth++
+      indents[depth] = current_indent
+      keys[depth] = current_key
+      under_continuation = 0
+      under_next_action = 0
+      under_routing = 0
+      for (i = 1; i < depth; i++) {
+        if (keys[i] == "continuation") under_continuation = 1
+        if (keys[i] == "next_action") under_next_action = 1
+        if (keys[i] == "routing") under_routing = 1
+      }
+      if (current_indent == 0 &&
+          (current_key == "runtime_profile" || current_key == "discovery_strategy" ||
+           current_key == "context" || current_key == "context_capabilities")) found=1
+      if (under_routing &&
+          (current_key == "initial" || current_key == "selected" ||
+           current_key == "revisions" || current_key == "context_value" ||
+           current_key == "runtime_profile_ref")) found=1
+      if (under_continuation && current_key == "recovery") found=1
+      if (under_next_action && current_key == "expected_context_tokens") found=1
     }
     END { if (found) exit 0; exit 1 }
   ' "$file"; then
-    fail 'stale/unsupported run state: obsolete routing representation; start a fresh run'
+    fail 'stale/unsupported run state: obsolete routing or context-control fields; start a fresh run'
   fi
 }
 
@@ -325,7 +358,7 @@ validate_state() {
   schema=$(value_for schema_version "$file" || true)
   [ "$schema" = 4 ] || \
     fail 'stale/unsupported run state: only schema_version: 4 is supported; start a fresh run'
-  reject_obsolete_routing "$file"
+  reject_obsolete_fields "$file"
 
   for key in workflow workflow_version schema_version run_id status requested_mode \
     requested_delivery delivery_mode reason fallback_used routing delivery_checkout \
@@ -429,9 +462,8 @@ inspection_step=
 inspection_awaiting=
 inspection_next_kind=
 inspection_next_target=
-inspection_expected_context_tokens_json=null
+inspection_acceptance_json=[]
 inspection_safe_boundary_json=false
-inspection_context_status=
 inspection_pr_number=
 inspection_pr_state=
 
@@ -463,9 +495,8 @@ inspection_defaults() {
   inspection_awaiting=none
   inspection_next_kind=none
   inspection_next_target=none
-  inspection_expected_context_tokens_json=null
+  inspection_acceptance_json=[]
   inspection_safe_boundary_json=false
-  inspection_context_status=unknown
   inspection_pr_number=none
   inspection_pr_state=none
 }
@@ -496,9 +527,8 @@ inspect_state_data() {
   inspection_awaiting=$(inspection_scalar continuation.awaiting "$inspection_state_file")
   inspection_next_kind=$(inspection_scalar continuation.next_action.kind "$inspection_state_file")
   inspection_next_target=$(inspection_scalar continuation.next_action.target "$inspection_state_file")
-  inspection_expected_context_tokens=$(inspection_scalar continuation.next_action.expected_context_tokens "$inspection_state_file")
+  inspection_acceptance_json=$(inspection_acceptance "$inspection_state_file")
   inspection_safe_boundary=$(inspection_scalar continuation.safe_boundary "$inspection_state_file")
-  inspection_context_status=$(inspection_scalar context.status "$inspection_state_file")
   inspection_pr_number=$(inspection_scalar continuation.delivery.pr_number "$inspection_state_file")
   inspection_pr_state=$(inspection_scalar continuation.delivery.pr_state "$inspection_state_file")
 
@@ -507,7 +537,6 @@ inspect_state_data() {
   [ -n "$inspection_awaiting" ] || inspection_awaiting=none
   [ -n "$inspection_next_kind" ] || inspection_next_kind=none
   [ -n "$inspection_next_target" ] || inspection_next_target=none
-  [ -n "$inspection_context_status" ] || inspection_context_status=unknown
   [ -n "$inspection_pr_number" ] || inspection_pr_number=none
   [ -n "$inspection_pr_state" ] || inspection_pr_state=none
   inspection_phase=$(projection_value "$inspection_phase")
@@ -515,7 +544,6 @@ inspect_state_data() {
   inspection_awaiting=$(projection_value "$inspection_awaiting")
   inspection_next_kind=$(projection_value "$inspection_next_kind")
   inspection_next_target=$(projection_value "$inspection_next_target")
-  inspection_context_status=$(projection_value "$inspection_context_status")
   inspection_pr_number=$(projection_value "$inspection_pr_number")
   inspection_pr_state=$(projection_value "$inspection_pr_state")
 
@@ -528,11 +556,6 @@ inspect_state_data() {
     true) inspection_safe_boundary_json=true ;;
     false|'') inspection_safe_boundary_json=false ;;
     *) inspection_reason='invalid continuation boundary marker'; return 0 ;;
-  esac
-  case "$inspection_expected_context_tokens" in
-    ''|unknown|none) inspection_expected_context_tokens_json=null ;;
-    *[!0-9]*) inspection_reason='invalid expected context token count'; return 0 ;;
-    *) inspection_expected_context_tokens_json=$inspection_expected_context_tokens ;;
   esac
   if [ "$inspection_workflow_active_json" != true ]; then
     inspection_reason='inactive workflow continuation'
@@ -594,14 +617,143 @@ emit_state_json() {
   printf ',"continuation":{"workflow_active":%s,"phase":%s,"step":%s,"awaiting":%s' \
     "$inspection_workflow_active_json" "$(json_quote "$inspection_phase")" \
     "$(json_quote "$inspection_step")" "$(json_quote "$inspection_awaiting")"
-  printf ',"next_action":{"kind":%s,"target":%s,"expected_context_tokens":%s},"safe_boundary":%s' \
+  printf ',"next_action":{"kind":%s,"target":%s,"acceptance":%s},"safe_boundary":%s' \
     "$(json_quote "$inspection_next_kind")" "$(json_quote "$inspection_next_target")" \
-    "$inspection_expected_context_tokens_json" "$inspection_safe_boundary_json"
-  printf ',"delivery":{"mode":%s,"pr_number":%s,"pr_state":%s}}' \
+    "$inspection_acceptance_json" "$inspection_safe_boundary_json"
+  printf ',"delivery":{"mode":%s,"pr_number":%s,"pr_state":%s}}}' \
     "$(json_quote "$inspection_delivery_mode")" "$(json_quote "$inspection_pr_number")" \
     "$(json_quote "$inspection_pr_state")"
-  printf ',"context":{"status":%s}}\n' "$(json_quote "$inspection_context_status")"
 }
+inspection_acceptance() {
+  file=$1
+  awk -v maximum="$MAX_PROJECTION_LENGTH" -v maximum_items="$MAX_ACCEPTANCE_ITEMS" '
+    function indentation(value, stripped) {
+      stripped = value
+      sub(/^[ ]*/, "", stripped)
+      return length(value) - length(stripped)
+    }
+    function key_name(value, stripped) {
+      stripped = value
+      sub(/^[ ]*/, "", stripped)
+      sub(/:.*/, "", stripped)
+      return stripped
+    }
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function json_quote(value,    i, c, quote, backslash, tab, newline, carriage_return, form_feed, backspace, vertical_tab) {
+      quote = sprintf("%c", 34)
+      backslash = sprintf("%c", 92)
+      tab = sprintf("%c", 9)
+      newline = sprintf("%c", 10)
+      carriage_return = sprintf("%c", 13)
+      form_feed = sprintf("%c", 12)
+      backspace = sprintf("%c", 8)
+      vertical_tab = sprintf("%c", 11)
+      result = quote
+      for (i = 1; i <= length(value); i++) {
+        c = substr(value, i, 1)
+        if (c == quote) result = result backslash quote
+        else if (c == backslash) result = result backslash backslash
+        else if (c == tab) result = result backslash "t"
+        else if (c == newline) result = result backslash "n"
+        else if (c == carriage_return) result = result backslash "r"
+        else if (c == form_feed) result = result backslash "f"
+        else if (c == backspace) result = result backslash "b"
+        else if (c == vertical_tab) result = result backslash "u000b"
+        else result = result c
+      }
+      return result quote
+    }
+    function append_value(value) {
+      value = trim(value)
+      if (value == "" || count >= maximum_items) return
+      if (value ~ /^".*"$/) {
+        sub(/^"/, "", value)
+        sub(/"$/, "", value)
+      }
+      value = substr(value, 1, maximum)
+      if (count > 0) printf ","
+      printf "%s", json_quote(value)
+      count++
+    }
+    function append_flow(value,    i, c, quote, escaped, item, backslash, double_quote, single_quote) {
+      sub(/^\[/, "", value)
+      sub(/\][[:space:]]*$/, "", value)
+      if (value == "") return
+      backslash = sprintf("%c", 92)
+      double_quote = sprintf("%c", 34)
+      single_quote = sprintf("%c", 39)
+      quote = ""
+      escaped = 0
+      item = ""
+      for (i = 1; i <= length(value); i++) {
+        c = substr(value, i, 1)
+        if (escaped) {
+          item = item c
+          escaped = 0
+          continue
+        }
+        if (quote != "" && c == backslash) {
+          escaped = 1
+          continue
+        }
+        if (quote == "" && (c == double_quote || c == single_quote)) {
+          quote = c
+          continue
+        }
+        if (quote != "" && c == quote) {
+          quote = ""
+          continue
+        }
+        if (quote == "" && c == ",") {
+          append_value(item)
+          item = ""
+          continue
+        }
+        item = item c
+      }
+      append_value(item)
+    }
+    BEGIN {
+      in_continuation = 0
+      in_next_action = 0
+      in_acceptance = 0
+      count = 0
+      printf "["
+    }
+    {
+      if ($0 ~ /^[[:space:]]*(#|$)/) next
+      current_indent = indentation($0)
+      current_key = key_name($0)
+      if (current_indent == 0) {
+        in_continuation = current_key == "continuation"
+        in_next_action = 0
+        in_acceptance = 0
+      } else if (in_continuation && current_indent == 2) {
+        in_next_action = current_key == "next_action"
+        in_acceptance = 0
+      } else if (in_continuation && in_next_action && current_indent == 4) {
+        in_acceptance = current_key == "acceptance"
+        value = $0
+        sub(/^[ ]*acceptance:[[:space:]]*/, "", value)
+        if (in_acceptance && value ~ /^\[/) {
+          append_flow(value)
+          in_acceptance = 0
+        }
+      } else if (in_continuation && in_next_action && in_acceptance &&
+          current_indent >= 6 && $0 ~ /^      - /) {
+        value = $0
+        sub(/^      - /, "", value)
+        append_value(value)
+      }
+    }
+    END { print "]" }
+  ' "$file"
+}
+
 projection_value() {
   awk -v value="$1" -v maximum="$MAX_PROJECTION_LENGTH" '
     BEGIN {
@@ -1176,12 +1328,9 @@ set_continuation() {
   next_kind=
   next_target=
   acceptance=
-  expected_context_tokens=unknown
   safe_boundary=
   pr_number=none
   pr_state=none
-  recovery_signal=none
-  recovery_status=none
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1199,12 +1348,9 @@ set_continuation() {
         if [ -n "$acceptance" ]; then acceptance="$acceptance$NEWLINE$2"; else acceptance=$2; fi
         shift 2
         ;;
-      --expected-context-tokens) [ "$#" -ge 2 ] || fail '--expected-context-tokens requires a value'; expected_context_tokens=$2; shift 2 ;;
       --safe-boundary) [ "$#" -ge 2 ] || fail '--safe-boundary requires true or false'; safe_boundary=$2; shift 2 ;;
       --pr-number) [ "$#" -ge 2 ] || fail '--pr-number requires a number or none'; pr_number=$2; shift 2 ;;
       --pr-state) [ "$#" -ge 2 ] || fail '--pr-state requires a state or none'; pr_state=$2; shift 2 ;;
-      --recovery-host-signal) [ "$#" -ge 2 ] || fail '--recovery-host-signal requires a signal'; recovery_signal=$2; shift 2 ;;
-      --recovery-status) [ "$#" -ge 2 ] || fail '--recovery-status requires a status'; recovery_status=$2; shift 2 ;;
       -h|--help) usage; exit 0 ;;
       *) fail "unknown set-continuation option: $1" ;;
     esac
@@ -1219,8 +1365,7 @@ set_continuation() {
   [ -n "$next_kind" ] || fail '--next-action-kind is required'
   [ -n "$next_target" ] || fail '--next-action-target is required'
   [ -n "$safe_boundary" ] || fail '--safe-boundary is required'
-  for value in "$workflow" "$phase" "$step" "$awaiting" "$next_kind" "$next_target" \
-    "$expected_context_tokens" "$pr_number" "$pr_state" "$recovery_signal" "$recovery_status"; do
+  for value in "$workflow" "$phase" "$step" "$awaiting" "$next_kind" "$next_target"; do
     control_chars "$value"
   done
   state_path=$(state_file "$state_arg")
@@ -1232,11 +1377,8 @@ set_continuation() {
   require_enum_arg continuation.awaiting "$awaiting" none user_merge user_decision recovery
   require_enum_arg continuation.next_action.kind "$next_kind" specify discover implement validate review verify_and_sync_merge recover none
   require_bool_arg continuation.safe_boundary "$safe_boundary"
-  case "$expected_context_tokens" in unknown|none) ;; ''|*[!0-9]*) fail 'invalid continuation.next_action.expected_context_tokens' ;; esac
   case "$pr_number" in none|''|*[!0-9]*) [ "$pr_number" = none ] || fail 'invalid continuation.delivery.pr_number' ;; esac
   require_enum_arg continuation.delivery.pr_state "$pr_state" DRAFT OPEN MERGED CLOSED none
-  require_enum_arg continuation.recovery.host_signal "$recovery_signal" none near-limit overflow compaction
-  require_enum_arg continuation.recovery.status "$recovery_status" none pending recovered blocked
 
   delivery_mode=$(required_scalar delivery_mode "$state_path")
   state_tmp=$state_path.tmp.$$
@@ -1270,16 +1412,12 @@ set_continuation() {
     else
       printf '    acceptance: []\n'
     fi
-    printf '    expected_context_tokens: %s\n' "$expected_context_tokens"
     printf '  safe_boundary: %s\n' "$safe_boundary"
     printf '  updated_at: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     printf '  delivery:\n'
     printf '    mode: %s\n' "$delivery_mode"
     printf '    pr_number: %s\n' "$pr_number"
     printf '    pr_state: %s\n' "$pr_state"
-    printf '  recovery:\n'
-    printf '    host_signal: %s\n' "$recovery_signal"
-    printf '    status: %s\n' "$recovery_status"
   } >>"$state_tmp"
   validate_state "$state_tmp" >/dev/null
   mv "$state_tmp" "$state_path"

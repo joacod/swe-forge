@@ -27,7 +27,7 @@ harness validation.
 - Final status: ACCEPTED / BLOCKED / FAILED / unknown
 - Did it create a delivery branch? yes / no / unknown
 - Did it create a PR? yes / no / not applicable
-- Was context pressure, compaction, or overflow recovery observed? yes / no / unknown
+- Was a host context discontinuity or recovery event observed? yes / no / unknown
 
 ## What happened?
 

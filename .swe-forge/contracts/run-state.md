@@ -136,10 +136,11 @@ stage-dependent and may be absent from the initial shell.
 ## Routing and capability evidence
 
 Automatic routing uses task coupling, independent evaluability, expected
-context relief, continuity risk, and the root-owned acceptance boundary.
+coordination relief, continuity risk, and the root-owned acceptance boundary.
 Prompt length alone never selects delegation. The working spec or concise
 `reason` records the evidence without serializing a routing score or dimension
 matrix.
+
 
 A native capability is available only when the active adapter has freshly
 demonstrated its task/subagent surface, bounded roles, structured results, and
@@ -165,15 +166,7 @@ acceptance_ref: <acceptance criteria reference>
 current_phase: discovery | foundation | implementation | review | delivery | cleanup
 ```
 
-context:
-  status: healthy | near-limit | overflow | compacting | recovered | unknown | blocked
-  capability_status: proven | partial | unknown | unavailable
-  signal_source: <adapter, host event, telemetry, or none>
-  usage_tokens: <number or unknown>
-  context_window: <number or unknown>
-  last_checkpoint: <external state or evidence reference>
-  last_compaction: <event, session entry, timestamp, or none>
-  recovery_action: none | checkpoint | compact | wait | blocked
+
 
 continuation:
   workflow_active: true | false
@@ -185,16 +178,14 @@ continuation:
     kind: specify | discover | implement | validate | review | verify_and_sync_merge | recover | none
     target: <short target>
     acceptance: [<short checks>]
-    expected_context_tokens: <number or unknown>
+
   safe_boundary: true | false
   updated_at: <UTC timestamp>
   delivery:
     mode: GUIDED | PR
     pr_number: <number or none>
     pr_state: DRAFT | OPEN | MERGED | CLOSED | none
-  recovery:
-    host_signal: none | near-limit | overflow | compaction
-    status: none | pending | recovered | blocked
+
 
 validation_ref: <evidence ledger or none>
 review:
@@ -239,9 +230,11 @@ fields and a delivery projection matching `delivery_mode`.
   snapshot.
 - `continuation` is the authoritative workflow-control snapshot; conversation
   summaries and adapter reminders are recovery aids only.
-- After compaction or overflow recovery, re-read the working spec and run
-  state, inspect `HEAD` and the diff, and resume only from the recorded next
-  action.
+- After a host context discontinuity or recovery event, re-read the working spec
+  and run state, inspect `HEAD` and the diff, and resume only from the recorded
+  next action.
+- `safe_boundary` marks a workflow checkpoint with no in-flight Forge semantic
+  mutation; it does not direct host context preservation or compaction.
 - Only a dependency in `done` with an `accepted_result_ref` satisfying its task
   and result contract can supply a downstream dependency digest.
 - Delegated writes are sequential in the sole delivery checkout.

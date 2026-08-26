@@ -48,22 +48,17 @@ grading an agent from its explanation alone.
 | Executable evidence and candidate binding | Load evidence policy before fingerprints, freshness, checkpoints, or receipts; evidence remains bound to the exact candidate and stale evidence is rejected. |
 | Delegated implementer with reduced context | Load the task contract and implementer role; invoke the canonical worker-brief renderer and pass only its validated projection with local scope, write ownership, relevant instructions, validation, permissions, no opportunistic expansion, no unauthorized delivery, required result/evidence fields, and blocking escalation. |
 | Independent review | Load the reviewer role and review contract before a fresh, read-only review; review remains independent and checks the review focus before general quality concerns. |
-| Context-risk or pressure path | Load context policy when its trigger occurs and follow its durable-state, compaction, and recovery sequence. |
+| Context discontinuity or recovery path | Re-read authoritative run state and inspect actual Git/evidence state before continuing; do not trust a conversational summary or repeat completed semantic work. |
 | `BLOCKED`/`FAILED` recovery path | Load failure-recovery before recovery and apply its bounded retry and preservation rules rather than looping or changing status silently. |
 | Final acceptance | Verification, evidence, review, delivery, and recovery contribute evidence to the one canonical Acceptance Gate in `SWE-FORGE.md`; no policy defines a competing final gate. |
 
-## Context Continuity
+## Continuity Across Host Lifecycle Events
 
 | Scenario | Required behavior |
 | --- | --- |
-| Reliable near-limit signal before the next PR slice | Persist the external working spec/run state, compact at the safe boundary, wait for completion, re-read state, inspect Git `HEAD`/diff, then resume from the recorded next action. |
-| Context overflow with host-managed compact-and-retry | Wait for the host lifecycle; do not launch a duplicate Forge retry; verify recovery and the post-recovery Git/evidence boundary before continuing. |
-| Context overflow without demonstrated automatic recovery | Persist state and return `BLOCKED` for a manual compact or fresh session; do not blindly continue or repeat the last mutation. |
-| Harness context capability is unknown | Record `unknown`/`unavailable`; do not infer a token threshold, context window, compaction API, or successful recovery from the model label. |
-| No context limit is reached | Report `healthy` or `not-observed`; do not force artificial compaction or ceremonial commits. |
-| Pi reliable `near-limit` with unknown next-step tokens | At a safe boundary, persist state and request one proactive compaction; do not require a fabricated estimate. |
-| Pi native `overflow`/`compacting` lifecycle | Do not launch a competing Forge compaction or duplicate native recovery. |
-| Pi project reserve | Use trusted `.pi/settings.json` `compaction.reserveTokens` over global settings, with safe fallback for malformed/missing files. |
+| Host context discontinuity after a safe workflow boundary | Persist authoritative continuation state, wait for the host lifecycle to settle, re-read state, inspect Git `HEAD`/diff and evidence, then resume from the recorded next action. |
+| Host-managed retry or recovery | Keep host retry state distinct from SWE Forge task retries; inspect the post-recovery checkout and evidence before continuing, with no duplicate semantic action. |
+| Host lifecycle integration unavailable | Continue only from durable workflow state and actual repository/evidence reconciliation; do not infer host preservation or recovery behavior. |
 | Simultaneous active run states | Keep explicit/current pointers unchanged and select the newest valid checkout-compatible `updated_at` candidate. |
 | Dedicated Pi CI runtime | Use a supported Node version and treat inability to execute the runtime fixture as a CI failure, while local unsupported runtimes may skip. |
 
@@ -132,20 +127,19 @@ handoff and verifies that B receives selected facts without A's full result.
 | Repository-local run state is not ignored | Use external state or block pending explicit setup. |
 | Temporary-state cleanup | Preserve dirty, blocked, stale, conflicting, or ambiguous state; never force-remove it. |
 
-## Context-Aware Routing and Continuity
+## Routing and Continuity
 
 | Scenario | Required behavior |
 | --- | --- |
 | Small tightly coupled task | Prefer and select `SOLO`; no unnecessary delegation. |
 | Large but globally coupled task | Keep `SOLO`; large prompt/file count is not delegation evidence. |
-| Independent investigations | Prefer/select `SUBAGENTS` when independently evaluable work materially reduces root-context growth and a native capability exists; implementation may remain sequential. |
+| Independent investigations | Prefer/select `SUBAGENTS` when independently evaluable work materially reduces root coordination and a native capability exists; implementation may remain sequential. |
 | Two independent discovery questions | Record `DELEGATED_RESEARCH`, launch both bounded read-only workers together before consuming results, wait at one root fan-in barrier, resolve contradictions, and continue. |
 | Two coupled discovery questions | Record `ROOT_ONLY` or a real sequential dependency; do not parallelize coupled questions. |
-| Long sequential PR implementation | Keep one root owner responsible for ordered writes; use bounded `SUBAGENTS` research when useful and compact at validated PR boundaries. |
-| Context-heavy transition | Reassess once at a safe boundary when new independent work or context pressure makes delegation useful; update preferred/current and reason, without routing history. |
-| PR survives compaction | Persist `delivery: PR`, `awaiting: user_merge`, and `next_action.kind: verify_and_sync_merge`; after compaction, `merged` routes to `/git-sync merged` after verification. |
+| Long sequential PR implementation | Keep one root owner responsible for ordered writes; use bounded `SUBAGENTS` research when useful and preserve durable continuation at workflow boundaries. |
+| Host lifecycle transition | Re-read durable state and actual Git/evidence state before changing topology or resuming semantic work; do not route from a host signal alone. |
+| PR survives a context discontinuity | Persist `delivery: PR`, `awaiting: user_merge`, and `next_action.kind: verify_and_sync_merge`; after recovery, `merged` routes to `/git-sync merged` after verification. |
 | No native subagent capability | Record preferred `SUBAGENTS`, effective `SOLO`, and a visible capability-unavailable fallback; do not fail or simulate workers. |
-| No context telemetry | Record context `unknown`/`unavailable`; use durable checkpoints/manual recovery. |
 | Bounded worker | Worker receives only the canonical renderer's `worker_briefing` projection: objective, relevant context, scope, acceptance, repository pointers, validation, permissions, and return fields. It does not create PRs, push, merge, reroute, or recursively delegate by default. |
 
 ## Repository-aware Delivery Conventions
@@ -168,8 +162,8 @@ handoff and verifies that B receives selected facts without A's full result.
 
 Run `scripts/test-swe-forge`, `scripts/test-swe-forge-gate`,
 `scripts/test-swe-forge-pi`, and `scripts/test-swe-forge-briefing`. The Pi
-fixture exercises state reinjection, active-PR `merged` shorthand, safe-boundary
-proactive compaction, and stale snapshot precedence without requiring a model or
-network. The installer suite covers exact target scope, conflicting files,
+fixture exercises state reinjection, active-PR `merged` shorthand, host
+lifecycle continuation refresh, and stale snapshot precedence without requiring
+a model or network. The installer suite covers exact target scope, conflicting
 symlinked destination components, user-level link-only behavior, installation
 locking, and rollback after an injected write failure.

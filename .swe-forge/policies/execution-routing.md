@@ -2,9 +2,9 @@
 
 ## Objective
 
-Choose the smallest topology that provides a meaningful reliability benefit,
-context headroom, and safe task ownership. Supported topologies are `SOLO` and
-`SUBAGENTS`; both use one writable delivery checkout.
+Choose the smallest topology that provides a meaningful reliability benefit and
+safe task ownership. Supported topologies are `SOLO` and `SUBAGENTS`; both use
+one writable delivery checkout.
 
 ## Routing record
 
@@ -37,20 +37,20 @@ and concise routing reason provide the recovery evidence that matters.
 
 ## Decision evidence
 
-Do not route from ticket size, prompt length, token count, or file count alone.
+Do not route from ticket size, prompt length, or file count alone.
 Assess the work shape and keep the evidence in the transient working spec or
 the concise run-state `reason`; this is not a score or a durable dimensions
 matrix:
 
 - how much global state the root must retain together;
 - whether bounded work is independently evaluable;
-- whether concise structured results materially reduce root-context growth;
+- whether concise structured results materially reduce root coordination;
 - whether continuity or recovery makes delegation unsafe; and
 - whether fresh native capability and one-checkout ownership support delegation.
 
-Large work with high root-context requirement and low reducibility remains
+Large work with high root-coordination requirements and low reducibility remains
 `SOLO`. Independent investigations may make `SUBAGENTS` preferable when their
-results materially reduce root growth.
+results materially reduce coordination burden.
 
 ## Early discovery-shape assessment
 
@@ -77,14 +77,14 @@ discovery_strategy:
 
 Use `DELEGATED_RESEARCH` only when at least one question is independently
 answerable, read-only, safely bounded, and likely to return concise evidence
-that materially reduces root-context growth. It must not decide delivery, pass
+that materially reduces root coordination. It must not decide delivery, pass
 full history to a worker, permit recursive orchestration, or allow writes. If
 native delegation is unavailable, retain the rationale and execute in the root
 context rather than simulating workers.
 
 ### Discovery batch rule
 
-When discovery contains two or more genuinely independent, context-reducible
+When discovery contains two or more genuinely independent, evidence-reducible
 questions, launch the useful ready questions as one small bounded
 fan-out/fan-in batch. Render one bounded read-only task per question, launch the
 batch before consuming a result, then wait at one root-owned fan-in barrier.
@@ -94,7 +94,7 @@ sequential when a real dependency requires it.
 ## Decision procedure
 
 1. After discovery and specification, identify global coupling, independently
-   evaluable work, expected context relief, and the root acceptance boundary.
+   evaluable work, expected coordination relief, and the root acceptance boundary.
 2. Prefer `SOLO` unless a bounded task materially benefits from delegation and
    can return concise, independently checkable evidence.
 3. If delegation is useful, require a demonstrated semantic native capability
@@ -111,9 +111,9 @@ Reconsider topology only at a meaningful boundary where evidence may have
 changed:
 
 - repository discovery changes decomposition, dependencies, or coupling;
-- compaction or recovery completes and the root has re-read state and Git; or
+- host recovery completes and the root has re-read state and Git; or
 - a new implementation or review phase changes delegation value, capability,
-  context headroom, or acceptance needs.
+  or acceptance needs.
 
 Routine turns, unchanged validation checkpoints, and ordinary PR slice
 boundaries do not trigger ceremonial reassessment. When a decision changes,
@@ -123,13 +123,13 @@ atomically with `swe-forge-state set-routing`; do not append routing history.
 The supported transitions are:
 
 - `SOLO -> SUBAGENTS` when independent work remains and delegation gives
-  meaningful context relief; and
+  meaningful coordination relief; and
 - `SUBAGENTS -> SOLO` when results are consumed, remaining work is coupled, or
   coordination no longer pays for itself.
 
-After compaction, re-read durable state and Git before applying a routing
-change. A conversation summary cannot establish that a topology or delivery
-phase is still active.
+After a host recovery or context discontinuity, re-read durable state and Git
+before applying a routing change. A conversation summary cannot establish that
+a topology or delivery phase is still active.
 
 ## Native capability observation
 
@@ -141,17 +141,15 @@ declarations; unknown never becomes available by assumption.
 
 Native capability is fresh execution evidence, not durable authorization. An
 active state with `routing.current: SUBAGENTS` is necessary but not sufficient:
-the adapter must renegotiate capability immediately before delegation. Context
-usage, compaction, and state-reinjection capabilities remain owned by the
-context policy and continuation state rather than a routing profile cache.
+the adapter must renegotiate capability immediately before delegation.
 
 ## Topologies
 
 ### `SOLO`
 
-One context owns discovery, implementation, validation, and acceptance. Use it
-for small, tightly coupled, sequential, or shared-surface work and whenever
-there is no meaningful context reduction to buy.
+One root execution flow owns discovery, implementation, validation, and
+acceptance. Use it for small, tightly coupled, sequential, or shared-surface
+work and whenever delegation would not materially reduce coordination.
 
 ### `SUBAGENTS`
 
@@ -171,7 +169,3 @@ preferred topology: SUBAGENTS
 effective topology: SOLO
 reason: native delegation capability unavailable
 ```
-
-When context usage is unavailable, record `unknown` and rely on durable
-safe-boundary checkpoints and host-native recovery. Never fabricate an exact
-measurement, universal threshold, or successful compaction.
