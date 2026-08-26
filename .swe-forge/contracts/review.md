@@ -1,16 +1,16 @@
 # Review Contract
 
 This contract owns the review result structure, required finding fields,
-severity and confidence semantics, review-attempt accounting, and canonical
-result validation. The reviewer role owns how to investigate and reason; this
-contract does not turn every review into a generic quality checklist.
+severity and confidence semantics, and canonical result validation. The
+reviewer role owns how to investigate and reason; this contract does not turn
+the review into a generic quality checklist.
 
-Use this contract for an independent review after implementation and
-verification. For `PR`, review the clean committed candidate after
-implementation and final validation have passed. The agent may have made one or
-more coherent commits; individual implementation commits do not require
-independent review. The root supplies a bounded handoff and the reviewer
-returns the focus and evidence used, not an implementation result or a transcript.
+Use this contract for one independent review after implementation and
+verification. For `PR`, review the clean committed candidate after final
+validation has passed. The agent may have made one or more coherent commits;
+individual implementation commits do not receive independent review. The root
+supplies a bounded handoff and the reviewer returns the focus and evidence used,
+not an implementation result or a transcript.
 
 ## Template
 
@@ -25,7 +25,7 @@ scope:
     path: <canonical delivery checkout or none>
 
 review_focus:
-  mode: initial | focused
+  mode: initial
   goal: <single sentence describing what this review must establish>
   acceptance_criteria_checked:
     - id: <criterion ID or short label>
@@ -39,16 +39,6 @@ review_focus:
     - <repository practice or concrete risk relevant to the changed behavior>
   non_goals:
     - <unrelated cleanup, refactor, or future work explicitly left out>
-  # Focused re-review only: carry forward the prior review's unaffected PASS
-  # conclusions and disposition every supplied blocking finding.
-  prior_blocking_findings:
-    - id: <finding ID>
-      disposition: resolved | remains | unclear
-      evidence: <repair diff, affected behavior, or validation evidence>
-  repair_delta:
-    summary: <repair change that this focused review must inspect>
-    files:
-      - <changed file or symbol>
 
 findings:
   - id: R1
@@ -58,8 +48,8 @@ findings:
     issue: >
       Explain the concrete problem and affected behavior.
     review_basis: >
-      Identify the supplied acceptance criterion, explicit constraint, prior
-      blocking finding, or concrete relevant risk that makes this in scope.
+      Identify the supplied acceptance criterion, explicit constraint, or
+      concrete relevant risk that makes this an in-scope finding.
     evidence: >
       Cite the code, diff, test, reproduction, Git state, or missing requirement.
     recommended_action: >
@@ -82,48 +72,26 @@ status: PASS
 findings: []
 ```
 
-## Review input coverage
+## Review scope
 
-The supplied `review_focus` defines the review assignment; the canonical
-review gate still owns the numeric attempt count:
+The supplied `review_focus` is the review assignment. For the initial review it
+must contain the complete ticket-relevant acceptance surface. Every supplied
+criterion must receive a disposition with evidence before `PASS`; relevant
+quality checks are considered when the changed behavior or focus implicates
+them. The original ticket remains the acceptance authority.
 
-- `mode: initial` means the focus contains the complete ticket-relevant
-  acceptance surface. Every supplied criterion must receive a disposition with
-  evidence before `PASS`; relevant quality checks are considered only when the
-  change or focus implicates them.
-- `mode: focused` means the focus contains the prior blocking findings, repair
-  delta, directly affected acceptance criteria, directly affected quality
-  checks, and the non-goals needed to prevent scope expansion. Every supplied
-  focused criterion and prior blocking finding must receive a disposition with
-  evidence before `PASS`; a `remains` or `unclear` prior blocker cannot
-  accompany `PASS`.
-- Previously established, unaffected `PASS` criteria do not need to be
-  independently re-proven in focused mode. A focused result may raise a new
-  finding only when it is introduced by the repair, revealed on the affected
-  surface, or necessary to establish that a prior blocker is resolved.
-
-The contract requires coverage of what the root supplied; it does not require unrelated criteria
-or generic risk categories to be added to a focused review. The reviewer role determines which
-supplied quality checks need investigation.
-
-## Review budget
-
-The normal candidate budget is two review executions total: one independent
-review and, after repair plus affected validation, one focused re-review. Every
-fresh reviewer-like pass uses the same canonical review gate and consumes one
-attempt, even when its source is labeled investigation, debug review, or
-another recovery activity. Ordinary debugging of an unrelated implementation or
-test failure is not a review execution. A second `CHANGES_REQUIRED` result is a
-blocking terminal review outcome for automatic recovery; preserve the findings
-and report the safest next action instead of launching another pass.
+The root may carry previously established, unaffected `PASS` conclusions forward
+in a focused repair context. That context is for one bounded repair, not a second
+review, and it must not be used to replay unrelated criteria or justify another
+review. A repair handoff contains only the prior finding, repair delta, directly
+affected criteria, and affected validation.
 
 ## Findings and blocking semantics
 
 Findings are reserved for issues that affect a supplied acceptance criterion,
-explicit constraint, supplied prior blocking finding, or concrete relevant risk
-in the changed behavior. Unrelated refactors, style preferences, speculative
-enhancements, and future-session work belong in `deferred_followups` and do
-not block a `PASS`.
+explicit constraint, or concrete relevant risk in the changed behavior.
+Unrelated refactors, style preferences, speculative enhancements, and
+future-session work belong in `deferred_followups` and do not block a `PASS`.
 
 Every finding must include severity, confidence, location when applicable,
 issue, review basis, evidence, and recommended action. The review basis must
@@ -162,7 +130,11 @@ risks or deferred follow-ups.
 
 Return `CHANGES_REQUIRED` when a blocking in-scope finding remains, with the
 required fields above. Return `PASS` only when every supplied acceptance
-criterion and focused prior blocking finding has a valid evidence-backed
-disposition and no critical or blocking finding under this contract remains.
-Unrelated criteria must not be pulled into scope merely because the review is a
-second execution.
+criterion has a valid evidence-backed disposition and no critical or blocking
+finding under this contract remains.
+
+After `CHANGES_REQUIRED`, the root may apply one focused repair only when the
+finding is concrete, localized, and clearly repairable. The repair must be
+validated on its affected surface and explicitly reported as not independently
+re-reviewed. A fundamental, materially uncertain, unsafe, or otherwise
+unrepairable finding blocks delivery. A repair never authorizes another review.

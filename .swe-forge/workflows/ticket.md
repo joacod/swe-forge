@@ -279,23 +279,19 @@ Run the relevant repository quality gates by following the loaded verification
 and evidence policies. In `PR`, targeted checks must pass for any implementation
 slice before its checkpoint and materializing commit. Once implementation is
 complete, run final integrated validation once against the committed candidate.
-If a review repair changes the candidate, establish the required
-final evidence for that new committed candidate after the repair commit.
-`GUIDED` may report a passing slice while final acceptance remains pending.
-Report every check as passed, failed, skipped, unavailable, or not-applicable
-with its evidence. Later review, acceptance, and delivery gates consume this
-evidence; they do not rerun unchanged validation.
+If a review repair changes the candidate, run the checks affected by that repair
+and establish current final evidence for the repaired candidate. `GUIDED` may
+report a passing slice while final acceptance remains pending. Report every
+check as passed, failed, skipped, unavailable, or not-applicable with its
+evidence. Later review, acceptance, and delivery gates consume this evidence;
+they do not rerun unchanged validation.
 
 ### 11. Review
 
 When the review trigger applies, load `.swe-forge/agents/reviewer.md` and
-`.swe-forge/contracts/review.md` before review. In `PR`, run the initial
-independent review only after implementation and final validation are complete,
-against that same committed candidate. If it returns
-`CHANGES_REQUIRED`, repair only the relevant finding, run the affected checks,
-record the explicit review-repair checkpoint and commit, establish required
-final evidence for the repaired candidate, and then run the focused second
-review against that committed `HEAD`.
+`.swe-forge/contracts/review.md` before review. In `PR`, run one independent
+review from fresh context only after implementation and final validation are
+complete, against that same committed candidate.
 
 The root owns the semantic handoff. Load the reviewer role and result contract
 as canonical references, but do not paste their methodology into the
@@ -315,40 +311,26 @@ The initial handoff is one concise comprehensive assignment containing:
 - the final diff and existing validation evidence; and
 - references to the reviewer role and canonical result contract.
 
-The focused handoff is a new narrow assignment, not a replay of the initial
-one. It contains:
-
-- the repaired candidate identity and read-only/no-tests constraint;
-- the prior blocking finding or findings, with enough evidence to re-establish
-  each one;
-- the repair delta and changed files;
-- a focused `review_focus` containing only the directly affected acceptance
-  criteria, constraints, quality or risk checks, and scope-protecting
-  non-goals;
-- current affected/final validation evidence; and
-- only the original ticket context needed to interpret those items, plus
-  references to the reviewer role and canonical result contract.
-
-Previously established, unaffected `PASS` conclusions carry forward. Do not
-send the full original assignment, unrelated criteria, workflow invariants,
-or a full transcript to the focused reviewer. The focused reviewer may block
-on a new issue only when the repair introduces it, reveals it on the affected
-surface, or its resolution is necessary to close a prior blocker. Use a fresh
-context for the independent initial review; use one for the focused review when
-delegation, multi-component scope, or medium-or-higher risk makes it useful.
-Record every reviewer-like execution through the canonical evidence
-gate, regardless of its source label. The normal candidate budget is two
-executions total; a passing focused second review goes directly to final
-acceptance.
+A `PASS` continues directly to acceptance. A `CHANGES_REQUIRED` result does
+not start another reviewer. The root either blocks a fundamental, materially
+uncertain, unsafe, or otherwise unrepairable candidate, or derives one focused
+repair context containing only the prior finding, repair delta, directly
+affected criteria, and affected validation. The root or one bounded repair
+worker applies the localized fix, records the review-repair checkpoint and
+commit in `PR`, and runs the affected validation. The repaired candidate is
+not independently re-reviewed; record that fact in the final report. Do not
+replay the initial handoff, unrelated criteria, workflow invariants, or a full
+transcript during repair. Unaffected review conclusions remain context for the
+root but are not used to justify a second review.
 
 ### 12. Repair
 
 Before a `BLOCKED` or `FAILED` recovery path, load and follow
-`policies/failure-recovery.md`. A second `CHANGES_REQUIRED` review is a
-stop-and-report outcome: preserve unresolved findings, evidence, repairs, and
-validation, and do not launch another reviewer, investigation, debug review, or
-fresh context automatically. Ordinary debugging of an unrelated implementation
-or test failure follows task recovery instead.
+`policies/failure-recovery.md`. A review finding is repaired only when the
+finding is concrete, localized, and clearly repairable; otherwise preserve the
+candidate and stop. Do not launch another reviewer or create a review/recovery
+loop. Ordinary debugging of an unrelated implementation or test failure follows
+task recovery instead.
 
 ### 13. Final Acceptance
 
@@ -357,10 +339,11 @@ review, delivery, and recovery policies contribute evidence to that gate and do
 not define a competing final gate.
 
 Compare the final integrated diff with the original ticket, acceptance criteria,
-review focus, and explicit constraints. Verify and consume the current local
-validation and PASS review evidence for the exact committed candidate. Do not
-rerun unchanged broad validation, request another reviewer-like pass, or treat
-acceptance itself as a new semantic audit.
+review focus, and explicit constraints. Verify and consume current local
+validation plus either a `PASS` review for the exact candidate or the one
+recorded review-repair evidence and affected validation. Do not rerun unchanged
+broad validation, request another reviewer, or treat acceptance itself as a new
+semantic audit.
 
 ### 14. Report
 

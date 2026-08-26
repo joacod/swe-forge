@@ -212,6 +212,12 @@ mutations and missing required checks, and renders latest statuses. Receipts are
 private run evidence, include final `Head`, evidence fingerprint, and UTC
 generation time, and are never project-facing PR content.
 
+The review boundary is one fresh, ticket-focused independent review. A
+concrete, localized, clearly repairable finding may receive one focused repair
+and affected validation; the repaired candidate is not independently
+re-reviewed. Fundamental or materially uncertain findings block delivery rather
+than creating review/recovery loops.
+
 ## Environment and shared artifacts
 
 One checkout does not isolate ports, databases, Docker projects, temporary

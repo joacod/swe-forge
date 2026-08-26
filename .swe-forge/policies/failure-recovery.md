@@ -42,25 +42,17 @@ mutation of the canonical delivery candidate.
 ## Retry Limits
 
 - default to one retry per task after an explicit correction;
-- record each attempt and its reason;
-- default to at most two review executions total for one candidate;
-- count every fresh reviewer-like pass in that budget, regardless of whether
-  it is called independent review, focused review, investigation, debug review,
-  or another recovery label;
-- do not count ordinary debugging of an unrelated implementation or test
-  failure as a review execution;
-- after a second `CHANGES_REQUIRED` review, preserve the latest findings and
-  evidence, stop automatic repair/review activity, and report the blocker;
+- record each task attempt and its reason;
 - stop when the same evidence recurs without a changed hypothesis or approach;
   and
 - require explicit user guidance or another already-explicit task authorization
-  recorded in run state to exceed a default, with a hard run-specific ceiling
-  before continuing.
+  recorded in run state to exceed a default before continuing.
 
-The canonical `review.attempts` and `review.retry_ceiling` fields in schema-v4
-run state own the review budget. The executable review gate increments attempts
-before replacing review evidence and rejects a ceiling-exhausted execution;
-changing the source label cannot bypass it.
+The review lifecycle has no retry budget. It permits one independent review and,
+when the root can prove a finding is concrete, localized, and clearly
+repairable, one focused repair. A repair is not a review and never authorizes a
+second reviewer. Fundamental, materially uncertain, unsafe, or unrepairable
+findings block delivery.
 
 Retries must not overwrite unrelated user changes or create unbounded worker
 activity.
@@ -105,14 +97,17 @@ cleanup status.
 ### Review Finding
 
 Classify the finding using the blocking matrix in `../contracts/review.md`.
-Repair only blocking in-scope findings and rerun the affected checks. In `PR`,
-record the explicit review-repair checkpoint and atomic commit; if that commit
-changes the candidate, establish the required final evidence for the new `HEAD`
-before requesting the focused re-review. Build that re-review from the prior
-blocking findings, repair delta, and directly affected `review_focus`; carry
-forward unaffected prior `PASS` conclusions rather than replaying the initial
-assignment. Other delivery modes use their existing checkpoint semantics. Do
-not loop on nonblocking low-confidence style opinions.
+Repair only a concrete, localized, clearly repairable blocking finding. Build a
+focused repair context from the finding, repair delta, directly affected
+criteria, and affected validation; do not replay the review handoff or the
+implementer's transcript. In `PR`, record the explicit review-repair
+checkpoint and atomic commit, then rerun the affected checks. Record the repair
+as complete and report that the repaired candidate was not independently
+re-reviewed. A fundamental, materially uncertain, unsafe, or otherwise
+unrepairable finding blocks delivery. Do not launch another reviewer, debugger,
+or recovery loop to avoid that decision. Other delivery modes use their
+existing checkpoint semantics. Do not loop on nonblocking low-confidence style
+opinions.
 
 ## Cleanup Handoff
 

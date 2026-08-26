@@ -71,14 +71,13 @@ independent when review is required, invoke security and performance
 specialists only for relevant surfaces, and do not let workers recursively
 spawn workers unless a task authorizes it.
 
-An independent review worker represents one bounded review execution. The
-initial worker receives the original ticket and complete ticket-relevant
-`review_focus`; a focused second worker receives only the original context
-needed for prior blocking findings, the repair delta, and the directly affected
-focus. Unaffected prior `PASS` conclusions carry forward. Do
-not chain fresh reviewer, investigation, or debug-review workers to evade the
-candidate's shared review ceiling; combine genuinely independent questions
-within that bounded attempt and fan in once at the root.
+An independent review worker represents the one bounded review execution.
+It receives the original ticket and complete ticket-relevant `review_focus` in a
+fresh context. If the result requires repair, a repair worker receives only the
+prior finding, repair delta, directly affected criteria, and affected checks as
+a focused writable task. Unaffected prior `PASS` conclusions carry forward for
+the root. Do not chain another reviewer, investigation, or debug-review worker;
+a repair is not a review.
 
 
 ## Task Creation
@@ -110,7 +109,7 @@ Execute tasks only after dependencies are satisfied:
 4. bounded implementation tasks; materialize and accept writable results
    sequentially against the canonical delivery candidate;
 5. verification;
-6. fresh review and bounded repair.
+6. one fresh review and, only when clearly repairable, one bounded repair.
 
 Waves may collapse for a small ticket. Do not create an artificial wave just to
 make the workflow look more complex.
@@ -144,14 +143,15 @@ or ask a worker to reconstruct root state from a transcript.
 
 The root selects the semantic objective, acceptance, scope, architecture
 context, validation, and relevant dependency facts. For a review task, those
-choices are projected from the authoritative `review_focus`: the initial focus
-covers the complete ticket-relevant surface, while a focused focus contains
-only the prior blockers, repair delta, and directly affected criteria and
-risks, plus only the original context needed to interpret them. The tool copies
-those choices and derives only mechanical permissions,
-recursion, result, and capability facts. Pass its validated output unchanged
-with the canonical role and applicable result or review contract; the adapter
-must not add the original transcript or unrelated policy prose.
+choices are projected from the authoritative initial `review_focus`, which
+covers the complete ticket-relevant surface. If a repair
+is authorized, the root creates a separate focused writable task containing
+only the prior finding, repair delta, directly affected criteria and checks,
+and the original context needed to interpret them. The tool copies those
+choices and derives only mechanical permissions, recursion, result, and
+capability facts. Pass its validated output unchanged with the canonical role
+and applicable result or review contract; the adapter must not add the original
+transcript or unrelated policy prose.
 
 ### Dependency handoff projection
 

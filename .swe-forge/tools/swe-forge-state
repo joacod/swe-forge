@@ -39,6 +39,7 @@ Usage:
   swe-forge-state set-receipt-ref --state FILE|DIRECTORY --receipt-ref REF
   swe-forge-state set-review --state FILE|DIRECTORY \
     --result PASS|CHANGES_REQUIRED [--blocked-by ID...]
+  swe-forge-state set-review-repair --state FILE|DIRECTORY
   swe-forge-state set-pull-request --state FILE|DIRECTORY --url URL
 
 `inspect` and `resolve-active` expose the validated semantic run-state
@@ -52,10 +53,10 @@ explicit `GUIDED` request selects guided delivery.
 `set-routing` owns deliberate preferred/effective topology changes and their
 current rationale. `set-continuation` accepts only the bounded continuation
 surface; it generates updated_at and derives the delivery projection.
-`set-delivery-checkout`, `set-receipt-ref`, `set-review`, and
-`set-pull-request` own their purpose-specific updates. All write operations
-validate a temporary result before atomic replacement. Obsolete or unknown
-state must be replaced by starting a fresh run.
+`set-delivery-checkout`, `set-receipt-ref`, `set-review`,
+`set-review-repair`, and `set-pull-request` own their purpose-specific updates.
+All write operations validate a temporary result before atomic replacement.
+Obsolete or unknown state must be replaced by starting a fresh run.
 EOF
 }
 
@@ -292,21 +293,18 @@ identifier_valid() {
 
 validate_review() {
   file=$1
-  for field in status blocked_by attempts retry_ceiling ceiling_provenance contract_ref; do
+  for field in status blocked_by contract_ref; do
     nested_key review "$field" "$file" || fail "review is missing $field"
   done
-  validate_enum review.status "$file" pending running pass changes-required skipped
-  attempts=$(required_scalar review.attempts "$file")
-  case "$attempts" in ''|*[!0-9]*) fail 'review.attempts must be a non-negative integer' ;; esac
-  retry_ceiling=$(required_scalar review.retry_ceiling "$file")
-  case "$retry_ceiling" in ''|*[!0-9]*) fail 'review.retry_ceiling must be a positive integer' ;; esac
-  [ "$retry_ceiling" -gt 0 ] || fail 'review.retry_ceiling must be a positive integer'
-  [ "$attempts" -le "$retry_ceiling" ] || fail 'review.attempts exceeds review.retry_ceiling'
-  ceiling_provenance=$(required_scalar review.ceiling_provenance "$file")
-  case "$ceiling_provenance" in
-    default) [ "$retry_ceiling" -eq 2 ] || fail 'default review.retry_ceiling must be 2' ;;
-    explicit-*) ;;
-    *) fail 'invalid review.ceiling_provenance' ;;
+  validate_enum review.status "$file" pending pass changes-required repaired skipped
+  blocked_by=$(required_scalar review.blocked_by "$file")
+  review_status=$(required_scalar review.status "$file")
+  case "$review_status" in
+    changes-required|repaired)
+      [ "$blocked_by" != '[]' ] || fail "review.$review_status requires a blocking finding" ;;
+    pass|pending|skipped)
+      [ "$review_status" != pass ] || [ "$blocked_by" = '[]' ] || \
+        fail 'review.pass may not retain blocking findings' ;;
   esac
   required_scalar review.contract_ref "$file" >/dev/null
 }
@@ -335,10 +333,12 @@ reject_obsolete_fields() {
       under_continuation = 0
       under_next_action = 0
       under_routing = 0
+      under_review = 0
       for (i = 1; i < depth; i++) {
         if (keys[i] == "continuation") under_continuation = 1
         if (keys[i] == "next_action") under_next_action = 1
         if (keys[i] == "routing") under_routing = 1
+        if (keys[i] == "review") under_review = 1
       }
       if (current_indent == 0 &&
           current_key != "workflow" && current_key != "workflow_version" &&
@@ -361,6 +361,9 @@ reject_obsolete_fields() {
            current_key == "runtime_profile_ref")) found=1
       if (under_continuation && current_key == "recovery") found=1
       if (under_next_action && current_key == "expected_context_tokens") found=1
+      if (under_review &&
+          (current_key == "attempts" || current_key == "retry_ceiling" ||
+           current_key == "ceiling_provenance")) found=1
     }
     END { if (found) exit 0; exit 1 }
   ' "$file"; then
@@ -513,8 +516,6 @@ inspection_safe_boundary_json=false
 inspection_pr_number=
 inspection_pr_state=
 inspection_review_status=
-inspection_review_attempts=0
-inspection_review_ceiling=0
 
 inspection_scalar() {
   scalar_value "$1" "$2" 2>/dev/null || true
@@ -549,8 +550,6 @@ inspection_defaults() {
   inspection_pr_number=none
   inspection_pr_state=none
   inspection_review_status=none
-  inspection_review_attempts=0
-  inspection_review_ceiling=0
 }
 
 inspect_state_data() {
@@ -579,11 +578,7 @@ inspect_state_data() {
   inspection_awaiting=$(inspection_scalar continuation.awaiting "$inspection_state_file")
   inspection_next_kind=$(inspection_scalar continuation.next_action.kind "$inspection_state_file")
   inspection_review_status=$(inspection_scalar review.status "$inspection_state_file")
-  inspection_review_attempts=$(inspection_scalar review.attempts "$inspection_state_file")
-  inspection_review_ceiling=$(inspection_scalar review.retry_ceiling "$inspection_state_file")
   [ -n "$inspection_review_status" ] || inspection_review_status=none
-  [ -n "$inspection_review_attempts" ] || inspection_review_attempts=0
-  [ -n "$inspection_review_ceiling" ] || inspection_review_ceiling=0
   inspection_next_target=$(inspection_scalar continuation.next_action.target "$inspection_state_file")
   inspection_acceptance_json=$(inspection_acceptance "$inspection_state_file")
   inspection_safe_boundary=$(inspection_scalar continuation.safe_boundary "$inspection_state_file")
@@ -672,9 +667,8 @@ emit_state_json() {
   printf ',"routing":{"preferred":%s,"current":%s},"delivery_mode":%s' \
     "$(json_quote "$inspection_preferred")" "$(json_quote "$inspection_current")" \
     "$(json_quote "$inspection_delivery_mode")"
-  printf ',"review":{"status":%s,"attempts":%s,"retry_ceiling":%s}' \
-    "$(json_quote "$inspection_review_status")" "$inspection_review_attempts" \
-    "$inspection_review_ceiling"
+  printf ',"review":{"status":%s}' \
+    "$(json_quote "$inspection_review_status")"
   printf ',"continuation":{"workflow_active":%s,"phase":%s,"step":%s,"awaiting":%s' \
     "$inspection_workflow_active_json" "$(json_quote "$inspection_phase")" \
     "$(json_quote "$inspection_step")" "$(json_quote "$inspection_awaiting")"
@@ -1154,9 +1148,6 @@ init_state() {
     printf 'review:\n'
     printf '  status: pending\n'
     printf '  blocked_by: []\n'
-    printf '  attempts: 0\n'
-    printf '  retry_ceiling: 2\n'
-    printf '  ceiling_provenance: default\n'
     printf '  contract_ref: .swe-forge/contracts/review.md\n'
     printf 'tasks: {}\n'
   } >"$state_tmp"
@@ -1189,31 +1180,25 @@ set_review() {
   done
   [ -n "$state_arg" ] || fail '--state is required'
   case "$review_result" in PASS|CHANGES_REQUIRED) ;; *) fail "invalid review result: ${review_result:-<missing>}" ;; esac
+  if [ "$review_result" = CHANGES_REQUIRED ] && [ -z "$blocked_values" ]; then
+    fail 'CHANGES_REQUIRED review must identify at least one blocking finding'
+  fi
+  if [ "$review_result" = PASS ] && [ -n "$blocked_values" ]; then
+    fail 'PASS review may not identify blocking findings'
+  fi
   state_path=$(state_file "$state_arg")
   acquire_review_lock
   validate_state "$state_path" >/dev/null
-  current_attempts=$(required_scalar review.attempts "$state_path")
-  review_ceiling=$(required_scalar review.retry_ceiling "$state_path")
-  ceiling_provenance=$(required_scalar review.ceiling_provenance "$state_path")
+  current_review_status=$(required_scalar review.status "$state_path")
+  [ "$current_review_status" = pending ] || \
+    fail "review has already been recorded: $current_review_status"
   contract_ref=$(required_scalar review.contract_ref "$state_path")
-  [ "$current_attempts" -lt "$review_ceiling" ] || \
-    fail "review ceiling exhausted: $current_attempts/$review_ceiling executions already recorded; automatic reviewer-like activity is stopped"
-  next_attempt=$((current_attempts + 1))
   case "$review_result" in
     PASS) review_status=pass ;;
     CHANGES_REQUIRED) review_status=changes-required ;;
   esac
   top_status=$(required_scalar status "$state_path")
-  if [ "$review_result" = CHANGES_REQUIRED ]; then
-    if [ "$next_attempt" -ge "$review_ceiling" ]; then
-      top_status=blocked
-    else
-      top_status=repairing
-    fi
-  fi
-  if [ "$review_result" = PASS ] && [ "$top_status" = repairing ]; then
-    top_status=running
-  fi
+  [ "$review_result" != CHANGES_REQUIRED ] || top_status=repairing
   blocked_yaml=[]
   if [ -n "$blocked_values" ]; then
     blocked_yaml="["
@@ -1250,15 +1235,59 @@ EOF_BLOCKED
     printf 'review:\n'
     printf '  status: %s\n' "$review_status"
     printf '  blocked_by: %s\n' "$blocked_yaml"
-    printf '  attempts: %s\n' "$next_attempt"
-    printf '  retry_ceiling: %s\n' "$review_ceiling"
-    printf '  ceiling_provenance: %s\n' "$ceiling_provenance"
     printf '  contract_ref: %s\n' "$contract_ref"
   } >>"$state_tmp"
   validate_state "$state_tmp" >/dev/null
   mv "$state_tmp" "$state_path"
   state_tmp=
-  printf 'PASS: review recorded: attempt %s/%s (%s)\n' "$next_attempt" "$review_ceiling" "$review_result"
+  printf 'PASS: review recorded: %s\n' "$review_result"
+}
+set_review_repair() {
+  state_arg=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --state) [ "$#" -ge 2 ] || fail '--state requires a file or directory'; state_arg=$2; shift 2 ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown set-review-repair option: $1" ;;
+    esac
+  done
+  [ -n "$state_arg" ] || fail '--state is required'
+  state_path=$(state_file "$state_arg")
+  acquire_review_lock
+  validate_state "$state_path" >/dev/null
+  current_review_status=$(required_scalar review.status "$state_path")
+  [ "$current_review_status" = changes-required ] || \
+    fail "review repair requires an unresolved changes-required review: $current_review_status"
+  contract_ref=$(required_scalar review.contract_ref "$state_path")
+  blocked_yaml=$(required_scalar review.blocked_by "$state_path")
+  state_tmp=$state_path.tmp.$$
+  awk '
+    BEGIN { section=""; skip=0; status_count=0 }
+    /^[^[:space:]#][^:]*:/ {
+      section=$1
+      sub(/:$/, "", section)
+      if (section == "review") { skip=1; next }
+      skip=0
+    }
+    skip { next }
+    /^status:/ {
+      print "status: running"
+      status_count++
+      next
+    }
+    { print }
+    END { if (status_count != 1) exit 1 }
+  ' "$state_path" >"$state_tmp" || fail 'review repair update could not locate the current state status'
+  {
+    printf 'review:\n'
+    printf '  status: repaired\n'
+    printf '  blocked_by: %s\n' "$blocked_yaml"
+    printf '  contract_ref: %s\n' "$contract_ref"
+  } >>"$state_tmp"
+  validate_state "$state_tmp" >/dev/null
+  mv "$state_tmp" "$state_path"
+  state_tmp=
+  printf 'PASS: review repair recorded: %s\n' "$state_path"
 }
 
 set_routing() {
@@ -1699,6 +1728,7 @@ main() {
     set-delivery-checkout) set_delivery_checkout "$@" ;;
     set-receipt-ref) set_receipt_ref "$@" ;;
     set-review) set_review "$@" ;;
+    set-review-repair) set_review_repair "$@" ;;
     set-pull-request) set_pull_request "$@" ;;
     -h|--help) usage ;;
     *) fail "unknown command: $command" ;;

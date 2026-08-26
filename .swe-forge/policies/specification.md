@@ -62,9 +62,9 @@ briefings, or routing records.
   The spec also records an initial `review_focus` with one review goal, every
   ticket-relevant acceptance criterion, relevant architecture decisions and
   constraints, quality concerns, non-goals, and a rule for separating
-  actionable findings from deferred follow-ups. A focused subset is derived transiently after a
-  repair; it contains only the prior blockers, repair delta, and directly
-  affected criteria and risks.
+  actionable findings from deferred follow-ups. A focused repair context is
+  derived transiently after a concrete repairable finding; it contains only the
+  finding, repair delta, directly affected criteria, and affected checks.
 - Any mode may pause for a decision when an ambiguity changes behavior, scope,
   compatibility, safety, or delivery authorization.
 
@@ -115,7 +115,7 @@ Before implementation, the working spec must expose:
 - acceptance and validation evidence to collect
 - an initial `review_focus` that names the complete ticket-relevant review
   goal, criteria, relevant constraints and quality concerns, non-goals, and
-  finding boundary; a focused re-review uses a transient affected subset
+  finding boundary; a focused repair uses a transient affected subset
 - compatibility, external-effect, and delivery risks
 - unresolved decisions and their recovery path
 

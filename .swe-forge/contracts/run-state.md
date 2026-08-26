@@ -132,9 +132,8 @@ fresh schema-v4 snapshot initialized by the helper always contains:
 - `receipt_ref`;
 - the complete `delivery_checkout` mapping;
 - the complete `delivery` authorization and action mapping;
-- the `review` budget, initialized with `attempts: 0`, `retry_ceiling: 2`,
-  `ceiling_provenance: default`, and the canonical review contract reference;
-  and
+- the `review` record, initialized with `status: pending`, no blocking
+  findings, and the canonical review contract reference; and
 - the `tasks` container, even when no delegated task exists.
 
 A fact that is not known yet uses the explicit `unknown`, `none`, empty, or
@@ -197,11 +196,8 @@ continuation:
 
 validation_ref: <evidence ledger or none>
 review:
-  status: pending | running | pass | changes-required | skipped
+  status: pending | pass | changes-required | repaired | skipped
   blocked_by: []
-  attempts: 0
-  retry_ceiling: 2
-  ceiling_provenance: default
   contract_ref: <canonical review contract>
 checkpoint:
   status: not-applicable | awaiting-user | resumed | complete
@@ -215,18 +211,19 @@ retries:
   <task_id>: {attempts: 0, ceiling: 1, ceiling_provenance: default}
 ```
 
-`review.attempts` is incremented by the canonical review gate for every
-reviewer-like execution, regardless of its source label. The default ceiling is
-two; a `CHANGES_REQUIRED` result at the ceiling leaves the run blocked and
-preserves the latest evidence. Ordinary unrelated debugging is not a review
-execution.
+`review.status: changes-required` records an unresolved blocking finding.
+`review.status: repaired` records one bounded repair of that finding after
+affected validation; `blocked_by` retains the finding IDs as repair evidence and
+this status does not claim that the repaired candidate passed a new independent
+review. A fundamental or materially uncertain finding remains blocked rather
+than entering another review or repair loop.
 
 A state whose `schema_version` is not `4` must be rejected as stale or
 unsupported, including older and future versions. No helper guesses a
 migration, normalizes an obsolete snapshot, or rewrites it in place. The
 validator also rejects removed workflow fields from earlier schema-v4
-representations, including the former commit lifecycle; callers must start a
-fresh run rather than migrate them.
+representations, including old review-attempt fields and the former commit
+lifecycle; callers must start a fresh run rather than migrate them.
 When `continuation` is present, the validator requires its workflow-control
 fields and a delivery projection matching `delivery_mode`.
 
@@ -241,8 +238,9 @@ fields and a delivery projection matching `delivery_mode`.
   owns the update timestamp and derived delivery projection.
 - Use `swe-forge-state set-delivery-checkout` and `set-receipt-ref` for their
   purpose-specific mutations; callers do not structurally edit the YAML.
-- Use `set-review` for canonical review attempts and `set-pull-request`
-  after local PR evidence and URL recording.
+- Use `set-review` for the one canonical review result, `set-review-repair`
+  for the one recorded localized repair, and `set-pull-request` after local PR
+  evidence and URL recording.
 - A resumed run inspects the real checkout and Git state before trusting this
   snapshot.
 - `continuation` is the authoritative workflow-control snapshot; conversation
@@ -262,8 +260,8 @@ fields and a delivery projection matching `delivery_mode`.
 - Cleanup never claims removal of resources that were not proven run-owned.
 - `planning` may become `running`, `blocked`, or `failed`; `running` may become
   `reviewing`, `blocked`, or `failed`; `reviewing` may become `repairing`,
-  `accepted`, `blocked`, or `failed`; and `blocked` may resume at its prior
-  state.
+  `accepted`, `blocked`, or `failed`; a completed repair returns to `running`;
+  and `blocked` may resume at its prior state.
 
 Authorization meanings live in `../policies/delivery.md`; this contract records
 the resulting action status rather than redefining those meanings.

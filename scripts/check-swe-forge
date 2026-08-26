@@ -207,6 +207,7 @@ require_text 'set-continuation' .swe-forge/tools/swe-forge-state
 require_text 'set-routing' .swe-forge/tools/swe-forge-state
 require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-state
 require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
+require_text 'set-review-repair' .swe-forge/tools/swe-forge-state
 require_text 'set-pull-request' .swe-forge/tools/swe-forge-state
 require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
 require_text 'one coherent commit or several' .swe-forge/policies/delivery.md
@@ -216,24 +217,27 @@ require_text 'remote default branch' .swe-forge/policies/delivery.md
 require_text 'review-repair commit' .swe-forge/policies/delivery.md
 require_text 'clean committed candidate' .swe-forge/contracts/review.md
 require_text 'coherent commits' .swe-forge/contracts/review.md
-require_text 'mode: initial | focused' .swe-forge/contracts/review.md
-require_text 'Previously established, unaffected `PASS` criteria' .swe-forge/contracts/review.md
-require_text 'does not require unrelated criteria' .swe-forge/contracts/review.md
+require_text 'mode: initial' .swe-forge/contracts/review.md
+require_text 'unaffected `PASS` conclusions carry forward' .swe-forge/contracts/review.md
+require_text 'must not be used to replay unrelated criteria' .swe-forge/contracts/review.md
 require_text 'not run tests, formatters, linters' .swe-forge/agents/reviewer.md
 require_text 'initial handoff' .swe-forge/workflows/ticket.md
-require_text 'focused handoff is a new narrow assignment' .swe-forge/workflows/ticket.md
-require_text 'unaffected `PASS` conclusions carry forward' .swe-forge/workflows/ticket.md
+require_text 'focused repair context' .swe-forge/workflows/ticket.md
+require_text 'unaffected review conclusions remain context' .swe-forge/workflows/ticket.md
 require_text 'Run final validation once the' .swe-forge/policies/verification.md
 require_text './scripts/validate-swe-forge' .swe-forge/policies/verification.md
 require_text 'Later review, acceptance, and delivery gates consume this' .swe-forge/workflows/ticket.md
 reject_text 'The reviewer must confirm that writable delegated results' .swe-forge/contracts/review.md
 reject_text 'Review all applicable areas:' .swe-forge/contracts/review.md
-require_text 'at most two review executions' SWE-FORGE.md
+require_text 'one independent review' SWE-FORGE.md
+require_text 'A repaired candidate is explicitly' SWE-FORGE.md
 require_text 'Remote GitHub CI is external after PR creation' SWE-FORGE.md
-require_text 'review ceiling exhausted' .swe-forge/tools/swe-forge-state
+require_text 'only one focused review repair is allowed' .swe-forge/tools/swe-forge-gate
 require_text 'PR review requires a clean committed candidate' .swe-forge/tools/swe-forge-gate
-require_text 'PR focused re-review requires a materialized review-repair commit' .swe-forge/tools/swe-forge-gate
-require_text 'Review attempts:' .swe-forge/contracts/receipt.md
+require_text 'Review repair: completed' .swe-forge/contracts/receipt.md
+reject_text 'Review attempts:' .swe-forge/contracts/receipt.md
+reject_text 'mode: initial | focused' .swe-forge/contracts/review.md
+reject_text 'review.attempts' .swe-forge/contracts/run-state.md
 require_text 'PR creation completion boundary' .swe-forge/conformance/scenarios.md
 require_text 'not awaited or polled' .swe-forge/policies/evidence.md
 require_text 'relevant PR is actually `MERGED`' .swe-forge/conformance/scenarios.md

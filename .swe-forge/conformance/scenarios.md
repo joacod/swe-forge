@@ -54,8 +54,7 @@ grading an agent from its explanation alone.
 | Delegated implementer with reduced context | Load the task contract and implementer role; invoke the canonical worker-brief renderer and pass only its validated projection with local scope, write ownership, relevant instructions, validation, permissions, no opportunistic expansion, no unauthorized delivery, required result/evidence fields, and blocking escalation. |
 | Independent review | Load the reviewer role and review contract before a fresh, read-only review; review remains independent and checks the complete initial `review_focus` before relevant quality concerns. |
 | Initial review handoff | Include the candidate identity, original ticket, complete ticket-relevant focus, relevant architecture decisions, final diff, and validation evidence without concatenating workflow-policy or contract prose. |
-| Focused second-review handoff | After repair, include prior blocking findings, the repair delta and files, directly affected focus/criteria/risks, current evidence, and only the original context needed; do not replay the initial assignment. |
-| Focused review carry-forward | Treat unaffected prior `PASS` conclusions as established and do not independently re-prove unrelated criteria. |
+| Focused repair handoff | After a concrete repairable finding, give the root or repair worker only the finding, repair delta and files, directly affected criteria/checks, and needed original context; do not replay the review assignment. Carry unaffected prior `PASS` conclusions forward for the root. |
 | Context discontinuity or recovery path | Re-read authoritative run state and inspect actual Git/evidence state before continuing; do not trust a conversational summary or repeat completed semantic work. |
 | `BLOCKED`/`FAILED` recovery path | Load failure-recovery before recovery and apply its bounded retry and preservation rules rather than looping or changing status silently. |
 | Final acceptance | Verification, evidence, review, delivery, and recovery contribute evidence to the one canonical Acceptance Gate in `SWE-FORGE.md`; no policy defines a competing final gate. |
@@ -112,17 +111,15 @@ handoff and verifies that B receives selected facts without A's full result.
 | Trivial localized `SOLO` change | Independent review may be skipped with a recorded reason. |
 | PR implementation slice | After its targeted checks pass, optionally checkpoint and materialize the coherent slice without an independent review; implementation may continue or finish. |
 | Final PR candidate | Run final integrated validation after implementation is complete, then review that same committed candidate. |
-| Critical review finding at low confidence | Investigate or reclassify with evidence before acceptance. |
-| Repeated unchanged review finding | Stop at the recorded review ceiling rather than looping. |
-| Review attempt 1 and 2 both require changes | Record attempts 1 and 2 in canonical state, preserve the second findings, and reject a third reviewer-like execution without replacing evidence. |
-| Successful focused second review | After an initial repair commit and required final evidence for its candidate, record attempt 2 as `PASS` and allow acceptance without a third review. |
-| Repair regression during focused review | Permit attempt 2 to return `CHANGES_REQUIRED` for a concrete regression introduced by the repair or necessary to establish the prior blocker is resolved; unrelated new audits remain deferred. |
-| Focused review attempt accounting | Record the focused execution through the same canonical second/final review attempt, regardless of source label. |
-| Final acceptance review boundary | Consume the current passing review and evidence without launching another reviewer-like execution or broad semantic audit. |
-| Reviewer-like recovery alias | An investigation, debug review, or focused-review source still consumes the shared review budget; ordinary unrelated test debugging does not. |
+| Critical review finding at low confidence | Preserve the candidate and block delivery when the finding is materially uncertain; do not turn uncertainty into a reviewer/recovery loop. |
+| Repairable review finding | For one concrete, localized, clearly repairable finding, use a focused repair context, repair once, rerun affected validation, and record the repair. |
+| Fundamental review finding | Block delivery and preserve the finding rather than attempting another review or repair. |
+| Repaired candidate | Deliver only with the repair checkpoint/commit and current affected validation; report that the repaired candidate was not independently re-reviewed. |
+| Second review request | Reject it after the one independent review; do not replace the original review evidence. |
+| Final acceptance review boundary | Consume the current passing review or recorded repair evidence without launching another reviewer or broad semantic audit. |
 | PR with multiple natural commit boundaries | Allow the agent to choose multiple coherent validated checkpoints and commits during implementation. |
 | PR with one cohesive commit | Allow one catch-all checkpoint and commit for a small ticket without ceremonial extra commits. |
-| Review-repair delivery commit | Record a repair checkpoint/commit separately before focused re-review; it is an additional coherent commit. |
+| Review-repair delivery commit | Record one repair checkpoint/commit separately before affected validation and delivery; it is an additional coherent commit. |
 | Unchanged PR candidate at a phase boundary | Consume current validation and review evidence; do not rerun an unchanged broad suite for review, acceptance, or PR preparation. |
 | PR creation completion boundary | After local gates pass and the PR URL is recorded, report completion without awaiting or polling remote GitHub CI. |
 
@@ -141,7 +138,7 @@ handoff and verifies that B receives selected facts without A's full result.
 | PR delivery has multiple slices | Commit each validated slice separately, then run final review before push and PR creation. |
 | Final executable validation | Require every required or applicable conditional check to be recorded as passed against the final `HEAD`. |
 | Receipt with missing or failed evidence | Report `BLOCKED`; never upgrade it to `ACCEPTED`. |
-| Receipt contents | Include compact check results and review counts, but no transcripts, credentials, or command output. |
+| Receipt contents | Include compact check results, the review result, and any repair/no-re-review note, but no transcripts, credentials, or command output. |
 | Final run report | Begin with a concise plain-language `Work summary`; keep it separate from the private receipt and project-facing PR content. |
 | Project-facing PR content | Use a concise outcome/motivation summary, relevant validation, and material risks when needed; never include receipts, Forge/tool metadata, transcripts, or unrelated detail. |
 | Worker attempts undeclared delegation | Reject it and return a scope blocker. |

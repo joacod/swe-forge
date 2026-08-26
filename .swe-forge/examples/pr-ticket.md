@@ -55,23 +55,19 @@ commit sequence is declared in the working spec, and the agent may keep the
 whole change together rather than manufacture ceremonial commits.
 
 After implementation is complete, it runs final integrated validation once and
-performs the initial independent review against that same committed candidate.
-The initial handoff contains the complete ticket-relevant `review_focus`, so it
-is the one comprehensive semantic review. If the review requires changes, it
-repairs only the relevant finding, runs the affected checks, creates the
-explicit review-repair checkpoint and commit, then establishes final evidence
-for the repaired candidate before the focused second review. That handoff
-contains the prior blocking finding, repair delta, and directly affected focus;
-unaffected prior `PASS` conclusions carry forward. A passing focused review
-goes directly to final acceptance; acceptance and PR preparation consume
-current evidence rather than rerunning unchanged validation or review.
-Unrelated improvements are recorded as deferred follow-ups rather than pulled
-into the PR. It does not stop after each slice for user approval.
+performs one fresh independent review against that same committed candidate.
+The handoff contains the complete ticket-relevant `review_focus`, so it is the
+one comprehensive semantic review without workflow prose or the implementer's
+transcript. A `PASS` goes directly to final acceptance.
 
-Review is recorded through the canonical gate for at most two executions total.
-If the focused second review still returns `CHANGES_REQUIRED`, the run stops
-and reports the unresolved findings instead of launching another reviewer-like
-recovery pass.
+If the review requires changes, the root repairs only a concrete, localized,
+clearly repairable finding. It builds a focused repair context from the finding,
+repair delta, directly affected criteria, and affected checks, then runs that
+validation and records the explicit review-repair checkpoint and commit. It
+does not invoke another reviewer. The repaired candidate is reported as not
+independently re-reviewed. A fundamental or materially uncertain finding blocks
+delivery. Unrelated improvements are recorded as deferred follow-ups rather
+than pulled into the PR. It does not stop after each slice for user approval.
 
 After local gates pass, PR creation is the synchronous boundary: push, create
 the PR, record its URL and local receipt, report the result, and stop. Remote

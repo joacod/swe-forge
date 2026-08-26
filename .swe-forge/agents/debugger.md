@@ -7,8 +7,9 @@ can choose a targeted repair.
 
 ## Invocation
 
-Invoke only when the root cause is uncertain, a validation failure is
-unexplained, or an initial repair did not work.
+Invoke only when the root cause is uncertain or a validation failure is
+unexplained. Do not use a debugger to reopen a completed review repair or
+create another review attempt.
 
 ## Default Permissions
 
