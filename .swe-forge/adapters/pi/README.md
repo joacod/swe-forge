@@ -55,7 +55,7 @@ Pi derives the prompt-template command from its filename:
 
 ```text
 /swe-forge <ticket>                 # guided checkpoints (default)
-/swe-forge pr <ticket>              # verify and create a PR without checkpoints
+/swe-forge pr <ticket>              # verify and create a PR without interactive checkpoints
 /swe-forge solo <ticket>            # explicit SOLO topology
 /swe-forge subagents <ticket>       # explicit bounded native delegation
 ```

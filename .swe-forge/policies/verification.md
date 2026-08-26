@@ -32,23 +32,31 @@ Code inspection alone cannot establish that a relevant behavior works.
   ceremonial test scaffolding
 - `GUIDED` checkpoint: validate the completed slice and label final acceptance
   as pending until the whole ticket is integrated
-- `PR` delivery: complete all required local checks, the ordered commit plan,
-  and fresh review before commit, push, or pull-request creation; after the PR
-  exists, remote CI is external and is not awaited by this workflow
+- `PR` delivery: validate and commit each planned step with its targeted checks;
+  after the plan is complete, establish final evidence and review the committed
+  candidate before delivery; after the PR exists, remote CI is external and is
+  not awaited by this workflow
 
 ### Validation cadence and batching
 
-Use targeted checks for each implementation slice and reserve complete
-repository suites for the final integrated candidate unless a slice changes a
-behavior that requires an earlier full check. Do not rerun an unchanged full
-suite merely because another check or commit boundary was reached.
+Use targeted checks for each implementation slice and reserve the complete
+repository suite for the final integrated candidate unless a slice changes a
+behavior that requires an earlier full check. Run that final validation once
+after the planned implementation commits. If a review repair materially changes
+the candidate, establish the required final evidence again for that new
+candidate before focused re-review. Do not rerun an unchanged full suite merely
+because a checkpoint, commit, review, acceptance, or PR-preparation boundary was
+reached. Later gates consume current evidence rather than repeating its semantic
+work.
 
 When independent checks share the same candidate and have no shared runtime or
 filesystem state, run them through one inspected batch when the repository
-provides one. A batch is only a scheduling optimization: it must preserve the
-identity and result of every check, report every failure or unavailable check,
-and return failure if any required check fails. It must not replace current-HEAD
-fingerprint binding, targeted slice evidence, or final review.
+provides one. For this repository, prefer `./scripts/validate-swe-forge` over
+manually serializing its component suites. A batch is only a scheduling
+optimization: it must preserve the identity and result of every check, report
+every failure or unavailable check, and return failure if any required check
+fails. It must not replace current-HEAD fingerprint binding, targeted slice
+evidence, or final review.
 
 ### Testing Decision
 
@@ -73,10 +81,11 @@ upfront.
 
 ## Quality Gates
 
-Run applicable repository checks after integration:
+Choose and run applicable repository checks at their required boundary:
 
-- targeted tests
-- full test suite when justified by scope or risk
+- targeted tests for the current implementation slice
+- the full test suite when justified by scope or risk, normally at final
+  integrated validation
 - typecheck
 - lint and formatting validation
 - build or packaging

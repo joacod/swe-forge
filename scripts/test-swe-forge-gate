@@ -58,7 +58,7 @@ state=$TMP_ROOT/clean.state
   "$GATE" commit-slice --state "$state" --checkpoint 1 --plan-step S1 --message 'Record gate evidence' --authorized-by PR >/dev/null
   "$GATE" plan-check --state "$state" --name final-smoke --requirement required >/dev/null
   "$GATE" validate --state "$state" --name final-smoke --final -- sh -c 'grep -q changed README.md' >/dev/null
-  "$GATE" review --state "$state" --result PASS --source fresh-context --findings 1 --repaired 1 >/dev/null
+  "$GATE" review --state "$state" --result PASS --source fresh-context --findings 0 --repaired 0 >/dev/null
   "$GATE" deliver-pr --state "$state" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 \
@@ -78,7 +78,7 @@ state=$TMP_ROOT/clean.state
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || fail 'accepted receipt is missing final status'
 if grep -F 'Context:' "$TMP_ROOT/receipt.md" >/dev/null; then fail 'receipt retains host context metadata'; fi
-grep -F 'Fresh review: PASS — 1 findings, 1 repaired' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
+grep -F 'Fresh review: PASS — 0 findings, 0 repaired' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
 grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing harness metadata'
 grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing routing metadata'
 grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing model metadata'
@@ -122,7 +122,8 @@ review_repo=$(make_repo review-ceiling)
 review_state=$TMP_ROOT/review-ceiling.state
 (
   cd "$review_repo"
-  "$GATE" preflight --state "$review_state" >/dev/null
+  "$GATE" preflight --state "$review_state" \
+    --requested-delivery GUIDED --delivery-mode GUIDED >/dev/null
   "$GATE" review --state "$review_state" --result CHANGES_REQUIRED \
     --source independent-review --findings 2 --blocked-by R1 --blocked-by R2 >/dev/null || true
   "$GATE" review --state "$review_state" --result CHANGES_REQUIRED \
@@ -142,7 +143,8 @@ second_review_repo=$(make_repo second-review)
 second_review_state=$TMP_ROOT/second-review.state
 (
   cd "$second_review_repo"
-  "$GATE" preflight --state "$second_review_state" >/dev/null
+  "$GATE" preflight --state "$second_review_state" \
+    --requested-delivery GUIDED --delivery-mode GUIDED >/dev/null
   "$GATE" review --state "$second_review_state" --result CHANGES_REQUIRED \
     --source independent-review --findings 1 --blocked-by R1 >/dev/null || true
   "$GATE" review --state "$second_review_state" --result PASS \
@@ -172,6 +174,9 @@ multi_state=$TMP_ROOT/multi-step.state
   "$GATE" checkpoint --state "$multi_state" --scope two.txt --plan-step S2 >/dev/null
   "$GATE" commit-slice --state "$multi_state" --checkpoint 2 --plan-step S2 \
     --message 'Add second planned step' --authorized-by PR >/dev/null
+  expect_failure 'PR review requires passing final validation for the current candidate' \
+    "$GATE" review --state "$multi_state" --result PASS --source fresh-context
+  grep -F '  attempts: 0' "$multi_state/run-state.yaml" >/dev/null
   "$GATE" validate --state "$multi_state" --name final-smoke --final \
     -- sh -c 'test -f one.txt && test -f two.txt' >/dev/null
   "$GATE" plan-check --state "$multi_state" --name repair-smoke \
@@ -181,6 +186,10 @@ multi_state=$TMP_ROOT/multi-step.state
   printf 'repair\n' >repair.txt
   "$GATE" validate --state "$multi_state" --name repair-smoke -- sh -c 'test -f repair.txt' >/dev/null
   "$GATE" checkpoint --state "$multi_state" --scope repair.txt --review-repair >/dev/null
+  expect_failure 'PR review requires a clean committed candidate' \
+    "$GATE" review --state "$multi_state" --result PASS \
+      --source focused-re-review --repaired 1
+  grep -F '  attempts: 1' "$multi_state/run-state.yaml" >/dev/null
   "$GATE" commit-slice --state "$multi_state" --checkpoint 3 --review-repair \
     --message 'Repair reviewed finding' --authorized-by PR >/dev/null
   "$GATE" validate --state "$multi_state" --name final-smoke --final \
@@ -188,6 +197,10 @@ multi_state=$TMP_ROOT/multi-step.state
   "$GATE" review --state "$multi_state" --result PASS \
     --source focused-re-review --repaired 1 >/dev/null
   "$GATE" deliver-pr --state "$multi_state" >/dev/null
+  "$GATE" receipt --state "$multi_state" --execution SOLO --delivery PR \
+    --pr-url https://github.com/example/repo/pull/3 >/dev/null
+  grep -F 'Review attempts: 2/2' "$multi_state/receipt.md" >/dev/null
+  "$GATE" receipt-verify --state "$multi_state" >/dev/null
   "$ROOT/scripts/swe-forge-state" commit-plan --state "$multi_state/run-state.yaml" |
     awk -F '\t' '$1 == "S1" && $2 == "complete" && $3 == "1" && $4 != "none" { first=1 }
       $1 == "S2" && $2 == "complete" && $3 == "2" && $4 != "none" { second=1 }
@@ -202,6 +215,8 @@ collapsed_state=$TMP_ROOT/collapsed.state
   cd "$collapsed_repo"
   "$GATE" preflight --state "$collapsed_state" >/dev/null
   "$GATE" commit-plan --state "$collapsed_state" --step S1 --step S2 >/dev/null
+  expect_failure 'PR review requires a complete commit plan' \
+    "$GATE" review --state "$collapsed_state" --result PASS --source fresh-context
   "$GATE" plan-check --state "$collapsed_state" --name slice-smoke \
     --requirement required --final-required false >/dev/null
   "$GATE" plan-check --state "$collapsed_state" --name final-smoke \
@@ -216,7 +231,6 @@ collapsed_state=$TMP_ROOT/collapsed.state
     --message 'Collapse planned steps' --authorized-by PR >/dev/null
   "$GATE" validate --state "$collapsed_state" --name final-smoke --final \
     -- sh -c 'test -f one.txt && test -f two.txt' >/dev/null
-  "$GATE" review --state "$collapsed_state" --result PASS --source fresh-context >/dev/null
   expect_failure 'PR commit plan is incomplete' "$GATE" deliver-pr --state "$collapsed_state"
   "$ROOT/scripts/swe-forge-state" commit-plan --state "$collapsed_state/run-state.yaml" |
     awk -F '\t' '$1 == "S2" && $2 == "pending" && $3 == "none" && $4 == "none" { found=1 }
@@ -237,6 +251,10 @@ repair_ceiling_state=$TMP_ROOT/repair-ceiling.state
     --plan-step S1 >/dev/null
   "$GATE" commit-slice --state "$repair_ceiling_state" --checkpoint 1 --plan-step S1 \
     --message 'Implement repair ceiling fixture' --authorized-by PR >/dev/null
+  "$GATE" plan-check --state "$repair_ceiling_state" --name final-smoke \
+    --requirement required >/dev/null
+  "$GATE" validate --state "$repair_ceiling_state" --name final-smoke --final \
+    -- sh -c 'test -f implementation.txt' >/dev/null
   "$GATE" review --state "$repair_ceiling_state" --result CHANGES_REQUIRED \
     --source fresh-context --findings 1 --blocked-by R1 >/dev/null || true
   "$GATE" plan-check --state "$repair_ceiling_state" --name repair-smoke \
@@ -248,6 +266,8 @@ repair_ceiling_state=$TMP_ROOT/repair-ceiling.state
     --review-repair >/dev/null
   "$GATE" commit-slice --state "$repair_ceiling_state" --checkpoint 2 --review-repair \
     --message 'Apply first review repair' --authorized-by PR >/dev/null
+  "$GATE" validate --state "$repair_ceiling_state" --name final-smoke --final \
+    -- sh -c 'test -f implementation.txt && test -f repair-one.txt' >/dev/null
   "$GATE" review --state "$repair_ceiling_state" --result CHANGES_REQUIRED \
     --source focused-re-review --findings 1 --repaired 1 --blocked-by R1 >/dev/null || true
   printf 'repair two\n' >repair-two.txt
@@ -274,6 +294,8 @@ orphan_state=$TMP_ROOT/orphan-repair.state
   "$GATE" plan-check --state "$orphan_state" --name final-smoke --requirement required >/dev/null
   "$GATE" plan-check --state "$orphan_state" --name repair-smoke \
     --requirement required --final-required false >/dev/null
+  "$GATE" validate --state "$orphan_state" --name final-smoke --final \
+    -- sh -c 'test -f implementation.txt' >/dev/null
   "$GATE" review --state "$orphan_state" --result CHANGES_REQUIRED \
     --source fresh-context --findings 1 --blocked-by R1 >/dev/null || true
   printf 'orphan repair\n' >repair.txt
@@ -283,8 +305,6 @@ orphan_state=$TMP_ROOT/orphan-repair.state
   rm repair.txt
   "$GATE" validate --state "$orphan_state" --name final-smoke --final \
     -- sh -c 'test -f implementation.txt' >/dev/null
-  "$GATE" review --state "$orphan_state" --result PASS \
-    --source focused-re-review --repaired 1 >/dev/null
   expect_failure 'review-repair checkpoint 2 has no materializing commit' \
     "$GATE" deliver-pr --state "$orphan_state"
 )

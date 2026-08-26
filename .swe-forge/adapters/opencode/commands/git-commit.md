@@ -1,5 +1,5 @@
 ---
-description: Review and commit selected local changes without pushing
+description: Validate and commit selected local changes without pushing
 ---
 
 The user explicitly invoked the `git-commit` delivery action.

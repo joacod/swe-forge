@@ -105,8 +105,12 @@ cleanup status.
 ### Review Finding
 
 Classify the finding using the blocking matrix in `../contracts/review.md`.
-Repair blocking findings, rerun affected checks, and request a focused re-
-review. Do not loop on nonblocking low-confidence style opinions.
+Repair only blocking in-scope findings and rerun the affected checks. In `PR`,
+record the explicit review-repair checkpoint and atomic commit; if that commit
+changes the candidate, establish the required final evidence for the new `HEAD`
+before requesting the focused re-review. Other delivery modes use their
+existing checkpoint semantics. Do not loop on nonblocking low-confidence style
+opinions.
 
 ## Cleanup Handoff
 

@@ -186,32 +186,39 @@ The transient spec owns a validated ordered commit plan and `review_focus`. A
 `PR` working spec is not ready for implementation until it contains at least one
 cohesive step with an identity, scope, dependencies, targeted validation, and
 commit subject. The orchestrator registers only the minimal step projection in
-run state, then validates and commits each step before starting the next.
-`checkpoint --plan-step` and `commit-slice --plan-step` bind each planned step
-to its validation and materializing commit; `deliver-pr` requires every planned
-step to be complete. A one-step ticket remains one commit, while review repairs
-use explicit additional `--review-repair` commits.
+run state. Each planned implementation step is validated with its targeted
+checks, checkpointed, and materialized as an explicitly authorized commit
+before the next step; planned commits do not require independent review. A
+one-step ticket remains one commit, while review repairs use explicit additional
+`--review-repair` commits.
 
-It then runs final verification and independent review before one authorized
-push and one final PR on the single delivery branch. Normal review-repair
-activity allows at most two review executions for the candidate, including
-independent, focused, investigation, or other reviewer-like passes. The gate
-records the attempts in canonical run state; a second `CHANGES_REQUIRED` result
-stops automatic repair or review activity and reports the unresolved evidence.
-Ordinary debugging of an unrelated implementation or test failure is separate
-task recovery and does not consume this review budget. PR mode never merges;
-project-facing PR content follows the delivery policy, while evidence and
-receipts remain private. `/git-pr draft` requests a draft PR without changing
-normal `/git-pr` behavior.
+After all planned implementation commits exist, the orchestrator runs final
+integrated validation once against that committed candidate and performs the
+initial independent review against the same candidate. If that review returns
+`CHANGES_REQUIRED`, it repairs only the relevant finding, runs the affected
+checks, records the review-repair checkpoint and commit, establishes the
+required final evidence for the repaired candidate, and performs the focused
+second review against that committed `HEAD`. A passing second review goes
+directly to final acceptance; acceptance consumes current evidence rather than
+rerunning unchanged validation or review. Normal review-repair activity allows
+at most two review executions for the candidate, including independent, focused,
+investigation, or other reviewer-like passes. The gate records the attempts in
+canonical run state; a second `CHANGES_REQUIRED` result stops automatic repair
+or review activity and reports the unresolved evidence. Ordinary debugging of
+an unrelated implementation or test failure is separate task recovery and does
+not consume this review budget. PR mode never merges; project-facing PR content
+follows the delivery policy, while evidence and receipts remain private.
+`/git-pr draft` requests a draft PR without changing normal `/git-pr` behavior.
 
 After the local gates pass, PR delivery pushes the branch, creates the one
 authorized PR, records its URL and a local receipt, reports `ACCEPTED`, and
 stops. Remote GitHub CI is external after PR creation: it may be reported as
 pending, but SWE Forge does not await or poll it synchronously.
 
-The PR mental model is: plan cohesive steps, implement/validate/commit each
-step, final-verify, independently review, allow at most one repair plus focused
-re-review, push, create the PR, and report.
+The PR mental model is: plan, targeted-validate/checkpoint/commit each step,
+final-validate, review, repair/validate/checkpoint/commit when required,
+final-validate the changed candidate, focused re-review, accept, push, create
+the PR, and report.
 
 ## Ticket Lifecycle
 
@@ -338,14 +345,17 @@ Declare success only when all applicable conditions are met:
 - any generated receipt is truthful and reports `ACCEPTED` only when its
   required evidence gate passes;
 - a normal ticket has one dedicated delivery branch; and
-- when `delivery_mode: PR`, every planned cohesive step has validated checkpoint
-  and commit evidence before authorized commit, push, and pull-request actions
-  complete or the run is reported `BLOCKED`; `GUIDED` may finish with a
-  reviewed local diff when delivery actions are not authorized;
+- when `delivery_mode: PR`, every planned cohesive step has targeted validation,
+  checkpoint, and commit evidence before final acceptance and delivery; final
+  validation and review evidence are current for the delivered candidate, or
+  the run is reported `BLOCKED`; `GUIDED` may finish with a reviewed local diff
+  when delivery actions are not authorized;
 - after a PR is created, local receipt generation and reporting complete the
   synchronous run; remote CI is not an acceptance wait or polling phase.
 
-Do not claim a check passed when it was not run. Distinguish skipped and
+Final acceptance consumes the current validation and review evidence; it does
+not itself rerun unchanged semantic work or authorize another reviewer-like
+pass. Do not claim a check passed when it was not run. Distinguish skipped and
 unavailable checks from successful validation.
 
 Final status is deterministic: use `ACCEPTED` only when this gate passes, use

@@ -1,6 +1,9 @@
 # Review Contract
 
 Use this contract for independent review after implementation and verification.
+For `PR`, review the clean committed candidate only after the ordered
+implementation plan is complete and its final validation has passed; planned
+implementation commits do not receive independent review individually.
 Reviewers should receive the original ticket, a `review_focus` from the PR
 working spec or a concise focus derived from the ticket for other modes,
 acceptance criteria, relevant architecture decisions, final diff, and
