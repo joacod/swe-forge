@@ -72,18 +72,17 @@ from `policies/specification.md`. `TOO_BROAD` explains the independent chunks
 and stops before specification, decomposition, routing, validation,
 implementation, review, and delivery. `PROCEED` continues normally.
 
-The default invocation is PR delivery with automatic topology:
+The public invocation expresses delivery intent; topology is selected by SWE
+Forge after ticket and repository inspection. PR delivery and automatic
+routing are the defaults:
 
 ```text
 /swe-forge <ticket>             # PR + automatic topology
 /swe-forge guided <ticket>      # GUIDED + automatic topology
-/swe-forge pr <ticket>          # explicit PR alias
-/swe-forge solo <ticket>        # SOLO + PR
-/swe-forge subagents <ticket>  # SUBAGENTS + PR
 ```
 
-Topology and delivery tokens may be combined; the invocation tool owns their
-grammar.
+`guided` is the only public modifier. `SOLO` and `SUBAGENTS` are internal
+routing outcomes, not invocation arguments.
 
 `SOLO` keeps the work in one root flow. `SUBAGENTS` uses demonstrated native
 workers only for bounded, independently evaluable work; unavailable capability
@@ -99,7 +98,7 @@ authorized.
 
 The ticket procedure is the executable source for this sequence:
 
-1. parse the invocation once and retain raw and normalized facts;
+1. parse the invocation once and retain the raw ticket and delivery intent;
 2. discover lightly, make the scope decision, then assess discovery shape;
 3. define observable acceptance and, for PR, a transient working spec;
 4. choose the compatible approach, risks, and ownership;
@@ -186,7 +185,7 @@ Remote GitHub CI is external after PR creation and is not awaited or polled.
 
 Begin with a short plain human `Work summary`, then report:
 
-- final status and requested/selected topology and delivery mode;
+- final status and preferred/effective topology and delivery mode;
 - approach, changed files, assumptions, risks, and continuity/recovery facts;
 - testing decision, exact validation results, review/repair result, and any
   skipped or unavailable checks; and

@@ -40,8 +40,8 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
-    [--requested-mode MODE] [--routing-preferred MODE] [--routing-current MODE]
-    [--requested-delivery DELIVERY] [--delivery-mode MODE]
+    [--routing-preferred MODE] [--routing-current MODE]
+    [--delivery-mode MODE]
   scripts/swe-forge-gate plan-check --state DIR --name NAME --requirement TYPE \
     [--condition TEXT] [--final-required true|false]
   scripts/swe-forge-gate validate --state DIR --name NAME [--final] \
@@ -64,10 +64,7 @@ Receipt metadata options:
   --forge-version VERSION       SWE Forge release version.
   --harness NAME                Harness used for the run.
   --harness-version VERSION     Harness version when known.
-  --requested-mode MODE         AUTO, SOLO, or SUBAGENTS.
-  --selected-mode MODE          SOLO or SUBAGENTS.
   --model-provider PROVIDER     Public model provider label when safe.
-  --routing-reason TEXT         Short routing rationale.
   --model MODEL                 Model label when safe to publish.
 
 The guard never launches agents, controls external orchestration, pushes,
@@ -363,8 +360,6 @@ update_meta_checkout() {
 preflight() {
   expected_branch=
   baseline_ref=HEAD
-  requested_mode=AUTO
-  requested_delivery=PR
   delivery_mode=PR
   routing_preferred=SOLO
   routing_current=SOLO
@@ -387,18 +382,6 @@ preflight() {
         [ "$#" -ge 2 ] || fail "--base requires a Git revision"
         baseline_ref=$2
         reject_control_chars "$baseline_ref"
-        shift 2
-        ;;
-      --requested-mode)
-        [ "$#" -ge 2 ] || fail "--requested-mode requires a topology"
-        requested_mode=$2
-        reject_control_chars "$requested_mode"
-        shift 2
-        ;;
-      --requested-delivery)
-        [ "$#" -ge 2 ] || fail "--requested-delivery requires DEFAULT, GUIDED, or PR"
-        requested_delivery=$2
-        reject_control_chars "$requested_delivery"
         shift 2
         ;;
       --delivery-mode)
@@ -464,8 +447,6 @@ preflight() {
     --checkout "$CHECKOUT" \
     --run-id "$(basename "$STATE")" \
     --baseline-ref "$base_head" \
-    --requested-mode "$requested_mode" \
-    --requested-delivery "$requested_delivery" \
     --delivery-mode "$delivery_mode" \
     --routing-preferred "$routing_preferred" \
     --routing-current "$routing_current" \
@@ -1463,6 +1444,9 @@ receipt_text() {
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
   current_fp=$(fingerprint_for_checkout "$CHECKOUT")
   branch=$(current_branch)
+  routing_preferred=$(run_state_nested_value routing preferred)
+  routing_current=$(run_state_nested_value routing current)
+  routing_reason=$(run_state_value reason)
   short_base=$(git -C "$CHECKOUT" rev-parse --short "$baseline_head")
   short_head=$(git -C "$CHECKOUT" rev-parse --short "$current_head")
   short_fp=$(printf '%s' "$current_fp" | cut -c 1-12)
@@ -1474,18 +1458,17 @@ receipt_text() {
   printf 'Execution: %s\n' "$execution"
   printf 'Delivery: %s\n' "$delivery"
   if [ -n "${receipt_forge_version:-}" ] || [ -n "${receipt_harness:-}" ] || \
-    [ -n "${receipt_harness_version:-}" ] || [ -n "${receipt_requested_mode:-}" ] || \
-    [ -n "${receipt_selected_mode:-}" ] || [ -n "${receipt_model_provider:-}" ] || \
-    [ -n "${receipt_routing_reason:-}" ] || [ -n "${receipt_model:-}" ]; then
+    [ -n "${receipt_harness_version:-}" ] || [ -n "${receipt_model_provider:-}" ] || \
+    [ -n "${receipt_model:-}" ] || [ -n "$routing_preferred" ] || [ -n "$routing_reason" ]; then
     printf 'Run metadata:\n'
     [ -z "${receipt_forge_version:-}" ] || printf -- '- SWE Forge: %s\n' "$receipt_forge_version"
     if [ -n "${receipt_harness:-}" ] || [ -n "${receipt_harness_version:-}" ]; then
       if [ -n "${receipt_harness_version:-}" ]; then printf -- '- Harness: %s %s\n' "$receipt_harness" "$receipt_harness_version"; else printf -- '- Harness: %s\n' "$receipt_harness"; fi
     fi
-    if [ -n "${receipt_requested_mode:-}" ] || [ -n "${receipt_selected_mode:-}" ]; then printf -- '- Routing: %s -> %s\n' "${receipt_requested_mode:-unknown}" "${receipt_selected_mode:-unknown}"; fi
+    [ -z "$routing_preferred" ] || printf -- '- Routing: %s -> %s\n' "$routing_preferred" "$routing_current"
     [ -z "${receipt_model_provider:-}" ] || printf -- '- Model provider: %s\n' "$receipt_model_provider"
     [ -z "${receipt_model:-}" ] || printf -- '- Model: %s\n' "$receipt_model"
-    [ -z "${receipt_routing_reason:-}" ] || printf -- '- Routing reason: %s\n' "$receipt_routing_reason"
+    [ -z "$routing_reason" ] || printf -- '- Routing reason: %s\n' "$routing_reason"
   fi
   printf 'Repository: %s\n' "$(repository_identity)"
   printf 'Base: %s\n' "$short_base"
@@ -1532,10 +1515,7 @@ receipt_run() {
   receipt_forge_version=
   receipt_harness=
   receipt_harness_version=
-  receipt_requested_mode=
-  receipt_selected_mode=
   receipt_model_provider=
-  receipt_routing_reason=
   receipt_model=
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1588,24 +1568,9 @@ receipt_run() {
         receipt_harness_version=$2
         shift 2
         ;;
-      --requested-mode)
-        [ "$#" -ge 2 ] || fail "--requested-mode requires a value"
-        receipt_requested_mode=$2
-        shift 2
-        ;;
-      --selected-mode)
-        [ "$#" -ge 2 ] || fail "--selected-mode requires a value"
-        receipt_selected_mode=$2
-        shift 2
-        ;;
       --model-provider)
         [ "$#" -ge 2 ] || fail "--model-provider requires a value"
         receipt_model_provider=$2
-        shift 2
-        ;;
-      --routing-reason)
-        [ "$#" -ge 2 ] || fail "--routing-reason requires a value"
-        receipt_routing_reason=$2
         shift 2
         ;;
       --model)
@@ -1627,17 +1592,17 @@ receipt_run() {
   case "$delivery" in GUIDED|PR) ;; *) fail "invalid delivery mode: ${delivery:-<missing>}" ;; esac
   [ "$delivery" != GUIDED ] || [ -z "$PR_URL" ] || \
     fail "a pull-request URL is only valid for PR receipt delivery"
-  case "$receipt_requested_mode" in ''|AUTO|SOLO|SUBAGENTS) ;; *) fail "invalid requested topology metadata" ;; esac
-  case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS) ;; *) fail "invalid selected topology metadata" ;; esac
   for receipt_value in "$receipt_forge_version" "$receipt_harness" "$receipt_harness_version" \
-    "$receipt_requested_mode" "$receipt_selected_mode" "$receipt_model_provider" \
-    "$receipt_routing_reason" "$receipt_model"; do
+    "$receipt_model_provider" "$receipt_model"; do
     reject_control_chars "$receipt_value"
   done
   if [ -n "$PR_URL" ]; then
     case "$PR_URL" in http://*|https://*) ;; *) fail "PR URL must use http:// or https://" ;; esac
   fi
   ensure_meta_state
+  routing_current=$(run_state_nested_value routing current)
+  [ "$execution" = "$routing_current" ] || \
+    fail "receipt execution topology $execution does not match run state $routing_current"
   state_delivery_mode=$(delivery_mode_from_state)
   [ "$delivery" = "$state_delivery_mode" ] || \
     fail "receipt delivery mode $delivery does not match run state $state_delivery_mode"

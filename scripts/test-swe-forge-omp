@@ -71,8 +71,7 @@ function makeState(name, current = "SUBAGENTS", runId = name) {
   fs.mkdirSync(stateDir, { recursive: true });
   const args = [
     "init", "--state", stateDir, "--checkout", checkout, "--run-id", runId,
-    "--baseline-ref", "HEAD", "--status", "running", "--requested-mode", "AUTO",
-    "--requested-delivery", "PR", "--delivery-mode", "PR", "--reason", "fixture state",
+    "--baseline-ref", "HEAD", "--status", "running", "--delivery-mode", "PR", "--reason", "fixture state",
     "--fallback-used", "no", "--routing-preferred", current, "--routing-current", current,
     "--delivery-status", "ready", "--delivery-branch-setup", "reused",
     "--remote-default-evidence", "fixture",

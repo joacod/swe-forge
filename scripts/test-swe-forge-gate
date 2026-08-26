@@ -57,8 +57,7 @@ state=$TMP_ROOT/clean.state
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 \
     --forge-version 0.1.0-alpha.1 --harness Pi --harness-version 0.84.1 \
-    --requested-mode AUTO --selected-mode SOLO --model-provider openai-codex \
-    --routing-reason 'tightly coupled test fixture' --model test-model \
+    --model-provider openai-codex --model test-model \
     --output "$TMP_ROOT/receipt.md" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 >/dev/null
@@ -72,7 +71,7 @@ state=$TMP_ROOT/clean.state
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || fail 'accepted receipt is missing final status'
 grep -F 'Fresh review: PASS — 0 findings' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
 grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing harness metadata'
-grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing routing metadata'
+grep -F -- '- Routing: SOLO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing routing metadata'
 grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing model metadata'
 receipt_ref=$(awk -F': ' '$1 == "receipt_ref" { print $2; exit }' "$state/run-state.yaml")
 [ "$receipt_ref" != none ] || fail 'run state does not retain receipt reference'
@@ -106,7 +105,7 @@ review_state=$TMP_ROOT/review-once.state
 (
   cd "$review_repo"
   "$GATE" preflight --state "$review_state" \
-    --requested-delivery GUIDED --delivery-mode GUIDED >/dev/null
+    --delivery-mode GUIDED >/dev/null
   "$GATE" review --state "$review_state" --result CHANGES_REQUIRED \
     --source independent-review --findings 2 --blocked-by R1 --blocked-by R2 >/dev/null || true
   expect_failure 'review has already been recorded' "$GATE" review --state "$review_state" \
@@ -265,26 +264,22 @@ propagation_state=$TMP_ROOT/propagation.state
 (
   cd "$propagation_repo"
   "$GATE" preflight --state "$propagation_state" \
-    --requested-mode SUBAGENTS --requested-delivery GUIDED --delivery-mode GUIDED \
-    --routing-preferred SUBAGENTS --routing-current SUBAGENTS \
-    --reason 'requested propagation fixture' >/dev/null
+    --delivery-mode GUIDED --routing-preferred SUBAGENTS --routing-current SUBAGENTS \
+    --reason 'automatic routing propagation fixture' >/dev/null
 )
-grep -F 'requested_mode: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
-grep -F 'requested_delivery: GUIDED' "$propagation_state/run-state.yaml" >/dev/null
 grep -F 'delivery_mode: GUIDED' "$propagation_state/run-state.yaml" >/dev/null
 expect_failure 'receipt delivery mode PR does not match run state GUIDED' \
-  "$GATE" receipt --state "$propagation_state" --execution SOLO --delivery PR \
+  "$GATE" receipt --state "$propagation_state" --execution SUBAGENTS --delivery PR \
   --pr-url https://github.com/example/repo/pull/2
 expect_failure 'pull-request URL is only valid for PR receipt delivery' \
-  "$GATE" receipt --state "$propagation_state" --execution SOLO --delivery GUIDED \
+  "$GATE" receipt --state "$propagation_state" --execution SUBAGENTS --delivery GUIDED \
   --pr-url https://github.com/example/repo/pull/2
 grep -F '  current: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
 
 state_tool=$ROOT/scripts/swe-forge-state
 early_state=$TMP_ROOT/early-state
 "$state_tool" init --state "$early_state" --checkout "$propagation_repo" --run-id early-state \
-  --requested-mode SUBAGENTS --requested-delivery GUIDED --delivery-mode GUIDED \
-  --routing-preferred SUBAGENTS --routing-current SUBAGENTS \
+  --delivery-mode GUIDED --routing-preferred SUBAGENTS --routing-current SUBAGENTS \
   --reason 'early shell fixture' >/dev/null
 "$state_tool" validate --state "$early_state" >/dev/null
 if grep -Eq '^continuation:' "$early_state/run-state.yaml"; then fail 'init unexpectedly created continuation data'; fi
@@ -304,8 +299,7 @@ grep -F 'fallback_used: SUBAGENTS -> SOLO: native capability unavailable' "$earl
 "$state_tool" validate --state "$early_state" >/dev/null
 adaptive_state=$TMP_ROOT/adaptive.state
 "$state_tool" init --state "$adaptive_state" --checkout "$propagation_repo" --run-id adaptive-state \
-  --requested-mode AUTO --requested-delivery GUIDED --delivery-mode GUIDED \
-  --routing-preferred SOLO --routing-current SOLO --reason 'adaptive baseline' >/dev/null
+  --delivery-mode GUIDED --routing-preferred SOLO --routing-current SOLO --reason 'adaptive baseline' >/dev/null
 "$state_tool" set-routing --state "$adaptive_state" \
   --preferred SUBAGENTS --current SUBAGENTS --reason 'independent discovery remains useful' \
   --fallback-used no >/dev/null

@@ -20,11 +20,11 @@ settings, models, credentials, permissions, or project configuration.
 ```text
 /swe-forge <ticket>
 /swe-forge guided <ticket>
-/swe-forge pr <ticket>
 ```
 
 The prompt passes `$ARGUMENTS` unchanged; the shared invocation parser owns
-reserved-token handling. Ordinary prompts do not activate the bridge.
+the `guided` delivery modifier and leaves topology selection to the canonical
+workflow. Ordinary prompts do not activate the bridge.
 
 For an explicit invocation, the extension observes the native `task` tool,
 batch shape, per-item `outputSchema`/`schemaMode`, source, confined

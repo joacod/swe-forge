@@ -9,8 +9,8 @@ scenario records the observable outcome rather than repeating its procedure.
 | Scenario | Required outcome | Owner |
 | --- | --- | --- |
 | Empty or incomplete invocation | Ask for the missing ticket; do not invent one. | invocation tool |
-| Default delivery | `requested_delivery: DEFAULT` resolves to `PR` with automatic topology. | invocation/spec |
-| Explicit forms | Accept lowercase topology/delivery forms and preserve raw arguments; uppercase tokens remain ticket text. | invocation tool |
+| Default delivery | `delivery_mode: PR` with automatic topology. | invocation/spec |
+| Delivery modifiers | A leading lowercase `guided` selects `GUIDED`; topology words remain ticket text and uppercase tokens remain ticket text. | invocation tool |
 | Small or substantial cohesive ticket | Decide `PROCEED`; size, prompt length, file count, and ordered steps do not reject it. | specification |
 | Independent or open-ended bundle | Decide `TOO_BROAD`, suggest chunks, and stop before downstream workflow. | specification |
 | Optional skill named | Preserve and evaluate its source; never install automatically. | specialist-skills |

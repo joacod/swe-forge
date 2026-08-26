@@ -16,10 +16,10 @@ a successful projection does not establish harness behavior.
 
 - Harness and version:
 - SWE Forge version or commit:
-- Raw invocation (`/swe-forge ...` or equivalent, including mode tokens):
+- Raw invocation (`/swe-forge ...` or equivalent, including delivery modifier):
 - Delivery mode: GUIDED / PR
-- Requested topology: AUTO / SOLO / SUBAGENTS
-- Selected topology, if known: SOLO / SUBAGENTS / unknown
+- Preferred topology, if known: SOLO / SUBAGENTS / unknown
+- Effective topology, if known: SOLO / SUBAGENTS / unknown
 - Native subagent capability, if used: available / unavailable / unknown
 - Routing fallback or revision, if any:
 - Final status, if known: ACCEPTED / BLOCKED / FAILED / unknown

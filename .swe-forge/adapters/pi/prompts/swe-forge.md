@@ -1,6 +1,6 @@
 ---
 description: Run SWE Forge with PR delivery by default or guided checkpoints
-argument-hint: "[guided|pr|solo|subagents] [ticket]"
+argument-hint: "[guided] [ticket]"
 ---
 
 The user explicitly invoked SWE Forge through Pi. Read

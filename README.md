@@ -48,8 +48,8 @@ mode when checkpoints are wanted:
 /swe-forge guided <ticket>
 ```
 
-`/swe-forge pr <ticket>` is an explicit PR alias; `solo` and `subagents` can
-request a topology. Neither mode merges automatically.
+SWE Forge selects `SOLO` or `SUBAGENTS` internally after inspecting the ticket
+and repository. Neither mode merges automatically.
 
 ## Documentation
 

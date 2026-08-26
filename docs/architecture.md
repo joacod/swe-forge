@@ -2,8 +2,10 @@
 
 SWE Forge is a harness-agnostic workflow above coding harnesses. One run takes
 one ticket to one reviewable delivery outcome and owns one writable delivery
-checkout. `SOLO` keeps work in the root; `SUBAGENTS` adds bounded native work
-when it materially helps. Delivery is independently `GUIDED` or `PR`.
+checkout. The public invocation carries the ticket and optional `GUIDED`
+delivery intent; `SOLO` and `SUBAGENTS` are internal routing outcomes. `SOLO`
+keeps work in the root; `SUBAGENTS` adds bounded native work when it materially
+helps. Delivery is independently `GUIDED` or `PR`.
 
 ## Canonical ownership
 

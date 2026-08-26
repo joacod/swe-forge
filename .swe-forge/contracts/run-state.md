@@ -32,8 +32,6 @@ workflow_version: 1
 schema_version: 4
 run_id: <unique id>
 status: planning | running | blocked | reviewing | repairing | accepted | failed
-requested_mode: AUTO | SOLO | SUBAGENTS
-requested_delivery: DEFAULT | GUIDED | PR
 delivery_mode: GUIDED | PR
 reason: <topology decision reason>
 fallback_used: no | <preferred -> effective reason>
@@ -125,12 +123,13 @@ retries:
 
 ## Ownership and updates
 
-`requested_mode` and delivery request facts come from the invocation parser.
 `routing.preferred` and `routing.current` are the only durable topology
-fields. `delivery_mode` owns delivery; `continuation.delivery.mode`, when
-present, is a derived matching projection. `delivery_checkout` is the only
-canonical candidate. A host-private worker path is not state, and no second
-workspace, worker branch, or transfer record is added.
+fields; invocation syntax never supplies a topology override. `delivery_mode`
+owns delivery and comes from the normalized delivery intent;
+`continuation.delivery.mode`, when present, is a derived matching projection.
+`delivery_checkout` is the only canonical candidate. A host-private worker
+path is not state, and no second workspace, worker branch, or transfer record is
+added.
 
 The `init` operation constructs the schema from semantic input and actual
 checkout facts. Use the purpose-specific helpers—`set-routing`,

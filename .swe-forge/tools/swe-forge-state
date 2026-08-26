@@ -45,11 +45,10 @@ Usage:
 `inspect` and `resolve-active` expose the validated semantic run-state
 projection as deterministic JSON. Candidate discovery remains the caller's
 responsibility; this helper owns validation, eligibility, and ordering.
-`init` creates the current schema-v4 structural shell from explicit routing,
-delivery, checkout, and normalized invocation facts. Pass the parser's
-requested_mode, requested_delivery, and delivery_mode values unchanged. A
-`requested_delivery` of `DEFAULT` (no delivery token) resolves to `PR`; only an
-explicit `GUIDED` request selects guided delivery.
+`init` creates the current schema-v4 structural shell from the selected
+internal routing, delivery, checkout, and normalized invocation facts. Pass the
+parser's `delivery_mode` unchanged; it defaults to `PR`, while an explicit
+`guided` modifier selects `GUIDED`.
 `set-routing` owns deliberate preferred/effective topology changes and their
 current rationale. `set-continuation` accepts only the bounded continuation
 surface; it generates updated_at and derives the delivery projection.
@@ -343,8 +342,7 @@ reject_obsolete_fields() {
       if (current_indent == 0 &&
           current_key != "workflow" && current_key != "workflow_version" &&
           current_key != "schema_version" && current_key != "run_id" &&
-          current_key != "status" && current_key != "requested_mode" &&
-          current_key != "requested_delivery" && current_key != "delivery_mode" &&
+          current_key != "status" && current_key != "delivery_mode" &&
           current_key != "reason" && current_key != "fallback_used" &&
           current_key != "routing" && current_key != "receipt_ref" &&
           current_key != "delivery_checkout" && current_key != "delivery" &&
@@ -367,21 +365,15 @@ reject_obsolete_fields() {
     }
     END { if (found) exit 0; exit 1 }
   ' "$file"; then
-    fail 'stale/unsupported run state: obsolete routing or context-control fields; start a fresh run'
+    fail 'stale/unsupported run state: obsolete routing, delivery, or context-control fields; start a fresh run'
   fi
 }
 
 
 validate_routing() {
-  requested=$1
-  preferred=$2
-  current=$3
-  requested_delivery=$4
-  delivery_mode=$5
+  preferred=$1
+  current=$2
 
-  if [ "$requested" != AUTO ] && [ "$preferred" != "$requested" ]; then
-    fail "routing.preferred must match explicit requested_mode: $requested"
-  fi
   case "$preferred" in
     SOLO|SUBAGENTS) ;;
     *) fail "invalid routing.preferred: $preferred" ;;
@@ -390,14 +382,6 @@ validate_routing() {
     SOLO|SUBAGENTS) ;;
     *) fail "invalid routing.current: $current" ;;
   esac
-  case "$requested_delivery" in
-    DEFAULT) expected_delivery=PR ;;
-    GUIDED) expected_delivery=GUIDED ;;
-    PR) expected_delivery=PR ;;
-    *) fail 'invalid requested_delivery' ;;
-  esac
-  [ "$delivery_mode" = "$expected_delivery" ] || \
-    fail "delivery_mode must match requested_delivery: $requested_delivery requires $expected_delivery"
 }
 
 
@@ -408,17 +392,14 @@ validate_state() {
     fail 'stale/unsupported run state: only schema_version: 4 is supported; start a fresh run'
   reject_obsolete_fields "$file"
 
-  for key in workflow workflow_version schema_version run_id status requested_mode \
-    requested_delivery delivery_mode reason fallback_used routing delivery_checkout \
-    delivery receipt_ref review tasks; do
+  for key in workflow workflow_version schema_version run_id status delivery_mode \
+    reason fallback_used routing delivery_checkout delivery receipt_ref review tasks; do
     top_level "$key" "$file" || fail "stale/unsupported run state: schema-v4 state is missing current key: $key; start a fresh run"
   done
 
   [ "$(value_for workflow "$file")" = swe-forge ] || fail 'workflow must be swe-forge'
   [ "$(value_for workflow_version "$file")" = 1 ] || fail 'workflow_version must be 1'
   validate_enum status "$file" planning running blocked reviewing repairing accepted failed
-  validate_enum requested_mode "$file" AUTO SOLO SUBAGENTS
-  validate_enum requested_delivery "$file" DEFAULT GUIDED PR
   validate_enum delivery_mode "$file" GUIDED PR
 
   for field in preferred current; do
@@ -427,11 +408,8 @@ validate_state() {
   done
 
   validate_routing \
-    "$(required_scalar requested_mode "$file")" \
     "$(required_scalar routing.preferred "$file")" \
-    "$(required_scalar routing.current "$file")" \
-    "$(required_scalar requested_delivery "$file")" \
-    "$(required_scalar delivery_mode "$file")"
+    "$(required_scalar routing.current "$file")"
 
   for field in path branch base_sha head_sha checkpoint_sha status branch_setup \
     remote_default_evidence; do
@@ -957,9 +935,7 @@ init_state() {
   init_run_id=
   init_baseline_ref=HEAD
   init_status=running
-  init_requested_mode=AUTO
-  init_requested_delivery=DEFAULT
-  init_delivery_mode=
+  init_delivery_mode=PR
   init_reason='initial schema-v4 state'
   init_fallback_used=no
   init_routing_preferred=
@@ -993,16 +969,6 @@ init_state() {
       --status)
         [ "$#" -ge 2 ] || fail '--status requires a lifecycle status'
         init_status=$2
-        shift 2
-        ;;
-      --requested-mode)
-        [ "$#" -ge 2 ] || fail '--requested-mode requires a topology'
-        init_requested_mode=$2
-        shift 2
-        ;;
-      --requested-delivery)
-        [ "$#" -ge 2 ] || fail '--requested-delivery requires DEFAULT, GUIDED, or PR'
-        init_requested_delivery=$2
         shift 2
         ;;
       --delivery-mode)
@@ -1071,22 +1037,8 @@ init_state() {
   [ -n "$init_run_id" ] || init_run_id=$(basename "$init_state_dir")
   require_scalar_arg run_id "$init_run_id"
   require_enum_arg status "$init_status" planning running blocked reviewing repairing accepted failed
-  require_enum_arg requested_mode "$init_requested_mode" AUTO SOLO SUBAGENTS
-  require_enum_arg requested_delivery "$init_requested_delivery" DEFAULT GUIDED PR
-  if [ -z "$init_delivery_mode" ]; then
-    case "$init_requested_delivery" in
-      PR) init_delivery_mode=PR ;;
-      DEFAULT) init_delivery_mode=PR ;;
-      GUIDED) init_delivery_mode=GUIDED ;;
-    esac
-  fi
   require_enum_arg delivery_mode "$init_delivery_mode" GUIDED PR
-  [ -n "$init_routing_preferred" ] || {
-    case "$init_requested_mode" in
-      AUTO) init_routing_preferred=SOLO ;;
-      *) init_routing_preferred=$init_requested_mode ;;
-    esac
-  }
+  [ -n "$init_routing_preferred" ] || init_routing_preferred=SOLO
   [ -n "$init_routing_current" ] || init_routing_current=$init_routing_preferred
   require_enum_arg routing.preferred "$init_routing_preferred" SOLO SUBAGENTS
   require_enum_arg routing.current "$init_routing_current" SOLO SUBAGENTS
@@ -1095,8 +1047,7 @@ init_state() {
   require_enum_arg delivery_checkout.status "$init_delivery_status" ready running blocked dirty complete
   require_enum_arg delivery_checkout.branch_setup "$init_delivery_branch_setup" auto-created reused user-provided provided blocked
   control_chars "$init_remote_default_evidence"
-  validate_routing "$init_requested_mode" "$init_routing_preferred" "$init_routing_current" \
-    "$init_requested_delivery" "$init_delivery_mode"
+  validate_routing "$init_routing_preferred" "$init_routing_current"
 
   if [ "$init_delivery_mode" = PR ]; then
     delivery_authorization=PR
@@ -1114,8 +1065,6 @@ init_state() {
     printf 'schema_version: 4\n'
     printf 'run_id: %s\n' "$init_run_id"
     printf 'status: %s\n' "$init_status"
-    printf 'requested_mode: %s\n' "$init_requested_mode"
-    printf 'requested_delivery: %s\n' "$init_requested_delivery"
     printf 'delivery_mode: %s\n' "$init_delivery_mode"
     printf 'reason: %s\n' "$init_reason"
     printf 'fallback_used: %s\n' "$init_fallback_used"
@@ -1343,10 +1292,7 @@ set_routing() {
   require_enum_arg routing.current "$current_arg" SOLO SUBAGENTS
   require_scalar_arg reason "$reason_arg"
   require_scalar_arg fallback_used "$fallback_arg"
-  requested_mode=$(required_scalar requested_mode "$state_path")
-  validate_routing "$requested_mode" "$preferred_arg" "$current_arg" \
-    "$(required_scalar requested_delivery "$state_path")" \
-    "$(required_scalar delivery_mode "$state_path")"
+  validate_routing "$preferred_arg" "$current_arg"
 
   state_tmp=$state_path.tmp.$$
   awk -v preferred="$preferred_arg" -v current="$current_arg" \

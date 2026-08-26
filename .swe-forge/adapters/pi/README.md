@@ -31,9 +31,10 @@ package is not installed; when absent, `SUBAGENTS` uses the canonical
 ```text
 /swe-forge <ticket>             # PR + automatic topology
 /swe-forge guided <ticket>      # guided checkpoints
-/swe-forge solo <ticket>        # SOLO
-/swe-forge subagents <ticket>  # bounded delegation
 ```
+
+`SOLO` and `SUBAGENTS` are selected internally after ticket and repository
+inspection.
 
 The template runs only for an explicit `/swe-forge` prompt and passes
 `$ARGUMENTS` unchanged. The runtime invokes the shared parser once and injects

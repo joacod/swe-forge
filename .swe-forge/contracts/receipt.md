@@ -14,7 +14,7 @@ Delivery: GUIDED | PR
 Run metadata: (optional)
 - SWE Forge: <version>
 - Harness: <name and version>
-- Routing: <requested -> selected>
+- Routing: <preferred -> effective>
 - Model provider: <safe public label>
 Repository: <identity>
 Base: <short SHA>
@@ -32,10 +32,11 @@ Pull request: <URL or not-created>
 Final status: ACCEPTED | BLOCKED | FAILED
 ```
 
-Omit optional metadata when unavailable. `Review repair: completed` appears
-only for the one recorded repair; the PR-only remote-CI line may be omitted for
-GUIDED. The default receipt is `$STATE/receipt.md` and its path is recorded in
-`receipt_ref`.
+Omit optional metadata when unavailable. The routing line is derived from
+persisted `routing.preferred` and `routing.current`; it is not invocation
+metadata. `Review repair: completed` appears only for the one recorded repair;
+the PR-only remote-CI line may be omitted for GUIDED. The default receipt is
+`$STATE/receipt.md` and its path is recorded in `receipt_ref`.
 
 ## Evidence rules
 
