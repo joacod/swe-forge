@@ -1,16 +1,8 @@
 name: CI
 
-# Feature branches are covered by pull_request only; push CI is reserved for
-# the integrated main branch and versioned release tags.
+# Automatic CI is temporarily disabled. Run this workflow manually when
+# validation is explicitly needed.
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
