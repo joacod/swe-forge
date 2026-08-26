@@ -32,7 +32,8 @@ its acceptance criteria are met.
 
 - do not silently expand the allowed scope;
 - do not overwrite unrelated user changes;
-- do not edit a shared checkout concurrently with another writer;
+- do not cause concurrent mutation of the canonical delivery candidate; root
+  owns sequential materialization and acceptance;
 - do not claim completion from code inspection alone;
 - do not create commits unless the user explicitly authorized them and the task
   contract transmits that authorization;

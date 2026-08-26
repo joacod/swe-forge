@@ -240,7 +240,9 @@ fields and a delivery projection matching `delivery_mode`.
   mutation; it does not direct host context preservation or compaction.
 - Only a dependency in `done` with an `accepted_result_ref` satisfying its task
   and result contract can supply a downstream dependency digest.
-- Delegated writes are sequential in the sole delivery checkout.
+- Writable delegated results are materialized into and validated against the
+  canonical delivery candidate before sequential acceptance; concurrent
+  mutation of that candidate is forbidden.
 - Dirty, conflicting, stale, or ambiguous checkout state is preserved and
   reported.
 - Cleanup never claims removal of resources that were not proven run-owned.

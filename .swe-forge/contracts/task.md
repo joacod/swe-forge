@@ -153,7 +153,9 @@ root-owned.
 - dependencies must be satisfied before execution;
 - one writing task owns a path or symbol set at a time;
 - read-only workers may inspect shared files;
-- delegated writes are sequential and never overlap another active writer;
+- writable results are materialized into and validated against the canonical
+  delivery candidate before sequential acceptance; concurrent mutation of that
+  candidate is forbidden;
 - a worker must ask for a revised contract before expanding scope;
 - every launch invokes the canonical worker-brief renderer;
 - workers discover repository details through allowed reads rather than pasted

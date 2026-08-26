@@ -36,8 +36,8 @@ Use the smallest recovery action that addresses the evidence:
 7. escalate capability or assign the work to the orchestrator; and
 8. stop and report the unresolved failure when safe progress is not possible.
 
-Do not hide a failure by changing the status to `DONE`. Never place concurrent
-writers in one checkout.
+Do not hide a failure by changing the status to `DONE`. Never allow concurrent
+mutation of the canonical delivery candidate.
 
 ## Retry Limits
 

@@ -35,8 +35,8 @@ authorization. Refactoring permission does not authorize commits or delivery.
 - do not claim behavior preservation without tests or other evidence
 - do not use a refactor as an excuse to rewrite the subsystem
 - stop and escalate when the baseline is not understood or is not green
-- do not overwrite pre-existing changes or edit concurrently in a shared
-  checkout
+- do not overwrite pre-existing changes or cause concurrent mutation of the
+  canonical delivery candidate
 - do not commit, push, publish, create a pull request, or merge without
   explicit per-action authorization in the task contract
 

@@ -4,9 +4,9 @@ SWE Forge is an explicitly invoked, harness-agnostic software-engineering
 workflow for AI coding harnesses. It takes one coding ticket through inspection,
 planning, implementation, verification, review, and delivery. A run owns one
 writable delivery checkout and one reviewable delivery outcome. Harness-native
-subagents may assist with bounded work, but concurrent writable-agent
-orchestration, worker fleets, external orchestration, and multi-workspace
-integration are outside SWE Forge's scope.
+subagents may assist with bounded work, but orchestration of concurrent
+mutation of the canonical delivery candidate, worker fleets, external
+orchestration, and multi-workspace integration are outside SWE Forge's scope.
 
 The canonical workflow remains portable. Adapters expose asymmetric native
 capabilities and use documented fallbacks; projection success or fixture
@@ -80,14 +80,18 @@ and runtime selection; SWE Forge never chooses models.
 - keep complete task and run state root-owned and pass only the validated
   `worker_briefing/v1` projection to a worker;
 - specify dependency and mutation semantics without prescribing the worker's
-  physical execution environment or an active-worker count;
+  physical execution environment, physical scheduling, or an active-worker
+  count;
+- neither require nor prohibit concurrent execution inside host-private worker
+  environments; the adapter/runtime determines physical scheduling and
+  isolation;
 - require every writable delegated result to be materialized into the canonical
   delivery checkout and validated there before acceptance or dependent handoff;
 - derive compact root-accepted `dependency_digest` facts for sequential
   dependent work; never open peer channels or forward a transcript;
 - consume structured worker results rather than conversational memory;
 - keep read-only research separate from writable implementation;
-- never allow concurrent writers to edit the canonical delivery candidate;
+- concurrent mutation of the canonical delivery candidate is forbidden;
 - treat verification evidence as stronger than confidence or code inspection;
 - make safety-critical boundaries executable when a compatible helper exists;
 - make a risk-proportional testing decision for every ticket;
@@ -154,7 +158,7 @@ bounded delegation, or fresh review when that materially improves the result.
 Independent read-only discovery may form one small logical fan-out/fan-in batch;
 the host runtime decides whether its ready items execute concurrently or
 sequentially. Writable delegated results are materialized into and accepted
-sequentially against the single canonical delivery checkout. The root retains
+sequentially against the single canonical delivery candidate. The root retains
 task ownership, integration, verification, review, and acceptance. If the
 optional native capability is unavailable, record the preferred topology and
 fall back to sequential execution or `SOLO` rather than simulating workers with

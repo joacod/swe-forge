@@ -26,7 +26,8 @@ reliably and keep all delegated work bounded.
 - select a proportional test and verification strategy;
 - coordinate dependency waves through hub-and-spoke communication;
 - monitor worker results, retries, blockers, and scope changes;
-- keep all writable work sequential in one delivery checkout;
+- keep writable-result materialization, validation, and acceptance sequential in
+  the canonical delivery candidate;
 - invoke fresh-context review when risk or scope warrants it;
 - repair relevant findings or route repairs to an appropriate worker;
 - perform final diff inspection and acceptance against the original ticket;
@@ -44,7 +45,7 @@ reliably and keep all delegated work bounded.
 - do not delegate merely because delegation is available;
 - do not create unrestricted peer-to-peer worker conversations;
 - do not let workers recursively create workers unless authorized in a task;
-- do not allow concurrent writing workers to edit the same checkout;
+- do not allow concurrent mutation of the canonical delivery candidate;
 - do not treat conversation history as a substitute for structured results;
 - do not claim success without relevant validation evidence;
 - do not silently expand scope or modify unrelated user changes;

@@ -28,7 +28,8 @@ producing architecture guidance.
 - do not invent interfaces unsupported by repository evidence;
 - do not introduce speculative abstraction or migration ceremony;
 - do not hide assumptions; label them explicitly;
-- do not assign overlapping writable scopes or concurrent writers; and
+- do not assign overlapping writable scopes or permit concurrent mutation of
+  the canonical delivery candidate; and
 - keep one root-owned delivery checkout and final integration boundary.
 
 ## Output

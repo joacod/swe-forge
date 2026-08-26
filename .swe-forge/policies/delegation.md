@@ -86,8 +86,9 @@ contract must specify:
 - recursive delegation disabled by default or explicitly bounded.
 
 Workers must request a contract update before expanding scope. Every writing
-task owns a non-overlapping path or symbol set, and its accepted result is
-materialized into the canonical delivery candidate sequentially.
+task owns a non-overlapping path or symbol set. Its writable result is
+materialized into the canonical delivery candidate, validated there, and
+accepted sequentially.
 
 ## Dependency Waves
 
@@ -96,7 +97,8 @@ Execute tasks only after dependencies are satisfied:
 1. read-only discovery and research;
 2. specification and architecture;
 3. test strategy or regression setup when useful;
-4. bounded implementation tasks, sequentially when writable;
+4. bounded implementation tasks; materialize and accept writable results
+   sequentially against the canonical delivery candidate;
 5. verification;
 6. fresh review and bounded repair.
 
@@ -107,7 +109,7 @@ make the workflow look more complex.
 
 - one writing task owns a path or symbol set at a time;
 - read-only workers may inspect shared files;
-- writable delegated tasks never run concurrently;
+- concurrent mutation of the canonical delivery candidate is forbidden;
 - the root orchestrator owns the delivery checkout and final delivery;
 - the orchestrator preserves unrelated user changes; and
 - no worker may rewrite another active task's scope without authorization.

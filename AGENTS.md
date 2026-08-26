@@ -31,8 +31,9 @@ When changing this repository itself:
   projections only for a real recovery purpose.
 - Optimize for one ticket to one reviewable delivery: one run owns one
   writable delivery checkout. Native subagents are bounded helpers; do not
-  introduce concurrent writable workers, worker worktrees, external execution
-  providers, fleet or scheduler layers, or cross-ticket orchestration.
+  introduce a writable-execution scheduling feature, worker worktrees, external
+  execution providers, fleet or scheduler layers, or cross-ticket
+  orchestration.
 - Preserve root/orchestrator authority, bounded task-specific worker context,
   no peer-to-peer worker communication, proportional worker results, compact
   root-accepted dependency digests, conservative read-only fan-out/fan-in, and

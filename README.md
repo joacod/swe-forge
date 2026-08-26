@@ -8,8 +8,9 @@ review, and report without replacing the harness itself.
 
 SWE Forge is harness-agnostic and opt-in. A run takes one ticket toward one
 reviewable delivery outcome and owns one writable delivery checkout. Native
-harness subagents may assist with bounded work; concurrent writable-agent
-orchestration and fleet management are outside SWE Forge's scope.
+harness subagents may assist with bounded work; orchestration of concurrent
+mutation of the canonical delivery candidate and fleet management are outside
+SWE Forge's scope.
 
 ## What it does
 
@@ -20,8 +21,9 @@ ticket → inspect and plan → choose SOLO or SUBAGENTS → implement → verif
 It chooses the smallest useful execution topology:
 
 - `SOLO` for tightly coupled work;
-- `SUBAGENTS` when demonstrated native delegation adds value, with writable work
-  kept sequential in the one delivery checkout.
+- `SUBAGENTS` when demonstrated native delegation adds value, with writable
+  results materialized and accepted sequentially against the canonical delivery
+  candidate.
 
 The [workflow specification](SWE-FORGE.md) and
 [architecture guide](docs/architecture.md) describe the deeper behavior.

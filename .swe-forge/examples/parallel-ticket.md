@@ -1,8 +1,9 @@
 # Example: Parallel Ticket
 
 This is a complete illustrative run for a ticket where independent research is
-useful, but concurrent writers would create unnecessary conflict. The example
-uses native subagents for read-only work and keeps implementation sequential.
+useful, but concurrent mutation would create unnecessary conflict. The example
+uses native subagents for read-only work and keeps the coupled implementation
+under one root owner.
 
 ## 1. Ticket
 

@@ -85,8 +85,10 @@ and `task.batch`; it does not require a separate SWE Forge subagent executor
 package.
 
 Read-only native workers may batch when canonical routing permits it. Writable
-workers in the shared checkout remain sequential. Missing or incompatible
-runtime capabilities use the visible `SOLO`/sequential fallback. OMP delegated
+delegated results are materialized into and accepted against the canonical
+delivery candidate sequentially; the adapter/runtime may serialize worker
+execution when its host requires it. Missing or incompatible runtime
+capabilities use the visible `SOLO`/sequential fallback. OMP delegated
 sessions are headless, so profile confinement and canonical root-owned delivery
 authorization—not an interactive approval prompt—are the safety boundary.
 
