@@ -1,5 +1,5 @@
 ---
-description: Run SWE Forge with automatic topology and guided or PR delivery
+description: Run SWE Forge with PR delivery by default, or explicit guided checkpoints, using automatic topology
 ---
 
 The user explicitly invoked SWE Forge through omp.

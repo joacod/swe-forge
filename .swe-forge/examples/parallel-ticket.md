@@ -119,7 +119,7 @@ routing:
   preferred: SUBAGENTS
   current: SUBAGENTS
 requested_delivery: DEFAULT
-delivery_mode: GUIDED
+delivery_mode: PR
 reason: API research, UI research, and test strategy are independent read-only tasks; submit one bounded logical fan-out/fan-in batch, let the host decide whether ready research runs concurrently or sequentially, then keep implementation sequential because the API contract and UI behavior are coupled.
 fan_in: one root barrier after the batch
 fallback: serialize research or use SOLO if native workers are unavailable
@@ -298,7 +298,7 @@ routing:
   preferred: SUBAGENTS
   current: SUBAGENTS
 requested_delivery: DEFAULT
-delivery_mode: GUIDED
+delivery_mode: PR
 result: ACCEPTED
 changed: API pagination/filter handling and admin URL-backed controls
 validation: focused API tests, focused UI tests, typecheck, diff check passed

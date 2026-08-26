@@ -54,10 +54,11 @@ keeps that lifecycle boundary adapter-local.
 Pi derives the prompt-template command from its filename:
 
 ```text
-/swe-forge <ticket>                 # guided checkpoints (default)
-/swe-forge pr <ticket>              # verify and create a PR without interactive checkpoints
-/swe-forge solo <ticket>            # explicit SOLO topology
-/swe-forge subagents <ticket>       # explicit bounded native delegation
+/swe-forge <ticket>                 # PR delivery, automatic topology (default)
+/swe-forge guided <ticket>          # explicit guided checkpoints
+/swe-forge pr <ticket>              # explicit PR alias
+/swe-forge solo <ticket>            # explicit SOLO topology, PR delivery
+/swe-forge subagents <ticket>       # explicit bounded delegation, PR delivery
 ```
 
 The template uses Pi's `$ARGUMENTS` expansion and is processed only when the

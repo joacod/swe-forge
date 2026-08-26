@@ -44,8 +44,9 @@ project-local `.swe-forge` tree.
 After installation, restart OMP and invoke:
 
 ```text
-/swe-forge <ticket>
-/swe-forge pr <ticket>
+/swe-forge <ticket>          # PR delivery, automatic topology (default)
+/swe-forge guided <ticket>   # explicit guided checkpoints
+/swe-forge pr <ticket>       # explicit PR alias
 ```
 
 Canonical routing decides whether `SUBAGENTS` is useful. When it selects that

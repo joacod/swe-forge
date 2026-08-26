@@ -52,7 +52,9 @@ projection as deterministic JSON. Candidate discovery remains the caller's
 responsibility; this helper owns validation, eligibility, and ordering.
 `init` creates the current schema-v4 structural shell from explicit routing,
 delivery, checkout, and normalized invocation facts. Pass the parser's
-requested_mode, requested_delivery, and delivery_mode values unchanged.
+requested_mode, requested_delivery, and delivery_mode values unchanged. A
+`requested_delivery` of `DEFAULT` (no delivery token) resolves to `PR`; only an
+explicit `GUIDED` request selects guided delivery.
 `set-routing` owns deliberate preferred/effective topology changes and their
 current rationale. `set-continuation` accepts only the bounded continuation
 surface; it generates updated_at and derives the delivery projection.
@@ -496,7 +498,8 @@ validate_routing() {
     *) fail "invalid routing.current: $current" ;;
   esac
   case "$requested_delivery" in
-    DEFAULT|GUIDED) expected_delivery=GUIDED ;;
+    DEFAULT) expected_delivery=PR ;;
+    GUIDED) expected_delivery=GUIDED ;;
     PR) expected_delivery=PR ;;
     *) fail 'invalid requested_delivery' ;;
   esac
@@ -1210,7 +1213,8 @@ init_state() {
   if [ -z "$init_delivery_mode" ]; then
     case "$init_requested_delivery" in
       PR) init_delivery_mode=PR ;;
-      DEFAULT|GUIDED) init_delivery_mode=GUIDED ;;
+      DEFAULT) init_delivery_mode=PR ;;
+      GUIDED) init_delivery_mode=GUIDED ;;
     esac
   fi
   require_enum_arg delivery_mode "$init_delivery_mode" GUIDED PR

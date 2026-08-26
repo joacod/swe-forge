@@ -24,11 +24,13 @@ assert_parse() {
 }
 
 assert_parse '' \
-  '{"raw_arguments":"","parsed_ticket":"","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"EMPTY","consumed_tokens":[]}'
+  '{"raw_arguments":"","parsed_ticket":"","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"PR","input_status":"EMPTY","consumed_tokens":[]}'
 assert_parse 'solo implement the parser' \
-  '{"raw_arguments":"solo implement the parser","parsed_ticket":"implement the parser","requested_mode":"SOLO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":["solo"]}'
+  '{"raw_arguments":"solo implement the parser","parsed_ticket":"implement the parser","requested_mode":"SOLO","requested_delivery":"DEFAULT","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["solo"]}'
 assert_parse 'pr implement the parser' \
   '{"raw_arguments":"pr implement the parser","parsed_ticket":"implement the parser","requested_mode":"AUTO","requested_delivery":"PR","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["pr"]}'
+assert_parse 'guided implement the parser' \
+  '{"raw_arguments":"guided implement the parser","parsed_ticket":"implement the parser","requested_mode":"AUTO","requested_delivery":"GUIDED","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":["guided"]}'
 assert_parse 'subagents guided inspect the adapters' \
   '{"raw_arguments":"subagents guided inspect the adapters","parsed_ticket":"inspect the adapters","requested_mode":"SUBAGENTS","requested_delivery":"GUIDED","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":["subagents","guided"]}'
 assert_parse 'pr subagents inspect the adapters' \
@@ -36,13 +38,13 @@ assert_parse 'pr subagents inspect the adapters' \
 assert_parse 'subagents pr' \
   '{"raw_arguments":"subagents pr","parsed_ticket":"","requested_mode":"SUBAGENTS","requested_delivery":"PR","delivery_mode":"PR","input_status":"INCOMPLETE","consumed_tokens":["subagents","pr"]}'
 assert_parse 'SOLO PR uppercase words remain ticket text' \
-  '{"raw_arguments":"SOLO PR uppercase words remain ticket text","parsed_ticket":"SOLO PR uppercase words remain ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":[]}'
+  '{"raw_arguments":"SOLO PR uppercase words remain ticket text","parsed_ticket":"SOLO PR uppercase words remain ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":[]}'
 assert_parse 'unknown solo pr words stay ticket text' \
-  '{"raw_arguments":"unknown solo pr words stay ticket text","parsed_ticket":"unknown solo pr words stay ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":[]}'
+  '{"raw_arguments":"unknown solo pr words stay ticket text","parsed_ticket":"unknown solo pr words stay ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":[]}'
 assert_parse 'former command token remains ticket text' \
-  '{"raw_arguments":"former command token remains ticket text","parsed_ticket":"former command token remains ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":[]}'
+  '{"raw_arguments":"former command token remains ticket text","parsed_ticket":"former command token remains ticket text","requested_mode":"AUTO","requested_delivery":"DEFAULT","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":[]}'
 assert_parse 'solo former command token is ticket content' \
-  '{"raw_arguments":"solo former command token is ticket content","parsed_ticket":"former command token is ticket content","requested_mode":"SOLO","requested_delivery":"DEFAULT","delivery_mode":"GUIDED","input_status":"COMPLETE","consumed_tokens":["solo"]}'
+  '{"raw_arguments":"solo former command token is ticket content","parsed_ticket":"former command token is ticket content","requested_mode":"SOLO","requested_delivery":"DEFAULT","delivery_mode":"PR","input_status":"COMPLETE","consumed_tokens":["solo"]}'
 
 raw_file=$TMP_ROOT/raw-arguments
 printf '  solo\tpr  preserve  "quoted"  \\\\ text\nwith a second line  \n' >"$raw_file"
@@ -76,7 +78,7 @@ git -C "$state_repo" config user.name 'Invocation Parser Fixture'
 printf '%s\n' base >"$state_repo/base.txt"
 git -C "$state_repo" add base.txt
 git -C "$state_repo" commit -qm 'Fixture base'
-normalized=$($PARSER parse --raw-arguments 'subagents pr initialize from parser facts')
+normalized=$($PARSER parse --raw-arguments 'solo initialize from parser facts')
 json_value() {
   case "$1" in
     requested_mode) printf '%s\n' "$normalized" | sed -n 's/.*"requested_mode":"\([^"]*\)".*/\1/p' ;;
@@ -92,8 +94,8 @@ $ROOT/scripts/swe-forge-state init --state "$state_dir" --checkout "$state_repo"
   --delivery-mode "$(json_value delivery_mode)" >/dev/null
 $ROOT/scripts/swe-forge-state validate --state "$state_dir" >/dev/null
 grep -F 'schema_version: 4' "$state_dir/run-state.yaml" >/dev/null
-grep -F 'requested_mode: SUBAGENTS' "$state_dir/run-state.yaml" >/dev/null
-grep -F 'requested_delivery: PR' "$state_dir/run-state.yaml" >/dev/null
+grep -F 'requested_mode: SOLO' "$state_dir/run-state.yaml" >/dev/null
+grep -F 'requested_delivery: DEFAULT' "$state_dir/run-state.yaml" >/dev/null
 grep -F 'delivery_mode: PR' "$state_dir/run-state.yaml" >/dev/null
 
 printf '%s\n' 'PASS: invocation parser fixture tests'

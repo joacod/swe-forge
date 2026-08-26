@@ -52,9 +52,11 @@ match, or normalize the command in workflow prose.
 
 Consume the parser's machine-readable result as the invocation facts:
 `raw_arguments`, `parsed_ticket`, `requested_mode`, `requested_delivery`,
-`delivery_mode`, `input_status`, and `consumed_tokens`. `COMPLETE` is the only
-status that proceeds as a ticket. `EMPTY` and `INCOMPLETE` require the missing
-ticket. The parser does not choose automatic topology.
+`delivery_mode`, `input_status`, and `consumed_tokens`. With no delivery token,
+the parser reports `requested_delivery: DEFAULT` and `delivery_mode: PR`; only
+an explicit `guided` token selects `GUIDED`. `COMPLETE` is the only status that
+proceeds as a ticket. `EMPTY` and `INCOMPLETE` require the missing ticket. The
+parser does not choose automatic topology.
 
 When initializing canonical run state, pass `requested_mode`,
 `requested_delivery`, and `delivery_mode` from this normalized result unchanged

@@ -6,14 +6,14 @@ files summarize or reference these rules; they must not redefine them.
 
 ## Delivery modes
 
-`GUIDED` preserves human checkpoints. Safe setup of one dedicated task branch
-from a clean protected default is workflow setup, not delivery authorization. A
-normal guided invocation may implement and validate on that branch, then stops
-at the declared checkpoint. Dirty, detached, protected, or ambiguous checkout
-state is preserved and reported rather than reset, stashed, cleaned, or
-overwitten.
+`GUIDED` is the exceptional/manual mode and preserves human checkpoints. Safe
+setup of one dedicated task branch from a clean protected default is workflow
+setup, not delivery authorization. An explicit guided invocation may implement
+and validate on that branch, then stops at the declared checkpoint. Dirty,
+detached, protected, or ambiguous checkout state is preserved and reported
+rather than reset, stashed, cleaned, or overwritten.
 
-`PR` is the explicit low-touch path. It authorizes the bounded local setup
+`PR` is the default low-touch path. It authorizes the bounded local setup
 recorded in the accepted plan, validated local commits on the one delivery
 branch, one final branch push, and one final PR. It never authorizes
 publication, deployment, force-push, or merge. Publication and merge remain

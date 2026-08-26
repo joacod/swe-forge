@@ -1,14 +1,17 @@
-# Example: PR Delivery Ticket
+# Example: Default PR Delivery Ticket
 
-This example shows the low-touch delivery path. It skips interactive human
-checkpoints, but not verification, fresh review, protected-branch rules, or
-merge safety.
+This example shows the default low-touch delivery path. It skips interactive
+human checkpoints, but not verification, fresh review, protected-branch rules,
+or merge safety.
 
 ## Invocation
 
 ```text
-/swe-forge pr add-health-check
+/swe-forge add-health-check
 ```
+
+The explicit `/swe-forge pr add-health-check` form remains an equivalent
+backwards-compatible alias.
 
 The parser records:
 
@@ -17,7 +20,7 @@ requested_mode: AUTO
 routing:
   preferred: SOLO
   current: SOLO
-requested_delivery: PR
+requested_delivery: DEFAULT
 delivery_mode: PR
 reason: One tightly coupled endpoint and test can be implemented and verified in one context.
 fallback_used: no

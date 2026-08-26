@@ -105,9 +105,9 @@ and runtime selection; SWE Forge never chooses models.
 
 ## Execution Topology
 
-`/swe-forge <ticket>` uses automatic routing by default. The orchestrator
-discovers enough repository evidence to choose the smallest useful topology; it
-does not need a separate decision agent.
+`/swe-forge <ticket>` uses PR delivery and automatic routing by default. The
+orchestrator discovers enough repository evidence to choose the smallest useful
+topology; it does not need a separate decision agent.
 
 Harness commands may also accept an explicit topology as the first argument:
 
@@ -117,14 +117,16 @@ Harness commands may also accept an explicit topology as the first argument:
 ```
 
 Execution topology and delivery mode are orthogonal. The default delivery mode
-is `GUIDED`; use `pr` only when the user wants the run to continue through
-pull-request creation:
+is `PR`. Use `guided` only for the exceptional/manual checkpoint flow; `pr`
+remains an explicit backwards-compatible alias for the default:
 
 ```text
-/swe-forge <ticket>                 # GUIDED, automatic topology
-/swe-forge pr <ticket>              # PR delivery, automatic topology
-/swe-forge solo pr <ticket>         # explicit topology plus PR delivery
-/swe-forge subagents <ticket>       # explicit bounded native delegation
+/swe-forge <ticket>                 # PR delivery, automatic topology
+/swe-forge guided <ticket>         # GUIDED delivery, automatic topology
+/swe-forge pr <ticket>              # explicit PR alias
+/swe-forge solo <ticket>            # explicit SOLO topology, PR delivery
+/swe-forge subagents <ticket>      # explicit SUBAGENTS topology, PR delivery
+/swe-forge solo guided <ticket>    # explicit topology and GUIDED delivery
 ```
 
 The shared `.swe-forge/tools/swe-forge-invocation` primitive deterministically
@@ -135,7 +137,8 @@ JSON result contains `raw_arguments`, `parsed_ticket`, `requested_mode`,
 The ticket procedure owns consuming those normalized facts and responding to
 their status; automatic topology selection remains agentic. Reserved tokens
 are lowercase `solo`, `subagents`, `guided`, and `pr`; other text remains ticket
-content.
+content. An omitted delivery token and the explicit `pr` token both resolve to
+`delivery_mode: PR`; `guided` resolves to `delivery_mode: GUIDED`.
 
 The ticket workflow loads `.swe-forge/policies/execution-routing.md` before the
 final topology decision. That policy owns the preferred/effective routing
@@ -166,17 +169,18 @@ unrelated processes.
 
 ## Delivery Modes
 
-### GUIDED (default)
+### GUIDED
 
-`GUIDED` keeps the user in the loop through bounded review checkpoints. The
-workflow creates or reuses one safe delivery checkout for normal execution.
-Before any setup or writable operation, load `.swe-forge/policies/delivery.md`;
-it owns branch, checkpoint, commit, and cleanup authorization. Guided approval
-never implies push, PR creation, publication, deployment, or merge.
+`GUIDED` is the exceptional/manual mode. It keeps the user in the loop through
+bounded review checkpoints. The workflow creates or reuses one safe delivery
+checkout for the guided run. Before any setup or writable operation, load
+`.swe-forge/policies/delivery.md`; it owns branch, checkpoint, commit, and
+cleanup authorization. Guided approval never implies push, PR creation,
+publication, deployment, or merge.
 
-### PR
+### PR (default)
 
-`PR` is the opt-in low-touch path. The normal ticket procedure loads
+`PR` is the default low-touch path. The normal ticket procedure loads
 `.swe-forge/policies/specification.md` before clarification or specification;
 `PR` additionally loads `.swe-forge/contracts/working-spec.md` before building
 the transient working spec. Before writable work or delivery choices, load

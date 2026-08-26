@@ -64,21 +64,24 @@ locations and optional capabilities.
 
 ## Use
 
-Invoke SWE Forge explicitly through the installed harness entry point:
+Invoke SWE Forge explicitly through the installed harness entry point. Give it
+one focused ticket and SWE Forge will take it through validation and review to a
+reviewable PR, using `PR` delivery with automatic topology by default:
 
 ```text
 /swe-forge <ticket>
 ```
 
-The default `GUIDED` mode is reviewable and keeps you in the loop. Use `PR` mode
-for the lower-touch path through pull-request creation:
+For the exceptional manual-checkpoint flow, opt in explicitly:
 
 ```text
-/swe-forge pr <ticket>
+/swe-forge guided <ticket>
 ```
 
-Neither mode merges automatically. Codex exposes the same explicit skill as
-`$swe-forge`; the other listed adapters use `/swe-forge`.
+`/swe-forge pr <ticket>` remains a backwards-compatible explicit alias. Use
+`solo` or `subagents` before the ticket when you need to override topology.
+Neither mode merges automatically. Codex exposes the same explicit
+skill as `$swe-forge`; the other listed adapters use `/swe-forge`.
 
 ## Documentation
 
