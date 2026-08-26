@@ -1,22 +1,16 @@
 ---
-description: Run SWE Forge with PR delivery by default, or explicit guided checkpoints, using automatic topology
-argument-hint: "[guided|pr|solo|subagents] [guided|pr] <ticket>"
+description: Run SWE Forge with PR delivery by default or guided checkpoints
+argument-hint: "[guided|pr|solo|subagents] [ticket]"
 ---
 
-The user explicitly invoked SWE Forge through Pi.
-
-Read `~/.pi/agent/swe-forge/AGENTS.md` and
-`~/.pi/agent/swe-forge/SWE-FORGE.md`, then read the ticket procedure at
-`~/.pi/agent/swe-forge/.swe-forge/workflows/ticket.md`. Follow the canonical
-workflow and load only the role, contract, and policy files required by the
-selected topology, delivery mode, and ticket risks. Resolve every canonical
-relative reference under `~/.pi/agent/swe-forge/`, never against a project-local
-`.swe-forge/` tree. Keep repository discovery rooted in the active project and
-preserve the raw invocation arguments as the original ticket.
-
-Pass the raw invocation arguments below unchanged to the ticket procedure;
-the shared parser/bootstrap supplies normalized invocation facts and the
-procedure handles their status and delivery-mode flow.
+The user explicitly invoked SWE Forge through Pi. Read
+`~/.pi/agent/swe-forge/AGENTS.md`,
+`~/.pi/agent/swe-forge/SWE-FORGE.md`, and
+`~/.pi/agent/swe-forge/.swe-forge/workflows/ticket.md`; follow the canonical
+load map under that support root, never a project-local `.swe-forge/`. Keep
+repository discovery in the active project and pass raw invocation arguments
+unchanged to the ticket procedure; its parser/bootstrap supplies normalized
+facts.
 
 Raw invocation arguments:
 $ARGUMENTS

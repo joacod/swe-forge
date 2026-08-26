@@ -1,34 +1,25 @@
 # Shared Agent Skill Adapter
 
-Codex and Cursor both support the open Agent Skills layout. They are
-experimental adapters: the shared projection can be structurally validated,
-but projection success is not live harness validation. This projection keeps
-one skill payload and one explicit-invocation policy for both harnesses:
+Codex and Cursor share this experimental explicit-invocation projection:
 
 ```text
-Skill:    ~/.agents/skills/swe-forge/
-Support:  ~/.agents/swe-forge/
+Skill:   ~/.agents/skills/swe-forge/
+Support: ~/.agents/swe-forge/
 ```
 
-Install either harness explicitly:
+Install one harness at a time:
 
-```bash
+```text
 scripts/swe-forge install codex
 scripts/swe-forge install cursor
 ```
 
-The installer registry maps both harnesses to this shared source tree and
-user-level destination. Installing both is unnecessary and is intentionally not
-offered as a multi-harness operation.
+The skill disables implicit invocation where supported; Codex also uses
+`agents/openai.yaml`. Users invoke `$swe-forge` in Codex or `/swe-forge` in
+Cursor. Native launches use the validated canonical worker briefing; the
+shared skill does not construct fields. See [shared adapter behavior](../../README.md).
 
-The skill sets `disable-model-invocation: true` for hosts that support that
-field, while `agents/openai.yaml` disables implicit invocation in Codex. Users
-invoke the installed skill explicitly as `$swe-forge` in Codex or `/swe-forge` in
-Cursor. Native launches use the validated output of
-`../../tools/swe-forge-worker-brief render`; the shared skill does not construct
-briefing fields. See [shared adapter behavior](../../README.md).
-
-References checked on 2026-08-11:
+References:
 
 - https://developers.openai.com/learn/codex
 - https://learn.chatgpt.com/docs/build-skills

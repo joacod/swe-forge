@@ -1,21 +1,13 @@
 ---
 name: swe-forge
-description: Explicitly activate the portable SWE Forge ticket workflow with PR delivery by default or explicit guided checkpoints for a user-supplied software task.
+description: Explicitly run the portable SWE Forge workflow for a supplied ticket.
 disable-model-invocation: true
 ---
 
-The user explicitly invoked SWE Forge through the host's explicit skill entry.
-Use `$swe-forge` in Codex or `/swe-forge` in Cursor.
-
-Read `~/.agents/swe-forge/AGENTS.md` and
+The user explicitly invoked SWE Forge. Use `$swe-forge` in Codex or
+`/swe-forge` in Cursor. Read `~/.agents/swe-forge/AGENTS.md`,
 `~/.agents/swe-forge/SWE-FORGE.md`, then read the ticket procedure at
-`~/.agents/swe-forge/.swe-forge/workflows/ticket.md`. Follow the canonical
-workflow and load only the role, contract, and policy files required by the
-selected topology, delivery mode, and ticket risks. Resolve every canonical
-relative reference under `~/.agents/swe-forge/`, never against a project-local
-`.swe-forge/` tree. Keep repository discovery rooted in the active project and
-preserve the raw invocation arguments as the original ticket.
-
-The explicit skill entry passes the request as raw invocation arguments. Keep
-those arguments unchanged; the ticket procedure invokes the shared parser
-bootstrap when the host cannot provide normalized facts before the agent turn.
+`~/.agents/swe-forge/.swe-forge/workflows/ticket.md`. Follow canonical stage
+loading, keep discovery in the active project, and preserve raw invocation
+arguments unchanged. The ticket procedure invokes the shared parser when the
+host supplies no normalized facts.

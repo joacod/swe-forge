@@ -1,193 +1,77 @@
 # OMP Adapter
 
-OMP (Oh My Pi) is an experimental SWE Forge adapter. It exposes the canonical
-workflow through OMP's user-level prompt-template and runtime extension
-conventions while keeping routing, worker briefs, result contracts, review, Git
-integration, and delivery in the canonical SWE Forge support tree.
-
-The adapter targets the observed OMP `18.0.4` task API and remains a small
-control-plane integration layer. It does not replace OMP's native task executor
-or change the OMP support tier.
+OMP is an experimental adapter using its user-level prompt, profile, and
+runtime-extension surfaces. It translates canonical worker briefs and results;
+it does not replace OMP's native task executor or choose topology.
 
 ## Installation
-
-Install the source-linked bridge explicitly:
 
 ```bash
 scripts/swe-forge install omp
 scripts/swe-forge verify omp
 ```
 
-The installer links these user-level artifacts:
+The installer links the prompt, runtime extension, three confined agent
+profiles, and canonical support under `~/.omp/agent/`. It does not change OMP
+settings, models, credentials, permissions, or project configuration.
+
+## Invocation and capability
 
 ```text
-~/.omp/agent/prompts/swe-forge.md
-~/.omp/agent/extensions/swe-forge-runtime.ts
-~/.omp/agent/agents/swe-forge-read-only.md
-~/.omp/agent/agents/swe-forge-writable.md
-~/.omp/agent/agents/swe-forge-reviewer.md
-~/.omp/agent/swe-forge/
+/swe-forge <ticket>
+/swe-forge guided <ticket>
+/swe-forge pr <ticket>
 ```
 
-The three agent definitions contain only host-level tool, recursion, and
-blocking settings; canonical role instructions and result semantics are
-supplied by the worker briefing and canonical contracts. The installer does
-not modify OMP settings, models, credentials, permissions, or project
-configuration.
+The prompt passes `$ARGUMENTS` unchanged; the shared invocation parser owns
+reserved-token handling. Ordinary prompts do not activate the bridge.
 
-Canonical support links resolve from the active user-level OMP agent directory,
-including `PI_CODING_AGENT_DIR`/OMP profiles. They are never resolved against a
-project-local `.swe-forge` tree.
+For an explicit invocation, the extension observes the native `task` tool,
+batch shape, per-item `outputSchema`/`schemaMode`, source, confined
+profiles, and canonical validators. Presence alone is not capability. When
+canonical routing selects `SUBAGENTS`, it:
 
-## Explicit invocation
+1. resolves active state through `swe-forge-state`;
+2. re-observes capability at the delegation boundary;
+3. inspects each `worker_briefing/v1` and its task ID;
+4. passes the unchanged projection to the native task;
+5. maps profile/write facts to the confined OMP profile; and
+6. requests the canonical result schema with `schemaMode: strict`, then uses
+   canonical encode/validation.
 
-After installation, restart OMP and invoke:
+The extension uses OMP middleware around the native task tool; it does not
+implement child sessions, scheduling, or task lifecycle. Read-only tasks may
+form one logical batch; OMP decides whether ready items run concurrently or
+sequentially. More than one writable item is rejected because canonical
+materialization and acceptance are sequential.
 
-```text
-/swe-forge <ticket>          # PR delivery, automatic topology (default)
-/swe-forge guided <ticket>   # explicit guided checkpoints
-/swe-forge pr <ticket>       # explicit PR alias
-```
-
-Canonical routing decides whether `SUBAGENTS` is useful. When it selects that
-topology and the adapter observes a compatible native capability, this adapter
-realizes the decision through OMP's native task mechanism. Otherwise it falls
-back visibly to `SOLO` or sequential root execution.
-
-The prompt template passes `$ARGUMENTS` unchanged to the canonical invocation
-bootstrap. The shared `swe-forge-invocation` tool remains responsible for
-parsing reserved tokens exactly once. Ordinary OMP prompts do not activate the
-runtime bridge.
-
-## Native `SUBAGENTS` bridge
-
-For an explicit SWE Forge invocation, the runtime extension observes OMP's
-current public surfaces:
-
-- the active native `task` tool and its batch shape;
-- per-item `outputSchema` and `schemaMode` support;
-- the source of the active task tool;
-- the installed user-level confined profiles; and
-- the canonical brief, result, and state validators.
-
-It advertises the capability only when those observations are compatible. A
-task tool's mere presence does not change routing, and capability observations
-are not trusted as durable authorization.
-
-When canonical routing has persisted `routing.current: SUBAGENTS`, the bridge:
-
-1. resolves active state candidates through the canonical
-   `swe-forge-state resolve-active` port;
-2. re-observes the native capability at the delegation boundary;
-3. inspects each `worker_briefing/v1` projection with
-   `swe-forge-worker-brief inspect` and checks its canonical task ID;
-4. passes the exact rendered projection as the native OMP task assignment;
-5. maps the inspected profile and write-access facts to the adapter-owned
-   `swe-forge-*` host profile;
-6. requests the canonical worker-result JSON Schema with `schemaMode: strict`;
-   and
-7. passes ordinary structured output through canonical `encode` and
-   `validate` before marking delegation successful.
-
-The extension uses OMP's `tool_call` input-revision and `tool_result` middleware
-around the native task tool. It does not implement child sessions, background
-jobs, structured-output execution, or task lifecycle management itself.
-
-### Profiles and approvals
-
-| Profile | OMP tools | Result contract |
+| Profile | Tools | Result |
 | --- | --- | --- |
-| `swe-forge-read-only` | `read`, `grep`, `glob` plus OMP's required `yield` | `READ_ONLY` |
-| `swe-forge-writable` | `read`, `grep`, `glob`, `edit`, `write`, `bash` plus `yield` | `WRITABLE` |
-| `swe-forge-reviewer` | `read`, `grep`, `glob` plus `yield` | `REVIEW` |
+| `swe-forge-read-only` | `read`, `grep`, `glob`, `yield` | `READ_ONLY` |
+| `swe-forge-writable` | read tools plus `edit`, `write`, `bash`, `yield` | `WRITABLE` |
+| `swe-forge-reviewer` | `read`, `grep`, `glob`, `yield` | `REVIEW` |
 
-Every profile sets `spawns: []` and `blocking: true`. This prevents recursive
-SWE Forge delegation through the profile and makes the native result available
-to the bridge before validation. Headless sessions have no interactive
-approval boundary; safety comes from the bounded canonical brief, selected
-profile, no recursion, sequential writable execution, and root-owned delivery
-authorization.
+Profiles set `spawns: []` and `blocking: true`. Review and repair use the
+canonical review/brief contracts; the adapter adds no ticket or policy prose.
 
-### Structured results
-The bridge requests the canonical `READ_ONLY` and `WRITABLE` JSON-Schema
-projections and always requests `schemaMode: strict`. The native
-`structuredOutput` must be a strict valid result. The adapter writes that JSON
-to a temporary input and invokes canonical `encode`, then the existing
-canonical validator. It does not reconstruct the schema or line-oriented
-representation locally. Invalid, missing, non-strict, or incompatible worker
-data remains untrusted.
+## Boundaries and evidence
 
-Reviewers receive the canonical REVIEW transport schema and the root-selected
-initial review briefing. A repair worker receives a separate focused writable
-briefing. The adapter forwards each briefing without adding ticket, workflow,
-or policy prose; the root and canonical contract retain semantic acceptance and
-the blocking matrix.
+Writable results are materialized and validated in the canonical delivery
+checkout. Private worktrees, sandboxes, overlays, and containers are host
+details, never Forge state. Missing, inactive, stale, obsolete, or
+incompatible capability/state uses visible `SOLO`/sequential fallback. The
+adapter does not implement context preservation, compaction, retry, or
+restoration.
 
-## Shared-checkout safety and fallback
+References:
 
-- independent read-only questions may be submitted in one logical native
-  `task.batch` when the routing policy permits a read-only fan-out/fan-in batch;
-  OMP/the host runtime decides whether ready items execute concurrently or
-  sequentially;
-- more than one writable item in a native batch is rejected because canonical
-  delivery materialization and acceptance remain sequential;
-- writable delegated results are materialized into and validated against the
-  canonical delivery checkout before acceptance or dependent handoff;
-- the host may use a private worktree, sandbox, overlay, container, or
-  equivalent mechanism, but that physical environment is adapter-private and
-  never enters canonical Forge state;
-- missing, inactive, shadowed, malformed, stale, obsolete-schema,
-  checkout-mismatched, or fenced capability/state causes a visible refusal and
-  the canonical `SOLO`/sequential fallback; and
-- a worker prompt cannot establish routing authority.
+- https://omp.sh/docs/prompt-templates
+- https://omp.sh/docs/extension-authoring
+- https://omp.sh/docs/subagents
+- https://omp.sh/docs/tools/task
+- https://omp.sh/docs/subagent-authoring
+- https://omp.sh/docs/approvals
+- https://omp.sh/docs/hooks
 
-## Lifecycle scope
-
-The adapter implements delegation, capability observation, state gating, and
-structured-result validation. It does not implement host context preservation,
-compaction, retry, or restoration. Those lifecycle mechanics remain private to
-OMP and its runtime. When a run resumes, the canonical workflow re-reads the
-authoritative continuation state and reconciles it with the checkout and
-evidence before continuing.
-
-## Current API references and validation boundary
-
-The implementation follows current OMP documentation and source for:
-
-- [prompt templates](https://omp.sh/docs/prompt-templates);
-- [extension loading](https://omp.sh/docs/extension-authoring);
-- [task/subagent execution](https://omp.sh/docs/subagents);
-- [task tool details](https://omp.sh/docs/tools/task);
-- [agent discovery and profiles](https://omp.sh/docs/subagent-authoring);
-- [tool approvals](https://omp.sh/docs/approvals); and
-- [extension hooks](https://omp.sh/docs/hooks).
-
-The observed local OMP CLI is `18.0.4`. Installer, profile, runtime-fixture,
-and canonical regression checks are covered locally. These checks demonstrate
-adapter behavior but do not change the Experimental support tier.
-
-## Demonstrated native validation
-
-On 2026-08-25, validation ran inside real OMP `18.0.4` through the normal
-automatic SWE Forge prompt path. The invocation used the `pr` delivery token.
-The canonical run state recorded:
-
-```text
-requested_mode: AUTO
-routing.preferred/current: SUBAGENTS
-```
-
-The root session recorded `native_task_prepared` for one two-item read-only
-batch and `native_task_validated` for two results. Native task results contained
-strict structured output, and the adapter recorded canonical
-`swe-forge-worker-result` validation. The validated assignments were canonical
-`worker_briefing/v1` projections unchanged.
-
-The same run exercised single-checkout writable safety against a temporary Git
-repository: one native `WRITABLE` worker created one untracked marker and
-returned required Git/change/validation evidence; a two-item writable native
-batch was refused because shared-checkout writers must run sequentially. A
-controlled malformed-result fixture was rejected rather than accepted as
-prose. A fresh OMP process with the native `task` tool disabled reported that
-the capability was unavailable, retained preferred `SUBAGENTS`, and used
-sequential fallback.
+The observed local OMP CLI is `18.0.4`; projection and runtime checks are
+adapter evidence, not a change to its Experimental tier.

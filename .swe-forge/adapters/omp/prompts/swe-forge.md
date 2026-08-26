@@ -1,23 +1,15 @@
 ---
-description: Run SWE Forge with PR delivery by default, or explicit guided checkpoints, using automatic topology
+description: Run SWE Forge with PR delivery by default or guided checkpoints
 ---
 
-The user explicitly invoked SWE Forge through omp.
-
-Read `~/.omp/agent/swe-forge/AGENTS.md` and
-`~/.omp/agent/swe-forge/SWE-FORGE.md`, then read the ticket procedure at
-`~/.omp/agent/swe-forge/.swe-forge/workflows/ticket.md`. Follow the canonical
-workflow and load only the role, contract, and policy files required by the
-selected topology, delivery mode, and ticket risks. Resolve every canonical
-relative reference under `~/.omp/agent/swe-forge/`, never against a
-project-local `.swe-forge/` tree. Keep repository discovery rooted in the
-active project and preserve the raw invocation arguments as the original
-ticket.
-
-The prompt-template expansion passes the user arguments through `$ARGUMENTS`.
-Keep those arguments unchanged and pass them to the ticket procedure. omp has
-no verified pre-agent normalized-invocation hook, so the canonical ticket
-bootstrap invokes the shared parser exactly once before workflow reasoning.
+The user explicitly invoked SWE Forge through OMP. Read
+`~/.omp/agent/swe-forge/AGENTS.md`,
+`~/.omp/agent/swe-forge/SWE-FORGE.md`, and
+`~/.omp/agent/swe-forge/.swe-forge/workflows/ticket.md`; follow canonical
+stage loading under that support root, never a project-local `.swe-forge/`.
+Keep repository discovery in the active project and pass prompt arguments
+unchanged; the ticket bootstrap invokes the shared parser once when OMP has no
+normalized facts.
 
 Raw invocation arguments:
 $ARGUMENTS

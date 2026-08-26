@@ -1,144 +1,88 @@
 # Delivery and Human-Control Policy
 
-This file is the sole canonical owner of delivery and local-resource
-authorization. Other workflow, contract, adapter, example, and documentation
-files summarize or reference these rules; they must not redefine them.
+This policy is the sole owner of checkout, branch, commit, push, PR, cleanup,
+and local-resource authorization. Other files reference it.
 
-## Delivery modes
+## Modes
 
-`GUIDED` is the exceptional/manual mode and preserves human checkpoints. Safe
-setup of one dedicated task branch from a clean protected default is workflow
-setup, not delivery authorization. An explicit guided invocation may implement
-and validate on that branch, then stops at the declared checkpoint. Dirty,
-detached, protected, or ambiguous checkout state is preserved and reported
-rather than reset, stashed, cleaned, or overwritten.
+`GUIDED` is the exceptional manual mode. When a branch is needed, create one
+from a clean protected/default branch; branch setup is not delivery
+authorization. Implement and validate, then stop at the declared checkpoint.
+Approval to continue or go never authorizes push, PR creation, publication,
+deployment, or merge. Dirty, detached, protected, and ambiguous state is
+preserved and reported.
 
-`PR` is the default low-touch path. It authorizes the bounded local setup
-selected for the ticket, validated local commits on the one delivery branch,
-one final branch push, and one final PR. It never authorizes
-publication, deployment, force-push, or merge. Publication and merge remain
-separate human actions.
+`PR` is the default low-touch mode. It permits the bounded local setup,
+validated local commits, one final push, and one final PR. It never permits
+publication, deployment, force-push, or merge.
 
-### PR commits and checkpoints
+During implementation, choose one coherent commit or several as the work
+requires. Do not manufacture ceremonial commits or predeclare a sequence. Each
+checkpoint binds its candidate, exact path scope, targeted validation, and
+materializing `commit-slice`. A review-repair commit is one additional atomic
+commit, uses `--review-repair`, and does not trigger another review.
 
-The agent decides during implementation whether the candidate is best represented
-by one coherent commit or several. A small ticket may use one checkpoint and
-commit; a larger cohesive ticket may use multiple checkpoints and commits. Do
-not manufacture commits for unrelated formatting or ceremonial phases, and do
-not require a predeclared commit sequence. Each implementation checkpoint
-binds its current candidate, exact path scope, targeted validation, and
-materializing `commit-slice` through the executable gate before delivery.
+A PR run ends synchronously after the exact locally gated candidate is pushed,
+one authorized PR is created, its URL is recorded, and the private receipt and
+report are generated. Remote CI is external follow-up evidence.
 
-Review repairs use `--review-repair` and remain one additional atomic commit
-when needed. The repair commit must exist before delivery of its candidate and
-is validated by the same candidate and path safeguards as other delivery
-commits. It does not trigger another review.
+## Repository conventions
 
-### PR completion boundary
+Resolve each project-facing artifact at its boundary, in this order:
 
-The synchronous PR lifecycle ends after the exact locally gated candidate is
-pushed, one authorized PR is created, its URL is recorded, and the private
-local receipt/report is generated. Remote GitHub checks remain external
-follow-up evidence; do not await or poll them in the ticket run. A later
-explicit invocation may inspect a failed or pending remote check.
+1. explicit user or ticket instruction;
+2. repository instructions and documentation;
+3. repository configuration or templates;
+4. a strong recurring Git-history convention; then
+5. the defaults below.
 
-
-## Repository-aware delivery conventions
-
-SWE Forge owns the workflow; the repository owns its delivery conventions.
-Before creating a project-facing artifact, resolve the convention for that
-artifact at the boundary where it will be created. Resolution is per artifact:
-
-1. explicit instruction from the user or ticket;
-2. explicit repository documentation or instructions, including `AGENTS.md`,
-   `CONTRIBUTING.md`, README/development documentation, and documented Git
-   rules;
-3. repository-native configuration or templates;
-4. strong, recurring evidence from recent Git history; and
-5. the existing SWE Forge default convention.
-
-Documented rules take precedence over inferred history. Keep discovered
-conventions ephemeral; never persist them as project files or delivery metadata.
-
-### Branch naming
-
-Resolve branch naming only immediately before SWE Forge must create a task branch.
-Do not spend convention-resolution work on a run that can safely reuse its
-existing branch. When no repository convention is confident, use:
-
-```text
-<type>/<short-kebab-case-description>
-```
-
-Choose `<type>` from the primary ticket outcome, for example `feat`, `fix`,
-`docs`, `refactor`, `test`, `chore`, `perf`, `build`, or `ci`. Do not use the
-repository name as a generic prefix. If the preferred name is occupied, add a
-short unique suffix rather than reusing another task's branch.
-
-### Commit messages
-
-Resolve the commit convention immediately before each delivery commit,
-including a review-repair commit. Prefer explicit repository instructions and
-then a clear recurring history pattern. When no convention is confident, use a
-concise imperative subject of 50 characters or fewer, with 72 characters as the
-hard maximum and no terminal punctuation.
-
-### Pull-request composition and templates
-
-Resolve the pull-request title/body convention immediately before composition.
-For GitHub repositories, prefer a read-only lookup of the current template on
-the remote default branch. Preserve repository headings, ordering, structure,
-placeholders, and checklists. If no template exists, use:
+Do not persist discovered conventions. Resolve branch naming only when creating
+a branch. Without a convention use `<type>/<short-kebab-case-description>`;
+resolve commit format immediately before each commit. For a GitHub PR, prefer a
+read-only lookup of the current remote default branch template immediately
+before composition. Preserve its headings, ordering, placeholders, and
+checklists. Without a template use:
 
 ```text
 Summary:
-- <what changed and why it matters>
+- <what changed and why>
 
 Validation:
-- <relevant checks actually run>
+- <checks actually run>
 
 Notes:
-- <only material risk, compatibility, rollout, or follow-up; omit when empty>
+- <material risk or follow-up, omit when empty>
 ```
 
-`/git-pr draft` requests a draft pull request without changing normal
-`/git-pr` behavior. Draft creation still requires the current branch to be
-pushed and does not implicitly commit, merge, or perform unrelated operations.
-
-Never include a receipt, evidence fingerprint, topology, harness, model,
-routing, context, internal path, transcript, or working spec in a project-facing
-pull request. Receipts remain private run evidence.
+A project-facing PR never includes receipts, evidence fingerprints, topology,
+harness/model metadata, internal paths, transcripts, or a working spec. `/git-pr
+draft` requests a draft; plain `/git-pr` remains normal/open behavior.
 
 ## One delivery boundary
 
-A normal run uses one task/delivery branch and one canonical writable delivery
-checkout. Forge owns that candidate, root acceptance, deterministic integration,
-and sequential materialization/validation of delegated writes. The host may
-execute a worker through a private worktree, sandbox, overlay, container, or
-other native mechanism; that physical environment is adapter/runtime detail, not
-a second Forge delivery boundary or run-state field. The root orchestrator owns
-final integration, verification, review, delivery, and cleanup.
+A run owns one task branch and one canonical writable delivery checkout. A host
+may execute a worker in a private worktree, sandbox, overlay, container, or
+other physical environment, but the result must be materialized and validated
+in the canonical checkout before root acceptance. No second Forge workspace,
+worker branch, or transfer record is created.
 
-## Atomic actions
+## Action authorization
 
-Each action is independently authorized:
+Authorization is per action:
 
-| Action | Permits | Never permits |
+| Action | Permits | Does not permit |
 | --- | --- | --- |
-| `commit` | one explicitly authorized, checkpointed local delivery-branch commit (`go` or PR) | push, PR, publication, deployment, merge |
-| `push` | one final delivery-branch push in PR mode | PR, publication, deployment, merge |
-| `create_pull_request` | one final PR targeting the protected default | merge, publication, deployment |
-| `publish` | nothing unless separately authorized | tag/release publication |
-| `deploy` | nothing unless separately authorized | production or shared-environment effects |
-| `merge` | nothing unless separately authorized | all other actions |
+| `commit` | one authorized local delivery-branch commit | push, PR, publication, deployment, merge |
+| `push` | one final PR-branch push | PR, publication, deployment, merge |
+| `create_pull_request` | one PR targeting the protected default | merge, publication, deployment |
+| `publish`, `deploy`, `merge` | only that separately authorized action | every other action |
 
-Pushing never creates a PR as a side effect. `git-pr` is a separate action.
-`git-sync` first verifies that the relevant PR is actually `MERGED`; a user
-statement alone is not proof of merge.
+Branch setup never implies commit or push authorization. Pushing never creates a
+PR. `git-sync` first verifies that the relevant PR is actually `MERGED`; a user
+statement alone is not proof.
 
 ## Cleanup
 
-Only run-owned clean temporary state may be removed. Dirty, stale, conflicting,
-manually removed, or ambiguous state remains in place and is reported. Never
-use force removal, hard reset, destructive cleanup, or equivalent behavior
-against ambiguous state.
+Remove only run-owned clean temporary state. Preserve dirty, stale, conflicting,
+manually removed, or ambiguous state and report it. Never force-remove, reset,
+clean, stash, overwrite, or deliver against ambiguous state.
