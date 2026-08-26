@@ -79,11 +79,15 @@ and runtime selection; SWE Forge never chooses models.
 - give workers bounded tasks with explicit ownership and acceptance criteria;
 - keep complete task and run state root-owned and pass only the validated
   `worker_briefing/v1` projection to a worker;
+- specify dependency and mutation semantics without prescribing the worker's
+  physical execution environment or an active-worker count;
+- require every writable delegated result to be materialized into the canonical
+  delivery checkout and validated there before acceptance or dependent handoff;
 - derive compact root-accepted `dependency_digest` facts for sequential
   dependent work; never open peer channels or forward a transcript;
 - consume structured worker results rather than conversational memory;
 - keep read-only research separate from writable implementation;
-- never allow concurrent writers to edit the delivery checkout;
+- never allow concurrent writers to edit the canonical delivery candidate;
 - treat verification evidence as stronger than confidence or code inspection;
 - make safety-critical boundaries executable when a compatible helper exists;
 - make a risk-proportional testing decision for every ticket;
@@ -147,12 +151,14 @@ reporting without artificial workers.
 
 `SUBAGENTS` uses demonstrated native harness subagents for independent research,
 bounded delegation, or fresh review when that materially improves the result.
-Independent read-only discovery may use one bounded fan-out/fan-in batch.
-Writable delegated work is sequential in the single delivery checkout. The root
-retains task ownership, integration, verification, review, and acceptance. If
-the optional native capability is unavailable, record the preferred topology
-and fall back to sequential execution or `SOLO` rather than simulating workers
-with unrelated processes.
+Independent read-only discovery may form one small logical fan-out/fan-in batch;
+the host runtime decides whether its ready items execute concurrently or
+sequentially. Writable delegated results are materialized into and accepted
+sequentially against the single canonical delivery checkout. The root retains
+task ownership, integration, verification, review, and acceptance. If the
+optional native capability is unavailable, record the preferred topology and
+fall back to sequential execution or `SOLO` rather than simulating workers with
+unrelated processes.
 
 ## Delivery Modes
 

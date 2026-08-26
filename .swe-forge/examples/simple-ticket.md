@@ -73,9 +73,9 @@ with the repository command and run it before returning `DONE`:
 RESULT_PROFILE: WRITABLE
 STATUS: DONE
 TASK_ID: receipt-discount-placeholder
-BASE_SHA: <task base>
-HEAD_SHA: <worker head or none>
-BRANCH: <task branch>
+BASE_SHA: <canonical delivery base>
+HEAD_SHA: <canonical delivery head or none>
+BRANCH: <canonical delivery branch>
 FILES_CHANGED:
 - src/receipts/format-total.ts
 - src/receipts/format-total.test.ts

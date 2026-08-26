@@ -2,7 +2,8 @@
 
 Use this contract before delegated work begins. A task is a bounded unit of
 work, not an invitation to redesign the repository. The root orchestrator
-retains the one delivery checkout, integration, and acceptance boundary.
+retains the one canonical delivery candidate, integration, and acceptance
+boundary; a host may execute the worker through a private mechanism.
 
 ## Template
 
@@ -32,9 +33,10 @@ allowed_reads: [<paths or symbols>]
 architecture_decisions: [<task-relevant decisions or none>]
 
 checkout_baseline:
-  path: <absolute delivery checkout path>
+  # Canonical delivery-candidate identity; not the worker's physical cwd.
+  path: <absolute canonical delivery checkout path>
   head: <revision>
-  branch: <delivery branch checked out here>
+  branch: <delivery branch defining the candidate>
   branch_setup: auto-created | reused | user-provided
   classification: writable
   remote_default_evidence: <reference>
@@ -103,8 +105,9 @@ expected_output:
 - `reason`: why this task is separate and useful;
 - `owner_role`: role responsible for the work;
 - `dependencies`: task IDs that must finish first;
-- `write_access`: task-local permission; delegated read-write work stays in the
-  sole delivery checkout;
+- `write_access`: task-local permission; accepted delegated writes target the
+  sole canonical delivery candidate sequentially, even when the host executes
+  the worker privately;
 - `worker_mode`: bounded worker mode, depth, root task, and zero descendant
   workers by default;
 - `repository_instructions`, `allowed_reads`, and `architecture_decisions`:
@@ -123,16 +126,19 @@ The task contract deliberately omits run-level request, live topology, and
 delivery mode. The active run state is authoritative; the orchestrator renders
 the current bounded routing fact into the worker briefing immediately before
 launch. A concrete task-specific execution constraint remains task-scoped
-rather than copying selected run state.
+rather than copying selected run state. The checkout baseline identifies the
+canonical delivery candidate and does not require the worker process to run
+there.
 
 Writable tasks additionally require `write_access`, `checkout_baseline`, and
 `authorization`. `working_spec_ref` is required when a transient spec guides
 the task and is `none` when it does not.
 
 `delegation.allowed` defaults to `false`. When it is `true`, the contract must
-also define `max_depth`, `max_workers`, and allowed roles. Every child contract
-carries the root task ID and reduced remaining budgets; a child cannot reset or
-increase them.
+also define `max_depth`, `max_workers`, and allowed roles. These are descendant
+delegation authority budgets, not runtime scheduling limits. Every child
+contract carries the root task ID and reduced remaining budgets; a child cannot
+reset or increase them.
 
 Immediately before launch, the orchestrator writes transient
 `worker-brief-input/v1` records and invokes `../tools/swe-forge-worker-brief`.

@@ -3,8 +3,9 @@
 ## Objective
 
 Choose the smallest topology that provides a meaningful reliability benefit and
-safe task ownership. Supported topologies are `SOLO` and `SUBAGENTS`; both use
-one writable delivery checkout.
+safe task ownership. Supported topologies are `SOLO` and `SUBAGENTS`; both
+define one canonical writable delivery candidate, while the host chooses the
+worker execution environment and scheduling mechanics.
 
 ## Routing record
 
@@ -69,7 +70,6 @@ discovery_strategy:
       acceptance: <what makes the evidence useful>
   batch:
     strategy: FAN_OUT_FAN_IN | ROOT_ONLY | SEQUENTIAL
-    max_workers: <bounded worker limit>
     fan_in: ONE_BARRIER | NONE
   capability: available | unavailable | unknown
   final_routing_deferred: true
@@ -85,11 +85,12 @@ context rather than simulating workers.
 ### Discovery batch rule
 
 When discovery contains two or more genuinely independent, evidence-reducible
-questions, launch the useful ready questions as one small bounded
-fan-out/fan-in batch. Render one bounded read-only task per question, launch the
-batch before consuming a result, then wait at one root-owned fan-in barrier.
-Resolve contradictions centrally. Coupled questions remain root-only or
-sequential when a real dependency requires it.
+questions, form one small logical fan-out/fan-in batch from the ready questions.
+Submit the useful questions together before consuming any result, then wait at
+one root-owned fan-in barrier. The host runtime decides whether ready items run
+concurrently or sequentially; the batch is a semantic dependency boundary, not
+an active-worker count. Resolve contradictions centrally. Coupled questions
+remain root-only or sequential when a real dependency requires it.
 
 ## Decision procedure
 
@@ -155,9 +156,10 @@ work and whenever delegation would not materially reduce coordination.
 
 Use demonstrated native workers for independent read-only research, concise
 evidence gathering, or sequentially consumable bounded work. Read-only tasks
-may use one bounded fan-out/fan-in batch. Writable delegated work is always
-sequential in the single delivery checkout. The root retains task ownership,
-validation, integration, review, and acceptance.
+may form one bounded logical fan-out/fan-in batch; the host runtime chooses
+their execution order. Writable delegated results are materialized into and
+accepted sequentially against the single canonical delivery candidate. The
+root retains task ownership, validation, integration, review, and acceptance.
 
 ## Safe fallback
 

@@ -55,9 +55,9 @@ when it protects a required behavior or safety boundary.
 - activation remains explicitly user-controlled;
 - the original ticket remains authoritative;
 - `SOLO` and `SUBAGENTS` rules remain safe;
-- concurrent writers never share a checkout;
-- workers return structured results with exact checkout, scope, and validation
-  evidence;
+- concurrent writers never modify the canonical delivery candidate at once;
+- workers return structured results with canonical delivery identity, scope, and
+  validation evidence; physical worker execution details are host-private;
 - verification and fresh review are proportional and real;
 - adapters remain subordinate integration layers and do not redefine canonical
   workflow semantics; and

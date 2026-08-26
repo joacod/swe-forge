@@ -119,8 +119,7 @@ routing:
   current: SUBAGENTS
 requested_delivery: DEFAULT
 delivery_mode: GUIDED
-reason: API research, UI research, and test strategy are independent read-only tasks; launch useful discovery questions in one bounded fan-out/fan-in batch, then keep implementation sequential because the API contract and UI behavior are coupled.
-worker_limit: 3
+reason: API research, UI research, and test strategy are independent read-only tasks; submit one bounded logical fan-out/fan-in batch, let the host decide whether ready research runs concurrently or sequentially, then keep implementation sequential because the API contract and UI behavior are coupled.
 fan_in: one root barrier after the batch
 fallback: serialize research or use SOLO if native workers are unavailable
 ```
@@ -142,9 +141,10 @@ dependencies:
 write_access: read-write
 working_spec_ref: none
 checkout_baseline:
-  path: <absolute checkout path>
+  # Canonical delivery-candidate identity; not the worker's physical cwd.
+  path: <absolute canonical delivery checkout path>
   head: <revision>
-  branch: <single task branch used for the entire run>
+  branch: <canonical delivery branch defining the candidate>
   branch_setup: auto-created | reused | user-provided
   classification: writable
   remote_default_evidence: <reference>
@@ -201,9 +201,9 @@ repository-specific command placeholders:
 RESULT_PROFILE: WRITABLE
 STATUS: DONE
 TASK_ID: orders-pagination
-BASE_SHA: <task base>
-HEAD_SHA: <worker head or none>
-BRANCH: <task branch>
+BASE_SHA: <canonical delivery base>
+HEAD_SHA: <canonical delivery head or none>
+BRANCH: <canonical delivery branch>
 FILES_CHANGED:
 - services/orders/src/http/admin-orders.ts
 - services/orders/src/repositories/order-repository.ts

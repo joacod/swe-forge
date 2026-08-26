@@ -53,7 +53,7 @@ routing:
 receipt_ref: <receipt path or none>
 
 delivery_checkout:
-  path: <absolute sole writable delivery checkout>
+  path: <absolute canonical writable delivery checkout>
   branch: <delivery branch>
   base_sha: <ticket base SHA>
   head_sha: <current delivery HEAD>
@@ -110,9 +110,12 @@ that decision rather than an independent owner. `swe-forge-state` derives it
 from `delivery_mode` during initialization or continuation update, and
 validation rejects a contradictory projection.
 
-`delivery_checkout` is the sole checkout that owns final delivery commits. All
-bounded delegated writes use that checkout sequentially. No second workspace,
-worker branch, or central transfer record is part of the run state.
+`delivery_checkout` is the sole canonical candidate that owns final delivery
+commits and branch state. All accepted delegated writes are materialized and
+validated there sequentially. A worker's physical execution path—whether the
+delivery checkout, a private worktree, sandbox, overlay, container, or another
+host mechanism—is not represented in run state. No second workspace, worker
+branch, or central transfer record is part of the run state.
 
 ## Required structure and lifecycle
 

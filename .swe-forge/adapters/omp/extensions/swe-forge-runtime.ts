@@ -362,8 +362,8 @@ function capabilityPrompt(observation: CapabilityObservation, run: ActiveRun | u
 			"Use agent=swe-forge-read-only for READ_ONLY, agent=swe-forge-writable for WRITABLE, and agent=swe-forge-reviewer for REVIEW.",
 			"Pass the validated canonical worker_briefing/v1 projection unchanged as each native task item's `task` assignment.",
 			"The adapter supplies the translated canonical worker-result JSON Schema with schemaMode=strict and validates the returned result canonically.",
-			"Independent read-only items may use one native task.batch; writable shared-checkout items must be one sequential item at a time.",
-			"Writers always run sequentially in the one delivery checkout; read-only items may use one native task.batch.",
+			"Submit independent read-only questions in one logical native task batch; OMP/the host runtime chooses whether ready items execute concurrently or sequentially.",
+			"Writable results must be materialized into and validated against the canonical delivery checkout before sequential acceptance; private host execution paths are not Forge state.",
 			"Headless workers have no interactive approval boundary; rely on the confined profile, bounded brief, no task recursion, and root-owned delivery authorization.",
 		);
 	} else {

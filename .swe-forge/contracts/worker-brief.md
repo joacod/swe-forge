@@ -148,7 +148,7 @@ contract files point here rather than repeating it.
 | Worker | Include | Omit |
 | --- | --- | --- |
 | Read-only | common semantic fields, read-only permissions, selected result/review contract | writable scope/actions, checkout and delivery state |
-| Read-write | common fields, allowed writes, shared-checkout permissions, writable result contract | delivery actions, unrelated run state, transcript |
+| Read-write | common fields, allowed writes, canonical delivery-candidate permissions, writable result contract | delivery actions, physical host execution details, unrelated run state, transcript |
 
 Workers discover implementation details through their allowed paths and
 symbols. They must request a contract revision before expanding scope and must

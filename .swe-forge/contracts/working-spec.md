@@ -63,7 +63,7 @@ discovery_strategy:
   questions: []
   batch:
     strategy: FAN_OUT_FAN_IN | ROOT_ONLY | SEQUENTIAL
-    max_workers: <bounded worker limit>
+    # Host runtime chooses whether ready items run concurrently or sequentially.
     fan_in: ONE_BARRIER | NONE
   capability: available | unavailable | unknown
   final_routing_deferred: true

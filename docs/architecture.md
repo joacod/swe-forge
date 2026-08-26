@@ -136,8 +136,10 @@ The final routing decision records only `preferred`, `current`, a concise
 reason, and any fallback evidence. Prefer `SOLO` unless independently
 evaluable work materially benefits from concise delegated results and the
 active adapter demonstrates the semantic native capability. Independent
-discovery questions may use one small read-only fan-out/fan-in batch; globally
-coupled work stays `SOLO` or uses an explicit sequential dependency.
+discovery questions may form one small logical read-only fan-out/fan-in batch;
+the host runtime chooses whether ready items execute concurrently or
+sequentially. Globally coupled work stays `SOLO` or uses an explicit sequential
+dependency.
 
 A preferred `SUBAGENTS` run with no active native capability falls back to
 effective `SOLO` or sequential work with a visible reason. Reassess only when
@@ -156,9 +158,18 @@ one invocation checkout
   -> one authorized push and one final PR
 ```
 
-The invocation and delivery paths are the same checkout for a normal run. The
-root owns branch setup, pre-edit baseline, task ownership, result acceptance,
-verification, and delivery. Completion order never creates a second delivery
+The invocation and delivery paths are the same checkout for a normal run; this
+describes the canonical delivery candidate, not a requirement about a worker
+process's current directory. Forge owns branch setup, the delivery candidate's
+baseline and fingerprint, task ownership, deterministic integration, result
+acceptance, verification, and delivery. A host may execute a worker directly or
+through a private worktree, sandbox, overlay, container, or equivalent native
+mechanism. Those physical environments are adapter/runtime details and are not
+represented in canonical run state.
+
+A writable delegated result must be materialized into the canonical delivery
+checkout and validated there before Forge accepts it or exposes it through a
+dependent-work digest. Completion order never creates a second delivery
 boundary. No worker branch, workspace, resource registry, or transfer mapping is
 part of canonical run state.
 

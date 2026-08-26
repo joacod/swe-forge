@@ -52,6 +52,13 @@ permissions, native capabilities, and behavior that cannot be represented by
 canonical files. They must not preload stage-specific sources or copy canonical
 procedure into a host prompt.
 
+Forge owns dependency, mutation, delivery-candidate, and acceptance semantics;
+the host decides worker physical execution and scheduling. An adapter may use a
+private worktree, sandbox, overlay, container, or equivalent mechanism only when
+the bounded change is materialized into the canonical delivery checkout and
+validated there. Private execution paths are not canonical state or worker
+result metadata.
+
 For GitHub-backed delivery adapters, the cleanest implementation is a read-only
 remote default-branch lookup immediately before PR composition, followed by the
 native draft flag when requested. Keep the host-specific mechanism in the

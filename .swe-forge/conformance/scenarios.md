@@ -73,15 +73,16 @@ grading an agent from its explanation alone.
 | Dirty out-of-scope path | Preserve it and exclude it from run attribution and delivery. |
 | Executable preflight on dirty, detached, or protected checkout | Fail before writable work and do not record a writable baseline. |
 | Executable checkpoint with an out-of-scope path | Fail without staging or committing the path. |
-| Two writable native workers | Serialize them in the one delivery checkout. |
-| Native read-only fan-out | Launch only genuinely independent questions together and fan in once at the root. |
+| Two writable native workers | Serialize canonical materialization and acceptance; do not race writes into the delivery candidate. |
+| Native read-only fan-out | Form only genuinely independent questions together; let the host schedule them and fan in once at the root. |
+| Host-private worker execution | Keep private worktrees, sandboxes, overlays, containers, and equivalent mechanisms out of Forge state; materialize and validate the bounded result in the canonical delivery checkout before acceptance. |
 
 ## Proportional Worker Results
 
 | Scenario | Required behavior |
 | --- | --- |
 | Read-only researcher result | Use `READ_ONLY` with status/task identity, concise findings, precise evidence references, and only relevant risks or next action; omit empty Git and delivery sections. |
-| Normal writable result | Use `WRITABLE` with checkout, Git/change, and validation evidence needed to consume the implementation; do not require unrelated empty sections. |
+| Normal writable result | Use `WRITABLE` with canonical delivery identity/fingerprint, changed-path, Git, and validation evidence; do not require a worker cwd or physical execution path. |
 | Review result | Use the dedicated `review.md` contract rather than an implementation-oriented result profile. |
 | Profile mismatch | Reject incomplete or profile-mismatched results instead of filling irrelevant fields from the briefing or memory. |
 | Dependent worker handoff | After A is accepted and B depends on A, derive a compact B-specific `dependency_digest` in B's existing briefing; keep the root as coordinator, omit A's full result and unrelated material, and do not expand B's scope. |

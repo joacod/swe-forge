@@ -129,12 +129,20 @@ require_text 'scripts/swe-forge install "$HARNESS"' README.md
 require_text 'scripts/swe-forge verify "$HARNESS"' README.md
 require_text 'Neither mode merges automatically' README.md
 require_text 'one writable delivery checkout' README.md
+require_text 'physical execution environment' SWE-FORGE.md
+require_text 'materialized into the canonical delivery' docs/architecture.md
+require_text 'host decides worker physical execution and scheduling' .swe-forge/adapters/README.md
+reject_text 'CHECKOUT' .swe-forge/contracts/result.md
+reject_text 'CHECKOUT' .swe-forge/tools/swe-forge-worker-result
+reject_text 'max_workers:' .swe-forge/contracts/working-spec.md
+reject_text 'worker_limit:' .swe-forge/examples/parallel-ticket.md
+reject_text 'two to four active workers' .swe-forge/policies/delegation.md
 require_text 'Adapters are harness integration layers' docs/architecture.md
 require_text 'SWE Forge does not manage the harness context window' SWE-FORGE.md
 require_text 'host lifecycle hooks' .swe-forge/adapters/pi/README.md
 [ ! -e "$ROOT/.swe-forge/policies/context.md" ] || fail 'obsolete context policy remains'
 require_text 'one delivery checkout' docs/architecture.md
-require_text 'Writable delegated work is sequential' SWE-FORGE.md
+require_text 'Writable delegated results are materialized' SWE-FORGE.md
 require_text 'schema-v4' SWE-FORGE.md
 require_text 'schema_version: 4' .swe-forge/contracts/run-state.md
 require_text 'schema-v4' .swe-forge/tools/swe-forge-state

@@ -43,7 +43,7 @@ competing result shapes.
 | Worker responsibility | Profile | Canonical return contract |
 | --- | --- | --- |
 | Read-only research or analysis that returns a worker result | `READ_ONLY` | This file, [Read-only result](#read-only-result) |
-| Bounded writable implementation in the delivery checkout | `WRITABLE` | This file, [Writable result](#normal-writable-result) |
+| Bounded writable implementation whose result is materialized into the canonical delivery candidate | `WRITABLE` | This file, [Normal writable result](#normal-writable-result) |
 | Independent review | `REVIEW` | [review.md](review.md), never an implementation result |
 
 ## Ordinary result rules
@@ -125,25 +125,24 @@ RECOMMENDED_ACTION:
 - Use the READ_ONLY profile for the discovery task.
 ```
 
-Do not add `BASE_SHA`, `HEAD_SHA`, `BRANCH`, `CHECKOUT`, `FILES_CHANGED`,
-`GIT_STATE`, `DELIVERABLE_COMMITS`, `VALIDATION`, environment resources, or
-delivery authorization to a read-only result. A command used during research
-is evidence, not an implementation validation block.
+Do not add `BASE_SHA`, `HEAD_SHA`, `BRANCH`, `FILES_CHANGED`, `GIT_STATE`,
+`DELIVERABLE_COMMITS`, `VALIDATION`, environment resources, or delivery
+authorization to a read-only result. A command used during research is
+evidence, not an implementation validation block.
 
 ### Normal writable result
 
 A bounded implementer adds only the Git, change, and validation evidence needed
-to verify and consume its implementation:
+to verify and consume the materialized canonical delivery candidate:
 
 ```text
 RESULT_PROFILE: WRITABLE
 STATUS: DONE
 TASK_ID: result-contract-profiles
 
-BASE_SHA: <exact delivery-checkout base>
-HEAD_SHA: <delivery-checkout head or none>
-BRANCH: <delivery branch or none>
-CHECKOUT: <absolute delivery-checkout path>
+BASE_SHA: <canonical delivery base>
+HEAD_SHA: <canonical delivery head or none>
+BRANCH: <canonical delivery branch or none>
 
 FILES_CHANGED:
 - <repository-relative path>
@@ -182,12 +181,14 @@ RECOMMENDED_ACTION:
 - <next action; omit when no action is useful>
 ```
 
-`BASE_SHA`, `HEAD_SHA`, checkout identity, `FILES_CHANGED`, `GIT_STATE`, and
-assigned `VALIDATION` entries are required when the writable task reaches that
-stage. `DELIVERABLE_COMMITS` and `SCOPE_EXCEPTIONS` are conditional; do not
-return empty lists. The task contract and working spec already contain the
-testing decision, so a writable result reports the checks actually run rather
-than repeating testing prose.
+`BASE_SHA`, `HEAD_SHA`, and `BRANCH` identify the canonical delivery candidate
+and its accepted Git fingerprint; they do not identify the worker's physical
+execution environment. `FILES_CHANGED`, `GIT_STATE`, and assigned `VALIDATION`
+entries are required when the writable task reaches that stage.
+`DELIVERABLE_COMMITS` and `SCOPE_EXCEPTIONS` are conditional; do not return
+empty lists. The task contract and working spec already contain the testing
+decision, so a writable result reports the checks actually run rather than
+repeating testing prose.
 
 The task contract remains responsible for allowed scope and per-action
 authorization. The result exposes changed paths and exceptions so the
@@ -207,8 +208,9 @@ Consume every result through the selected profile:
 - correlate `TASK_ID` and `STATUS` first;
 - for `READ_ONLY`, evaluate findings, references, risks, and any recommended
   action without inventing Git or delivery requirements;
-- for `WRITABLE`, verify scope, checkout identity, Git/change evidence,
-  assigned validation, and blockers before consuming the implementation; and
+- for `WRITABLE`, verify canonical delivery identity/fingerprint, scope,
+  Git/change evidence, assigned validation, and blockers before consuming the
+  implementation; and
 - for `REVIEW`, evaluate the dedicated review contract and its blocking matrix.
 
 Workers do not create PRs, push, merge, publish, deploy, make delivery
