@@ -1,66 +1,57 @@
 # Run-State Contract
 
-Run state is temporary internal recovery state. It is not a transcript, a task
-specification, or a second source of truth. Keep it outside the repository or
-under an already ignored `.swe-forge/runs/` path. Never store credentials,
+Run state is temporary internal recovery state, not a transcript, task
+specification, or second source of truth. Keep it outside the repository or
+under an already ignored `.swe-forge/runs/` path; never store credentials,
 private ticket content, or worker transcripts.
 
-Only the current run-state schema is supported. State written by an older or
-unknown schema is stale and must not be resumed; start a fresh run instead.
-SWE Forge does not automatically migrate obsolete run-state schemas. A schema
-change updates all first-party producers, readers, validation, adapters, and
-fixtures together.
+Only the current schema is supported. Older, future, or unknown state is stale,
+must be rejected, and is never migrated. Producers, readers, validators,
+adapters, and fixtures change together when the schema changes.
 
-## Executable semantic inspection
+## Machine surface
 
-Adapters do not parse this YAML representation. The canonical
-`.swe-forge/tools/swe-forge-state` tool exposes the bounded machine port:
+Adapters use the dependency-free semantic ports rather than parsing YAML:
 
 ```text
 swe-forge-state inspect --state FILE|DIRECTORY --checkout PATH
-swe-forge-state resolve-active --checkout PATH \
-  [--candidate FILE|DIRECTORY ...] [--all]
+swe-forge-state resolve-active --checkout PATH [--candidate FILE|DIRECTORY ...] [--all]
 ```
 
-`inspect` structurally validates one snapshot and reports its stable run
-identity, checkout match, lifecycle eligibility, routing, delivery, and compact
-continuation facts as deterministic JSON. `resolve-active` applies the same
-validation and eligibility rules to caller-supplied candidates and owns newest
-`updated_at`, mtime fallback, and deterministic path tie-breaking order.
-Terminal, inactive, stale, obsolete, unsupported, and wrong-checkout snapshots
-are never returned as active candidates.
+They validate identity, checkout, lifecycle, routing, delivery, continuation,
+and active-state ordering. Terminal, stale, obsolete, unsupported, and
+wrong-checkout snapshots are not active candidates.
 
 ## Schema v4
 
-The only current state identity is:
+The current state has this shape:
 
 ```yaml
 workflow: swe-forge
 workflow_version: 1
 schema_version: 4
-run_id: <unique-run-id>
+run_id: <unique id>
 status: planning | running | blocked | reviewing | repairing | accepted | failed
 requested_mode: AUTO | SOLO | SUBAGENTS
 requested_delivery: DEFAULT | GUIDED | PR
 delivery_mode: GUIDED | PR
-reason: <why this is the smallest safe topology>
-fallback_used: no | <preferred -> effective selection and reason>
+reason: <topology decision reason>
+fallback_used: no | <preferred -> effective reason>
 
 routing:
   preferred: SOLO | SUBAGENTS
   current: SOLO | SUBAGENTS
-
 receipt_ref: <receipt path or none>
 
 delivery_checkout:
   path: <absolute canonical writable delivery checkout>
   branch: <delivery branch>
-  base_sha: <ticket base SHA>
-  head_sha: <current delivery HEAD>
-  checkpoint_sha: <last clean checkpoint SHA>
+  base_sha: <ticket base>
+  head_sha: <current HEAD>
+  checkpoint_sha: <last clean checkpoint>
   status: ready | running | blocked | dirty | complete
   branch_setup: auto-created | reused | user-provided | provided | blocked
-  remote_default_evidence: <read-only branch classification evidence>
+  remote_default_evidence: <classification reference>
 
 delivery:
   authorization:
@@ -82,98 +73,21 @@ tasks:
     dependencies: []
     allowed_scope: []
     forbidden_scope: []
-    accepted_result_ref: <accepted structured result/evidence reference or none>
-    validation_ref: <result or evidence reference>
+    accepted_result_ref: <reference or none>
+    validation_ref: <reference>
 ```
 
-### Canonical routing ownership
-
-`requested_mode` is the immutable invocation request. The shared invocation
-parser/bootstrap supplies `requested_mode`, `requested_delivery`, and
-`delivery_mode` to `swe-forge-state init`; an `input_status` other than
-`COMPLETE` must not initialize a ticket run. `requested_delivery: DEFAULT`
-means that no delivery token was supplied and resolves to `delivery_mode: PR`;
-`GUIDED` requires the explicit `guided` token, while `PR` remains an explicit
-backwards-compatible alias. The nested `routing` mapping is the sole owner of
-live topology facts:
-
-| Field | Meaning and update rule |
-| --- | --- |
-| `routing.preferred` | Current semantic topology preference after the latest meaningful assessment. |
-| `routing.current` | Currently effective topology authorized to run; update it only at a safe boundary when the effective decision changes. |
-
-A preferred `SUBAGENTS` topology may run with effective `SOLO` after native
-capability fallback. The preference remains visible with its reason; it is not
-reported as successful delegation. Initial preference, initial effective
-selection, and routing history are not durable state.
-
-`delivery_mode` owns the active delivery decision.
-`continuation.delivery.mode`, when present, is a compact recovery projection of
-that decision rather than an independent owner. `swe-forge-state` derives it
-from `delivery_mode` during initialization or continuation update, and
-validation rejects a contradictory projection.
-
-`delivery_checkout` is the sole canonical candidate that owns final delivery
-commits and branch state. All accepted delegated writes are materialized and
-validated there sequentially. A worker's physical execution path—whether the
-delivery checkout, a private worktree, sandbox, overlay, container, or another
-host mechanism—is not represented in run state. No second workspace, worker
-branch, or central transfer record is part of the run state.
-
-## Required structure and lifecycle
-
-The canonical `swe-forge-state init` operation writes the shell from semantic
-routing and actual checkout facts; callers do not manually serialize it. A
-fresh schema-v4 snapshot initialized by the helper always contains:
-- `workflow`, `workflow_version`, `schema_version`, `run_id`, `status`,
-  `requested_mode`, `requested_delivery`, `delivery_mode`, `reason`, and
-  `fallback_used`;
-- the `routing` mapping with `preferred` and `current`;
-- `receipt_ref`;
-- the complete `delivery_checkout` mapping;
-- the complete `delivery` authorization and action mapping;
-- the `review` record, initialized with `status: pending`, no blocking
-  findings, and the canonical review contract reference; and
-- the `tasks` container, even when no delegated task exists.
-
-A fact that is not known yet uses the explicit `unknown`, `none`, empty, or
-false representation instead of ambiguous omission. `continuation` is
-stage-dependent and may be absent from the initial shell.
-
-## Routing and capability evidence
-
-Automatic routing uses task coupling, independent evaluability, expected
-coordination relief, continuity risk, and the root-owned acceptance boundary.
-Prompt length alone never selects delegation. The working spec or concise
-`reason` records the evidence without serializing a routing score or dimension
-matrix.
-
-
-A native capability is available only when the active adapter has freshly
-demonstrated its task/subagent surface, bounded roles, structured results, and
-safe fallback. An unknown or unavailable capability keeps the effective
-topology `SOLO` or sequential root execution. Capability presence never
-selects a topology by itself, and a cached capability fact never authorizes a
-worker launch.
-
-## Remaining state
-
-The following sections may be recorded when their lifecycle applies:
+The initialization helper also creates the `review` record and empty task
+container. Unknown facts use explicit `unknown`, `none`, empty, or false
+values. Optional state may include:
 
 ```yaml
-ticket_ref: <immutable raw invocation arguments>
-parsed_ticket_ref: <parsed ticket text>
-specialist_skills:
-  - id: <identifier>
-    source: <path or URL>
-    status: selected | skipped | unavailable
-    reason: <selection evidence or none>
-working_spec_ref: <external temporary spec, active context, or none>
-acceptance_ref: <acceptance criteria reference>
+ticket_ref: <immutable raw invocation>
+parsed_ticket_ref: <parsed ticket>
+specialist_skills: []
+working_spec_ref: <temporary spec or none>
+acceptance_ref: <reference>
 current_phase: discovery | foundation | implementation | review | delivery | cleanup
-```
-
-
 
 continuation:
   workflow_active: true | false
@@ -185,7 +99,6 @@ continuation:
     kind: specify | discover | implement | validate | review | verify_and_sync_merge | recover | none
     target: <short target>
     acceptance: [<short checks>]
-
   safe_boundary: true | false
   updated_at: <UTC timestamp>
   delivery:
@@ -193,8 +106,7 @@ continuation:
     pr_number: <number or none>
     pr_state: DRAFT | OPEN | MERGED | CLOSED | none
 
-
-validation_ref: <evidence ledger or none>
+validation_ref: <ledger reference or none>
 review:
   status: pending | pass | changes-required | repaired | skipped
   blocked_by: []
@@ -202,7 +114,7 @@ review:
 checkpoint:
   status: not-applicable | awaiting-user | resumed | complete
   number: 0
-  next_slice: <bounded slice or none>
+  next_slice: <slice or none>
   requested_action: continue | revise | go | commit | none
 cleanup:
   status: pending | complete | incomplete | not-needed
@@ -211,57 +123,41 @@ retries:
   <task_id>: {attempts: 0, ceiling: 1, ceiling_provenance: default}
 ```
 
-`review.status: changes-required` records an unresolved blocking finding.
-`review.status: repaired` records one bounded repair of that finding after
-affected validation; `blocked_by` retains the finding IDs as repair evidence and
-this status does not claim that the repaired candidate passed a new independent
-review. A fundamental or materially uncertain finding remains blocked rather
-than entering another review or repair loop.
+## Ownership and updates
 
-A state whose `schema_version` is not `4` must be rejected as stale or
-unsupported, including older and future versions. No helper guesses a
-migration, normalizes an obsolete snapshot, or rewrites it in place. The
-validator also rejects removed workflow fields from earlier schema-v4
-representations, including old review-attempt fields and the former commit
-lifecycle; callers must start a fresh run rather than migrate them.
-When `continuation` is present, the validator requires its workflow-control
-fields and a delivery projection matching `delivery_mode`.
+`requested_mode` and delivery request facts come from the invocation parser.
+`routing.preferred` and `routing.current` are the only durable topology
+fields. `delivery_mode` owns delivery; `continuation.delivery.mode`, when
+present, is a derived matching projection. `delivery_checkout` is the only
+canonical candidate. A host-private worker path is not state, and no second
+workspace, worker branch, or transfer record is added.
 
-## Rules and transitions
+The `init` operation constructs the schema from semantic input and actual
+checkout facts. Use the purpose-specific helpers—`set-routing`,
+`set-continuation`, `set-delivery-checkout`, `set-receipt-ref`, `set-review`,
+`set-review-repair`, and `set-pull-request`—instead of hand-editing containers,
+timestamps, or projections. `set-continuation` owns `updated_at` and the
+matching delivery projection.
 
-- State is updated only from actual Git/evidence facts or an explicit
-  orchestrator decision.
-- Use `swe-forge-state set-routing` for deliberate preferred/effective
-  topology changes and their concise reason/fallback evidence; it validates
-  and atomically replaces only those fields.
-- Use `swe-forge-state set-continuation` for bounded continuation updates; it
-  owns the update timestamp and derived delivery projection.
-- Use `swe-forge-state set-delivery-checkout` and `set-receipt-ref` for their
-  purpose-specific mutations; callers do not structurally edit the YAML.
-- Use `set-review` for the one canonical review result, `set-review-repair`
-  for the one recorded localized repair, and `set-pull-request` after local PR
-  evidence and URL recording.
-- A resumed run inspects the real checkout and Git state before trusting this
-  snapshot.
-- `continuation` is the authoritative workflow-control snapshot; conversation
-  summaries and adapter reminders are recovery aids only.
-- After a host context discontinuity or recovery event, re-read the working spec
-  and run state, inspect `HEAD` and the diff, and resume only from the recorded
-  next action.
-- `safe_boundary` marks a workflow checkpoint with no in-flight Forge semantic
-  mutation; it does not direct host context preservation or compaction.
-- Only a dependency in `done` with an `accepted_result_ref` satisfying its task
-  and result contract can supply a downstream dependency digest.
-- Writable delegated results are materialized into and validated against the
-  canonical delivery candidate before sequential acceptance; concurrent
-  mutation of that candidate is forbidden.
-- Dirty, conflicting, stale, or ambiguous checkout state is preserved and
-  reported.
-- Cleanup never claims removal of resources that were not proven run-owned.
-- `planning` may become `running`, `blocked`, or `failed`; `running` may become
-  `reviewing`, `blocked`, or `failed`; `reviewing` may become `repairing`,
-  `accepted`, `blocked`, or `failed`; a completed repair returns to `running`;
-  and `blocked` may resume at its prior state.
+A resumed run first inspects real Git and evidence. After a context
+discontinuity or recovery, re-read the working spec and state, inspect `HEAD`
+and the diff, and resume only from the recorded next action. Conversation
+summaries and adapter reminders are recovery aids, not authority.
 
-Authorization meanings live in `../policies/delivery.md`; this contract records
-the resulting action status rather than redefining those meanings.
+Only a `done` dependency with an accepted result may supply a dependent digest.
+Writable delegated results are materialized and validated in the canonical
+candidate before sequential acceptance. Dirty, conflicting, stale, or
+ambiguous checkout state is preserved and reported; cleanup cannot claim
+unproven removal.
+
+Reject any `schema_version` other than `4`, removed fields from obsolete
+representations, malformed routing, or a contradictory continuation delivery
+projection. Start a fresh run; do not normalize or rewrite stale state.
+
+## Lifecycle
+
+`planning` may become `running`, `blocked`, or `failed`; `running` may become
+`reviewing`, `blocked`, or `failed`; `reviewing` may become `repairing`,
+`accepted`, `blocked`, or `failed`; a completed repair returns to `running`; and
+`blocked` may resume at its prior state. Authorization meanings belong to
+`policies/delivery.md`; this contract records resulting action status.

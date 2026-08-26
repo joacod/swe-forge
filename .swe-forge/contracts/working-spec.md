@@ -1,184 +1,85 @@
 # Ephemeral Working Spec Contract
 
-Use this contract for the short-lived specification that guides a ticket,
-especially in `PR` delivery mode. It is a session artifact, not a new source
-of truth.
+A working spec is a short PR planning artifact. The original ticket remains
+authoritative; this spec makes its intent, boundaries, evidence, and review
+scope executable without creating project documentation.
 
-## Purpose
+## Storage
 
-A working spec turns a broad ticket into a small, observable agreement before
-implementation. It borrows the useful parts of proposal, requirements,
-acceptance scenarios, and implementation notes without creating a repository
-change folder or permanent project documentation.
+Keep it in active context or in the run's restricted temporary directory. Never
+commit it, write it into the repository, or add an ignore rule for it. Delete
+external copies during cleanup. Run state, not this spec, owns continuation;
+worker dependency digests are derived at launch and do not belong here.
 
-The original ticket remains authoritative. The working spec may clarify,
-organize, or make assumptions explicit, but it must not silently change the
-ticket's intent or scope.
+## Minimum shape
 
-## Storage and Lifetime
-
-- Keep the spec in active context for a short run when that is enough.
-- When state must survive a context change or delegation, store it outside the
-  repository under the run's restricted temporary directory and reference it
-  from run state.
-- Never write a ticket-specific working spec to the repository, commit it, or
-  add an ignore rule just to hide it.
-- Delete external working-spec files during cleanup and report a cleanup failure.
-- A working spec may record the task DAG and task dependencies, but it does
-  not store worker-to-worker messages or dependency digests. The root derives
-  each transient digest from an accepted structured result when rendering the
-  dependent worker's briefing.
-
-## Template
+Do not fill ceremonial sections. A ready spec normally contains only:
 
 ```yaml
 spec_version: 1
 status: draft | ready | revised
-source_ticket: <immutable ticket text or external reference>
+source_ticket: <immutable raw invocation or reference>
 
-intent: >
-  The user-visible problem or outcome.
+goal: <user-visible outcome>
 
 scope:
   in:
-    - <observable capability or affected area>
+    - <affected behavior or surface>
   out:
     - <explicit non-goal>
 
-requirements:
-  - id: R1
-    statement: <system behavior in observable terms>
-    scenarios:
-      - given: <context>
-        when: <trigger>
-        then:
-          - <observable result>
-
 acceptance:
-  - <checkable condition>
+  - id: R1
+    check: <observable condition>
+  - id: R2
+    check: <observable condition>
 
-discovery_strategy:
-  mode: ROOT_ONLY | DELEGATED_RESEARCH
-  rationale: <why discovery questions can or cannot leave root context>
-  questions: []
-  batch:
-    strategy: FAN_OUT_FAN_IN | ROOT_ONLY | SEQUENTIAL
-    # Host runtime chooses whether ready items run concurrently or sequentially.
-    fan_in: ONE_BARRIER | NONE
-  capability: available | unavailable | unknown
-  final_routing_deferred: true
+approach: <smallest compatible implementation approach>
+risks:
+  - <meaningful risk and mitigation>
+
+validation:
+  testing: <concise testing decision, or not-applicable>
+  checks:
+    - command: <command or manual check>
+      requirement: required | conditional | informational
+      condition: <when it applies>
+      side_effects: local-only | external-read | external-write | destructive
 
 review_focus:
   mode: initial
   goal: <one-sentence review objective>
-  acceptance_criteria_checked:
-    - <criterion ID or statement the reviewer must check>
-  relevant_architecture_decisions:
-    - <decision that affects this review, or none>
-  relevant_constraints:
-    - <explicit constraint that affects this review, or none>
-  relevant_quality_checks:
-    - <changed behavior, repository practice, or concrete risk>
-  non_goals:
-    - <unrelated cleanup, refactor, or future work>
-  finding_rule: >
-    Raise a finding only when it affects a supplied acceptance criterion,
-    explicit constraint, or concrete relevant risk in the changed behavior;
-    record useful out-of-scope observations as deferred follow-ups.
-
-# Derived only after a review finding; this is a focused repair context, not
-# another reviewer assignment.
-repair_context:
-  prior_findings:
-    - id: <finding ID>
-      issue: <concrete blocking issue to repair>
-      evidence: <review evidence>
-  repair_delta:
-    summary: <repair change>
-    files:
-      - <changed file or symbol>
-  affected_criteria:
-    - <criterion directly affected by the repair>
-  affected_validation:
-    - <check that must be rerun after the repair>
-
-routing:
-  requested_mode: AUTO | SOLO | SUBAGENTS
-  preferred: SOLO | SUBAGENTS
-  current: SOLO | SUBAGENTS
-  reason: <why this topology is the smallest safe choice>
-  fallback_used: no | <preferred -> effective selection and reason>
-
-
-
-constraints:
-  - <compatibility, safety, or repository constraint>
-
-specialist_skills:
-  - id: <identifier>
-    source: <user-provided or already-installed path or URL>
-    status: selected | skipped | unavailable
-    reason: <ticket fit and expected benefit, or why it was not used>
-
-testing:
-  behavior: <observable behavior being changed, or none>
-  seam: <public interface or observable boundary, or none>
-  existing_coverage: <relevant tests or none found>
-  approach: regression | acceptance | characterization | existing-sufficient | manual | not-applicable
-  development_mode: test-first | test-after | not-applicable
-  rationale: <why this is the smallest useful evidence>
-
-assumptions:
-  - <low-risk assumption, or none>
-
-architecture:
-  approach: <smallest compatible approach>
-  affected_areas:
-    - <path, symbol, or interface>
-  risks:
-    - <risk and mitigation>
-
-validation:
-  - command: <command or manual check>
-    requirement: required | conditional | informational
-    condition: <when it applies>
-    side_effects: local-only | external-read | external-write | destructive
-
-delivery:
-  mode: GUIDED | PR
-  checkpoint_plan:
-    - <review slice, or none for PR mode>
-  authorized_actions:
-    - <action and explicit provenance, or none>
-
-open_questions: []
+  acceptance_criteria_checked: [R1, R2]
+  relevant_architecture_decisions: [<decision affecting review, when any>]
+  relevant_constraints: [<ticket constraint>]
+  relevant_quality_checks: [<changed behavior or concrete risk>]
+  non_goals: [<out-of-scope work>]
+  finding_rule: <what makes a finding actionable>
 ```
 
-## Readiness Rules
+`scope.out`, `risks`, and the review lists may be omitted when genuinely empty;
+acceptance must remain observable. For a behavior change, expand `testing` with
+its behavior, seam, existing coverage, approach, and rationale. Add
+`assumptions` or `open_questions` only when they affect safe implementation. Add a bounded `discovery_strategy` only
+when read-only discovery leaves the root; add routing facts only when needed to
+explain a topology decision. Delivery authorization and continuation belong to
+run state and the delivery policy, not this spec.
 
-A `ready` working spec has a concrete intent, bounded scope and non-goals,
-observable requirements, acceptance checks, a testing decision, a validation
-plan, and explicit assumptions. It records a lightweight discovery assessment;
-`DELEGATED_RESEARCH` requires bounded read-only questions and structured
-evidence, while coupled or unclear work remains `ROOT_ONLY`. In `PR`, it also
-has an initial `review_focus` with a clear goal, every ticket-relevant
-acceptance criterion, relevant architecture decisions and constraints,
-quality concerns, non-goals, and a finding rule that keeps unrelated work out of
-the review.
-After a review finding, the root derives one transient focused repair context
-containing the concrete finding, repair delta, directly affected criteria, and
-checks. It does not rewrite the original ticket or broaden the initial focus.
-The repair context is used for one localized repair and is never a second
-review assignment. The spec records the preferred and current topology,
-concise routing reason, and fallback evidence; native capability is freshly
-observed at the delegation boundary rather than cached as a routing profile.
-Implementation may be organized into one or more cohesive commits as the work
-develops; commit boundaries are not part of working-spec readiness.
+## Readiness
 
-For a long-running ticket, the durable run state records the next valid
-workflow action. Host context preservation, compaction, retry, and restoration
-remain outside the working spec; after a context discontinuity, recovery
-re-reads authoritative state and repository/evidence reality before resuming.
-Open questions may remain only when they do not block safe implementation and
-are recorded as risks. Ask the user about a blocking decision rather than
-guessing.
+A `ready` spec has a concrete goal, bounded scope, observable acceptance,
+smallest compatible approach, meaningful risks when present, a testing decision,
+selected validation, and an initial review focus covering every ticket-relevant
+criterion and constraint. It may omit an interview when the ticket already
+provides those facts. Ask the user about blocking intent, compatibility, risk,
+or external-action decisions; record low-risk assumptions instead.
+
+The initial `review_focus` is the sole structured review scope. It may reference
+acceptance IDs instead of copying their prose. After a concrete, localized,
+clearly repairable finding, create a separate transient repair context with only
+the finding, repair delta, directly affected criteria, and affected checks. It
+is never a second review assignment.
+
+Host context preservation, compaction, retries, and restoration are runtime
+concerns. After a discontinuity, recovery re-reads run state and repository and
+evidence reality before resuming.

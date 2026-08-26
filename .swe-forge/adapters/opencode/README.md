@@ -1,31 +1,17 @@
 # OpenCode Adapter
 
-This adapter exposes SWE Forge through current OpenCode user-level
-conventions. OpenCode is a Compatible adapter with prior successful use. Its
-demonstrated capabilities may differ from other adapters while the canonical
-workflow remains portable and no parity requirement follows.
+OpenCode is a Compatible adapter exposing SWE Forge through user-level
+commands. Canonical files remain `AGENTS.md`, `SWE-FORGE.md`, and
+`.swe-forge/`; this adapter only translates host syntax and permissions.
 
-OpenCode discovers user commands under `~/.config/opencode/commands/`.
-Project agents and commands may still be used for unrelated harness
-configuration. The adapter does not redefine the workflow; canonical files
-remain `AGENTS.md`, `SWE-FORGE.md`, and `.swe-forge/`.
+## Commands
 
-## Explicit Command
+The installer links `commands/swe-forge.md` to
+`~/.config/opencode/commands/`. `$ARGUMENTS` and file references load the
+canonical support tree only when the user types `/swe-forge`. The shared
+invocation parser runs once; ordinary prompts do not activate Forge.
 
-The installer links `commands/swe-forge.md` to:
-
-```text
-~/.config/opencode/commands/swe-forge.md
-```
-
-The command uses OpenCode's file references and `$ARGUMENTS` substitution to
-load canonical instructions only when the user types `/swe-forge`. The
-canonical ticket bootstrap invokes
-`~/.config/opencode/swe-forge/.swe-forge/tools/swe-forge-invocation` exactly
-once and passes normalized facts to the agent; this adapter does not copy
-grammar into the command body.
-
-The delivery helpers are separate explicit commands:
+Delivery actions remain separate:
 
 ```text
 /git-commit [paths|message]
@@ -34,72 +20,38 @@ The delivery helpers are separate explicit commands:
 /git-sync
 ```
 
-They load `.swe-forge/policies/delivery.md` rather than copying its procedure.
-`/git-pr draft` is an explicit draft request; plain `/git-pr` retains
-normal/open behavior. See [shared adapter behavior](../README.md).
+Each delivery command loads `policies/delivery.md`; `/git-pr draft` is an
+explicit draft request and plain `/git-pr` remains normal/open.
 
-Do not install a command that auto-runs the workflow for ordinary prompts.
+## Native subagents
 
-## Native Subagents
+When routing selects `SUBAGENTS`, render and validate the canonical worker brief
+with `../../tools/swe-forge-worker-brief` and pass it unchanged with the role
+and result/review contract. Writable workers in one delivery checkout run
+sequentially; the root owns materialization, integration, and delivery.
 
-OpenCode provides native primary and subagent modes. Use them when the routing
-policy selects `SUBAGENTS`. Before launch, invoke
-`../../tools/swe-forge-worker-brief render` with root-produced structured input
-and pass its validated output unchanged with the relevant canonical role and
-result/review contract. The renderer owns inclusion and dependency rules; this
-adapter does not construct briefing fields.
-
-Writable native subagents in one checkout must run sequentially. Non-overlapping
-file scope alone does not make concurrent writes safe. The root orchestrator
-keeps final integration and delivery under its own checkout.
-
-For a custom native role, create a thin project agent in `.opencode/agents/`
-that contains only:
+A custom `.opencode/agents/` entry should be a thin host bridge, for example:
 
 ```markdown
 ---
-description: Read-only independent SWE Forge review
+description: Read-only SWE Forge review
 mode: subagent
 permission:
   edit: deny
   bash: deny
 ---
 
-Read `.swe-forge/agents/reviewer.md` and follow that canonical role. Return
-findings using `.swe-forge/contracts/review.md`. Do not duplicate the role
-instructions here.
+Read `.swe-forge/agents/reviewer.md` and return findings using
+`.swe-forge/contracts/review.md`.
 ```
 
-Choose permissions for each role deliberately. Read-only researchers and
-reviewers should not receive edit access. Writable implementers need explicit
-scope from a task contract.
-
-## Runtime and Permissions
-
-OpenCode runtime and permission mappings are configuration choices. Keep them in
-the target project's OpenCode configuration or user configuration, never in
-canonical role files.
-
-The adapter does not require a particular runtime, permission mode, or MCP
-server.
-
-## Skills
-
-The explicit command is the default integration because current OpenCode skill
-discovery is agent-visible and does not provide the same explicit-only
-invocation control as the command loader. A future skill adapter should remain
-a small host projection and preserve the activation contract.
+Keep runtime and permission choices in OpenCode configuration. Read-only roles
+must not receive edit access; writable scope comes from the task contract.
 
 ## References
 
-The adapter was designed against current OpenCode documentation for:
-
-- project agents in `.opencode/agents/`;
-- project commands in `.opencode/commands/`;
-- `$ARGUMENTS` and file references in command templates; and
-- permission-based agent tool control.
-
-References checked on 2026-08-10:
+The adapter follows OpenCode's command, agent, skill, and permission
+conventions. See [shared adapter behavior](../README.md) and:
 
 - https://opencode.ai/docs/agents/
 - https://opencode.ai/docs/commands/

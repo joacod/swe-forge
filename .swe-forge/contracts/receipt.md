@@ -1,73 +1,56 @@
 # SWE Forge Receipt Contract
 
-A receipt is a compact private run-evidence summary generated from the
-executable evidence ledger. It contains no transcripts, raw logs, secrets, or
-private ticket content. It is not a replacement for run state, review, or final
-Git inspection, and it is not a project-facing PR description, commit message,
-branch name, or changelog entry. Never copy a receipt into a PR description;
-this rule applies to every repository, including SWE Forge itself.
+A receipt is a compact private run-evidence summary. It is generated from the
+executable ledger and Git state; it is not run state, a review, or project-facing
+PR content. Never copy transcripts, secrets, private ticket content, or receipt
+metadata into a PR, commit, branch, or changelog.
 
-## Template
+## Shape
 
 ```text
 ## SWE Forge receipt
 Execution: SOLO | SUBAGENTS
 Delivery: GUIDED | PR
 Run metadata: (optional)
-- SWE Forge: <release version>
-- Harness: <name> <version>
-- Routing: <requested topology> -> <selected topology>
-- Model provider: <safe public model provider label>
-- Routing reason: <short rationale>
-Repository: <repository identity>
-Base: <short base SHA>
+- SWE Forge: <version>
+- Harness: <name and version>
+- Routing: <requested -> selected>
+- Model provider: <safe public label>
+Repository: <identity>
+Base: <short SHA>
 Branch: <delivery branch>
 Head: <short final SHA>
 Evidence fingerprint: <short final fingerprint>
 Generated at: <UTC timestamp>
-Commits: <count> (<validated slices>, <review-repair commits>)
+Commits: <validated slice and repair counts>
 Verification:
 - <registered check>: passed | failed | skipped | unavailable | not-applicable
-Fresh review: PASS | CHANGES_REQUIRED | NOT RUN — <findings> findings
-Review repair: completed (when applicable) — one finding repaired; repaired candidate was not independently re-reviewed
+Fresh review: PASS | CHANGES_REQUIRED | NOT RUN — <finding count>
+Review repair: completed — one finding repaired; repaired candidate was not independently re-reviewed
 Remote CI: not awaited after PR creation
 Pull request: <URL or not-created>
 Final status: ACCEPTED | BLOCKED | FAILED
 ```
 
-`Review repair` is emitted only when the one allowed repair was recorded;
-`Remote CI` is emitted for `PR` receipts, and a `GUIDED` receipt may omit that
-PR-specific line.
+Omit optional metadata when unavailable. `Review repair: completed` appears
+only for the one recorded repair; the PR-only remote-CI line may be omitted for
+GUIDED. The default receipt is `$STATE/receipt.md` and its path is recorded in
+`receipt_ref`.
 
-Receipts render the latest relevant status for every planned check. The
-executable gate retains the default receipt at `$STATE/receipt.md` and records
-that run-local path in `receipt_ref`; an explicit output path may replace it.
+## Evidence rules
 
-Record a model provider separately only when a safe public label is available.
-Omit unavailable metadata rather than guessing, and never publish credentials,
-private paths, raw transcripts, or private ticket details.
+`ACCEPTED` requires a clean non-protected branch, baseline ancestry, at least
+one checkpoint, every required/applicable final check passing for the exact
+candidate, and either fresh review `PASS` or the one recorded repair with
+affected validation. PR mode also requires its PR URL.
 
-## Required evidence
+For PR, every recorded implementation or review-repair checkpoint has a
+materializing commit. Final acceptance consumes current candidate-bound
+validation and review/repair evidence; it does not rerun unchanged work or
+another review. PR creation adds no remote validation requirement.
 
-`ACCEPTED` requires a clean non-protected branch, a baseline ancestor, at least
-one checkpoint, every required and applicable conditional final check passing
-for the exact current candidate fingerprint, fresh review `PASS` for the exact
-current `HEAD` and fingerprint or one recorded review repair with affected
-validation, and a PR URL in `PR` mode.
-
-For `PR`, every recorded implementation or review-repair checkpoint must be
-bound to a materializing commit before delivery. The agent may use one or more
-coherent checkpoints and commits; no predeclared commit sequence is required.
-Final acceptance and receipt generation consume the current candidate-bound
-validation and either PASS review evidence or the recorded repair evidence;
-they do not rerun unchanged validation or another review. PR creation does not
-add a remote validation requirement.
-
-The read-only `receipt-verify` operation compares the receipt with the current
-repository identity, branch, `HEAD`, final candidate fingerprint, and final
-evidence state. A receipt created before a later commit, same-path edit,
-untracked-content change, or replacement file is stale and must be rejected.
-
-A receipt reports failed, skipped, unavailable, not-applicable, or missing
-evidence explicitly. It never infers success from worker summaries and cannot
-be hand-edited to upgrade a status.
+`receipt-verify` compares repository identity, branch, `HEAD`, candidate
+fingerprint, and final evidence. Later commits, same-path edits, untracked
+changes, or replacement files make a receipt stale. Missing, failed, skipped,
+unavailable, and not-applicable evidence stays explicit; a receipt cannot be
+hand-edited to upgrade status.

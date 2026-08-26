@@ -26,10 +26,9 @@ A workflow should define:
 - phases and decision points;
 - artifacts and contracts it consumes;
 - routing differences from the general ticket workflow;
-- test and verification strategy;
-- failure and recovery boundaries;
-- final acceptance gate; and
-- concise report format.
+- test and verification evidence to feed the canonical gate;
+- failure and recovery boundaries; and
+- workflow-specific report additions, if any.
 
 Keep the workflow proportional. Do not import product-management ceremony,
 unrestricted agent conversations, or role requirements that the ticket does not
@@ -58,7 +57,8 @@ when it protects a required behavior or safety boundary.
 - concurrent mutation of the canonical delivery candidate is forbidden;
 - workers return structured results with canonical delivery identity, scope, and
   validation evidence; physical worker execution details are host-private;
-- verification and fresh review are proportional and real;
+- verification and any fresh review feed the canonical Acceptance Gate and are
+  proportional and real;
 - adapters remain subordinate integration layers and do not redefine canonical
   workflow semantics; and
 - examples and conformance coverage explain when the workflow should not be used.

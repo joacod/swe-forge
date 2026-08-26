@@ -1,308 +1,68 @@
-# Example: Parallel Ticket
+# Example: Independent Research, Sequential Writes
 
-This is a complete illustrative run for a ticket where independent research is
-useful, but concurrent mutation would create unnecessary conflict. The example
-uses native subagents for read-only work and keeps the coupled implementation
-under one root owner.
+Ticket: add pagination and status filtering to an admin orders list, preserving
+unfiltered callers and adding focused API/UI coverage.
 
-## 1. Ticket
+## Discovery
 
-```text
-Add server-side pagination and status filtering to the admin orders list.
-
-Requirements:
-- GET /admin/orders accepts status, limit, and cursor.
-- Invalid limits return HTTP 400.
-- The response includes next_cursor when more results exist.
-- Existing unfiltered callers remain compatible.
-- The admin table stores status and cursor state in the URL.
-- Add focused API and UI coverage.
-```
-
-## 2. Discovery
-
-The orchestrator identifies two genuinely independent read-only questions and
-launches both bounded researcher briefs in one small first-wave batch, before
-consuming either result. Each brief names one question, allowed reads, and a
-concise evidence budget. The root waits at one fan-in barrier, accepts both
-structured results, resolves any contradiction from repository evidence, and
-then continues to specification. The workers do not communicate or write; once
-each acceptance condition is met, they stop. A follow-up would be allowed only
-for a `BLOCKED` result caused by a missing required fact.
-
-Research result from the API worker:
-
-- `services/orders/src/http/admin-orders.ts` owns the route.
-- `services/orders/src/repositories/order-repository.ts` already accepts a
-  status predicate but returns the full collection.
-- `services/orders/tests/admin-orders.test.ts` uses the repository test fixture.
-- Existing API responses preserve unknown fields for compatibility.
-
-Research result from the UI worker:
-
-- `apps/admin/src/orders/OrdersTable.tsx` owns the table query state.
-- `apps/admin/src/orders/use-orders.ts` builds the request URL.
-- `apps/admin/src/orders/OrdersTable.test.tsx` covers empty and populated lists.
-- URL state uses the existing query-string helper.
-
-Test-strategy result:
-
-- Add API cases for invalid limit, status filtering, cursor continuation, and
-  an unfiltered request.
-- Add UI cases for URL initialization, status changes, and next-page behavior.
-- No full end-to-end browser run is needed unless the repository's quality gate
-  requires it.
-
-## 3. Specification
-
-Acceptance criteria:
-
-- `status` filters orders without changing the default unfiltered result.
-- `limit` is bounded by the repository's existing API convention.
-- Invalid `limit` returns HTTP 400 with the established error shape.
-- `next_cursor` is omitted when there is no next page.
-- Existing callers that omit all new parameters remain compatible.
-- The admin URL represents the selected status and cursor.
-- API and UI focused tests pass.
-
-Assumptions:
-
-- The repository's existing cursor encoding is safe to reuse.
-- The current API error format is the compatibility boundary.
-
-Risks:
-
-- cursor ordering must remain stable while new orders are inserted
-- UI reset behavior must clear a stale cursor when status changes
-
-## 4. Architecture
-
-Reuse the existing repository query and query-string helpers. Add cursor
-translation at the HTTP boundary, keep the response shape backward compatible,
-and reset the UI cursor when the status filter changes.
-
-## 5. Decomposition
+The root identifies two independent read-only questions:
 
 ```yaml
 tasks:
   api-research:
     role: researcher
-    access: read-only
-    dependencies: []
+    scope: API route, repository query, and API tests
   ui-research:
     role: researcher
-    access: read-only
-    dependencies: []
-  test-strategy:
-    role: test-engineer
-    access: read-only
-    dependencies: []
+    scope: table query state, URL helper, and UI tests
   implementation:
     role: implementer
-    access: read-write
-    dependencies:
-      - api-research
-      - ui-research
-      - test-strategy
-  review:
-    role: reviewer
-    access: read-only
-    dependencies:
-      - implementation
+    dependencies: [api-research, ui-research]
 ```
 
-## 6. Routing Decision
+Each researcher receives one bounded question, allowed reads, an evidence
+budget, and the `READ_ONLY` result contract. The root submits the independent
+questions as one logical fan-out, waits at one fan-in barrier, and resolves
+contradictions centrally. The host may schedule them concurrently or
+sequentially.
 
-```text
-requested_mode: AUTO
-routing:
-  preferred: SUBAGENTS
-  current: SUBAGENTS
-requested_delivery: DEFAULT
-delivery_mode: PR
-reason: API research, UI research, and test strategy are independent read-only tasks; submit one bounded logical fan-out/fan-in batch, let the host decide whether ready research runs concurrently or sequentially, then keep implementation sequential because the API contract and UI behavior are coupled.
-fan_in: one root barrier after the batch
-fallback: serialize research or use SOLO if native workers are unavailable
-```
-
-
-## 7. Task Contract
-
-The implementation worker receives a bounded contract:
+## Specification
 
 ```yaml
-task_id: orders-pagination
-objective: Implement the API and admin UI pagination behavior described above.
-reason: Research and test strategy are complete; one writer can preserve the API/UI contract safely.
-owner_role: implementer
-dependencies:
-  - api-research
-  - ui-research
-  - test-strategy
-write_access: read-write
-working_spec_ref: none
-checkout_baseline:
-  # Canonical delivery-candidate identity; not the worker's physical cwd.
-  path: <absolute canonical delivery checkout path>
-  head: <revision>
-  branch: <canonical delivery branch defining the candidate>
-  branch_setup: auto-created | reused | user-provided
-  classification: writable
-  remote_default_evidence: <reference>
-  staged: []
-  unstaged: []
-  untracked: []
-delegation:
-  allowed: false
-allowed_scope:
-  - services/orders/src/http/admin-orders.ts
-  - services/orders/src/repositories/order-repository.ts
-  - services/orders/tests/admin-orders.test.ts
-  - apps/admin/src/orders/**
-forbidden_scope:
-  - unrelated services
-  - global query-string helpers
+goal: Add compatible API pagination/filtering and URL-backed admin controls.
+scope:
+  in: [orders API, admin orders URL state, focused API/UI tests]
+  out: [unrelated query helpers and full browser audit]
 acceptance:
-  - all ticket criteria pass
-testing:
-  behavior: API filtering/cursor compatibility and admin URL-backed pagination behavior.
-  seam: HTTP API response boundary and admin table URL/query boundary.
-  existing_coverage: Focused API and UI tests cover adjacent behavior.
-  approach: acceptance
-  development_mode: test-after
-  rationale: Add focused acceptance cases at both public boundaries without requiring a full browser run.
+  - status filters without changing the default unfiltered result
+  - invalid limits use the established HTTP 400 shape
+  - cursors and URL state behave correctly
+  - focused tests pass
+approach: Reuse existing repository pagination and query-string helpers.
+risks:
+  - reset a stale cursor when status changes
 validation:
-  - command: <orders API focused tests>
-    requirement: required
-    condition: always
-    side_effects: local-only
-  - command: <admin orders focused tests>
-    requirement: required
-    condition: always
-    side_effects: local-only
-risk: medium
-expected_output:
-  - implementation
-  - focused test evidence
-  - structured worker result
-authorization:
-  commit: {status: not-authorized, provenance: none, scope: none}
-  push: {status: not-authorized, provenance: none, scope: none}
-  create_pull_request: {status: not-authorized, provenance: none, scope: none}
-  publish: {status: not-authorized, provenance: none, scope: none}
-  merge: {status: not-authorized, provenance: none, scope: none}
+  testing:
+    behavior: API filtering/cursors and URL-backed admin pagination
+    seam: API response and admin URL/query boundaries
+    approach: acceptance
+    rationale: Focused API/UI cases cover both public surfaces.
+  checks: [focused API tests, focused UI tests, relevant typecheck]
 ```
 
-## 8. Implementation Result
+Research is useful because the API and UI facts can be checked independently;
+implementation remains one bounded writer because their contract is coupled.
+If native workers are unavailable, use root-owned sequential research without
+claiming delegation.
 
-This block is hypothetical expected output after replacing and running the
-repository-specific command placeholders:
+## Handoff
 
-```text
-RESULT_PROFILE: WRITABLE
-STATUS: DONE
-TASK_ID: orders-pagination
-BASE_SHA: <canonical delivery base>
-HEAD_SHA: <canonical delivery head or none>
-BRANCH: <canonical delivery branch>
-FILES_CHANGED:
-- services/orders/src/http/admin-orders.ts
-- services/orders/src/repositories/order-repository.ts
-- services/orders/tests/admin-orders.test.ts
-- apps/admin/src/orders/OrdersTable.tsx
-- apps/admin/src/orders/use-orders.ts
-- apps/admin/src/orders/OrdersTable.test.tsx
-GIT_STATE:
-- clean
-VALIDATION:
-- command: <orders API focused tests>
-  requirement: required
-  condition: always
-  applies: true
-  result: passed
-  evidence: invalid limits, filtering, cursor continuation, and compatibility pass
-- command: <admin orders focused tests>
-  requirement: required
-  condition: always
-  applies: true
-  result: passed
-  evidence: URL state and reset behavior pass
-FINDINGS:
-- API filtering and cursor handling remain compatible while admin pagination state is persisted in the URL.
-EVIDENCE:
-- services/orders/src/http/admin-orders.ts#pagination
-- apps/admin/src/orders/OrdersTable.tsx#url-state
-RISKS:
-- A full browser integration run was not needed for the covered URL-state behavior.
-```
+Before launch, render and validate `worker-brief-input/v1`. The implementation
+brief contains only its objective, allowed scope, acceptance, validation,
+permissions, and accepted dependency digest. It does not contain the root
+transcript or full research results. The result is materialized and validated in
+the canonical delivery checkout before root acceptance.
 
-## 9. Integration and Verification
-
-The orchestrator inspects the worker's diff and confirms every touched path is
-within the task contract. It runs the focused API and UI checks, then runs the
-repository typecheck because both server and UI interfaces changed.
-
-```text
-<orders API focused tests>       passed
-<admin orders focused tests>     passed
-<repository typecheck>           passed
-git diff --check                 passed
-```
-
-## 10. Independent Review
-
-The initial reviewer handoff contains the candidate identity, original ticket,
-complete ticket-relevant `review_focus`, final diff, and current validation
-evidence. The focus is authoritative and names the criteria and relevant risks
-without replaying the worker transcript or general workflow policy:
-
-```yaml
-review_focus:
-  mode: initial
-  goal: Confirm compatible API and URL-backed pagination behavior.
-  acceptance_criteria_checked:
-    - unfiltered callers remain compatible
-    - invalid limits are rejected
-    - cursor and URL state reset correctly
-  relevant_architecture_decisions:
-    - Keep pagination state at the API and admin URL boundaries.
-  relevant_constraints:
-    - Existing callers that omit new parameters remain compatible.
-  relevant_quality_checks:
-    - compatibility and stale-cursor handling
-  non_goals:
-    - unrelated query-string helpers or a full browser audit
-```
-
-It returns:
-
-```yaml
-status: PASS
-findings: []
-```
-
-If the initial review returns `CHANGES_REQUIRED`, the root creates a focused
-repair context with only the prior blocking finding, repair delta, and directly
-affected criteria and checks. Unaffected prior `PASS` conclusions carry forward
-for the root; no second reviewer is invoked.
-
-## 11. Final Acceptance
-
-The orchestrator compares the final diff to the original ticket, confirms all
-acceptance criteria and relevant quality gates pass, and reports the one review
-result. If a concrete finding was repaired, it also reports the focused repair
-and that the repaired candidate was not independently re-reviewed:
-
-```text
-requested_mode: AUTO
-routing:
-  preferred: SUBAGENTS
-  current: SUBAGENTS
-requested_delivery: DEFAULT
-delivery_mode: PR
-result: ACCEPTED
-changed: API pagination/filter handling and admin URL-backed controls
-validation: focused API tests, focused UI tests, typecheck, diff check passed
-review: PASS
-remaining_risks: none material for the ticket scope
-```
+The root then runs final validation once, performs one fresh review of the same
+candidate, and applies the normal Acceptance Gate. One concrete localized
+review finding may receive one focused repair; no second review is launched.

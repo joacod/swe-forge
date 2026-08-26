@@ -1,131 +1,58 @@
 # Failure Recovery Policy
 
-## Worker Status
+Use this policy only after a worker or workflow phase is `BLOCKED` or
+`FAILED`. Preserve evidence and use the smallest safe recovery; never turn an
+incomplete result into success.
 
-Workers return one of:
+## Status and retry boundary
 
-- `DONE`: acceptance criteria and assigned validation are satisfied, the
-  delivery checkout evidence is complete, and the structured result is valid;
-- `BLOCKED`: safe progress requires context, access, a decision, a capability,
-  or a scope change; and
-- `FAILED`: the attempt did not satisfy acceptance criteria or exposed an
+- `DONE` means the task contract and assigned evidence are satisfied.
+- `BLOCKED` means safe progress needs context, access, a decision, capability,
+  or scope change.
+- `FAILED` means the attempt did not satisfy acceptance or exposed an
   unresolved failure.
 
-A host task lifecycle state is scheduling evidence only. It never replaces a
-structured result, Git evidence, validation, or root-owned acceptance.
+Host retries are not Forge task retries. After a host retry or recovery, inspect
+the actual checkout and evidence before continuing and do not duplicate semantic
+work. Allow one Forge retry per task after a changed hypothesis or explicit
+correction; stop when the same evidence recurs. Exceeding that limit needs
+explicit guidance or task authorization.
 
-## Host retry boundary
+## Recovery ladder
 
-Automatic model or harness retries are not SWE Forge task retries. While a host
-is retrying, do not launch duplicate workers, repeat the plan, or make a second
-delivery attempt. Once the call settles, inspect the actual checkout and
-evidence state before continuing. If the call still fails, record the failure
-separately and use at most the normal one Forge retry after a changed hypothesis
-or explicit correction.
+1. supply missing context or access;
+2. clarify the contract and retry once;
+3. investigate with the debugger when the cause is uncertain;
+4. serialize conflicting work;
+5. reduce scope to the smallest safe unit;
+6. fall back to root-owned sequential work; or
+7. stop and report the unresolved failure.
 
-## Recovery Ladder
+Keep ownership explicit and never allow concurrent mutation of the canonical
+delivery candidate.
 
-Use the smallest recovery action that addresses the evidence:
+## Common cases
 
-1. supply missing context or repository access;
-2. clarify the task contract and retry once;
-3. run a focused debugger investigation;
-4. serialize work that exposed an ownership or ordering conflict;
-5. reduce the task scope to the smallest safe unit;
-6. fall back to root-owned sequential work when native delegation is unavailable;
-7. escalate capability or assign the work to the orchestrator; and
-8. stop and report the unresolved failure when safe progress is not possible.
+Classify test failures as implementation, test, environment, or pre-existing;
+reproduce where practical and rerun the smallest affected validation. For a
+checkout conflict, stop, inspect `HEAD`, branch, diff, and paths, and preserve
+the checkout. For shared resources, isolate or serialize them; migrations and
+shared persistent environments need separate authorization.
 
-Do not hide a failure by changing the status to `DONE`. Never allow concurrent
-mutation of the canonical delivery candidate.
+A blocked worker receives missing context once, then is retried only if the
+blocker is removed. It must report uncommitted changes and exact state. A worker
+cannot declare `DONE` from code inspection alone.
 
-## Retry Limits
-
-- default to one retry per task after an explicit correction;
-- record each task attempt and its reason;
-- stop when the same evidence recurs without a changed hypothesis or approach;
-  and
-- require explicit user guidance or another already-explicit task authorization
-  recorded in run state to exceed a default before continuing.
-
-The review lifecycle has no retry budget. It permits one independent review and,
-when the root can prove a finding is concrete, localized, and clearly
-repairable, one focused repair. A repair is not a review and never authorizes a
-second reviewer. Fundamental, materially uncertain, unsafe, or unrepairable
-findings block delivery.
-
-Retries must not overwrite unrelated user changes or create unbounded worker
-activity.
-
-## Common Failures
-
-### Scope Conflict
-
-Stop the conflicting task, preserve its result, update ownership or
- dependencies, serialize the remaining work, and rerun affected validation. A
-conflict between tasks classified as independent is evidence that the
-decomposition may be wrong.
-
-### Test Failure
-
-Classify the failure as implementation, test, environment, or pre-existing.
-Reproduce it, invoke the debugger when root cause is uncertain, and rerun the
-smallest affected validation after repair. A worker cannot declare `DONE` from
-code inspection alone.
-
-### Blocked Worker
-
-Provide the missing context once, then retry only if the blocker is removed.
-Otherwise reassign the bounded task or return the blocker to the root. Preserve
-uncommitted changes and report their exact checkout state.
-
-### Checkout Conflict
-
-Stop safely, preserve the current checkout, inspect `HEAD`, diff, branch, and
-candidate paths, and re-evaluate ownership and dependencies. Serialize the
-affected task from the current safe baseline. Never silently resolve a conflict
-or use destructive cleanup against ambiguous state.
-
-### Environment Failure
-
-Inspect setup commands and resource state. Treat ports, databases, temporary
-paths, migrations, and shared services as explicit resources. Allocate unique
-resources or serialize execution. Migrations and shared persistent environments
-require separate authorization. Preserve dirty or unknown resources and report
-cleanup status.
-
-### Review Finding
-
-Classify the finding using the blocking matrix in `../contracts/review.md`.
-Repair only a concrete, localized, clearly repairable blocking finding. Build a
-focused repair context from the finding, repair delta, directly affected
-criteria, and affected validation; do not replay the review handoff or the
-implementer's transcript. In `PR`, record the explicit review-repair
-checkpoint and atomic commit, then rerun the affected checks. Record the repair
-as complete and report that the repaired candidate was not independently
-re-reviewed. A fundamental, materially uncertain, unsafe, or otherwise
-unrepairable finding blocks delivery. Do not launch another reviewer, debugger,
-or recovery loop to avoid that decision. Other delivery modes use their
-existing checkpoint semantics. Do not loop on nonblocking low-confidence style
-opinions.
+A review finding follows `contracts/review.md`. Repair only one concrete,
+localized, clearly repairable blocking finding, in a focused context; record its
+repair checkpoint/commit in PR mode and rerun affected checks. The repaired
+candidate is not independently re-reviewed. Fundamental, materially uncertain,
+unsafe, or unrepairable findings block; do not launch another reviewer or a
+review/recovery loop.
 
 ## Cleanup Handoff
 
-Cleanup authorization and exact safe-removal rules are owned by
-`../policies/delivery.md`. During recovery, preserve dirty, blocked, stale,
-conflicting, or ambiguous state and report it; never use recovery as permission
-for destructive cleanup.
-
-## Final Failure Reporting
-
-If acceptance is not possible, report:
-
-- original acceptance criteria that remain unmet;
-- failed or unavailable checks;
-- relevant worker and retry history;
-- evidence and likely root cause;
-- attempted recovery actions;
-- remaining temporary state or processes; and
-- remaining impact and safest next action.
-
-An honest incomplete result is preferable to an unsupported success claim.
+Cleanup rules live in `policies/delivery.md`; recovery never authorizes
+destructive cleanup. If acceptance is impossible, report unmet criteria,
+failed or unavailable checks, relevant attempts and evidence, recovery actions,
+remaining temporary state/processes, impact, and the safest next action.

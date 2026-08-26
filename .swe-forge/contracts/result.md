@@ -1,23 +1,14 @@
 # Worker Result Contract
 
-Workers return the smallest structured result that lets the orchestrator make
-its next safe decision. The task briefing and run state remain the source of
-scope, acceptance, topology, authorization, and delivery truth; a result
-reports only the evidence produced by the worker.
+Return the smallest structured evidence needed for the root's next safe
+decision. The task briefing and run state remain authoritative for scope,
+authorization, topology, and delivery. Review results use `review.md`, not an
+ordinary result profile.
 
-## Executable contract surface
+## Executable surface
 
-The dependency-free `.swe-forge/tools/swe-forge-worker-result` tool exposes
-this contract without coupling it to a host runtime. `schema` emits the
-machine-readable `worker-result/v1` profile map. `validate` accepts an ordinary
-`READ_ONLY` or `WRITABLE` result, checks its profile-specific fields and
-validation records, and exits non-zero for malformed or incompatible input.
-Successful validation returns a compact machine-readable confirmation; the
-returned result remains untrusted evidence until the normal workflow consumes
-it.
-
-The same tool supplies host-neutral structured transport ports without moving
-host API mechanics into the canonical layer:
+`.swe-forge/tools/swe-forge-worker-result` owns the ordinary `worker-result/v1`
+profiles, validation, JSON-Schema projection, and line-oriented encoding:
 
 ```text
 swe-forge-worker-result schema --profile READ_ONLY --task-id ID --format json-schema
@@ -26,32 +17,20 @@ swe-forge-worker-result schema --profile REVIEW --format json-schema
 swe-forge-worker-result encode --profile READ_ONLY|WRITABLE --task-id ID --input FILE|-
 ```
 
-The JSON-Schema projections bind ordinary results to their canonical task ID.
-`encode` validates the structured ordinary result, rejects unsafe values, and
-emits the existing line-oriented representation. Review semantics and the
-blocking matrix remain owned by `review.md` and the accountable root workflow.
+The profile map is:
 
-`REVIEW` uses `review.md` and its blocking matrix. Reviewers therefore return
-the dedicated review shape rather than an implementation result profile.
-
-## Profile selection
-
-The profile is selected from the worker's role and write access. This table is
-the canonical profile map; roles and policies refer to it rather than defining
-competing result shapes.
-
-| Worker responsibility | Profile | Canonical return contract |
+| Responsibility | Profile | Contract |
 | --- | --- | --- |
-| Read-only research or analysis that returns a worker result | `READ_ONLY` | This file, [Read-only result](#read-only-result) |
-| Bounded writable implementation whose result is materialized into the canonical delivery candidate | `WRITABLE` | This file, [Normal writable result](#normal-writable-result) |
-| Independent review | `REVIEW` | [review.md](review.md), never an implementation result |
+| read-only research or analysis | `READ_ONLY` | this file |
+| bounded writable implementation | `WRITABLE` | this file |
+| independent review | `REVIEW` | [review.md](review.md) |
 
-## Ordinary result rules
+The validator checks profile fields and task identity. A valid result is still
+untrusted evidence until the root checks scope, candidate state, and acceptance.
 
-`READ_ONLY` and `WRITABLE` are ordinary line-oriented result profiles. They
-share only the fields needed to correlate and consume evidence. The executable
-validator accepts the field shape below and rejects unknown or profile-
-irrelevant fields:
+## Common result
+
+Both ordinary profiles use this line-oriented shape:
 
 ```text
 RESULT_PROFILE: READ_ONLY | WRITABLE
@@ -59,86 +38,38 @@ STATUS: DONE | BLOCKED | FAILED
 TASK_ID: <task identifier>
 
 FINDINGS:
-- <concise independently checkable finding>
+- <concise independently checkable outcome or issue>
 
 EVIDENCE:
 - <precise file, symbol, command, Git, or behavior reference>
 
 RISKS:
-- <relevant risk or unknown; omit this section when there is none>
+- <relevant risk or unknown; omit when empty>
 
 RECOMMENDED_ACTION:
-- <next action for the accountable orchestrator; omit when no action is useful>
+- <next action; omit when unnecessary>
 ```
 
-Rules for both ordinary profiles:
+`DONE` means the bounded task satisfied its contract evidence; it does not
+authorize delivery. `BLOCKED` and `FAILED` include evidence and the smallest
+useful next action. Do not add empty sections or fields for another profile.
 
-- `RESULT_PROFILE`, `STATUS`, `TASK_ID`, `FINDINGS`, and `EVIDENCE` are the
-  common result surface. Keep findings concise and use references instead of
-  pasting source excerpts or replaying exploration.
-- `RISKS` and `RECOMMENDED_ACTION` are conditional. Do not emit empty sections
-  merely to match the writable profile.
-- `DONE` means the bounded task was answered with the evidence required by its
-  task contract. It does not authorize delivery or replace Git/evidence gates.
-- `BLOCKED` and `FAILED` include the evidence and smallest useful next action;
-  they do not need irrelevant checkout or delivery headings.
+## Read-only result
 
-### Dependency handoff eligibility
+A read-only result contains only the common surface. Do not add Git, changed
+paths, worker execution metadata, validation blocks, environment resources, or
+delivery authorization. A command used for research is evidence, not an
+implementation validation record.
 
-A `DONE` result is eligible to inform a dependent worker only after the root
-orchestrator verifies its task identity, profile, scope, required evidence, and
-assigned validation. The root may then derive a compact `dependency_digest`
-from the accepted result and the dependent task's objective and acceptance
-criteria. The digest belongs in the dependent worker's existing briefing
-projection; it is not a new result field, peer message, or persistent
-coordination record.
+## Writable result
 
-The full result remains root-owned. A digest may carry only B-relevant accepted
-decisions, facts, interfaces, paths or symbols, authoritative assumptions,
-validation facts, unresolved risks, and references for deeper inspection. It
-must not copy reasoning, exploration, unrelated findings, full logs, full
-diffs, or unrelated delivery metadata. A dependent worker remains bounded by
-its own task contract and must request a contract revision before expanding
-scope.
-
-### Read-only result
-
-A researcher or other read-only analysis worker normally returns only the
-common surface:
-
-```text
-RESULT_PROFILE: READ_ONLY
-STATUS: DONE
-TASK_ID: repository-result-contract-map
-
-FINDINGS:
-- The researcher can report the profile boundary without a checkout snapshot.
-
-EVIDENCE:
-- .swe-forge/contracts/result.md#profile-selection
-- .swe-forge/agents/researcher.md#output
-
-RISKS:
-- <only a relevant unknown>
-
-RECOMMENDED_ACTION:
-- Use the READ_ONLY profile for the discovery task.
-```
-
-Do not add `BASE_SHA`, `HEAD_SHA`, `BRANCH`, `FILES_CHANGED`, `GIT_STATE`,
-`DELIVERABLE_COMMITS`, `VALIDATION`, environment resources, or delivery
-authorization to a read-only result. A command used during research is
-evidence, not an implementation validation block.
-
-### Normal writable result
-
-A bounded implementer adds only the Git, change, and validation evidence needed
-to verify and consume the materialized canonical delivery candidate:
+A bounded implementation adds the evidence needed to consume its materialized
+canonical candidate:
 
 ```text
 RESULT_PROFILE: WRITABLE
 STATUS: DONE
-TASK_ID: result-contract-profiles
+TASK_ID: <task identifier>
 
 BASE_SHA: <canonical delivery base>
 HEAD_SHA: <canonical delivery head or none>
@@ -149,13 +80,10 @@ FILES_CHANGED:
 
 GIT_STATE:
 - clean
-# For a dirty checkout, list only the relevant non-empty categories instead:
-# - staged: <path>
-# - unstaged: <path>
-# - untracked: <path>
+# otherwise list only relevant staged, unstaged, or untracked paths
 
 DELIVERABLE_COMMITS:
-- <local commit SHA and subject; emit only when a commit exists>
+- <local SHA and subject; omit when none>
 
 VALIDATION:
 - command: <assigned check>
@@ -169,49 +97,29 @@ SCOPE_EXCEPTIONS:
 - <contract revision reference; omit when none>
 
 FINDINGS:
-- <concise implementation outcome or issue>
+- <concise outcome or issue>
 
 EVIDENCE:
 - <diff, file, symbol, command, Git, or behavior reference>
-
-RISKS:
-- <relevant risk or unknown; omit when there is none>
-
-RECOMMENDED_ACTION:
-- <next action; omit when no action is useful>
 ```
 
-`BASE_SHA`, `HEAD_SHA`, and `BRANCH` identify the canonical delivery candidate
-and its accepted Git fingerprint; they do not identify the worker's physical
-execution environment. `FILES_CHANGED`, `GIT_STATE`, and assigned `VALIDATION`
-entries are required when the writable task reaches that stage.
-`DELIVERABLE_COMMITS` and `SCOPE_EXCEPTIONS` are conditional; do not return
-empty lists. The task contract and working spec already contain the testing
-decision, so a writable result reports the checks actually run rather than
-repeating testing prose.
-
-The task contract remains responsible for allowed scope and per-action
-authorization. The result exposes changed paths and exceptions so the
-orchestrator can compare them with that contract; it does not grant authority.
-
-## Review result
-
-Review workers use [review.md](review.md) and its `PASS`/
-`CHANGES_REQUIRED` contract. They are not asked to reshape review findings into
-`READ_ONLY` or `WRITABLE`, and a review result never replaces implementation
-evidence.
+`BASE_SHA`, `HEAD_SHA`, and `BRANCH` identify the canonical delivery candidate,
+not the worker's physical environment. `FILES_CHANGED`, `GIT_STATE`, and
+assigned `VALIDATION` are required when the task reaches that stage.
+`DELIVERABLE_COMMITS` and `SCOPE_EXCEPTIONS` are conditional. The task contract
+owns scope and authorization; the result only reports paths and exceptions.
 
 ## Consumption
 
-Consume every result through the selected profile:
+Correlate task identity and status first. For `READ_ONLY`, check concise
+findings, references, risks, and next action. For `WRITABLE`, additionally
+check canonical candidate identity, changed paths, Git state, assigned checks,
+and blockers. A `DONE` result is eligible for a dependent worker only after the
+root validates it against its task and derives a compact B-relevant
+`dependency_digest` in the dependent briefing. The digest is not a peer message
+or result field.
 
-- correlate `TASK_ID` and `STATUS` first;
-- for `READ_ONLY`, evaluate findings, references, risks, and any recommended
-  action without inventing Git or delivery requirements;
-- for `WRITABLE`, verify canonical delivery identity/fingerprint, scope,
-  Git/change evidence, assigned validation, and blockers before consuming the
-  implementation; and
-- for `REVIEW`, evaluate the dedicated review contract and its blocking matrix.
-
-Workers do not create PRs, push, merge, publish, deploy, make delivery
-choices, reroute the root ticket, or recursively delegate by default.
+Reject incomplete, ambiguous, profile-mismatched, or scope-expanding results as
+`BLOCKED`; do not fill missing evidence from the briefing or memory. Workers do
+not create PRs, push, merge, publish, deploy, reroute, or recursively delegate
+by default.
