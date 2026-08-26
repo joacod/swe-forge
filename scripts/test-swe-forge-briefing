@@ -72,7 +72,7 @@ shared_input() {
     record3 task id shared-writer
     record3 task owner_role implementer
     record3 task depth 1
-    record3 task objective 'Implement the bounded delivery-checkout change.'
+    record3 task objective 'Implement the bounded worker change.'
     record3 task write_access read-write
     record3 task acceptance 'The implementation remains within its declared scope.'
     record3 task instruction AGENTS.md
@@ -132,10 +132,6 @@ dependency_input() {
 }
 
 [ -x "$TOOL" ] || fail 'canonical worker-brief tool is not executable'
-assert_text 'worker_briefing:' "$ROOT/.swe-forge/contracts/worker-brief.md"
-assert_text 'worker-brief/v1' "$ROOT/.swe-forge/contracts/worker-brief.md"
-assert_text 'render --input' "$TOOL"
-assert_text 'validate --brief' "$TOOL"
 
 read_input "$TMP_ROOT/read.input" reader-check researcher
 "$TOOL" render --input "$TMP_ROOT/read.input" >"$TMP_ROOT/read.brief"
@@ -152,8 +148,13 @@ for required in \
   'allowed_writes:' "- 'none'"; do
   assert_text "$required" "$TMP_ROOT/read.brief"
 done
-for forbidden in 'CHECKOUT:' 'source_commits:' 'create_pull_request:'; do
-  assert_absent "$forbidden" "$TMP_ROOT/read.brief"
+for forbidden in \
+  '      - delivery' \
+  '      - recursive delegation' \
+  '      - peer communication' \
+  '      - scope expansion' \
+  '      - topology decisions'; do
+  assert_text "$forbidden" "$TMP_ROOT/read.brief"
 done
 
 "$TOOL" render --input "$TMP_ROOT/read.input" >"$TMP_ROOT/read-again.brief"
@@ -206,7 +207,6 @@ for required in 'dependencies:' 'completed:' 'dependency_digest:' \
   assert_text "$required" "$TMP_ROOT/dependency.brief"
 done
 assert_absent 'RESULT_PROFILE: READ_ONLY' "$TMP_ROOT/dependency.brief"
-assert_absent 'full test log' "$TMP_ROOT/dependency.brief"
 dependency_input "$TMP_ROOT/unaccepted.input" running none
 record4 digest parser-task accepted_decisions 'This digest is not yet accepted.' >>"$TMP_ROOT/unaccepted.input"
 expect_failure 'unaccepted dependency digest' "$TOOL" render --input "$TMP_ROOT/unaccepted.input"

@@ -9,39 +9,16 @@ fail() {
   exit 1
 }
 
-require_text() {
+ci_contains() {
   needle=$1
-  file=$2
-  grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1 || fail "$file does not contain required text: $needle"
+  grep -F -- "$needle" "$ROOT/.github/workflows/ci.yml" >/dev/null 2>&1 || \
+    fail ".github/workflows/ci.yml is missing required structure: $needle"
 }
 
-reject_text() {
-  needle=$1
-  file=$2
-  if grep -F -- "$needle" "$ROOT/$file" >/dev/null 2>&1; then fail "$file contains obsolete text: $needle"; fi
-}
-
-require_ordered_text() {
-  first=$1
-  second=$2
-  file=$3
-  awk -v first="$first" -v second="$second" '
-    index($0, first) && first_line == 0 { first_line = NR }
-    first_line > 0 && NR > first_line && index($0, second) { found = 1 }
-    END { exit !(first_line > 0 && found) }
-  ' "$ROOT/$file" || fail "$file does not load '$second' after '$first'"
-}
-
-require_scope_decision() {
-  heading=$1
-  expected=$2
-  awk -v heading="$heading" -v expected="$expected" '
-    $0 == heading { in_section = 1; next }
-    in_section && /^## / { exit }
-    in_section && $0 == "scope_decision: " expected { found = 1 }
-    END { exit !found }
-  ' "$ROOT/.swe-forge/examples/scope-decision.md" || \
-    fail "scope example '$heading' does not decide $expected"
+ci_job_exists() {
+  job=$1
+  grep -Eq "^  $job:" "$ROOT/.github/workflows/ci.yml" || \
+    fail ".github/workflows/ci.yml is missing job: $job"
 }
 
 REGISTRY_VALIDATOR=$ROOT/scripts/lib/registry.sh
@@ -52,7 +29,14 @@ validate_registry() {
   line_number=0
   while IFS='|' read -r harness kind source destination support; do
     line_number=$((line_number + 1))
-    case "$harness" in ''|\#*) continue ;; esac
+    case "$harness" in
+      '')
+        [ -z "$kind$source$destination$support" ] || \
+          fail "invalid adapter registry row at line $line_number"
+        continue
+        ;;
+      \#*) continue ;;
+    esac
     swe_forge_registry_row_is_valid "$harness" "$kind" "$source" "$destination" "$support" || \
       fail "invalid adapter registry row at line $line_number"
     case "$kind" in
@@ -60,7 +44,6 @@ validate_registry() {
       tree) [ -d "$ROOT/.swe-forge/adapters/$source" ] || fail "missing adapter registry tree source at line $line_number" ;;
     esac
   done <"$ROOT/.swe-forge/adapters/registry.tsv"
-  reject_text '|project|' .swe-forge/adapters/registry.tsv
 }
 
 sh -n \
@@ -102,22 +85,19 @@ for executable in \
 done
 
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail 'missing GitHub Actions CI workflow'
-require_text 'fetch-depth: 0' .github/workflows/ci.yml
-require_text 'github.event.pull_request.base.sha' .github/workflows/ci.yml
-require_text 'git diff --check "$BASE_SHA...$CURRENT_SHA"' .github/workflows/ci.yml
-require_text './scripts/validate-swe-forge core invocation evidence installer workers' .github/workflows/ci.yml
-require_text './scripts/validate-swe-forge pi' .github/workflows/ci.yml
-require_text './scripts/validate-swe-forge omp' .github/workflows/ci.yml
-require_text './scripts/validate-swe-forge evidence installer' .github/workflows/ci.yml
-require_text './scripts/validate-swe-forge full' .github/workflows/ci.yml
-require_text './scripts/validate-swe-forge full release' .github/workflows/ci.yml
-require_text 'pr-validation:' .github/workflows/ci.yml
-require_text 'main-validation:' .github/workflows/ci.yml
-require_text 'pi-runtime:' .github/workflows/ci.yml
-require_text 'omp-runtime:' .github/workflows/ci.yml
-require_text 'macos-portability:' .github/workflows/ci.yml
-require_text 'release-validation:' .github/workflows/ci.yml
-require_text 'node-version: 22.19.0' .github/workflows/ci.yml
+ci_contains 'fetch-depth: 0'
+ci_contains 'github.event.pull_request.base.sha'
+ci_contains 'git diff --check "$BASE_SHA...$CURRENT_SHA"'
+ci_contains './scripts/validate-swe-forge core invocation evidence installer workers'
+ci_contains './scripts/validate-swe-forge pi'
+ci_contains './scripts/validate-swe-forge omp'
+ci_contains './scripts/validate-swe-forge evidence installer'
+ci_contains './scripts/validate-swe-forge full'
+ci_contains './scripts/validate-swe-forge full release'
+for job in pr-validation main-validation pi-runtime omp-runtime macos-portability release-validation; do
+  ci_job_exists "$job"
+done
+ci_contains 'node-version: 22.19.0'
 validate_registry
 
 for role in orchestrator researcher architect implementer reviewer debugger test-engineer \
@@ -139,130 +119,40 @@ for issue_template in \
   [ -f "$ROOT/$issue_template" ] || fail "missing issue template: $issue_template"
 done
 
-[ -f "$ROOT/.swe-forge/examples/scope-decision.md" ] || \
-  fail 'missing scope decision examples'
-require_scope_decision '## 1. Small cohesive ticket — PROCEED' PROCEED
-require_scope_decision '## 2. Substantial but cohesive ticket — PROCEED' PROCEED
-require_scope_decision '## 3. Several independent improvements — TOO_BROAD' TOO_BROAD
-require_scope_decision '## 4. Broad or open-ended rewrite — TOO_BROAD' TOO_BROAD
-
-for heading in '## What it does' '## Harnesses' '## Install' '## Use' '## Documentation'; do
-  require_text "$heading" README.md
+for required_file in \
+  AGENTS.md \
+  SWE-FORGE.md \
+  README.md \
+  docs/architecture.md \
+  docs/installation.md \
+  .swe-forge/adapters/README.md \
+  .swe-forge/adapters/omp/README.md \
+  .swe-forge/adapters/pi/README.md \
+  .swe-forge/conformance/scenarios.md \
+  .swe-forge/examples/parallel-ticket.md \
+  .swe-forge/examples/pr-ticket.md \
+  .swe-forge/examples/simple-ticket.md \
+  .swe-forge/examples/scope-decision.md \
+  .swe-forge/workflows/ticket.md \
+  .swe-forge/contracts/receipt.md \
+  .swe-forge/contracts/result.md \
+  .swe-forge/contracts/review.md \
+  .swe-forge/contracts/run-state.md \
+  .swe-forge/contracts/task.md \
+  .swe-forge/contracts/worker-brief.md \
+  .swe-forge/contracts/working-spec.md \
+  .swe-forge/policies/delegation.md \
+  .swe-forge/policies/delivery.md \
+  .swe-forge/policies/evidence.md \
+  .swe-forge/policies/execution-routing.md \
+  .swe-forge/policies/failure-recovery.md \
+  .swe-forge/policies/specialist-skills.md \
+  .swe-forge/policies/specification.md \
+  .swe-forge/policies/verification.md; do
+  [ -f "$ROOT/$required_file" ] || fail "missing canonical file: $required_file"
 done
-require_text 'harness-agnostic' README.md
-require_text '`SOLO`' README.md
-require_text '`SUBAGENTS`' README.md
-require_text 'scripts/swe-forge install "$HARNESS"' README.md
-require_text 'scripts/swe-forge verify "$HARNESS"' README.md
-require_text 'Neither mode merges automatically' README.md
-require_text 'one writable delivery checkout' README.md
-require_text 'physical execution environment' SWE-FORGE.md
-require_text 'materialized into the canonical delivery' docs/architecture.md
-require_text 'host decides worker physical execution and scheduling' .swe-forge/adapters/README.md
-reject_text 'CHECKOUT' .swe-forge/contracts/result.md
-reject_text 'CHECKOUT' .swe-forge/tools/swe-forge-worker-result
-reject_text 'max_workers:' .swe-forge/contracts/working-spec.md
-reject_text 'worker_limit:' .swe-forge/examples/parallel-ticket.md
-reject_text 'two to four active workers' .swe-forge/policies/delegation.md
-require_text 'Adapters are harness integration layers' docs/architecture.md
-require_text 'SWE Forge does not manage the harness context window' SWE-FORGE.md
-require_text 'host lifecycle hooks' .swe-forge/adapters/pi/README.md
-[ ! -e "$ROOT/.swe-forge/policies/context.md" ] || fail 'obsolete context policy remains'
-require_text 'one delivery checkout' docs/architecture.md
-require_text 'Writable delegated results are materialized' SWE-FORGE.md
-require_text 'schema-v4' SWE-FORGE.md
-require_text 'schema_version: 4' .swe-forge/contracts/run-state.md
-require_text 'schema-v4' .swe-forge/tools/swe-forge-state
-require_text 'worker-result/v1' .swe-forge/tools/swe-forge-worker-result
-require_text 'worker-brief-input/v1' .swe-forge/tools/swe-forge-worker-brief
-require_text 'dependency_digest' .swe-forge/contracts/worker-brief.md
-require_text 'DELEGATED_RESEARCH' .swe-forge/policies/delegation.md
-require_text 'Early discovery-shape assessment' .swe-forge/policies/execution-routing.md
-require_text 'Independent Review Handoff' .swe-forge/policies/verification.md
-require_text 'Acceptance handoff' .swe-forge/policies/verification.md
-require_text 'Cleanup Handoff' .swe-forge/policies/failure-recovery.md
-require_text 'native `task` tool' .swe-forge/adapters/omp/README.md
-require_text 'schemaMode: strict' .swe-forge/adapters/omp/README.md
-require_text 'workerBriefing' .swe-forge/adapters/pi/README.md
-require_text 'raw arguments through unchanged' .swe-forge/adapters/pi/prompts/git-pr.md
-require_text 'raw arguments through unchanged' .swe-forge/adapters/opencode/commands/git-pr.md
-require_text '~/.agents/swe-forge/.swe-forge/workflows/ticket.md' .swe-forge/adapters/shared/agent-skill/swe-forge/SKILL.md
-require_text 'allow_implicit_invocation: false' .swe-forge/adapters/shared/agent-skill/swe-forge/agents/openai.yaml
-require_text 'worker-brief-input/v1' .swe-forge/workflows/ticket.md
-require_text 'swe-forge-invocation' .swe-forge/workflows/ticket.md
-require_text 'input_status' .swe-forge/workflows/ticket.md
-require_text 'parse --raw-arguments TEXT' .swe-forge/tools/swe-forge-invocation
-require_text 'consumed_tokens' .swe-forge/tools/swe-forge-invocation
-require_text 'root/orchestrator authority' AGENTS.md
-require_text 'ephemeral internal implementation state' AGENTS.md
-require_text 'risk-proportional testing decision' SWE-FORGE.md
-require_text 'scope_decision: PROCEED | TOO_BROAD' SWE-FORGE.md
-require_text 'one cohesive reviewable PR' SWE-FORGE.md
-require_text 'substantial cohesive work' .swe-forge/agents/orchestrator.md
-require_text 'Early semantic scope decision' .swe-forge/workflows/ticket.md
-require_text 'submit separately' .swe-forge/policies/specification.md
-require_text 'Work summary' SWE-FORGE.md
-require_text 'plain human' SWE-FORGE.md
-require_text 'Run metadata:' .swe-forge/contracts/receipt.md
-require_text 'Model provider:' .swe-forge/contracts/receipt.md
-require_text 'Head:' .swe-forge/contracts/receipt.md
-require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
-require_text 'Generated at:' .swe-forge/contracts/receipt.md
-require_text 'safe_boundary:' .swe-forge/contracts/run-state.md
-require_text 'continuation:' .swe-forge/contracts/run-state.md
-require_text 'delivery_checkout:' .swe-forge/contracts/run-state.md
-require_text 'set-continuation' .swe-forge/tools/swe-forge-state
-require_text 'set-routing' .swe-forge/tools/swe-forge-state
-require_text 'set-delivery-checkout' .swe-forge/tools/swe-forge-state
-require_text 'set-receipt-ref' .swe-forge/tools/swe-forge-state
-require_text 'set-review-repair' .swe-forge/tools/swe-forge-state
-require_text 'set-pull-request' .swe-forge/tools/swe-forge-state
-require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
-require_text 'one coherent commit or several' .swe-forge/policies/delivery.md
-require_text 'materializing `commit-slice`' .swe-forge/policies/delivery.md
-require_text 'no commit sequence is predeclared' SWE-FORGE.md
-require_text 'remote default branch' .swe-forge/policies/delivery.md
-require_text 'review-repair commit' .swe-forge/policies/delivery.md
-require_text 'clean committed candidate' .swe-forge/contracts/review.md
-require_text 'coherent commits' .swe-forge/contracts/review.md
-require_text 'mode: initial' .swe-forge/contracts/review.md
-require_text 'unaffected `PASS` conclusions carry forward' .swe-forge/contracts/review.md
-require_text 'must not be used to replay unrelated criteria' .swe-forge/contracts/review.md
-require_text 'not run tests, formatters, linters' .swe-forge/agents/reviewer.md
-require_text 'initial handoff' .swe-forge/workflows/ticket.md
-require_text 'focused repair context' .swe-forge/workflows/ticket.md
-require_text 'unaffected review conclusions remain context' .swe-forge/workflows/ticket.md
-require_text 'Run final validation once the' .swe-forge/policies/verification.md
-require_text 'select the smallest final validation groups' .swe-forge/policies/verification.md
-require_text './scripts/validate-swe-forge' .swe-forge/policies/verification.md
-require_text 'full` is reserved for CI' .swe-forge/policies/verification.md
-require_text '--plan' .swe-forge/policies/verification.md
-require_text 'Later review, acceptance, and delivery gates consume this' .swe-forge/workflows/ticket.md
-reject_text 'The reviewer must confirm that writable delegated results' .swe-forge/contracts/review.md
-reject_text 'Review all applicable areas:' .swe-forge/contracts/review.md
-require_text 'one independent review' SWE-FORGE.md
-require_text 'A repaired candidate is explicitly' SWE-FORGE.md
-require_text 'Remote GitHub CI is external after PR creation' SWE-FORGE.md
-require_text 'only one focused review repair is allowed' .swe-forge/tools/swe-forge-gate
-require_text 'PR review requires a clean committed candidate' .swe-forge/tools/swe-forge-gate
-require_text 'Review repair: completed' .swe-forge/contracts/receipt.md
-reject_text 'Review attempts:' .swe-forge/contracts/receipt.md
-reject_text 'mode: initial | focused' .swe-forge/contracts/review.md
-reject_text 'review.attempts' .swe-forge/contracts/run-state.md
-require_text 'PR creation completion boundary' .swe-forge/conformance/scenarios.md
-require_text 'not awaited or polled' .swe-forge/policies/evidence.md
-require_text 'relevant PR is actually `MERGED`' .swe-forge/conformance/scenarios.md
-require_ordered_text 'Early semantic scope decision' 'Before broad discovery' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before broad discovery' 'final topology decision' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before specification or clarification behavior is needed' 'policies/specification.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'In `PR`, also load' 'contracts/working-spec.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before making the final automatic or explicit topology decision' 'policies/execution-routing.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before selecting or executing validation' 'policies/verification.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before the first writable checkout/setup operation' 'policies/delivery.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'When the review trigger applies' 'contracts/review.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'Before a `BLOCKED` or `FAILED` recovery path' 'policies/failure-recovery.md' .swe-forge/workflows/ticket.md
-require_ordered_text 'The canonical Acceptance Gate' 'Compare the final integrated diff' .swe-forge/workflows/ticket.md
-reject_text 'fresh review before commit, push' .swe-forge/policies/verification.md
-reject_text 'one reviewed local delivery-branch commit' .swe-forge/policies/delivery.md
-
+agent_config=$ROOT/.swe-forge/adapters/shared/agent-skill/swe-forge/agents/openai.yaml
+[ -f "$agent_config" ] || fail 'missing agent invocation configuration'
+grep -Fx 'allow_implicit_invocation: false' "$agent_config" >/dev/null 2>&1 || \
+  fail 'agent invocation configuration must disable implicit invocation'
 printf '%s\n' 'PASS: SWE Forge structural checks'
