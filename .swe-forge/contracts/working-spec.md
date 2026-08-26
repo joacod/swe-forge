@@ -69,17 +69,32 @@ discovery_strategy:
   final_routing_deferred: true
 
 review_focus:
+  mode: initial | focused
   goal: <one-sentence review objective>
   acceptance_criteria_checked:
     - <criterion ID or statement the reviewer must check>
-  in_scope:
-    - <changed behavior, relevant repository practice, or concrete risk>
+  relevant_architecture_decisions:
+    - <decision that affects this review, or none>
+  relevant_constraints:
+    - <explicit constraint that affects this review, or none>
+  relevant_quality_checks:
+    - <changed behavior, repository practice, or concrete risk>
   non_goals:
     - <unrelated cleanup, refactor, or future work>
+  # Focused re-review derives these fields transiently after a repair; they do
+  # not replace the original ticket or the initial review focus.
+  prior_blocking_findings:
+    - id: <finding ID>
+      issue: <prior blocking issue to re-establish>
+  repair_delta:
+    summary: <repair change to inspect>
+    files:
+      - <changed file or symbol>
   finding_rule: >
-    Raise a finding only when it affects an acceptance criterion, explicit
-    constraint, or concrete relevant risk in the changed behavior; record useful
-    out-of-scope observations as deferred follow-ups.
+    Raise a finding only when it affects a supplied acceptance criterion,
+    explicit constraint, prior blocking finding, or concrete relevant risk in
+    the changed behavior; record useful out-of-scope observations as deferred
+    follow-ups.
 
 commit_plan:
   - id: S1
@@ -156,14 +171,18 @@ observable requirements, acceptance checks, a testing decision, a validation
 plan, and explicit assumptions. It records a lightweight discovery assessment;
 `DELEGATED_RESEARCH` requires bounded read-only questions and structured
 evidence, while coupled or unclear work remains `ROOT_ONLY`. In `PR`, it also
-has a review focus with a clear goal, the acceptance criteria to check, relevant
-in-scope quality concerns, non-goals, and a finding rule that keeps unrelated
-work out of the current review. It records the preferred and current topology,
-concise routing reason, and fallback evidence; native capability is freshly
-observed at the delegation boundary rather than cached as a routing profile.
-For `PR`, readiness also requires a valid non-empty ordered `commit_plan`;
-implementation must not begin while the plan is absent, ambiguous, or missing
-per-step validation and commit subjects.
+has an initial `review_focus` with a clear goal, every ticket-relevant
+acceptance criterion, relevant architecture decisions and constraints,
+quality concerns, non-goals, and a finding rule that keeps unrelated work out of
+the review.
+After a repair, the root derives a transient focused subset containing the prior
+blocking findings, repair delta, and directly affected criteria and risks; it
+does not rewrite the original ticket or broaden the initial focus. It records
+the preferred and current topology, concise routing reason, and fallback
+evidence; native capability is freshly observed at the delegation boundary
+rather than cached as a routing profile. For `PR`, readiness also requires a
+valid non-empty ordered `commit_plan`; implementation must not begin while the
+plan is absent, ambiguous, or missing per-step validation and commit subjects.
 
 For a long-running ticket, the durable run state records the next valid
 workflow action. Host context preservation, compaction, retry, and restoration

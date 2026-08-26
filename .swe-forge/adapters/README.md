@@ -53,11 +53,14 @@ canonical files. They must not preload stage-specific sources or copy canonical
 procedure into a host prompt.
 
 Forge owns dependency, mutation, delivery-candidate, and acceptance semantics;
-the host decides worker physical execution and scheduling. An adapter may use a
-private worktree, sandbox, overlay, container, or equivalent mechanism only when
-the bounded change is materialized into the canonical delivery checkout and
-validated there. Private execution paths are not canonical state or worker
-result metadata.
+the host decides worker physical execution and scheduling. Review handoffs are
+root-selected semantic content: adapters forward the validated initial or
+focused `review_focus` unchanged and do not append the ticket, workflow
+invariants, authorization, delivery, generic risk checklists, or transcripts.
+An adapter may use a private worktree, sandbox, overlay, container, or
+equivalent mechanism only when the bounded change is materialized into the
+canonical delivery checkout and validated there. Private execution paths are
+not canonical state or worker result metadata.
 
 For GitHub-backed delivery adapters, the cleanest implementation is a read-only
 remote default-branch lookup immediately before PR composition, followed by the

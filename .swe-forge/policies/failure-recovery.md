@@ -108,9 +108,11 @@ Classify the finding using the blocking matrix in `../contracts/review.md`.
 Repair only blocking in-scope findings and rerun the affected checks. In `PR`,
 record the explicit review-repair checkpoint and atomic commit; if that commit
 changes the candidate, establish the required final evidence for the new `HEAD`
-before requesting the focused re-review. Other delivery modes use their
-existing checkpoint semantics. Do not loop on nonblocking low-confidence style
-opinions.
+before requesting the focused re-review. Build that re-review from the prior
+blocking findings, repair delta, and directly affected `review_focus`; carry
+forward unaffected prior `PASS` conclusions rather than replaying the initial
+assignment. Other delivery modes use their existing checkpoint semantics. Do
+not loop on nonblocking low-confidence style opinions.
 
 ## Cleanup Handoff
 

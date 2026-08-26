@@ -193,6 +193,7 @@ assert_text "role: 'reviewer'" "$TMP_ROOT/review.brief"
 assert_text 'profile: REVIEW' "$TMP_ROOT/review.brief"
 assert_text 'contract: .swe-forge/contracts/review.md' "$TMP_ROOT/review.brief"
 assert_absent '      - edit' "$TMP_ROOT/review.brief"
+assert_absent '      - validation' "$TMP_ROOT/review.brief"
 
 # Dependency handoff: only selected digest categories are projected, and
 # completion requires accepted result evidence in canonical state.

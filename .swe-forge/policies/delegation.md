@@ -71,8 +71,12 @@ independent when review is required, invoke security and performance
 specialists only for relevant surfaces, and do not let workers recursively
 spawn workers unless a task authorizes it.
 
-An independent review worker represents one bounded review execution. Do not
-chain fresh reviewer, investigation, or debug-review workers to evade the
+An independent review worker represents one bounded review execution. The
+initial worker receives the original ticket and complete ticket-relevant
+`review_focus`; a focused second worker receives only the original context
+needed for prior blocking findings, the repair delta, and the directly affected
+focus. Unaffected prior `PASS` conclusions carry forward. Do
+not chain fresh reviewer, investigation, or debug-review workers to evade the
 candidate's shared review ceiling; combine genuinely independent questions
 within that bounded attempt and fan in once at the root.
 
@@ -139,10 +143,15 @@ selection, and inclusion/omission rules. Do not create a second task contract
 or ask a worker to reconstruct root state from a transcript.
 
 The root selects the semantic objective, acceptance, scope, architecture
-context, validation, and relevant dependency facts. The tool copies those
-choices and derives only mechanical permissions, recursion, result, and
-capability facts. Pass its validated output unchanged with the canonical role
-and result/review contract.
+context, validation, and relevant dependency facts. For a review task, those
+choices are projected from the authoritative `review_focus`: the initial focus
+covers the complete ticket-relevant surface, while a focused focus contains
+only the prior blockers, repair delta, and directly affected criteria and
+risks, plus only the original context needed to interpret them. The tool copies
+those choices and derives only mechanical permissions,
+recursion, result, and capability facts. Pass its validated output unchanged
+with the canonical role and applicable result or review contract; the adapter
+must not add the original transcript or unrelated policy prose.
 
 ### Dependency handoff projection
 
