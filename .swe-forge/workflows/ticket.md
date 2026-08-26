@@ -140,7 +140,8 @@ When delegation or independent review is useful, first load
 Create bounded tasks only where the loaded delegation policy and contracts
 provide useful independence. Keep each task's ownership and validation
 explicit. For `GUIDED`, divide broad work into cohesive review slices. For
-`PR`, record an ordered commit plan in the working spec even in `SOLO`.
+`PR`, record a valid non-empty ordered commit plan in the ready working spec even
+in `SOLO`; register only its minimal step projection before the first edit.
 
 Parallelize only read-only questions with non-overlapping ownership and
 satisfied dependencies. A logical fan-out batch does not prescribe host
@@ -196,11 +197,14 @@ Before the first writable checkout/setup operation, first edit, or any
 commit/push/PR-related decision, load and follow `policies/delivery.md`. It is
 the sole detailed owner of checkout and branch ownership, commits, pushes,
 pull requests, synchronization, and cleanup.
-
 Implement only the bounded dependency waves selected by the architecture and
-working spec. In `PR`, validate and commit each planned step before beginning
-the next. In `GUIDED`, stop at the declared checkpoint. Keep task ownership,
-scope, and delivery authorization explicit and stop on a blocking gate.
+working spec. In `PR`, use the executable commit-plan projection: implement one
+step, run its required checks, record its checkpoint and commit with that step's
+identity, and only then begin the next. Use an explicit review-repair checkpoint
+and commit for blocking review repairs; never mark a planned step complete with
+a catch-all checkpoint. In `GUIDED`, stop at the declared checkpoint. Keep task
+ownership, scope, and delivery authorization explicit and stop on a blocking
+gate.
 
 Before writing, classify the checkout, record the pre-edit baseline, and use
 one permitted task/delivery branch. Preserve dirty, detached, protected, or
@@ -242,15 +246,20 @@ When the review trigger applies, load `.swe-forge/agents/reviewer.md` and
 `.swe-forge/contracts/review.md` before review. Use a fresh context when
 delegation, multi-component scope, or medium-or-higher risk makes it useful.
 Provide the original ticket, `review_focus`, acceptance criteria, architecture
-decisions, final diff, and validation evidence. The reviewer role and contract
-define review behavior, relevant findings, and blocking status.
+decisions, final diff, and validation evidence. Record every reviewer-like
+execution through the canonical evidence gate, regardless of its source label.
+The normal candidate budget is two executions total: initial review, then one
+focused re-review after repair and affected validation.
 
 ### 12. Repair
 
 Before a `BLOCKED` or `FAILED` recovery path, load and follow
 `policies/failure-recovery.md`. Repair only relevant findings within the
-original scope and rerun affected validation. Use the policy's retry ceilings,
-failure classification, debugger escalation, and preservation rules.
+original scope and rerun affected validation. A second `CHANGES_REQUIRED`
+review is a stop-and-report outcome: preserve unresolved findings, evidence,
+repairs, and validation, and do not launch another reviewer, investigation,
+debug review, or fresh context automatically. Ordinary debugging of an
+unrelated implementation or test failure follows task recovery instead.
 
 ### 13. Final Acceptance
 

@@ -61,6 +61,18 @@ status: PASS
 findings: []
 ```
 
+## Review Budget
+
+The normal candidate budget is two review executions total: one independent
+review and, after repair plus affected validation, one focused re-review. Every
+fresh reviewer-like pass uses the same canonical review gate and consumes one
+attempt, even when its source is labeled investigation, debug review, or
+another recovery activity. Ordinary debugging of an unrelated implementation or
+test failure is not a review execution. A second `CHANGES_REQUIRED` result is a
+blocking terminal review outcome for automatic recovery; preserve the findings
+and report the safest next action instead of launching another pass.
+
+
 ## Review Areas
 
 Review the supplied `review_focus` first. Confirm every listed acceptance

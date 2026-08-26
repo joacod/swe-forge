@@ -52,6 +52,15 @@ in-scope findings as additional commits, and inspects the final diff. Unrelated
 improvements are recorded as deferred follow-ups rather than pulled into the
 PR. It does not stop after each slice for user approval.
 
+Review is recorded through the canonical gate for at most two executions total.
+If the focused second review still returns `CHANGES_REQUIRED`, the run stops
+and reports the unresolved findings instead of launching another reviewer-like
+recovery pass.
+
+After local gates pass, PR creation is the synchronous boundary: push, create
+the PR, record its URL and local receipt, report the result, and stop. Remote
+GitHub CI is external and is not awaited by this run.
+
 After all final gates pass, `PR` mode pushes the one task branch and creates
 exactly one pull request with a concise, project-facing title and body. The body
 explains the outcome and motivation, lists only relevant validation, and notes

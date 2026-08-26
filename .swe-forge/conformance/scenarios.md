@@ -104,6 +104,13 @@ handoff and verifies that B receives selected facts without A's full result.
 | Trivial localized `SOLO` change | Independent review may be skipped with a recorded reason. |
 | Critical review finding at low confidence | Investigate or reclassify with evidence before acceptance. |
 | Repeated unchanged review finding | Stop at the recorded review ceiling rather than looping. |
+| Review attempt 1 and 2 both require changes | Record attempts 1 and 2 in canonical state, preserve the second findings, and reject a third reviewer-like execution without replacing evidence. |
+| Successful focused second review | After an initial repair, record attempt 2 as `PASS` and allow acceptance when all other gates pass. |
+| Reviewer-like recovery alias | An investigation, debug review, or focused-review source still consumes the shared review budget; ordinary unrelated test debugging does not. |
+| PR commit plan with multiple steps | Require each ordered step to have its own validated checkpoint and materializing commit; reject one catch-all checkpoint. |
+| PR commit plan with one step | Allow one cohesive implementation step and one commit without ceremonial extra commits. |
+| Review-repair delivery commit | Record a repair checkpoint/commit separately; it does not complete or replace a planned implementation step. |
+| PR creation completion boundary | After local gates pass and the PR URL is recorded, report completion without awaiting or polling remote GitHub CI. |
 
 ## Authorization and State
 

@@ -76,6 +76,15 @@ delivery:
   sync: not-authorized | pending | complete | blocked
   pull_request_ref: <URL or none>
 
+commit_plan:
+  status: not-applicable | unregistered | pending | complete
+  steps:
+    - id: <ordered working-spec step identity>
+      status: pending | complete
+      checkpoint: none | <checkpoint ID>
+      commit: none | <full commit SHA>
+
+
 tasks:
   <task_id>:
     status: pending | ready | running | blocked | done | failed | skipped
@@ -121,15 +130,19 @@ branch, or central transfer record is part of the run state.
 
 The canonical `swe-forge-state init` operation writes the shell from semantic
 routing and actual checkout facts; callers do not manually serialize it. A
-valid schema-v4 snapshot always contains:
-
+fresh schema-v4 snapshot initialized by the helper always contains:
 - `workflow`, `workflow_version`, `schema_version`, `run_id`, `status`,
   `requested_mode`, `requested_delivery`, `delivery_mode`, `reason`, and
   `fallback_used`;
 - the `routing` mapping with `preferred` and `current`;
 - `receipt_ref`;
 - the complete `delivery_checkout` mapping;
-- the complete `delivery` authorization and action mapping; and
+- the complete `delivery` authorization and action mapping;
+- the `commit_plan` projection, marked `not-applicable` in `GUIDED` and
+  `unregistered` until the ready PR working spec registers its ordered steps;
+- the `review` budget, initialized with `attempts: 0`, `retry_ceiling: 2`,
+  `ceiling_provenance: default`, and the canonical review contract reference;
+  and
 - the `tasks` container, even when no delegated task exists.
 
 A fact that is not known yet uses the explicit `unknown`, `none`, empty, or
@@ -209,6 +222,18 @@ cleanup:
 retries:
   <task_id>: {attempts: 0, ceiling: 1, ceiling_provenance: default}
 ```
+
+`review.attempts` is incremented by the canonical review gate for every
+reviewer-like execution, regardless of its source label. The default ceiling is
+two; a `CHANGES_REQUIRED` result at the ceiling leaves the run blocked and
+preserves the latest evidence. Ordinary unrelated debugging is not a review
+execution.
+
+In `PR`, `commit_plan` is a minimal projection of the transient working spec,
+not a second semantic plan. The state helper records only ordered step
+identity, status, checkpoint, and commit evidence. A complete projection is
+required before `deliver-pr`; review-repair evidence is recorded separately in
+the private ledger and does not complete a planned step.
 
 A state whose `schema_version` is not `4` must be rejected as stale or
 unsupported, including older and future versions. No helper guesses a

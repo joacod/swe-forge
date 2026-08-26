@@ -71,6 +71,12 @@ independent when review is required, invoke security and performance
 specialists only for relevant surfaces, and do not let workers recursively
 spawn workers unless a task authorizes it.
 
+An independent review worker represents one bounded review execution. Do not
+chain fresh reviewer, investigation, or debug-review workers to evade the
+candidate's shared review ceiling; combine genuinely independent questions
+within that bounded attempt and fan in once at the root.
+
+
 ## Task Creation
 
 Before delegation, create a task contract using `../contracts/task.md`. The

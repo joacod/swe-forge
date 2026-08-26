@@ -21,17 +21,32 @@ separate human actions.
 
 ### PR commit plan
 
-Before the first edit, a `PR` working spec records an ordered commit plan. Each
-step has one cohesive objective, owned paths, dependencies, targeted
-validation, and a repository-appropriate commit subject. The orchestrator
-implements one step, runs that step's required checks, and creates its local
-delivery commit before starting the next. It must not accumulate all steps and
-create one catch-all commit at the end.
+Before the first edit, a ready `PR` working spec records an ordered commit plan.
+Each step has one cohesive objective, owned paths, dependencies, targeted
+validation, and a repository-appropriate commit subject. Register only the
+step identities in the private run-state projection with `commit-plan`.
+The orchestrator implements one step, runs that step's required checks, records
+`checkpoint --plan-step <id>`, and creates its matching
+`commit-slice --plan-step <id>` before starting the next. The executable gate
+requires steps in plan order, refuses missing or reused step evidence, and
+`deliver-pr` requires every planned step to have its checkpoint and materializing
+commit. It must not accumulate all steps and create one catch-all commit at the
+end.
 
 A step may contain implementation and tests that are inseparable at the
 observable boundary. Do not manufacture commits for unrelated formatting or
 ceremonial phases: a one-step ticket correctly produces one commit. Review
-repairs are additional atomic commits rather than a squash.
+repairs use `--review-repair` and remain additional atomic commits rather than a
+squash or completion of a planned step.
+
+### PR completion boundary
+
+The synchronous PR lifecycle ends after the exact locally gated candidate is
+pushed, one authorized PR is created, its URL is recorded, and the private
+local receipt/report is generated. Remote GitHub checks remain external
+follow-up evidence; do not await or poll them in the ticket run. A later
+explicit invocation may inspect a failed or pending remote check.
+
 
 ## Repository-aware delivery conventions
 

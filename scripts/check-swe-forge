@@ -187,6 +187,14 @@ require_text 'one fan-in barrier' .swe-forge/policies/delegation.md
 require_text 'ordered commit plan' .swe-forge/policies/delivery.md
 require_text 'remote default branch' .swe-forge/policies/delivery.md
 require_text 'review-repair commit' .swe-forge/policies/delivery.md
+require_text 'at most two review executions' SWE-FORGE.md
+require_text 'Remote GitHub CI is external after PR creation' SWE-FORGE.md
+require_text 'commit-plan' .swe-forge/tools/swe-forge-state
+require_text 'record-commit-step' .swe-forge/tools/swe-forge-state
+require_text 'review ceiling exhausted' .swe-forge/tools/swe-forge-state
+require_text 'Review attempts:' .swe-forge/contracts/receipt.md
+require_text 'PR creation completion boundary' .swe-forge/conformance/scenarios.md
+require_text 'not awaited or polled' .swe-forge/policies/evidence.md
 require_text 'relevant PR is actually `MERGED`' .swe-forge/conformance/scenarios.md
 require_ordered_text 'Before broad discovery' 'final topology decision' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before specification or clarification behavior is needed' 'policies/specification.md' .swe-forge/workflows/ticket.md

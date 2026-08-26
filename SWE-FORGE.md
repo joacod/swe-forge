@@ -182,17 +182,36 @@ never implies push, PR creation, publication, deployment, or merge.
 the transient working spec. Before writable work or delivery choices, load
 `.swe-forge/policies/delivery.md`.
 
-The transient spec owns an ordered commit plan and `review_focus`; the
-orchestrator validates and commits each cohesive step before starting the next.
+The transient spec owns a validated ordered commit plan and `review_focus`. A
+`PR` working spec is not ready for implementation until it contains at least one
+cohesive step with an identity, scope, dependencies, targeted validation, and
+commit subject. The orchestrator registers only the minimal step projection in
+run state, then validates and commits each step before starting the next.
+`checkpoint --plan-step` and `commit-slice --plan-step` bind each planned step
+to its validation and materializing commit; `deliver-pr` requires every planned
+step to be complete. A one-step ticket remains one commit, while review repairs
+use explicit additional `--review-repair` commits.
+
 It then runs final verification and independent review before one authorized
-push and one final PR on the single delivery branch. PR mode never merges;
+push and one final PR on the single delivery branch. Normal review-repair
+activity allows at most two review executions for the candidate, including
+independent, focused, investigation, or other reviewer-like passes. The gate
+records the attempts in canonical run state; a second `CHANGES_REQUIRED` result
+stops automatic repair or review activity and reports the unresolved evidence.
+Ordinary debugging of an unrelated implementation or test failure is separate
+task recovery and does not consume this review budget. PR mode never merges;
 project-facing PR content follows the delivery policy, while evidence and
 receipts remain private. `/git-pr draft` requests a draft PR without changing
 normal `/git-pr` behavior.
 
-The atomic `git-commit`, `git-push`, `git-pr`, and `git-sync` actions load and
-follow `.swe-forge/policies/delivery.md` separately. Pushing never creates a PR
-as a side effect, and post-merge sync verifies the PR state first.
+After the local gates pass, PR delivery pushes the branch, creates the one
+authorized PR, records its URL and a local receipt, reports `ACCEPTED`, and
+stops. Remote GitHub CI is external after PR creation: it may be reported as
+pending, but SWE Forge does not await or poll it synchronously.
+
+The PR mental model is: plan cohesive steps, implement/validate/commit each
+step, final-verify, independently review, allow at most one repair plus focused
+re-review, push, create the PR, and report.
 
 ## Ticket Lifecycle
 
@@ -317,9 +336,12 @@ Declare success only when all applicable conditions are met:
 - any generated receipt is truthful and reports `ACCEPTED` only when its
   required evidence gate passes;
 - a normal ticket has one dedicated delivery branch; and
-- when `delivery_mode: PR`, authorized commit, push, and pull-request actions
+- when `delivery_mode: PR`, every planned cohesive step has validated checkpoint
+  and commit evidence before authorized commit, push, and pull-request actions
   complete or the run is reported `BLOCKED`; `GUIDED` may finish with a
-  reviewed local diff when delivery actions are not authorized.
+  reviewed local diff when delivery actions are not authorized;
+- after a PR is created, local receipt generation and reporting complete the
+  synchronous run; remote CI is not an acceptance wait or polling phase.
 
 Do not claim a check passed when it was not run. Distinguish skipped and
 unavailable checks from successful validation.

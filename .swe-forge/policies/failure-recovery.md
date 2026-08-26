@@ -43,11 +43,24 @@ mutation of the canonical delivery candidate.
 
 - default to one retry per task after an explicit correction;
 - record each attempt and its reason;
-- default to at most two review-repair cycles;
+- default to at most two review executions total for one candidate;
+- count every fresh reviewer-like pass in that budget, regardless of whether
+  it is called independent review, focused review, investigation, debug review,
+  or another recovery label;
+- do not count ordinary debugging of an unrelated implementation or test
+  failure as a review execution;
+- after a second `CHANGES_REQUIRED` review, preserve the latest findings and
+  evidence, stop automatic repair/review activity, and report the blocker;
 - stop when the same evidence recurs without a changed hypothesis or approach;
   and
-- require an explicit orchestrator decision recorded in run state to exceed
-  defaults, with a hard run-specific ceiling before continuing.
+- require explicit user guidance or another already-explicit task authorization
+  recorded in run state to exceed a default, with a hard run-specific ceiling
+  before continuing.
+
+The canonical `review.attempts` and `review.retry_ceiling` fields in schema-v4
+run state own the review budget. The executable review gate increments attempts
+before replacing review evidence and rejects a ceiling-exhausted execution;
+changing the source label cannot bypass it.
 
 Retries must not overwrite unrelated user changes or create unbounded worker
 activity.
