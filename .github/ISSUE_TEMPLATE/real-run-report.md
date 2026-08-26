@@ -34,7 +34,7 @@ harness validation.
 - What did Forge prevent or catch?
 - What evidence or validation was most useful?
 - What ceremony felt unnecessary?
-- Did the receipt help explain the run? Why or why not?
+- Did the final harness report and PR explain the run? Why or why not?
 
 ## Would you use it again?
 
@@ -42,5 +42,5 @@ Would you use SWE Forge for another ticket? What would make that more likely?
 
 ## Optional evidence
 
-Paste a redacted receipt or concise summary. Do not include transcripts,
-credentials, private ticket details, or personal paths.
+Paste the final harness report or a concise summary. Do not include
+transcripts, credentials, private ticket details, or personal paths.

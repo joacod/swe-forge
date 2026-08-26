@@ -26,7 +26,7 @@ scenario records the observable outcome rather than repeating its procedure.
 | Active-state selection | Ignore stale, terminal, wrong-checkout, or obsolete candidates; choose the newest valid candidate. | state tool |
 | Normal ticket load | Load specification before clarification, routing before final topology, verification before checks, delivery before the first write, and recovery only on trigger. | workflow |
 | PR specification | Load `contracts/working-spec.md` before building the transient spec. | workflow |
-| Evidence features | Load evidence policy before fingerprints, freshness, checkpoints, or receipts. | workflow |
+| Evidence features | Load evidence policy before recording executable validation or relying on Git candidate identity. | workflow |
 
 ## Continuity, checkout, and ownership
 
@@ -64,9 +64,9 @@ scenario records the observable outcome rather than repeating its procedure.
 | Review handoff | Include candidate identity, original ticket, complete initial focus, final diff, and validation evidence without transcript or policy prose. | workflow/review |
 | Repairable finding | Repair once in focused context, rerun affected validation, and do not launch another reviewer. | review/recovery |
 | Fundamental or uncertain finding | Preserve it and block delivery. | review |
-| Repaired candidate | Require repair checkpoint/commit and affected validation; report that it was not independently re-reviewed. | review/delivery |
+| Repaired candidate | Require one repair commit and affected validation; report that it was not independently re-reviewed. | review/delivery |
 | Trivial localized `SOLO` change | Review may be skipped with a recorded reason. | verification |
-| Unchanged candidate at a phase boundary | Consume current evidence; do not rerun unchanged broad validation. | verification |
+| Committed candidate at a phase boundary | Consume current Git-HEAD-bound evidence; do not rerun unchanged broad validation. | verification |
 | PR creation completion boundary | After local gates and URL recording, report completion without awaiting or polling remote CI. | delivery/evidence |
 
 ## Authorization and routing

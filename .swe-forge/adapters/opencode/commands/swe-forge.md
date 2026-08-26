@@ -1,5 +1,5 @@
 ---
-description: Run SWE Forge with PR delivery by default or guided checkpoints
+description: Run SWE Forge with PR delivery by default or guided human pauses
 agent: build
 ---
 

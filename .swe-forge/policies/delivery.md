@@ -7,24 +7,26 @@ and local-resource authorization. Other files reference it.
 
 `GUIDED` is the exceptional manual mode. When a branch is needed, create one
 from a clean protected/default branch; branch setup is not delivery
-authorization. Implement and validate, then stop at the declared checkpoint.
-Approval to continue or go never authorizes push, PR creation, publication,
-deployment, or merge. Dirty, detached, protected, and ambiguous state is
-preserved and reported.
+authorization. Implement and validate, then stop at the declared human
+checkpoint. Approval to continue or go never authorizes push, PR creation,
+publication, deployment, or merge. Dirty, detached, protected, and ambiguous
+state is preserved and reported.
 
-`PR` is the default low-touch mode. It permits the bounded local setup,
-validated local commits, one final push, and one final PR. It never permits
-publication, deployment, force-push, or merge.
+`PR` is the default low-touch mode. It permits bounded local setup, the
+implementation commits needed by the work, one final branch push, and one final
+PR. It never permits publication, deployment, force-push, or merge.
 
 During implementation, choose one coherent commit or several as the work
-requires. Do not manufacture ceremonial commits or predeclare a sequence. Each
-checkpoint binds its candidate, exact path scope, targeted validation, and
-materializing `commit-slice`. A review-repair commit is one additional atomic
-commit, uses `--review-repair`, and does not trigger another review.
+requires. Do not manufacture ceremonial commits or predeclare a sequence. A
+clean committed candidate is identified by its Git `HEAD`; the same SHA must be
+used for final validation, the independent review, and delivery. A review
+repair is one additional atomic commit, uses the existing review-repair state
+transition, reruns affected validation, and is reported as not independently
+re-reviewed.
 
 A PR run ends synchronously after the exact locally gated candidate is pushed,
-one authorized PR is created, its URL is recorded, and the private receipt and
-report are generated. Remote CI is external follow-up evidence.
+one authorized PR is created, its URL is recorded, and the final harness report
+is produced. Remote CI is external follow-up evidence.
 
 ## Repository conventions
 
@@ -36,8 +38,8 @@ Resolve each project-facing artifact at its boundary, in this order:
 4. a strong recurring Git-history convention; then
 5. the defaults below.
 
-Do not persist discovered conventions. Resolve branch naming only when creating
-a branch. Without a convention use `<type>/<short-kebab-case-description>`;
+Do not persist discovered conventions. Resolve branch naming only when creating a
+branch. Without a convention use `<type>/<short-kebab-case-description>`;
 resolve commit format immediately before each commit. For a GitHub PR, prefer a
 read-only lookup of the current remote default branch template immediately
 before composition. Preserve its headings, ordering, placeholders, and
@@ -54,9 +56,9 @@ Notes:
 - <material risk or follow-up, omit when empty>
 ```
 
-A project-facing PR never includes receipts, evidence fingerprints, topology,
-harness/model metadata, internal paths, transcripts, or a working spec. `/git-pr
-draft` requests a draft; plain `/git-pr` remains normal/open behavior.
+A project-facing PR never includes topology, harness/model metadata, internal
+paths, transcripts, or a working spec. `/git-pr draft` requests a draft; plain
+`/git-pr` remains normal/open behavior.
 
 ## One delivery boundary
 

@@ -52,7 +52,7 @@ is unavailable; never report preference as delegation.
 
 Reassess only when discovery, recovery, delegation value, capability, or review
 needs materially change. Do not append routing history or reassess at every turn
-or unchanged checkpoint. Re-read durable state and Git after recovery before
+or unchanged phase boundary. Re-read durable state and Git after recovery before
 changing topology.
 
 ## Topologies and fallback

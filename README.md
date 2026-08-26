@@ -9,8 +9,8 @@ per run.
 
 It chooses the smallest useful path—`SOLO` or bounded `SUBAGENTS`—then helps
 inspect, implement, validate, independently review, and report the change.
-The extra confidence comes from candidate-bound validation and a fresh review;
-SWE Forge never merges automatically.
+The extra confidence comes from validation and a fresh review bound to the
+same committed Git candidate; SWE Forge never merges automatically.
 
 ## Harnesses
 
@@ -42,7 +42,7 @@ Give the installed entry point one focused ticket:
 ```
 
 PR delivery and automatic topology are the defaults. Use the explicit guided
-mode when checkpoints are wanted:
+mode when a human pause is wanted:
 
 ```text
 /swe-forge guided <ticket>

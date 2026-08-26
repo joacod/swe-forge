@@ -40,7 +40,7 @@ review_focus:
 
 Delegation would add no useful independence, so routing is `SOLO`. The agent
 loads delivery before writing, validates the completed slice, and stops at the
-GUIDED checkpoint. `go` authorizes the reviewed local commit only; it does not
+GUIDED human pause. `go` authorizes the reviewed local commit only; it does not
 authorize push, PR creation, or merge.
 
 A final report distinguishes passed, skipped, and unavailable checks. If the

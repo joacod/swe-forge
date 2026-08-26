@@ -30,7 +30,7 @@ package is not installed; when absent, `SUBAGENTS` uses the canonical
 
 ```text
 /swe-forge <ticket>             # PR + automatic topology
-/swe-forge guided <ticket>      # guided checkpoints
+/swe-forge guided <ticket>      # guided human pause
 ```
 
 `SOLO` and `SUBAGENTS` are selected internally after ticket and repository
@@ -63,9 +63,10 @@ delivery checkout.
 
 The host decides context preservation, compaction, retry, restoration, worker
 physical execution, and scheduling. After a lifecycle discontinuity, the
-canonical workflow re-reads state and Git/evidence. A first capability probe may
-occur before a state snapshot; it is discovery only. Missing, stale, or
-incompatible capability/state uses the visible `SOLO`/sequential fallback.
+canonical workflow re-reads state and Git/validation evidence. A first
+capability probe may occur before a state snapshot; it is discovery only.
+Missing, stale, or incompatible capability/state uses the visible
+`SOLO`/sequential fallback.
 
 ## References
 

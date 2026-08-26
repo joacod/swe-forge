@@ -18,7 +18,7 @@ specification       -> scope decision and transient working spec
 execution-routing   -> topology and capability evidence
 delegation          -> task ownership and dependency handoffs
 verification        -> testing and quality-gate selection
-evidence            -> candidate-bound checks and receipts
+evidence            -> Git-HEAD-bound validation and review evidence
 delivery            -> checkout and external-action authorization
 failure-recovery    -> bounded recovery
 contracts           -> data shapes and review semantics
@@ -43,9 +43,9 @@ explicit user request
  one delivery checkout -> validation -> review -> authorized delivery
 ```
 
-The root owns discovery, task ownership, integration, Git/evidence validation,
-review, acceptance, delivery, and cleanup. A host task mechanism realizes a
-selected capability; it does not choose topology or own acceptance.
+The root owns discovery, task ownership, integration, Git and validation
+checks, review, acceptance, delivery, and cleanup. A host task mechanism
+realizes a selected capability; it does not choose topology or own acceptance.
 
 ## Capability boundary
 
@@ -79,14 +79,16 @@ channel, or transfer registry is needed.
 ## Delivery and state
 
 `policies/delivery.md` owns branch, commit, push, PR, merge, external-resource,
-and cleanup authorization. `policies/evidence.md` binds checks and checkpoints
-to the candidate fingerprint. Review is one fresh ticket-focused review; one
-concrete localized repair may be validated without a second review.
+and cleanup authorization. `policies/evidence.md` binds final validation and
+review to the committed candidate's Git `HEAD`. Review is one fresh
+ticket-focused review; one concrete localized repair may be validated without a
+second review.
 
 Run state is temporary or ignored, schema-v4 only, and authoritative for
 continuation after a host context discontinuity. The host owns context
 preservation, compaction, retry, and restoration. Before resuming, the
-workflow re-reads state and reconciles actual Git and evidence.
+workflow re-reads state and reconciles actual Git and validation/review
+evidence.
 
 ## Installation
 

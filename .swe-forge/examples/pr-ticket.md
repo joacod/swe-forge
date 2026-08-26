@@ -40,6 +40,6 @@ repaired candidate is reported as not independently re-reviewed. A fundamental
 or uncertain finding blocks. No second review is launched.
 
 After local gates pass, PR mode pushes the one task branch, creates one PR,
-records a private receipt, and reports the result. It does not await remote CI
-or merge. The project-facing PR contains only the outcome, relevant validation,
-and material risks. A later `merged` sync first verifies the remote PR state.
+records its URL, and reports the result. It does not await remote CI or merge.
+The project-facing PR contains only the outcome, relevant validation, and
+material risks. A later `merged` sync first verifies the remote PR state.
