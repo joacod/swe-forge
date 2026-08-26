@@ -10,6 +10,10 @@ grading an agent from its explanation alone.
 | --- | --- |
 | Empty invocation | Ask for a ticket; do not invent one. |
 | Default delivery with no delivery token | Record `requested_delivery: DEFAULT` and resolve it to `delivery_mode: PR` with automatic topology. |
+| Small cohesive ticket | Decide `PROCEED`; one small primary outcome is not broadened into extra workflow machinery. |
+| Substantial but cohesive ticket | Decide `PROCEED`; effort, prompt length, file count, or several ordered steps do not make one primary outcome too broad. |
+| Several independent improvements in one request | Decide `TOO_BROAD`, explain the independent outcomes briefly, and suggest the major chunks as separate tickets before downstream workflow machinery. |
+| Broad or open-ended rewrite | Decide `TOO_BROAD` and stop before specification, decomposition, implementation, review, or delivery. |
 | `solo` without a remainder | Report incomplete input. |
 | Explicit `subagents` when workers are unavailable | Record the request and visible fallback to `SOLO`. |
 | Native capability unavailable during automatic routing | Keep the preferred decision visible and execute sequentially or in `SOLO`. |

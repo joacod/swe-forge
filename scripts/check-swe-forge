@@ -32,6 +32,18 @@ require_ordered_text() {
   ' "$ROOT/$file" || fail "$file does not load '$second' after '$first'"
 }
 
+require_scope_decision() {
+  heading=$1
+  expected=$2
+  awk -v heading="$heading" -v expected="$expected" '
+    $0 == heading { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section && $0 == "scope_decision: " expected { found = 1 }
+    END { exit !found }
+  ' "$ROOT/.swe-forge/examples/scope-decision.md" || \
+    fail "scope example '$heading' does not decide $expected"
+}
+
 REGISTRY_VALIDATOR=$ROOT/scripts/lib/registry.sh
 [ -f "$REGISTRY_VALIDATOR" ] || fail 'missing adapter registry validator'
 . "$REGISTRY_VALIDATOR"
@@ -119,6 +131,13 @@ for issue_template in \
   [ -f "$ROOT/$issue_template" ] || fail "missing issue template: $issue_template"
 done
 
+[ -f "$ROOT/.swe-forge/examples/scope-decision.md" ] || \
+  fail 'missing scope decision examples'
+require_scope_decision '## 1. Small cohesive ticket — PROCEED' PROCEED
+require_scope_decision '## 2. Substantial but cohesive ticket — PROCEED' PROCEED
+require_scope_decision '## 3. Several independent improvements — TOO_BROAD' TOO_BROAD
+require_scope_decision '## 4. Broad or open-ended rewrite — TOO_BROAD' TOO_BROAD
+
 for heading in '## What it does' '## Harnesses' '## Install' '## Use' '## Documentation'; do
   require_text "$heading" README.md
 done
@@ -169,6 +188,11 @@ require_text 'consumed_tokens' .swe-forge/tools/swe-forge-invocation
 require_text 'root/orchestrator authority' AGENTS.md
 require_text 'ephemeral internal implementation state' AGENTS.md
 require_text 'risk-proportional testing decision' SWE-FORGE.md
+require_text 'scope_decision: PROCEED | TOO_BROAD' SWE-FORGE.md
+require_text 'one cohesive reviewable PR' SWE-FORGE.md
+require_text 'substantial cohesive work' .swe-forge/agents/orchestrator.md
+require_text 'early semantic scope decision' .swe-forge/workflows/ticket.md
+require_text 'submit separately' .swe-forge/policies/specification.md
 require_text 'Work summary' SWE-FORGE.md
 require_text 'plain human' SWE-FORGE.md
 require_text 'Run metadata:' .swe-forge/contracts/receipt.md
@@ -214,6 +238,7 @@ require_text 'Review attempts:' .swe-forge/contracts/receipt.md
 require_text 'PR creation completion boundary' .swe-forge/conformance/scenarios.md
 require_text 'not awaited or polled' .swe-forge/policies/evidence.md
 require_text 'relevant PR is actually `MERGED`' .swe-forge/conformance/scenarios.md
+require_ordered_text 'Early semantic scope decision' 'Before broad discovery' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before broad discovery' 'final topology decision' .swe-forge/workflows/ticket.md
 require_ordered_text 'Before specification or clarification behavior is needed' 'policies/specification.md' .swe-forge/workflows/ticket.md
 require_ordered_text 'In `PR`, also load' 'contracts/working-spec.md' .swe-forge/workflows/ticket.md

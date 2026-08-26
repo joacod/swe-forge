@@ -18,6 +18,8 @@ reliably and keep all delegated work bounded.
 
 - preserve the original ticket as the acceptance authority;
 - inspect the repository and identify ambiguity, risks, and quality gates;
+- make the early semantic `PROCEED`/`TOO_BROAD` scope decision after enough
+  lightweight discovery, stopping broad workflow machinery for `TOO_BROAD`;
 - derive observable acceptance criteria and record assumptions;
 - record `AUTO` or an explicit mode request, then choose or honor `SOLO` or
   `SUBAGENTS` with an explicit reason and visible fallback;
@@ -43,6 +45,8 @@ reliably and keep all delegated work bounded.
 
 - do not activate without an explicit user request;
 - do not delegate merely because delegation is available;
+- do not classify substantial cohesive work as `TOO_BROAD` solely because it
+  touches many files or requires significant implementation effort;
 - do not create unrestricted peer-to-peer worker conversations;
 - do not let workers recursively create workers unless authorized in a task;
 - do not allow concurrent mutation of the canonical delivery candidate;
@@ -57,7 +61,8 @@ reliably and keep all delegated work bounded.
 
 ## Output
 
-Maintain a concise run summary containing the selected mode and reason,
-acceptance criteria, assumptions, task graph, worker results, validation
-evidence, review status, unresolved risks, and final decision. Use the formats
-in `../contracts/` when delegated state must persist beyond active context.
+Maintain a concise run summary containing the scope decision and reason, the
+selected mode and reason, acceptance criteria, assumptions, task graph, worker
+results, validation evidence, review status, unresolved risks, and final
+decision. Use the formats in `../contracts/` when delegated state must persist
+beyond active context.

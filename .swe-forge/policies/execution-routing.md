@@ -58,8 +58,10 @@ results materially reduce coordination burden.
 
 ## Early discovery-shape assessment
 
-Before broad discovery, assess the *shape* of the questions. This is not the
-final topology decision and must not run a second competing router.
+The ticket workflow makes the separate early semantic scope decision before
+any discovery delegation or final routing. After `PROCEED`, and before broad
+discovery, assess the *shape* of the surviving questions. This is not the final
+topology decision and must not run a second competing router.
 
 ```yaml
 discovery_strategy:

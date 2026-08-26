@@ -72,24 +72,68 @@ non-goals, and requested validation. Preserve important wording from the
 original ticket. Record whether the user wants review checkpoints or low-touch
 PR delivery; do not treat delivery preference as permission to merge.
 
-### 2. Discover
+### 2. Discover and scope
+
+Perform only enough lightweight, root-owned repository discovery to identify
+the ticket's requested outcomes, likely affected surfaces, and whether those
+outcomes are coupled. This may inspect relevant entry points, documentation,
+tests, and conventions; it must not turn into architecture, decomposition, or
+validation planning.
+
+#### Early semantic scope decision
+
+After that lightweight discovery, load and follow
+`policies/specification.md` for the one transient root/orchestrator decision:
+
+```text
+scope_decision: PROCEED | TOO_BROAD
+```
+
+Use this question:
+
+> Can this request reasonably produce one cohesive reviewable PR with one
+> primary outcome and a bounded implementation surface?
+
+Choose `PROCEED` when the answer is yes. A substantial implementation, many
+changed files, or several ordered implementation steps can still be one
+cohesive outcome. Do not use work amount, prompt length, or file count as a
+proxy for breadth.
+
+Choose `TOO_BROAD` when the request is effectively an epic, bundles multiple
+independently implementable improvements, asks for an open-ended rewrite, or
+should obviously be split into multiple tickets. This is a semantic judgment,
+not a score, size threshold, topology choice, or delivery choice.
+
+If `TOO_BROAD`, briefly explain why and suggest the major independent chunks
+the user should submit separately, then stop before specification,
+architecture, decomposition, routing, validation planning, implementation,
+review, or delivery. Do not create a working spec, task graph, worker
+assignment, review handoff, or delivery artifact for the rejected request.
+
+If `PROCEED`, continue the normal discovery and ticket lifecycle. Automatic
+topology selection still happens later, and `PR` remains the normal/default
+delivery path.
 
 Before broad discovery, load and follow `policies/execution-routing.md` for its
 lightweight discovery-shape assessment. Keep `discovery_strategy` in the
-transient working spec or active context, using `ROOT_ONLY` unless there are
-clearly independent, read-only questions whose answers can return concise
-evidence and materially reduce root coordination. This is an early research
-strategy, not the final topology decision or durable routing state.
+transient working spec or active context; it may select delegated research only
+after this gate has passed. This early research strategy is separate from the
+final topology decision and does not create durable routing state.
 
+After `PROCEED`, inspect the repository before making architectural claims.
+Locate relevant entry points, dependencies, analogous implementations,
+conventions, documentation, tests, and quality gates. If the ticket names an
+optional skill, load `policies/specialist-skills.md` and evaluate it on demand;
+otherwise do not search or load unrelated skills.
 
 For `DELEGATED_RESEARCH`, load `policies/delegation.md`, the bounded researcher
-role, and the task/result contracts before assigning a worker.
-Give each worker one bounded question, a small allowed read scope, an evidence
-budget, and a structured result contract. Workers do not write, make delivery
-or topology decisions, pass along full ticket/history, recurse, or orchestrate
-other workers. If no native capability is available, record the safe fallback
-to root-only discovery. When multiple genuinely independent questions survive
-the assessment, submit the useful ready questions together as one small logical
+role, and the task/result contracts before assigning a worker. Give each worker
+one bounded question, a small allowed read scope, an evidence budget, and a
+structured result contract. Workers do not write, make delivery or topology
+decisions, pass along full ticket/history, recurse, or orchestrate other
+workers. If no native capability is available, record the safe fallback to
+root-only discovery. When multiple genuinely independent questions survive the
+assessment, submit the useful ready questions together as one small logical
 fan-out/fan-in batch, then wait at one root fan-in barrier. The host runtime may
 execute those ready items concurrently or sequentially; Forge does not
 prescribe an active-worker count. Consume the structured results together and
@@ -99,12 +143,6 @@ sequential.
 The full evidence-backed topology decision remains in step 6 after
 specification, architecture, and useful decomposition. Early research must not
 become a second router.
-
-Inspect the repository before making architectural claims. Locate relevant
-entry points, dependencies, analogous implementations, conventions,
-documentation, tests, and quality gates. If the ticket names an optional skill,
-load `policies/specialist-skills.md` and evaluate it on demand; otherwise do
-not search or load unrelated skills.
 
 Use read-only research only when it reduces time or root coordination. All
 research must return evidence with file, symbol, command, or documentation
