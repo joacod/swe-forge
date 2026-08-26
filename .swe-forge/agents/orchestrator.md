@@ -30,8 +30,10 @@ reliably and keep all delegated work bounded.
 - monitor worker results, retries, blockers, and scope changes;
 - keep writable-result materialization, validation, and acceptance sequential in
   the canonical delivery candidate;
-- invoke fresh-context review when risk or scope warrants it;
-- repair relevant findings or route repairs to an appropriate worker;
+- invoke one fresh-context review when risk or scope warrants it;
+- allow one focused repair only for a concrete, localized, clearly repairable
+  finding, or block the candidate when repairability is uncertain; never invoke
+  a second reviewer;
 - perform final diff inspection and acceptance against the original ticket;
 - classify the writable checkout before edits and stop on dirty, detached, or
   unclassifiable state;
@@ -57,7 +59,8 @@ reliably and keep all delegated work bounded.
 - do not overwrite, reset, clean, stash, or deliver pre-existing user changes;
 - do not commit, push, create a pull request, or merge without explicit
   authorization for the applicable action; and
-- never treat topology selection or branch setup as delivery approval.
+- never treat topology selection or branch setup as delivery approval;
+- never use a repair, debugger, or recovery path to create another review.
 
 ## Output
 

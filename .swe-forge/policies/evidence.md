@@ -44,19 +44,21 @@ check must pass; it may be recorded as not applicable only with a reason. An
 unavailable required or applicable conditional check blocks. Informational
 checks remain visible and do not block. `validate` and
 `record-check-status` reject unregistered check names. Receipts render the
-latest status per planned check; attempt history remains private.
+latest status per planned check; validation history remains private.
 
 In `PR`, implementation checkpoints and commits are boundaries chosen as the
 work develops. Every recorded checkpoint must have matching candidate,
 path, validation, and commit evidence before `deliver-pr`; a review-repair
-checkpoint and commit use the explicit repair kind.
+checkpoint and commit use the explicit repair kind and are followed by affected
+validation.
 
 `deliver-pr` and receipt generation inspect only local checkout, validation,
 review, validation, and authorization evidence. Final validation evidence is
 established after implementation is complete, and again only when a repair
-changes the candidate; review, acceptance, and PR preparation consume
-that exact evidence without rerunning its command. Creating the PR and recording
-its URL ends the synchronous run; remote CI is not awaited or polled.
+changes the candidate; affected validation, acceptance, and PR preparation
+consume that exact evidence without rerunning unchanged commands. Creating the
+PR and recording its URL ends the synchronous run; remote CI is not awaited or
+polled.
 
 Use `--final-required false` for a targeted check owned by the current
 implementation slice and the default `--final-required true` for final checks.

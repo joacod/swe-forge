@@ -108,9 +108,6 @@ delivery:
 review:
   status: pending
   blocked_by: []
-  attempts: 0
-  retry_ceiling: 2
-  ceiling_provenance: default
   contract_ref: .swe-forge/contracts/review.md
 continuation:
   workflow_active: ${options.workflowActive ?? "true"}

@@ -281,16 +281,17 @@ status: PASS
 findings: []
 ```
 
-If the initial review returns `CHANGES_REQUIRED`, the second handoff replaces
-that complete focus with only the prior blocking finding, the repair delta, and
-the directly affected criteria and risks. Unaffected prior `PASS` conclusions
-carry forward; attempt 2 does not restart the complete ticket review.
+If the initial review returns `CHANGES_REQUIRED`, the root creates a focused
+repair context with only the prior blocking finding, repair delta, and directly
+affected criteria and checks. Unaffected prior `PASS` conclusions carry forward
+for the root; no second reviewer is invoked.
 
 ## 11. Final Acceptance
 
 The orchestrator compares the final diff to the original ticket, confirms all
-acceptance criteria and relevant quality gates pass, confirms the reviewer has
-no critical or high-confidence correctness finding, and reports:
+acceptance criteria and relevant quality gates pass, and reports the one review
+result. If a concrete finding was repaired, it also reports the focused repair
+and that the repaired candidate was not independently re-reviewed:
 
 ```text
 requested_mode: AUTO

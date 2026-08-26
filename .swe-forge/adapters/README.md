@@ -54,9 +54,10 @@ procedure into a host prompt.
 
 Forge owns dependency, mutation, delivery-candidate, and acceptance semantics;
 the host decides worker physical execution and scheduling. Review handoffs are
-root-selected semantic content: adapters forward the validated initial or
-focused `review_focus` unchanged and do not append the ticket, workflow
-invariants, authorization, delivery, generic risk checklists, or transcripts.
+root-selected semantic content: adapters forward the validated initial
+`review_focus` unchanged for review and preserve a focused repair task without
+appending the ticket, workflow invariants, authorization, delivery, generic risk
+checklists, or transcripts.
 An adapter may use a private worktree, sandbox, overlay, container, or
 equivalent mechanism only when the bounded change is materialized into the
 canonical delivery checkout and validated there. Private execution paths are

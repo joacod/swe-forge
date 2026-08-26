@@ -150,13 +150,14 @@ contract files point here rather than repeating it.
 | Worker | Include | Omit |
 | --- | --- | --- |
 | Read-only | common semantic fields, read-only permissions, selected result/review contract | writable scope/actions, checkout and delivery state |
-| Review | the supplied review focus, only necessary ticket context, prior findings or repair delta when focused, read-only permissions, review contract, and validation evidence to inspect | edit or validation actions, unrelated ticket criteria, workflow state, and transcript |
+| Review | the supplied initial review focus, necessary ticket context, read-only permissions, review contract, and validation evidence to inspect | edit or validation actions, unrelated ticket criteria, workflow state, and transcript |
 | Read-write | common fields, allowed writes, canonical delivery-candidate permissions, writable result contract | delivery actions, physical host execution details, unrelated run state, transcript |
 
 Workers discover implementation details through their allowed paths and
-symbols. Reviewers receive the complete ticket-relevant focus for the initial
-review and only the prior blockers, repair delta, and directly affected focus
-for a focused re-review; unaffected PASS conclusions carry forward. They must
-request a contract revision before expanding scope and must not create PRs,
-push, merge, publish, deploy, reroute, redo root discovery, run validation, or
-spawn descendants by default.
+symbols. Reviewers receive the complete ticket-relevant initial focus. A repair
+worker receives a separate focused writable task with only the prior finding,
+repair delta, directly affected criteria, and affected validation; unaffected
+`PASS` conclusions carry forward for the root. Repair workers must not turn
+that context into a review. Workers must request a contract revision before
+expanding scope and must not create PRs, push, merge, publish, deploy, reroute,
+redo root discovery, or spawn descendants by default.

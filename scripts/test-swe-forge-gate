@@ -48,6 +48,10 @@ state=$TMP_ROOT/clean.state
     fail 'state initializer emitted removed routing representation'
   fi
   "$ROOT/scripts/swe-forge-state" validate --state "$state/run-state.yaml" >/dev/null
+  projection=$("$ROOT/scripts/swe-forge-state" inspect --state "$state" --checkout "$repo")
+  case "$projection" in
+    *'"attempts"'*|*'"retry_ceiling"'*) fail 'state inspection exposes obsolete review retry fields' ;;
+  esac
   removed_gate_command=commit
   removed_gate_command=$removed_gate_command-plan
   expect_failure "unknown command: $removed_gate_command" "$GATE" \
@@ -56,7 +60,9 @@ state=$TMP_ROOT/clean.state
   removed_state_command=$removed_state_command-plan
   expect_failure "unknown command: $removed_state_command" "$ROOT/scripts/swe-forge-state" \
     "$removed_state_command" --state "$state/run-state.yaml" --step S1
-  grep -F '  retry_ceiling: 2' "$state/run-state.yaml" >/dev/null
+  if grep -Eq '^  (attempts|retry_ceiling|ceiling_provenance):' "$state/run-state.yaml"; then
+    fail 'run state retains obsolete review retry fields'
+  fi
   removed_state_field=commit
   removed_state_field=${removed_state_field}_plan
   if grep -F "$removed_state_field:" "$state/run-state.yaml" >/dev/null; then
@@ -69,7 +75,7 @@ state=$TMP_ROOT/clean.state
   "$GATE" commit-slice --state "$state" --checkpoint 1 --message 'Record gate evidence' --authorized-by PR >/dev/null
   "$GATE" plan-check --state "$state" --name final-smoke --requirement required >/dev/null
   "$GATE" validate --state "$state" --name final-smoke --final -- sh -c 'grep -q changed README.md' >/dev/null
-  "$GATE" review --state "$state" --result PASS --source fresh-context --findings 0 --repaired 0 >/dev/null
+  "$GATE" review --state "$state" --result PASS --source fresh-context --findings 0 >/dev/null
   "$GATE" deliver-pr --state "$state" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 \
@@ -82,14 +88,16 @@ state=$TMP_ROOT/clean.state
   test -f "$state/receipt.md"
   grep -F -- '- smoke: passed' "$state/receipt.md" >/dev/null
   grep -F -- '- final-smoke: passed' "$state/receipt.md" >/dev/null
-  grep -F 'Review attempts: 1/2' "$state/receipt.md" >/dev/null
+  if grep -F 'Review attempts:' "$state/receipt.md" >/dev/null; then
+    fail 'receipt retains obsolete review attempt accounting'
+  fi
   grep -F 'Remote CI: not awaited after PR creation' "$state/receipt.md" >/dev/null
   "$GATE" receipt --verify --state "$state" >/dev/null
   "$GATE" receipt-verify --state "$state" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || fail 'accepted receipt is missing final status'
 if grep -F 'Context:' "$TMP_ROOT/receipt.md" >/dev/null; then fail 'receipt retains host context metadata'; fi
-grep -F 'Fresh review: PASS — 0 findings, 0 repaired' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
+grep -F 'Fresh review: PASS — 0 findings' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
 grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing harness metadata'
 grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing routing metadata'
 grep -F -- '- Model provider: openai-codex' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing model metadata'
@@ -130,39 +138,32 @@ removed_state_field=${removed_state_field}_plan
 } >"$obsolete_plan"
 expect_failure 'obsolete routing or context-control fields' \
   "$ROOT/scripts/swe-forge-state" validate --state "$obsolete_plan"
-review_repo=$(make_repo review-ceiling)
-review_state=$TMP_ROOT/review-ceiling.state
+obsolete_review=$TMP_ROOT/obsolete-review.yaml
+awk '/^review:/{print; print "  attempts: 1"; next} {print}' \
+  "$state/run-state.yaml" >"$obsolete_review"
+expect_failure 'obsolete routing or context-control fields' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$obsolete_review"
+review_repo=$(make_repo review-once)
+review_state=$TMP_ROOT/review-once.state
 (
   cd "$review_repo"
   "$GATE" preflight --state "$review_state" \
     --requested-delivery GUIDED --delivery-mode GUIDED >/dev/null
   "$GATE" review --state "$review_state" --result CHANGES_REQUIRED \
     --source independent-review --findings 2 --blocked-by R1 --blocked-by R2 >/dev/null || true
-  "$GATE" review --state "$review_state" --result CHANGES_REQUIRED \
-    --source focused-re-review --findings 1 --repaired 1 --blocked-by R2 >/dev/null || true
-  expect_failure 'review ceiling exhausted' "$GATE" review --state "$review_state" \
-    --result CHANGES_REQUIRED --source investigation --findings 1 --blocked-by R2
-  grep -F '  attempts: 2' "$review_state/run-state.yaml" >/dev/null
+  expect_failure 'review has already been recorded' "$GATE" review --state "$review_state" \
+    --result PASS --source another-review --findings 0
   grep -F '  status: changes-required' "$review_state/run-state.yaml" >/dev/null
-  grep -F 'source=focused-re-review' "$review_state/review.env" >/dev/null
-  grep -F 'blocked_by=R2' "$review_state/review.env" >/dev/null
-  if grep -F 'source=investigation' "$review_state/review.env" >/dev/null; then
-    fail 'rejected reviewer-like activity replaced the latest evidence'
+  if grep -Eq '^  (attempts|retry_ceiling|ceiling_provenance):' "$review_state/run-state.yaml"; then
+    fail 'run state retains obsolete review retry fields'
   fi
-)
-
-second_review_repo=$(make_repo second-review)
-second_review_state=$TMP_ROOT/second-review.state
-(
-  cd "$second_review_repo"
-  "$GATE" preflight --state "$second_review_state" \
-    --requested-delivery GUIDED --delivery-mode GUIDED >/dev/null
-  "$GATE" review --state "$second_review_state" --result CHANGES_REQUIRED \
-    --source independent-review --findings 1 --blocked-by R1 >/dev/null || true
-  "$GATE" review --state "$second_review_state" --result PASS \
-    --source focused-re-review --findings 0 --repaired 1 >/dev/null
-  grep -F '  attempts: 2' "$second_review_state/run-state.yaml" >/dev/null
-  grep -F '  status: pass' "$second_review_state/run-state.yaml" >/dev/null
+  grep -F 'source=independent-review' "$review_state/review.env" >/dev/null
+  if grep -Eq '^(attempt|retry_ceiling|repaired)=' "$review_state/review.env"; then
+    fail 'review evidence retains obsolete retry or re-review fields'
+  fi
+  if grep -F 'source=another-review' "$review_state/review.env" >/dev/null; then
+    fail 'rejected second review replaced the initial evidence'
+  fi
 )
 
 
@@ -187,30 +188,36 @@ multi_state=$TMP_ROOT/multi-slice.state
     --message 'Add second implementation slice' --authorized-by PR >/dev/null
   expect_failure 'PR review requires passing final validation for the current candidate' \
     "$GATE" review --state "$multi_state" --result PASS --source fresh-context
-  grep -F '  attempts: 0' "$multi_state/run-state.yaml" >/dev/null
+  if grep -Eq '^  (attempts|retry_ceiling|ceiling_provenance):' "$multi_state/run-state.yaml"; then
+    fail 'run state retains obsolete review retry fields'
+  fi
   "$GATE" validate --state "$multi_state" --name final-smoke --final \
     -- sh -c 'test -f one.txt && test -f two.txt' >/dev/null
   "$GATE" plan-check --state "$multi_state" --name repair-smoke \
     --requirement required --final-required false >/dev/null
   "$GATE" review --state "$multi_state" --result CHANGES_REQUIRED \
     --source fresh-context --findings 1 --blocked-by R1 >/dev/null || true
+  expect_failure 'review has unresolved findings' \
+    "$GATE" deliver-pr --state "$multi_state"
   printf 'repair\n' >repair.txt
   "$GATE" validate --state "$multi_state" --name repair-smoke -- sh -c 'test -f repair.txt' >/dev/null
   "$GATE" checkpoint --state "$multi_state" --scope repair.txt --review-repair >/dev/null
-  expect_failure 'PR review requires a clean committed candidate' \
-    "$GATE" review --state "$multi_state" --result PASS \
-      --source focused-re-review --repaired 1
-  grep -F '  attempts: 1' "$multi_state/run-state.yaml" >/dev/null
   "$GATE" commit-slice --state "$multi_state" --checkpoint 3 --review-repair \
     --message 'Repair reviewed finding' --authorized-by PR >/dev/null
+  grep -F '  status: repaired' "$multi_state/run-state.yaml" >/dev/null
   "$GATE" validate --state "$multi_state" --name final-smoke --final \
     -- sh -c 'test -f one.txt && test -f two.txt && test -f repair.txt' >/dev/null
-  "$GATE" review --state "$multi_state" --result PASS \
-    --source focused-re-review --repaired 1 >/dev/null
+  expect_failure 'review can only start from pending review state' \
+    "$GATE" review --state "$multi_state" --result PASS --source another-review
   "$GATE" deliver-pr --state "$multi_state" >/dev/null
   "$GATE" receipt --state "$multi_state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/3 >/dev/null
-  grep -F 'Review attempts: 2/2' "$multi_state/receipt.md" >/dev/null
+  grep -F 'Fresh review: CHANGES_REQUIRED — 1 findings' "$multi_state/receipt.md" >/dev/null
+  grep -F 'Review repair: completed — one finding repaired; repaired candidate was not independently re-reviewed' \
+    "$multi_state/receipt.md" >/dev/null
+  if grep -F 'Review attempts:' "$multi_state/receipt.md" >/dev/null; then
+    fail 'receipt retains obsolete review attempt accounting'
+  fi
   "$GATE" receipt-verify --state "$multi_state" >/dev/null
   test "$(awk -F '\t' '$9 == "slice" { count++ } END { print count + 0 }' "$multi_state/checkpoints.tsv")" = 2
   test "$(awk -F '\t' '$10 != "none" { count++ } END { print count + 0 }' "$multi_state/checkpoints.tsv")" = 3
@@ -240,43 +247,41 @@ collapsed_state=$TMP_ROOT/collapsed.state
   "$GATE" deliver-pr --state "$collapsed_state" >/dev/null
   test "$(awk -F '\t' '$9 == "slice" { count++ } END { print count + 0 }' "$collapsed_state/checkpoints.tsv")" = 1
 )
-repair_ceiling_repo=$(make_repo repair-ceiling)
-repair_ceiling_state=$TMP_ROOT/repair-ceiling.state
+repair_once_repo=$(make_repo repair-once)
+repair_once_state=$TMP_ROOT/repair-once.state
 (
-  cd "$repair_ceiling_repo"
-  "$GATE" preflight --state "$repair_ceiling_state" >/dev/null
-  "$GATE" plan-check --state "$repair_ceiling_state" --name implementation-smoke \
+  cd "$repair_once_repo"
+  "$GATE" preflight --state "$repair_once_state" >/dev/null
+  "$GATE" plan-check --state "$repair_once_state" --name implementation-smoke \
     --requirement required --final-required false >/dev/null
   printf 'implementation\n' >implementation.txt
-  "$GATE" validate --state "$repair_ceiling_state" --name implementation-smoke \
+  "$GATE" validate --state "$repair_once_state" --name implementation-smoke \
     -- sh -c 'test -f implementation.txt' >/dev/null
-  "$GATE" checkpoint --state "$repair_ceiling_state" --scope implementation.txt >/dev/null
-  "$GATE" commit-slice --state "$repair_ceiling_state" --checkpoint 1 \
-    --message 'Implement repair ceiling fixture' --authorized-by PR >/dev/null
-  "$GATE" plan-check --state "$repair_ceiling_state" --name final-smoke \
+  "$GATE" checkpoint --state "$repair_once_state" --scope implementation.txt >/dev/null
+  "$GATE" commit-slice --state "$repair_once_state" --checkpoint 1 \
+    --message 'Implement repair fixture' --authorized-by PR >/dev/null
+  "$GATE" plan-check --state "$repair_once_state" --name final-smoke \
     --requirement required >/dev/null
-  "$GATE" validate --state "$repair_ceiling_state" --name final-smoke --final \
+  "$GATE" validate --state "$repair_once_state" --name final-smoke --final \
     -- sh -c 'test -f implementation.txt' >/dev/null
-  "$GATE" review --state "$repair_ceiling_state" --result CHANGES_REQUIRED \
+  "$GATE" review --state "$repair_once_state" --result CHANGES_REQUIRED \
     --source fresh-context --findings 1 --blocked-by R1 >/dev/null || true
-  "$GATE" plan-check --state "$repair_ceiling_state" --name repair-smoke \
+  "$GATE" plan-check --state "$repair_once_state" --name repair-smoke \
     --requirement required --final-required false >/dev/null
   printf 'repair one\n' >repair-one.txt
-  "$GATE" validate --state "$repair_ceiling_state" --name repair-smoke \
+  "$GATE" validate --state "$repair_once_state" --name repair-smoke \
     -- sh -c 'test -f repair-one.txt' >/dev/null
-  "$GATE" checkpoint --state "$repair_ceiling_state" --scope repair-one.txt \
+  "$GATE" checkpoint --state "$repair_once_state" --scope repair-one.txt \
     --review-repair >/dev/null
-  "$GATE" commit-slice --state "$repair_ceiling_state" --checkpoint 2 --review-repair \
-    --message 'Apply first review repair' --authorized-by PR >/dev/null
-  "$GATE" validate --state "$repair_ceiling_state" --name final-smoke --final \
+  "$GATE" commit-slice --state "$repair_once_state" --checkpoint 2 --review-repair \
+    --message 'Apply review repair' --authorized-by PR >/dev/null
+  "$GATE" validate --state "$repair_once_state" --name final-smoke --final \
     -- sh -c 'test -f implementation.txt && test -f repair-one.txt' >/dev/null
-  "$GATE" review --state "$repair_ceiling_state" --result CHANGES_REQUIRED \
-    --source focused-re-review --findings 1 --repaired 1 --blocked-by R1 >/dev/null || true
   printf 'repair two\n' >repair-two.txt
-  "$GATE" validate --state "$repair_ceiling_state" --name repair-smoke \
+  "$GATE" validate --state "$repair_once_state" --name repair-smoke \
     -- sh -c 'test -f repair-two.txt' >/dev/null
-  expect_failure 'review-repair activity stopped at the review ceiling' \
-    "$GATE" checkpoint --state "$repair_ceiling_state" --scope repair-two.txt --review-repair
+  expect_failure 'review-repair activity requires an unresolved changes-required review' \
+    "$GATE" checkpoint --state "$repair_once_state" --scope repair-two.txt --review-repair
 )
 
 orphan_repo=$(make_repo orphan-repair)

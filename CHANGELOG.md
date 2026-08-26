@@ -20,6 +20,9 @@ change between alpha releases.
 - PR runs now let agents choose one or more coherent implementation commits
   during the work while retaining candidate-bound validation and checkpoint
   evidence without repeating unchanged run-state validation.
+- PR review recovery now uses one fresh independent review and, only for a
+  concrete localized finding, one focused repair with affected validation; it
+  does not automatically re-review the repaired candidate.
 - Receipt generation now keeps a run-local copy by default without adding
   workflow metadata to pull requests.
 - Continue collecting real-run reports across harness adapters; projection

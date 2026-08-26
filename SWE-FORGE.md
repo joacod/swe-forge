@@ -232,45 +232,41 @@ acceptance, testing decision, validation plan, and review focus are clear. The
 agent chooses during implementation whether the cohesive result is best
 represented by one commit or several; no commit sequence is predeclared or
 stored in run state. Each implementation checkpoint still binds the current
-targeted evidence to a coherent materializing commit, and review
-repairs use explicit additional `--review-repair` commits.
+targeted evidence to a coherent materializing commit, and one review repair,
+when needed, uses an explicit `--review-repair` commit.
 
 After implementation is complete, the orchestrator runs final integrated
-validation once against that committed candidate and performs the initial
-independent review from fresh context against the same candidate. The initial
-handoff uses
-the complete ticket-relevant `review_focus`, so it remains the primary
-comprehensive semantic review while broader quality concerns stay relevant to
-the change. If that review returns `CHANGES_REQUIRED`, it repairs only the
-relevant finding, runs the affected checks, records the review-repair checkpoint
-and commit, establishes the required final evidence for the repaired candidate,
-and performs the focused second review against that committed `HEAD`. The
-focused handoff contains only the prior blockers, repair delta, and directly
-affected focus; unaffected `PASS` conclusions carry forward. A passing second
-review goes directly to final acceptance; acceptance consumes current evidence
-rather than rerunning unchanged validation or review. Normal review-repair
-activity allows at most two review executions for the candidate, including
-independent, focused, investigation, or other reviewer-like passes. The gate
-records the attempts in canonical run state; a second `CHANGES_REQUIRED` result
-stops automatic repair or review activity and reports the unresolved evidence.
-Ordinary debugging of an unrelated implementation or test failure is separate
-task recovery and does not consume this review budget. PR mode never merges;
-project-facing PR content follows the delivery policy, while evidence and
-receipts remain private. `/git-pr draft` requests a draft PR without changing
-normal `/git-pr` behavior.
+validation once against that committed candidate and performs one independent
+review from fresh context against the same candidate. The handoff uses the
+complete ticket-relevant `review_focus`, so the review remains comprehensive
+without receiving workflow prose or the implementer's transcript.
+
+If the review returns `PASS`, continue to final acceptance and delivery. If it
+returns `CHANGES_REQUIRED`, repair only a concrete, localized, clearly
+repairable correctness issue. Build a focused repair context from the finding,
+repair delta, directly affected criteria, and affected validation; do not replay
+the initial review assignment. Run the affected validation and record the
+review-repair checkpoint and commit. Do not automatically request another
+review: the repaired candidate is delivered with the explicit report that it
+was not independently re-reviewed.
+
+A fundamental, materially uncertain, unsafe, or otherwise unrepairable finding,
+or impossible required validation, blocks delivery. There is no second review
+or reviewer-retry loop. PR mode never merges; project-facing PR content follows
+the delivery policy, while evidence and receipts remain private.
+`/git-pr draft` requests a draft PR without changing normal `/git-pr` behavior.
 
 After the local gates pass, PR delivery pushes the branch, creates the one
 authorized PR, records its URL and a local receipt, reports `ACCEPTED`, and
 stops. Remote GitHub CI is external after PR creation: it may be reported as
 pending, but SWE Forge does not await or poll it synchronously.
 
-The working spec's `review_focus` is the sole structured review scope. The
-root derives a transient focused subset after a repair instead of mutating the
-original ticket or replaying unrelated criteria. The PR mental model is:
-implement, use targeted validation and materialize one or more coherent
-checkpoint/commit boundaries, final-validate the candidate, review, repair/validate/checkpoint/
-commit when required, final-validate the changed candidate, focused re-review,
-accept, push, create the PR, and report.
+The working spec's `review_focus` is the sole structured review scope. After a
+finding, the root derives a transient focused repair context instead of
+mutating the original ticket or replaying unrelated criteria. The PR mental
+model is: implement, validate, one fresh independent review, optionally repair
+one concrete localized finding, run affected validation, accept, push, create
+the PR, and report.
 
 ## Ticket Lifecycle
 
@@ -348,10 +344,11 @@ The canonical `swe-forge-state init` operation owns schema-v4 shell construction
 Use `set-routing` for deliberate preferred/effective topology changes,
 `set-continuation` for bounded semantic continuation inputs,
 `set-delivery-checkout` and `set-receipt-ref` for their purpose-specific
-updates, `set-review` for review attempts, and `set-pull-request` after PR
-creation. These helpers validate atomic replacements and derive
-`continuation.updated_at` and the delivery projection; callers must not
-hand-construct containers, timestamps, or projections in YAML.
+updates, `set-review` for the one review result, `set-review-repair` for the
+single recorded repair, and `set-pull-request` after PR creation. These helpers
+validate atomic replacements and derive `continuation.updated_at` and the
+delivery projection; callers must not hand-construct containers, timestamps, or
+projections in YAML.
 
 A run state is temporary by default and should live outside the repository, for
 example:
@@ -378,7 +375,7 @@ separately authorized.
 ## Failure Handling
 
 On `BLOCKED` or `FAILED`, load and follow
-`.swe-forge/policies/failure-recovery.md`; it owns retry limits, failure
+`.swe-forge/policies/failure-recovery.md`; it owns task-retry limits, failure
 classification, debugger escalation, conflict handling, and conservative
 cleanup. Preserve ambiguous state and report unresolved evidence rather than
 silently changing status or looping.
@@ -400,17 +397,19 @@ Declare success only when all applicable conditions are met:
 - a normal ticket has one dedicated delivery branch; and
 - when `delivery_mode: PR`, any recorded implementation or review-repair
   checkpoint has targeted validation, checkpoint, and commit evidence before
-  final acceptance and delivery; final validation and review evidence are
-  current for the delivered candidate, or the run is reported `BLOCKED`;
+  final acceptance and delivery; final validation is current for the delivered
+  candidate, and review evidence is either a `PASS` for that candidate or one
+  recorded repair with affected validation. A repaired candidate is explicitly
+  not independently re-reviewed; otherwise the run is reported `BLOCKED`;
   `GUIDED` may finish with a reviewed local diff when delivery actions are not
   authorized;
 - after a PR is created, local receipt generation and reporting complete the
   synchronous run; remote CI is not an acceptance wait or polling phase.
 
 Final acceptance consumes the current validation and review evidence; it does
-not itself rerun unchanged semantic work or authorize another reviewer-like
-pass. Do not claim a check passed when it was not run. Distinguish skipped and
-unavailable checks from successful validation.
+not itself rerun unchanged semantic work or authorize another review. Do not
+claim a check passed when it was not run. Distinguish skipped and unavailable
+checks from successful validation.
 
 Final status is deterministic: use `ACCEPTED` only when this gate passes, use
 `BLOCKED` when a user decision, authorization, access, or environment change can
@@ -437,7 +436,8 @@ Return a concise report containing:
 - continuity/recovery evidence relevant to resumption;
 - files changed;
 - testing decision, tests, and validation performed with results;
-- reviewer result and repaired findings;
+- reviewer result, repaired findings, and whether the repaired candidate was
+  independently re-reviewed;
 - assumptions and remaining risks;
 - delivery result (checkpoint, commit, push, PR URL, or explicit not-authorized
   status);

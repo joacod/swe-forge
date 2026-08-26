@@ -54,7 +54,7 @@ Usage:
   scripts/swe-forge-gate commit-slice --state DIR --checkpoint ID \
     --message MESSAGE --authorized-by PR|GO [--review-repair]
   scripts/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED \
-    --source SOURCE [--findings N] [--repaired N] [--blocked-by ID...]
+    --source SOURCE [--findings N] [--blocked-by ID...]
   scripts/swe-forge-gate deliver-pr --state DIR
   scripts/swe-forge-gate receipt --state DIR --execution MODE \
     --delivery GUIDED|PR [metadata options]
@@ -194,17 +194,48 @@ acquire_review_lock() {
   REVIEW_LOCK=$lock_path
   printf '%s\n' "$$" >"$REVIEW_LOCK/pid"
 }
+review_repair_count() {
+  awk -F "$TAB" '$9 == "review-repair" { count++ } END { print count + 0 }' \
+    "$STATE/checkpoints.tsv"
+}
+
+review_blocker_count() {
+  blocked=$(run_state_nested_value review blocked_by)
+  case "$blocked" in
+    '[]'|'') printf '0\n' ;;
+    \[*\])
+      blocked=${blocked#\[}
+      blocked=${blocked%\]}
+      printf '%s\n' "$blocked" | awk -F',' 'NF { print NF; next } { print 0 }'
+      ;;
+    *) printf '0\n' ;;
+  esac
+}
+
 review_repair_allowed() {
   review_status=$(run_state_nested_value review status)
-  review_attempts=$(run_state_nested_value review attempts)
-  review_ceiling=$(run_state_nested_value review retry_ceiling)
   [ "$review_status" = changes-required ] || \
     fail "review-repair activity requires an unresolved changes-required review"
-  case "$review_attempts:$review_ceiling" in
-    ''|*[!0-9:]*|*:*:) fail "review-repair activity has invalid review budget" ;;
-  esac
-  [ "$review_attempts" -lt "$review_ceiling" ] || \
-    fail "review-repair activity stopped at the review ceiling: $review_attempts/$review_ceiling"
+  [ "$(review_blocker_count)" -eq 1 ] || \
+    fail "one focused review repair requires exactly one blocking finding"
+  repair_count=$(review_repair_count)
+  [ "$repair_count" -eq 0 ] || \
+    fail "only one focused review repair is allowed"
+}
+
+review_repair_checkpoint_ready() {
+  review_status=$(run_state_nested_value review status)
+  [ "$review_status" = changes-required ] || \
+    fail "review-repair activity requires an unresolved changes-required review"
+  [ "$(review_blocker_count)" -eq 1 ] || \
+    fail "one focused review repair requires exactly one blocking finding"
+  repair_count=$(review_repair_count)
+  [ "$repair_count" -eq 1 ] || \
+    fail "review-repair commit requires one recorded repair checkpoint"
+  repair_checkpoint_commit=$(awk -F "$TAB" '$9 == "review-repair" { print $10; exit }' \
+    "$STATE/checkpoints.tsv")
+  [ "$repair_checkpoint_commit" = none ] || \
+    fail "review repair has already been committed"
 }
 
 review_repair_commit_exists() {
@@ -225,31 +256,14 @@ review_repair_commit_exists() {
 }
 
 review_candidate_ready() {
-  candidate_attempts=$1
-  candidate_head=$2
-  candidate_fp=$3
+  candidate_fp=$1
   [ "$(delivery_mode_from_state)" = PR ] || return 0
-
-  candidate_ceiling=$(run_state_nested_value review retry_ceiling)
-  [ "$candidate_attempts" -lt "$candidate_ceiling" ] || \
-    fail "review ceiling exhausted: $candidate_attempts/$candidate_ceiling executions already recorded; automatic reviewer-like activity is stopped"
   [ -z "$(status_porcelain)" ] || \
     fail "PR review requires a clean committed candidate"
   check_requirements "$candidate_fp" yes >/dev/null 2>&1 || \
     fail "PR review requires passing final validation for the current candidate"
-
-  case "$candidate_attempts" in
-    0)
-      [ "$(run_state_nested_value review status)" = pending ] || \
-        fail "PR review can only start from pending review state"
-      ;;
-    *)
-      [ "$(run_state_nested_value review status)" = changes-required ] || \
-        fail "PR focused re-review requires an unresolved changes-required review"
-      review_repair_commit_exists "$candidate_head" || \
-        fail "PR focused re-review requires a materialized review-repair commit"
-      ;;
-  esac
+  [ "$(run_state_nested_value review status)" = pending ] || \
+    fail "PR review can only start from pending review state"
 }
 
 
@@ -988,8 +1002,14 @@ checkpoint_run() {
       review_repair_allowed
       checkpoint_kind=review-repair
     else
-      [ "$(run_state_nested_value review status)" != changes-required ] || \
-        fail "PR checkpoint after a review finding requires --review-repair"
+      case "$(run_state_nested_value review status)" in
+        changes-required)
+          fail "PR checkpoint after a review finding requires --review-repair" ;;
+        repaired)
+          fail "PR candidate cannot be changed after its review repair" ;;
+        pass)
+          fail "PR candidate cannot be changed after review" ;;
+      esac
       checkpoint_kind=slice
     fi
   else
@@ -1101,11 +1121,17 @@ commit_slice() {
   delivery_mode=$(delivery_mode_from_state)
   if [ "$delivery_mode" = PR ]; then
     if [ "$review_repair" = true ]; then
-      review_repair_allowed
+      review_repair_checkpoint_ready
       commit_kind=review-repair
     else
-      [ "$(run_state_nested_value review status)" != changes-required ] || \
-        fail "PR commit after a review finding requires --review-repair"
+      case "$(run_state_nested_value review status)" in
+        changes-required)
+          fail "PR commit after a review finding requires --review-repair" ;;
+        repaired)
+          fail "PR candidate cannot be changed after its review repair" ;;
+        pass)
+          fail "PR candidate cannot be changed after review" ;;
+      esac
       commit_kind=slice
     fi
   else
@@ -1157,6 +1183,10 @@ commit_slice() {
     --head-sha "$new_head" \
     --checkpoint-sha "$new_head" >/dev/null
   update_meta_checkout "$new_head"
+  if [ "$commit_kind" = review-repair ]; then
+    "$SCRIPT_DIR/swe-forge-state" set-review-repair \
+      --state "$STATE/run-state.yaml" >/dev/null
+  fi
   rm -f "$current_paths" "$staged_before" "$staged_tmp" "$unstaged_tmp"
   printf 'PASS: committed checkpoint %s (%s)\n' "$checkpoint_id" "$commit_kind"
   printf 'COMMIT: %s\n' "$new_head"
@@ -1166,7 +1196,6 @@ review_run() {
   result=
   source=
   findings=0
-  repaired=0
   blocked_values=
   blocked_args=
   while [ "$#" -gt 0 ]; do
@@ -1191,11 +1220,6 @@ review_run() {
         findings=$2
         shift 2
         ;;
-      --repaired)
-        [ "$#" -ge 2 ] || fail "--repaired requires a non-negative integer"
-        repaired=$2
-        shift 2
-        ;;
       --blocked-by)
         [ "$#" -ge 2 ] || fail "--blocked-by requires a finding ID"
         blocked_id=$2
@@ -1215,7 +1239,9 @@ review_run() {
   [ -n "$source" ] || fail "--source is required"
   reject_control_chars "$source"
   case "$findings" in ''|*[!0-9]*) fail "findings must be a non-negative integer" ;; esac
-  case "$repaired" in ''|*[!0-9]*) fail "repaired must be a non-negative integer" ;; esac
+  if [ "$result" = CHANGES_REQUIRED ] && [ "$findings" -eq 0 ]; then
+    fail "CHANGES_REQUIRED review must report at least one finding"
+  fi
   blocked_display=none
   if [ -n "$blocked_values" ]; then
     blocked_display=
@@ -1232,36 +1258,30 @@ review_run() {
 $blocked_values
 EOF_BLOCKED
   fi
+  if [ "$result" = CHANGES_REQUIRED ] && [ -z "$blocked_values" ]; then
+    fail "CHANGES_REQUIRED review must identify at least one blocking finding"
+  fi
   acquire_review_lock
   ensure_meta_state
   assert_identity
   head=$(git -C "$CHECKOUT" rev-parse HEAD)
   fp=$(fingerprint_for_checkout "$CHECKOUT")
-  current_attempts=$(run_state_nested_value review attempts)
-  review_requested_result=$result
-  review_candidate_ready "$current_attempts" "$head" "$fp"
-  result=$review_requested_result
+  review_candidate_ready "$fp"
   SWE_FORGE_REVIEW_LOCK_HELD=true "$SCRIPT_DIR/swe-forge-state" set-review \
     --state "$STATE/run-state.yaml" --result "$result" $blocked_args >/dev/null
-  attempt=$(run_state_nested_value review attempts)
-  ceiling=$(run_state_nested_value review retry_ceiling)
   REVIEW_TMP=$STATE/review.env.tmp.$$
   {
     printf 'result=%s\n' "$result"
     printf 'source=%s\n' "$source"
     printf 'findings=%s\n' "$findings"
-    printf 'repaired=%s\n' "$repaired"
     printf 'blocked_by=%s\n' "$blocked_display"
-    printf 'attempt=%s\n' "$attempt"
-    printf 'retry_ceiling=%s\n' "$ceiling"
     printf 'head=%s\n' "$head"
     printf 'fingerprint=%s\n' "$fp"
     printf 'recorded_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   } >"$REVIEW_TMP"
   mv "$REVIEW_TMP" "$STATE/review.env"
   REVIEW_TMP=
-  printf 'REVIEW: %s attempt %s/%s (%s findings, %s repaired)\n' \
-    "$result" "$attempt" "$ceiling" "$findings" "$repaired"
+  printf 'REVIEW: %s (%s findings)\n' "$result" "$findings"
   [ "$result" = PASS ]
 }
 
@@ -1342,28 +1362,48 @@ check_final_state() {
   fp=$(fingerprint_for_checkout "$CHECKOUT")
   if ! check_requirements "$fp" yes >/dev/null 2>&1; then blocker "required or applicable final validation is not passing for current candidate"; fi
   review_state_status=$(run_state_nested_value review status)
-  review_state_attempts=$(run_state_nested_value review attempts)
-  review_state_ceiling=$(run_state_nested_value review retry_ceiling)
-  if [ "$(delivery_mode_from_state)" = PR ]; then
-    [ "$review_state_status" = pass ] || blocker "canonical review state is not PASS: ${review_state_status:-missing}"
-    case "$review_state_attempts" in ''|*[!0-9]*|0) blocker "canonical review attempt evidence is missing" ;; esac
-    [ -n "$review_state_ceiling" ] || blocker "canonical review ceiling is missing"
-  fi
+  case "$review_state_status" in
+    pass|repaired) ;;
+    changes-required)
+      blocker "review has unresolved findings" ;;
+    *)
+      blocker "canonical review state does not permit delivery: ${review_state_status:-missing}" ;;
+  esac
   if [ -f "$STATE/review.env" ]; then
     review_result=$(meta_value result "$STATE/review.env")
     review_head=$(meta_value head "$STATE/review.env")
     review_fp=$(meta_value fingerprint "$STATE/review.env")
-    review_attempt=$(meta_value attempt "$STATE/review.env")
-    review_ceiling=$(meta_value retry_ceiling "$STATE/review.env")
-    [ "$review_result" = PASS ] || blocker "fresh review is not PASS: ${review_result:-missing}"
-    [ "$review_head" = "$current_head" ] || blocker "review evidence is not for current HEAD"
-    [ "$review_fp" = "$fp" ] || blocker "review evidence is not for current candidate fingerprint"
-    if [ "$(delivery_mode_from_state)" = PR ]; then
-      [ "$review_attempt" = "$review_state_attempts" ] || \
-        blocker "review evidence attempt does not match canonical run state"
-      [ "$review_ceiling" = "$review_state_ceiling" ] || \
-        blocker "review evidence ceiling does not match canonical run state"
-    fi
+    case "$review_state_status" in
+      pass)
+        [ "$review_result" = PASS ] || blocker "fresh review is not PASS: ${review_result:-missing}"
+        [ "$review_head" = "$current_head" ] || blocker "review evidence is not for current HEAD"
+        [ "$review_fp" = "$fp" ] || blocker "review evidence is not for current candidate fingerprint"
+        [ "$(review_repair_count)" -eq 0 ] || blocker "review PASS cannot have a repair checkpoint"
+        ;;
+      repaired)
+        [ "$(delivery_mode_from_state)" = PR ] || \
+          blocker "review repair is only supported for PR delivery"
+        [ "$review_result" = CHANGES_REQUIRED ] || \
+          blocker "repaired review state lacks its changes-required review evidence"
+        [ "$review_head" != "$current_head" ] || \
+          blocker "review repair did not produce a new candidate"
+        [ "$review_fp" != "$fp" ] || \
+          blocker "review repair evidence is for the current candidate"
+        [ "$(review_blocker_count)" -eq 1 ] || \
+          blocker "repaired review state lacks one blocking finding"
+        [ "$(review_repair_count)" -eq 1 ] || \
+          blocker "repaired review state lacks one review-repair checkpoint"
+        repair_commit=$(awk -F "$TAB" '$9 == "review-repair" { print $10; exit }' \
+          "$STATE/checkpoints.tsv")
+        [ "$repair_commit" = "$current_head" ] || \
+          blocker "candidate changed after its review repair"
+        review_repair_commit_exists "$current_head" || \
+          blocker "review repair has no materializing commit"
+        ;;
+      *)
+        blocker "review evidence cannot complete delivery from state: $review_state_status"
+        ;;
+    esac
   else
     blocker "review evidence is missing"
   fi
@@ -1469,13 +1509,10 @@ receipt_text() {
   if [ -f "$STATE/review.env" ]; then
     review_result=$(meta_value result "$STATE/review.env")
     review_findings=$(meta_value findings "$STATE/review.env")
-    review_repaired=$(meta_value repaired "$STATE/review.env")
-    review_attempt=$(meta_value attempt "$STATE/review.env")
-    review_ceiling=$(meta_value retry_ceiling "$STATE/review.env")
-    [ -n "$review_attempt" ] || review_attempt=$(run_state_nested_value review attempts)
-    [ -n "$review_ceiling" ] || review_ceiling=$(run_state_nested_value review retry_ceiling)
-    printf 'Fresh review: %s — %s findings, %s repaired\n' "$review_result" "$review_findings" "$review_repaired"
-    printf 'Review attempts: %s/%s\n' "$review_attempt" "$review_ceiling"
+    printf 'Fresh review: %s — %s findings\n' "$review_result" "$review_findings"
+    if [ "$(run_state_nested_value review status)" = repaired ]; then
+      printf 'Review repair: completed — one finding repaired; repaired candidate was not independently re-reviewed\n'
+    fi
   else
     printf 'Fresh review: NOT RUN\n'
   fi
@@ -1655,20 +1692,15 @@ receipt_verify() {
   receipt_status=$(awk -F': ' '$1 == "Final status" { print $2; exit }' "$receipt_file")
   receipt_delivery=$(awk -F': ' '$1 == "Delivery" { print $2; exit }' "$receipt_file")
   receipt_pr_url=$(awk -F': ' '$1 == "Pull request" { print $2; exit }' "$receipt_file")
-  receipt_review_attempts=$(awk -F': ' '$1 == "Review attempts" { print $2; exit }' "$receipt_file")
   canonical_delivery=$(delivery_mode_from_state)
   [ "$receipt_delivery" = "$canonical_delivery" ] || \
     fail "receipt delivery mode $receipt_delivery does not match run state $canonical_delivery"
-  review_state_attempts=$(run_state_nested_value review attempts)
-  review_state_ceiling=$(run_state_nested_value review retry_ceiling)
   if [ "$canonical_delivery" = PR ]; then
     recorded_pr_url=$(run_state_nested_value delivery pull_request_ref)
     [ -n "$recorded_pr_url" ] && [ "$recorded_pr_url" != none ] || \
       fail "run state is missing the recorded pull-request URL"
     [ "$receipt_pr_url" = "$recorded_pr_url" ] || \
       fail "receipt pull-request URL does not match run state"
-    [ "$receipt_review_attempts" = "$review_state_attempts/$review_state_ceiling" ] || \
-      fail "receipt review attempts do not match canonical run state"
   else
     [ -z "$receipt_pr_url" ] || [ "$receipt_pr_url" = not-created ] || \
       fail "guided receipt cannot contain a pull-request URL"

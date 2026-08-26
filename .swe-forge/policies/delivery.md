@@ -29,9 +29,10 @@ not require a predeclared commit sequence. Each implementation checkpoint
 binds its current candidate, exact path scope, targeted validation, and
 materializing `commit-slice` through the executable gate before delivery.
 
-Review repairs use `--review-repair` and remain additional atomic commits. The
-repair commit must exist before the focused re-review of its candidate; it is
-validated by the same candidate and path safeguards as other delivery commits.
+Review repairs use `--review-repair` and remain one additional atomic commit
+when needed. The repair commit must exist before delivery of its candidate and
+is validated by the same candidate and path safeguards as other delivery
+commits. It does not trigger another review.
 
 ### PR completion boundary
 

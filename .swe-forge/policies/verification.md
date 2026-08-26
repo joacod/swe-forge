@@ -34,8 +34,9 @@ Code inspection alone cannot establish that a relevant behavior works.
   as pending until the whole ticket is integrated
 - `PR` delivery: use targeted validation for each implementation slice when
   useful, commit coherent slices as they are completed, then establish final
-  evidence and review the committed candidate before delivery; after the PR
-  exists, remote CI is external and is not awaited by this workflow
+  evidence and perform one independent review of the committed candidate before
+  delivery; after the PR exists, remote CI is external and is not awaited by
+  this workflow
 
 ### Validation cadence and batching
 
@@ -43,8 +44,8 @@ Use targeted checks for each implementation slice and reserve the complete
 repository suite for the final integrated candidate unless a slice changes a
 behavior that requires an earlier full check. Run final validation once the
 implementation candidate is complete. If a review repair materially changes
-the candidate, establish the required final evidence again for that new
-candidate before focused re-review. Do not rerun an unchanged full suite merely
+the candidate, rerun the checks affected by that repair and establish current
+final evidence for delivery. Do not rerun an unchanged full suite merely
 because a checkpoint, commit, review, acceptance, or PR-preparation boundary was
 reached. Later gates consume current evidence rather than repeating its semantic
 work.
@@ -138,15 +139,15 @@ The ticket workflow decides when independent review is required. When it is,
 load `.swe-forge/agents/reviewer.md` and `../contracts/review.md` before review.
 Verification supplies current validation evidence; the reviewer role owns how
 to investigate, and the contract owns result shape, coverage semantics,
-severity, blocking behavior, and attempt accounting.
+severity, and blocking behavior.
 
-For the initial review, the handoff uses the complete ticket-relevant
-`review_focus`. After a repair, the handoff uses a newly derived focused subset
-with the prior blocking findings, repair delta, directly affected criteria and
-risks, and only the original context needed to interpret them. Unaffected
-previous `PASS` conclusions carry forward. Adapters forward this bounded
-handoff; they do not append workflow policy, authorization, delivery, or
-transcript content.
+The one review handoff uses the complete ticket-relevant initial
+`review_focus`. If repair is needed, the root derives a separate focused repair
+context with the prior finding, repair delta, directly affected criteria and
+checks, and only the original context needed to interpret them. Unaffected
+previous `PASS` conclusions carry forward for the root; no second reviewer
+receives that context. Adapters forward the bounded handoff; they do not append
+workflow policy, authorization, delivery, or transcript content.
 
 ## Acceptance handoff
 
@@ -155,4 +156,5 @@ Acceptance Gate in `SWE-FORGE.md`. This policy does not define a competing
 final gate. Report unavailable or failed required evidence explicitly and let
 the canonical gate determine whether the run is `ACCEPTED`, `BLOCKED`, or
 `FAILED`; delivery authorization and receipt semantics remain owned by their
-canonical policy and contract.
+canonical policy and contract. A repaired candidate is accepted only with the
+recorded repair and current affected validation, not a second review.

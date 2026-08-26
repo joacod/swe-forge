@@ -118,9 +118,10 @@ representation locally. Invalid, missing, non-strict, or incompatible worker
 data remains untrusted.
 
 Reviewers receive the canonical REVIEW transport schema and the root-selected
-initial or focused review briefing. The adapter forwards that briefing without
-adding ticket, workflow, or policy prose; the root and canonical contract retain
-semantic acceptance and the blocking matrix.
+initial review briefing. A repair worker receives a separate focused writable
+briefing. The adapter forwards each briefing without adding ticket, workflow,
+or policy prose; the root and canonical contract retain semantic acceptance and
+the blocking matrix.
 
 ## Shared-checkout safety and fallback
 

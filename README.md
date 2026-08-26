@@ -15,7 +15,7 @@ SWE Forge's scope.
 ## What it does
 
 ```text
-ticket → inspect and plan → choose SOLO or SUBAGENTS → implement → verify and review → deliver/report
+ticket → inspect and plan → choose SOLO or SUBAGENTS → implement → validate → one fresh review → optional repair/validate → deliver/report
 ```
 
 It chooses the smallest useful execution topology:
@@ -65,8 +65,10 @@ locations and optional capabilities.
 ## Use
 
 Invoke SWE Forge explicitly through the installed harness entry point. Give it
-one focused ticket and SWE Forge will take it through validation and review to a
-reviewable PR, using `PR` delivery with automatic topology by default:
+one focused ticket and SWE Forge will take it through validation and one
+independent review to a reviewable PR, using `PR` delivery with automatic
+topology by default. A concrete localized finding may receive one focused repair
+and affected validation; the repaired candidate is not independently re-reviewed:
 
 ```text
 /swe-forge <ticket>
