@@ -42,6 +42,35 @@ state=$TMP_ROOT/normal.state
   cd "$repo"
   "$GATE" preflight --state "$state" >/dev/null
   "$STATE_TOOL" validate --state "$state" >/dev/null
+  if grep -Eq '^(reason|fallback_used|requested_mode|requested_delivery|receipt_ref):|checkpoint_sha|fingerprint|delivery_checkout|meta\.env|review\.env' "$state/run-state.yaml"; then
+    fail 'run state retained a removed workflow projection'
+  fi
+  grep -F '  reason: single-checkout implementation' "$state/run-state.yaml" >/dev/null
+  grep -F '  fallback: no' "$state/run-state.yaml" >/dev/null
+  test ! -e "$state/meta.env" || fail 'run state created obsolete meta state'
+  ! grep -Eq '^tasks:' "$state/run-state.yaml" || fail 'SOLO state retained delegated task state'
+  legacy_state=$TMP_ROOT/legacy.state
+  mkdir -p "$legacy_state"
+  cp "$state/run-state.yaml" "$legacy_state/run-state.yaml"
+  printf '%s\n' 'requested_mode: AUTO' >>"$legacy_state/run-state.yaml"
+  expect_failure 'unknown or removed state fields' "$STATE_TOOL" validate --state "$legacy_state"
+  mkdir "$state/.run-state.lock"
+  expect_failure 'being mutated by another activity' "$STATE_TOOL" set-routing \
+    --state "$state" --preferred SOLO --current SOLO --reason locked --fallback-used no
+  rmdir "$state/.run-state.lock"
+  identity_state=$TMP_ROOT/identity.state
+  mkdir -p "$identity_state"
+  awk '
+    BEGIN { section = "" }
+    /^[^[:space:]#][^:]*:/ { section = $1; sub(/:$/, "", section) }
+    section == "checkout" && $0 ~ /^  branch:/ { print "  branch: another-branch"; next }
+    { print }
+  ' "$state/run-state.yaml" >"$identity_state/run-state.yaml"
+  identity_inspection=$("$STATE_TOOL" inspect --state "$identity_state" --checkout "$repo")
+  case "$identity_inspection" in
+    *'"active":false'*'"reason":"checkout branch mismatch"'*) ;;
+    *) fail 'state inspection accepted a mismatching checkout branch' ;;
+  esac
   printf 'implemented\n' >>README.md
   git add README.md
   git commit -qm 'Implement ticket'
@@ -55,13 +84,20 @@ state=$TMP_ROOT/normal.state
     '$2 == "smoke" && $5 == "passed" && $10 == head && $12 == "yes" { found=1 }
      END { exit !found }' "$state/validations.tsv"
   grep -F "  head_sha: $head" "$state/run-state.yaml" >/dev/null
+  grep -F "  status: passed" "$state/run-state.yaml" >/dev/null
   "$GATE" review --state "$state" --result PASS --source fresh-context >/dev/null
   "$GATE" deliver-pr --state "$state" >/dev/null
   "$STATE_TOOL" set-pull-request --state "$state" \
     --url https://github.com/example/repo/pull/1 >/dev/null
   grep -F '  pull_request_ref: https://github.com/example/repo/pull/1' \
     "$state/run-state.yaml" >/dev/null
+  grep -F '  status: complete' "$state/run-state.yaml" >/dev/null
   grep -F '  workflow_active: false' "$state/run-state.yaml" >/dev/null
+  expect_failure 'unknown set-delivery-checkout option' "$STATE_TOOL" set-delivery-checkout \
+    --state "$state" --path "$repo" --head-sha "$head"
+  for obsolete_command in set-receipt-ref set-commit-plan record-commit-step commit-plan check-commit-step; do
+    expect_failure "unknown command: $obsolete_command" "$STATE_TOOL" "$obsolete_command"
+  done
 )
 
 # A final validation cannot silently move off the committed candidate.
@@ -113,12 +149,12 @@ repair_state=$TMP_ROOT/repair.state
   git add repair.txt
   git commit -qm 'Repair reviewed finding'
   repaired_head=$(git rev-parse HEAD)
-  "$STATE_TOOL" set-review-repair --state "$repair_state" >/dev/null
+  "$STATE_TOOL" set-review-repair --state "$repair_state" --head-sha "$repaired_head" >/dev/null
   "$GATE" validate --state "$repair_state" --name smoke --requirement required \
     --final -- sh -c 'test -f implementation.txt && test -f repair.txt' >/dev/null
   "$GATE" deliver-pr --state "$repair_state" >/dev/null
   grep -F '  status: repaired' "$repair_state/run-state.yaml" >/dev/null
-  test "$(awk -F= '$1 == "head" { print $2; exit }' "$repair_state/review.env")" = "$reviewed_head"
+  test "$(awk '$1 == "reviewed_head:" { print $2; exit }' "$repair_state/run-state.yaml")" = "$reviewed_head"
   test "$reviewed_head" != "$repaired_head"
   expect_failure 'PR review can only start from pending review state' "$GATE" review \
     --state "$repair_state" --result PASS --source another-review

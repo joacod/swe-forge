@@ -370,7 +370,7 @@ function capabilityPrompt(observation: CapabilityObservation, run: ActiveRun | u
 		lines.push("Do not call the native task tool for SWE Forge delegation; use the visible SOLO/sequential fallback.");
 	}
 	if (!run) {
-		lines.push("This explicit-invocation observation is discovery only. Persist a valid checkout-matching schema-v4 run-state with routing.current: SUBAGENTS before delegation.");
+		lines.push("This explicit-invocation observation is discovery only. Persist a valid checkout-matching schema-v5 run-state with routing.current: SUBAGENTS before delegation.");
 	} else if (topology !== "SUBAGENTS") {
 		lines.push(`The current canonical topology is ${topology}; native shared-checkout delegation is not authorized for this run.`);
 	}
@@ -637,7 +637,7 @@ export default function sweForgeRuntime(pi: ExtensionAPI): void {
 		if (!run) {
 			return {
 				block: true,
-				reason: "OMP native delegation refused: no active checkout-matching schema-v4 SWE Forge run-state is discoverable. Use SOLO/sequential fallback; a worker brief cannot establish routing authority.",
+				reason: "OMP native delegation refused: no active checkout-matching schema-v5 SWE Forge run-state is discoverable. Use SOLO/sequential fallback; a worker brief cannot establish routing authority.",
 			};
 		}
 		if (run.currentTopology !== "SUBAGENTS") {

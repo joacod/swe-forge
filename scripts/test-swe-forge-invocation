@@ -93,7 +93,7 @@ state_dir=$TMP_ROOT/state
 $ROOT/scripts/swe-forge-state init --state "$state_dir" --checkout "$state_repo" \
   --delivery-mode "$(json_value delivery_mode)" >/dev/null
 $ROOT/scripts/swe-forge-state validate --state "$state_dir" >/dev/null
-grep -F 'schema_version: 4' "$state_dir/run-state.yaml" >/dev/null
+grep -F 'schema_version: 5' "$state_dir/run-state.yaml" >/dev/null
 grep -F 'delivery_mode: PR' "$state_dir/run-state.yaml" >/dev/null
 
 printf '%s\n' 'PASS: invocation parser fixture tests'

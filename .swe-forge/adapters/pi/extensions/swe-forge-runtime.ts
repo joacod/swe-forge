@@ -213,7 +213,7 @@ function activeRunProjection(value: unknown): ActiveRun | undefined {
 	const routing = isRecord(value.routing) ? value.routing : undefined;
 	const continuation = isRecord(value.continuation) ? value.continuation : undefined;
 	const nextAction = continuation && isRecord(continuation.next_action) ? continuation.next_action : undefined;
-	const delivery = continuation && isRecord(continuation.delivery) ? continuation.delivery : undefined;
+	const delivery = isRecord(value.delivery) ? value.delivery : undefined;
 	if (
 		typeof value.state_file !== "string" ||
 		typeof value.run_id !== "string" ||
@@ -324,7 +324,7 @@ function subagentRoutingFallbackReason(run: ActiveRun | undefined, current: stri
 		return [
 			"Canonical routing is UNKNOWN because no active, checkout-matching SWE-Forge run-state is discoverable.",
 			"Use the existing SOLO/sequential fallback.",
-			"Capability discovery may proceed, but before action=run persist a complete active schema-v4 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
+			"Capability discovery may proceed, but before action=run persist a complete active schema-v5 run-state with routing.current: SUBAGENTS and request action=capabilities again.",
 			"The worker briefing does not establish canonical routing.",
 		].join(" ");
 	}
@@ -467,7 +467,7 @@ function subagentCapabilityPrompt(observation: SubagentToolObservation, run: Act
 		`current topology: ${current} (preferred: ${preferred})`,
 		"Canonical routing owns whether to use this shared-checkout capability; use it only for one bounded SUBAGENTS task.",
 		"Call action=capabilities first and require the requested role and READ_ONLY/WRITABLE profile before action=run.",
-		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v4 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
+		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v5 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
 		"Pass only the canonical worker_briefing projection to action=run. Missing or incompatible capability falls back to SOLO/sequential.",
 	].join("\n");
 }

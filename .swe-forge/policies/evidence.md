@@ -34,6 +34,8 @@ run against a clean committed candidate and must leave it unchanged. A command
 that changes the candidate is recorded as failed rather than silently allowing
 its evidence to drift. Required and applicable conditional final checks must
 pass; unavailable checks block, while informational results remain visible.
+The run-state `validation` record only binds the current aggregate result and
+candidate to that ledger; the ledger remains the detailed authority.
 
 For a committed candidate, the full Git commit SHA is the only candidate
 identity. Final validation, review, and delivery must all refer to that same
@@ -48,9 +50,10 @@ creation, or merge. It only checks local evidence and delivery prerequisites.
 
 ## Delivery evidence
 
-`review` records one fresh review result and its candidate `HEAD`. A concrete,
-localized repair is recorded through the run-state review transition after its
-additional commit; it cannot be turned into another review. `deliver-pr`
+`review` records one fresh review result and its candidate `HEAD` directly in
+run state. A concrete, localized repair is recorded through the run-state
+review transition after its additional commit; it cannot be turned into
+another review. `deliver-pr`
 requires a safe clean checkout, baseline ancestry, current final validation,
 and either a passing review for the same `HEAD` or a recorded repair whose
 validation is current for the repaired `HEAD`.

@@ -16,8 +16,11 @@ change between alpha releases.
   that state around host lifecycle events and active-PR shorthand recovery.
 - Model/provider/reasoning-mode optimization remains intentionally out of scope
   for this change.
-- Final alpha hardening adds schema-v4 run state, machine-valid worker
+- Final alpha hardening adds schema-v5 run state, machine-valid worker
   results, executable Git/validation safeguards, and release-readiness checks.
+- Run state now keeps only the run fence, routing, canonical checkout,
+  continuation, candidate-bound validation/review, and PR delivery facts;
+  obsolete workflow projections are rejected rather than migrated.
 - PR runs now let agents choose one or more coherent implementation commits
   during the work while binding final validation and review to the committed
   candidate's Git `HEAD` without requiring process checkpoints.
