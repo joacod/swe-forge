@@ -32,7 +32,7 @@ Read-only. Do not modify the checkout, tests, configuration, or run state.
 
 - correctness and missing requirements for the ticket;
 - regressions, compatibility, error handling, and edge cases;
-- sequential shared-checkout ownership and safe fallback behavior;
+- sequential canonical materialization/acceptance and safe fallback behavior;
 - concurrency, security, performance, test quality, and missing validation when
   relevant to the review focus; and
 - unnecessary complexity, scope creep, or unrelated modifications that affect

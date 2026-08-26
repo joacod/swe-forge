@@ -4,8 +4,9 @@ SWE Forge is a harness-agnostic workflow above coding harnesses. It takes one
 coding ticket through inspection, planning, implementation, verification,
 review, and delivery. A run owns one writable delivery checkout and one
 reviewable delivery outcome. Harness-native subagents may assist with bounded
-work, but concurrent writable-agent orchestration, worker fleets, external
-orchestrators, and multi-workspace integration are outside SWE Forge's scope.
+work, but orchestration of concurrent mutation of the canonical delivery
+candidate, worker fleets, external orchestrators, and multi-workspace
+integration are outside SWE Forge's scope.
 
 The architecture keeps canonical workflow semantics separate from roles,
 contracts, policies, and harness adapters:
@@ -14,7 +15,8 @@ contracts, policies, and harness adapters:
   one root context;
 - `SUBAGENTS` uses demonstrated native subagents for bounded independent work;
 - delivery is `GUIDED` or `PR`, independent of execution topology; and
-- delegated writes are sequential in the one delivery checkout.
+- writable-result materialization, validation, and acceptance are sequential in
+  the canonical delivery candidate.
 
 ## Canonical ownership and load map
 
@@ -153,7 +155,7 @@ one invocation checkout
   -> one writable delivery checkout
   -> one non-protected delivery branch
   -> bounded root or native discovery
-  -> sequential delegated writes when useful
+  -> sequential canonical materialization and acceptance of delegated results when useful
   -> central validation and review
   -> one authorized push and one final PR
 ```
@@ -165,7 +167,9 @@ baseline and fingerprint, task ownership, deterministic integration, result
 acceptance, verification, and delivery. A host may execute a worker directly or
 through a private worktree, sandbox, overlay, container, or equivalent native
 mechanism. Those physical environments are adapter/runtime details and are not
-represented in canonical run state.
+represented in canonical run state. SWE Forge neither requires nor prohibits
+concurrent execution inside host-private worker environments. The adapter/runtime
+determines physical scheduling and isolation.
 
 A writable delegated result must be materialized into the canonical delivery
 checkout and validated there before Forge accepts it or exposes it through a
@@ -205,7 +209,8 @@ One checkout does not isolate ports, databases, Docker projects, temporary
 paths, external services, credentials, or Git refs. Plans record allowlisted
 ignored files, setup side effects, unique runtime resources, and cleanup. Shared
 schemas, contracts, root lockfiles, generated artifacts, changelogs, and
-versions have one explicit owner; delegated writers do not run concurrently.
+versions have one explicit owner. Concurrent mutation of the canonical delivery
+candidate is forbidden.
 
 ## Adapters and installation
 

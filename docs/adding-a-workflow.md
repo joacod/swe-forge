@@ -55,7 +55,7 @@ when it protects a required behavior or safety boundary.
 - activation remains explicitly user-controlled;
 - the original ticket remains authoritative;
 - `SOLO` and `SUBAGENTS` rules remain safe;
-- concurrent writers never modify the canonical delivery candidate at once;
+- concurrent mutation of the canonical delivery candidate is forbidden;
 - workers return structured results with canonical delivery identity, scope, and
   validation evidence; physical worker execution details are host-private;
 - verification and fresh review are proportional and real;

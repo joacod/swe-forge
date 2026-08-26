@@ -70,16 +70,17 @@ changed behavior or an explicit constraint. Review all applicable areas:
 - correctness and missing requirements;
 - regressions, compatibility, error handling, and edge cases;
 - unnecessary complexity, abstraction, and scope creep;
-- sequential shared-checkout ownership and dependency handoffs;
+- sequential canonical materialization/acceptance and dependency handoffs;
 - harness capability boundaries and safe fallback behavior;
 - security and sensitive-data boundaries when relevant;
 - performance implications when relevant;
 - test quality and missing integrated validation; and
 - unrelated or accidental modifications.
 
-The reviewer must confirm that delegated writes remained sequential in the sole
-delivery checkout, that the root retained integration and delivery ownership,
-and that the final candidate was validated centrally. A worker result or host
+The reviewer must confirm that writable delegated results were materialized
+into and validated against the canonical delivery candidate before sequential
+acceptance, that the root retained integration and delivery ownership, and that
+concurrent mutation of the candidate did not occur. A worker result or host
 lifecycle status alone is never sufficient for `PASS`.
 
 Findings are reserved for issues that affect an acceptance criterion, explicit

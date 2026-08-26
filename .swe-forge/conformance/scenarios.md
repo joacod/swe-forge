@@ -73,7 +73,7 @@ grading an agent from its explanation alone.
 | Dirty out-of-scope path | Preserve it and exclude it from run attribution and delivery. |
 | Executable preflight on dirty, detached, or protected checkout | Fail before writable work and do not record a writable baseline. |
 | Executable checkpoint with an out-of-scope path | Fail without staging or committing the path. |
-| Two writable native workers | Serialize canonical materialization and acceptance; do not race writes into the delivery candidate. |
+| Two writable native workers | Canonical materialization and acceptance are sequential; concurrent mutation of the delivery candidate is forbidden. |
 | Native read-only fan-out | Form only genuinely independent questions together; let the host schedule them and fan in once at the root. |
 | Host-private worker execution | Keep private worktrees, sandboxes, overlays, containers, and equivalent mechanisms out of Forge state; materialize and validate the bounded result in the canonical delivery checkout before acceptance. |
 
