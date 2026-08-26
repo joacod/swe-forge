@@ -80,7 +80,7 @@ host:
 - commands, prompts, and skills used to expose SWE Forge;
 - host-native task or subagent invocation and bounded worker profiles;
 - runtime capability observation and lifecycle hooks;
-- context telemetry integration and structured-result translation;
+- adapter-local reload or reinjection of bounded canonical continuation state;
 - host approval behavior and configuration paths; and
 - installation projections.
 
@@ -141,9 +141,8 @@ coupled work stays `SOLO` or uses an explicit sequential dependency.
 
 A preferred `SUBAGENTS` run with no active native capability falls back to
 effective `SOLO` or sequential work with a visible reason. Reassess only when
-discovery, recovery, delegation value, capability, context headroom, or review
-needs materially change; ordinary turns and unchanged checkpoints do not
-create routing history.
+discovery, recovery, delegation value, capability, or review needs materially
+change; ordinary turns and unchanged checkpoints do not create routing history.
 
 ## Shared-checkout boundary
 
@@ -212,7 +211,7 @@ projection.
 ticket/raw invocation
   -> shared parser facts and immutable raw ticket
   -> acceptance and transient PR working spec
-  -> context capability and durable continuation plan
+  -> durable continuation state and recovery plan
   -> architecture, ownership, and validation plan
   -> preferred/effective routing and fresh native capability check
   -> one delivery checkout
@@ -223,23 +222,25 @@ ticket/raw invocation
 ```
 
 Run state is temporary or ignored and schema-v4 only. Its short `continuation`
-block is authoritative workflow-control state after compaction; conversation
-summaries and adapter reminders are not. Any state with another schema version,
-or with removed routing fields, is stale, rejected clearly, and never migrated
-or guessed into a new shape.
+block is authoritative workflow-control state after any host context
+discontinuity; conversation summaries and adapter reminders are not. Any state
+with another schema version, or with removed routing fields or obsolete
+context-control fields, is stale, rejected clearly, and never migrated or
+guessed into a new shape.
+
+SWE Forge does not manage the harness context window. Host runtimes own context
+preservation, compaction, retry, restoration, and related lifecycle mechanics.
+Before resuming after a discontinuity, Forge re-reads authoritative run state
+and reconciles it with actual Git and evidence state.
 
 ## Runtime capability boundary
 
 The generic core consumes semantic capability observations such as
-`context_usage`, `proactive_compaction`, `state_reinjection`, and
-`subagents.native`; it does not cache harness-specific routing profiles.
-Capability resolution uses observed runtime evidence first, then adapter
-declarations, documented static defaults, and finally `unknown`. Unknown
-capabilities degrade to durable checkpoints, manual recovery, or root-owned
-sequential work rather than invented thresholds or delegation authority.
+`subagents.native`; it does not negotiate or cache context-window,
+compaction, retry, or persistent-session capabilities.
 
 Adapters may translate demonstrated host-native worker facilities into the
-canonical delegation capability. Canonical routing still owns whether
-delegation occurs, and unavailable capabilities use the canonical fallback.
-Host API and bridge details belong in the relevant adapter, not in this
-architectural description.
+canonical delegation capability and may keep host lifecycle hooks private.
+Canonical routing still owns whether delegation occurs, and unavailable
+capabilities use the canonical fallback. Host API and bridge details belong in
+the relevant adapter, not in this architectural description.

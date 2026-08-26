@@ -62,11 +62,12 @@ and runtime selection; SWE Forge never chooses models.
 ## Operating Principles
 
 - choose the smallest execution topology that provides sufficient reliability
-  and context headroom;
+  and safe task ownership;
 - prefer a strong single agent over pointless delegation; prompt length alone
   never selects a topology;
 - delegate only independently evaluable work whose concise result materially
-  reduces root context growth;
+  reduces root coordination;
+
 - keep canonical workflow logic dependent on semantic capabilities, not harness
   identity when the distinction can be expressed as a capability;
 - allow asymmetric adapter capabilities and use the documented safe fallback
@@ -201,7 +202,8 @@ is:
    executable gate, fingerprints, freshness, or receipts;
 8. load delivery before writable setup or delivery decisions, then implement
    bounded sequential dependency waves;
-9. load context or failure-recovery policy only when their triggers occur;
+9. load failure-recovery only when its trigger occurs; host context lifecycle
+   mechanics remain adapter/runtime-owned rather than canonical Forge policy;
 10. verify the current candidate, review from fresh context when warranted,
     repair relevant findings, and compare the final diff with the ticket;
 11. apply the canonical Acceptance Gate, perform only authorized delivery; and
@@ -221,7 +223,6 @@ delegation boundaries -> policies/delegation.md
 verification strategy and quality gates -> policies/verification.md
 evidence semantics and receipts -> policies/evidence.md
 delivery and local-resource authorization -> policies/delivery.md
-context continuity and compaction -> policies/context.md
 failure classification and recovery -> policies/failure-recovery.md
 specialist-skill selection -> policies/specialist-skills.md
 roles -> agents/*
@@ -235,16 +236,23 @@ Minimal load sets are stage-triggered. Every normal run loads this file,
 additionally loads `contracts/working-spec.md`; early discovery and final
 routing load `policies/execution-routing.md`; delegation loads its policy,
 relevant roles, and contracts; delivery, verification, and evidence load before
-their first operation. Context and failure recovery remain lazy.
+their first operation. Failure recovery remains lazy.
+
 
 ## State and Contracts
 
 Use the contracts under `.swe-forge/contracts/` when tasks are delegated or
-state must survive context changes. In `PR` mode, the working-spec contract
-provides a short behavior-first brief; it is temporary and is not a repository
-artifact. The run-state `continuation` section is the authoritative workflow
-control snapshot after compaction; adapter reminders and conversation summaries
-are not authoritative.
+state must survive an execution-context discontinuity. In `PR` mode, the
+working-spec contract provides a short behavior-first brief; it is temporary
+and is not a repository artifact. The run-state `continuation` section is the
+authoritative workflow-control snapshot after a discontinuity; adapter reminders
+and conversation summaries are not authoritative.
+
+SWE Forge does not manage the harness context window. Host runtimes own context
+preservation, compaction, retry, restoration, and related lifecycle mechanics.
+SWE Forge persists authoritative workflow state and reconciles it with actual
+repository and evidence state before resuming.
+
 
 The canonical `swe-forge-state init` operation owns schema-v4 shell construction.
 Use `set-routing` for deliberate preferred/effective topology changes,
@@ -328,7 +336,7 @@ Return a concise report containing:
 - requested and selected execution topology;
 - requested and selected delivery mode;
 - implementation approach and important decisions;
-- context capability/status and any compaction or recovery evidence;
+- continuity/recovery evidence relevant to resumption;
 - files changed;
 - testing decision, tests, and validation performed with results;
 - reviewer result and repaired findings;

@@ -25,7 +25,7 @@ a successful projection does not establish harness behavior.
 - Final status, if known: ACCEPTED / BLOCKED / FAILED / unknown
 - Did it create a delivery branch? yes / no / unknown
 - Did it create a PR? yes / no / not applicable
-- Was context pressure, compaction, or overflow recovery involved? yes / no / unknown
+- Was a host context discontinuity or recovery event involved? yes / no / unknown
 
 ## Evidence
 

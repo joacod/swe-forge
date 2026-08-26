@@ -96,19 +96,7 @@ routing:
   reason: <why this topology is the smallest safe choice>
   fallback_used: no | <preferred -> effective selection and reason>
 
-context_strategy:
-  status: healthy | near-limit | overflow | compacting | recovered | unknown | blocked
-  capability_status: proven | partial | unknown | unavailable
-  signal_source: <adapter, host event, telemetry, or none>
-  usage_tokens: <number or unknown>
-  context_window: <number or unknown>
-  state_reinjection: available | unavailable | unknown
-  safe_boundary: true | false
-  expected_next_context_tokens: <number or unknown>
-  last_compaction: <event, session entry, timestamp, or none>
-  near_limit_action: <checkpoint and native/adapter compaction, or manual fallback>
-  overflow_action: <host recovery and recheck, or blocked/manual resume>
-  durable_state_ref: <external working spec and run-state reference>
+
 
 constraints:
   - <compatibility, safety, or repository constraint>
@@ -165,9 +153,10 @@ in-scope quality concerns, non-goals, and a finding rule that keeps unrelated
 work out of the current review. It records the preferred and current topology,
 concise routing reason, and fallback evidence; native capability is freshly
 observed at the delegation boundary rather than cached as a routing profile.
-For a long-running or context-risk ticket, it records context strategy, latest
-status, capability source, state-reinjection status, safe compaction
-boundary/action, expected next-action headroom, overflow action, and
-durable-state reference. Open questions may remain only when they do not block
-safe implementation and are recorded as risks. Ask the user about a blocking
-decision rather than guessing.
+For a long-running ticket, the durable run state records the next valid
+workflow action. Host context preservation, compaction, retry, and restoration
+remain outside the working spec; after a context discontinuity, recovery
+re-reads authoritative state and repository/evidence reality before resuming.
+Open questions may remain only when they do not block safe implementation and
+are recorded as risks. Ask the user about a blocking decision rather than
+guessing.

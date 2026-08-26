@@ -39,11 +39,10 @@ reviewing a host projection:
   and sequencing;
 - [`tools/swe-forge-worker-brief`](../tools/swe-forge-worker-brief) and
   [`contracts/worker-brief.md`](../contracts/worker-brief.md) — canonical worker
-  briefing rendering, validation, bounded context, and dependency handoffs;
+  briefing rendering, validation, task scope, and dependency handoffs;
 - [`policies/delegation.md`](../policies/delegation.md) — semantic delegation
   boundaries and root-owned dependency selection;
 - [`policies/delivery.md`](../policies/delivery.md) — delivery authorization;
-- [`policies/context.md`](../policies/context.md) — continuation and compaction;
 - [`policies/verification.md`](../policies/verification.md) — quality gates; and
 - [`policies/evidence.md`](../policies/evidence.md) — fingerprints, checks, and
   receipts.

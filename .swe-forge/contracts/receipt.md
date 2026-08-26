@@ -24,7 +24,6 @@ Base: <short base SHA>
 Branch: <delivery branch>
 Head: <short final SHA>
 Evidence fingerprint: <short final fingerprint>
-Context: healthy | compacted | overflow-recovered | not-observed | blocked — <short evidence>
 Generated at: <UTC timestamp>
 Commits: <count> (<validated slice count> validated slices)
 Verification:
@@ -57,7 +56,5 @@ evidence state. A receipt created before a later commit, same-path edit,
 untracked-content change, or replacement file is stale and must be rejected.
 
 A receipt reports failed, skipped, unavailable, not-applicable, or missing
-evidence explicitly. Context status is `not-observed` when no limit was reached;
-when pressure occurred, the receipt names the observed compaction/recovery
-evidence or reports `blocked`. It never infers success from worker summaries
-and cannot be hand-edited to upgrade a status.
+evidence explicitly. It never infers success from worker summaries and cannot
+be hand-edited to upgrade a status.

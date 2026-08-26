@@ -7,8 +7,6 @@ const ACTIVE_MARKER = "SWE-FORGE ACTIVE RUN";
 const NORMALIZED_INVOCATION_MARKER = "[SWE-FORGE NORMALIZED INVOCATION]";
 const INVOCATION_ARGUMENTS_MARKER = "Raw invocation arguments:";
 const MAX_INVOCATION_BYTES = 256 * 1024;
-const DEFAULT_RESERVE_TOKENS = 16_384;
-const COMPACTION_COOLDOWN_MS = 30_000;
 const MAX_STATE_FILES = 64;
 const MAX_FIELD_LENGTH = 160;
 const RUN_STATE_ENV_VARS = ["SWE_FORGE_RUN_STATE", "SWE_FORGE_STATE"];
@@ -18,18 +16,6 @@ const SUBAGENT_READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
 const SUBAGENT_WRITABLE_TOOLS = ["read", "grep", "find", "ls", "edit", "write", "bash"] as const;
 const SUBAGENT_CAPABILITY_MARKER = "[SWE-FORGE OPTIONAL SUBAGENT CAPABILITY]";
 
-interface SettingsFileSnapshot {
-	signature: string;
-	settings?: Record<string, any>;
-}
-
-interface ReserveCacheEntry {
-	global: SettingsFileSnapshot;
-	project: SettingsFileSnapshot;
-	reserve: number;
-}
-
-const reserveCache = new Map<string, ReserveCacheEntry>();
 
 interface NormalizedInvocation {
 	raw_arguments: string;
@@ -153,8 +139,6 @@ function discoverStatePaths(cwd: string): Set<string> {
 interface ActiveRun {
 	filePath: string;
 	stateId: string;
-	updatedAt: number;
-	modifiedAt: number;
 	status: string;
 	workflowActive: boolean;
 	delegationAuthorized: boolean;
@@ -166,9 +150,8 @@ interface ActiveRun {
 	awaiting: string;
 	nextActionKind: string;
 	nextActionTarget: string;
-	expectedContextTokens?: number;
+	acceptance: readonly string[];
 	safeBoundary: boolean;
-	contextStatus: string;
 	prNumber: string;
 	prState: string;
 }
@@ -218,8 +201,9 @@ async function canonicalJson(pi: unknown, command: string, args: string[]): Prom
 }
 
 function projectionString(value: unknown, fallback: string): string {
-	return typeof value === "string" && value.length > 0 ? value : fallback;
+	return typeof value === "string" && value.length > 0 ? value.slice(0, MAX_FIELD_LENGTH) : fallback;
 }
+
 
 function activeRunProjection(value: unknown): ActiveRun | undefined {
 	if (!isRecord(value) || value.active !== true) return undefined;
@@ -227,9 +211,6 @@ function activeRunProjection(value: unknown): ActiveRun | undefined {
 	const continuation = isRecord(value.continuation) ? value.continuation : undefined;
 	const nextAction = continuation && isRecord(continuation.next_action) ? continuation.next_action : undefined;
 	const delivery = continuation && isRecord(continuation.delivery) ? continuation.delivery : undefined;
-	const context = isRecord(value.context) ? value.context : undefined;
-	const updatedAt = value.updated_at_ms;
-	const modifiedAt = value.modified_at_ms;
 	if (
 		typeof value.state_file !== "string" ||
 		typeof value.run_id !== "string" ||
@@ -239,19 +220,13 @@ function activeRunProjection(value: unknown): ActiveRun | undefined {
 		typeof routing.preferred !== "string" ||
 		typeof routing.current !== "string" ||
 		!continuation ||
-		typeof continuation.workflow_active !== "boolean" ||
-		typeof updatedAt !== "number" ||
-		!Number.isFinite(updatedAt) ||
-		typeof modifiedAt !== "number" ||
-		!Number.isFinite(modifiedAt)
+		typeof continuation.workflow_active !== "boolean"
 	) {
 		return undefined;
 	}
 	return {
 		filePath: value.state_file,
 		stateId: value.run_id,
-		updatedAt,
-		modifiedAt,
 		status: value.status,
 		workflowActive: continuation.workflow_active,
 		delegationAuthorized: value.delegation_authorized === true,
@@ -263,12 +238,8 @@ function activeRunProjection(value: unknown): ActiveRun | undefined {
 		awaiting: projectionString(continuation.awaiting, "none"),
 		nextActionKind: projectionString(nextAction?.kind, "none"),
 		nextActionTarget: projectionString(nextAction?.target, "none"),
-		expectedContextTokens:
-			typeof nextAction?.expected_context_tokens === "number" && Number.isFinite(nextAction.expected_context_tokens)
-				? nextAction.expected_context_tokens
-				: undefined,
+		acceptance: stringArray(nextAction?.acceptance) ?? [],
 		safeBoundary: continuation.safe_boundary === true,
-		contextStatus: projectionString(context?.status, "unknown"),
 		prNumber: projectionString(delivery?.pr_number, "none"),
 		prState: projectionString(delivery?.pr_state, "none"),
 	};
@@ -576,14 +547,45 @@ function continuityPrompt(run: ActiveRun): string {
 		run.deliveryMode === "PR" && (run.awaiting === "user_merge" || run.nextActionKind === "verify_and_sync_merge")
 			? "\nworkflow shorthand: merged -> /git-sync merged"
 			: "";
+	const acceptance = run.acceptance.length > 0 ? `\nacceptance: ${run.acceptance.join(" | ")}` : "\nacceptance: none";
+	const stateId = projectionString(run.stateId, "unknown");
 	return [
 		`[${ACTIVE_MARKER}]`,
 		`workflow: ticket | topology: ${run.currentTopology} (preferred: ${run.preferredTopology}) | delivery: ${run.deliveryMode}`,
 		`phase: ${run.phase} | step: ${run.step} | awaiting: ${run.awaiting}`,
-		`next_action: ${run.nextActionKind} -> ${run.nextActionTarget}`,
-		`run_state: ${run.stateId}${pr}${mergeHint}`,
+		`safe_boundary: ${run.safeBoundary}`,
+		`next_action: ${run.nextActionKind} -> ${run.nextActionTarget}${acceptance}`,
+		`run_state: ${stateId}${pr}${mergeHint}`,
 		"Authoritative continuation is the current run-state snapshot; do not use a lossy summary to invent a phase or repeat a completed action.",
 	].join("\n");
+}
+
+interface ContinuationMessageSender {
+	sendMessage(
+		message: { customType: string; content: string; display: boolean },
+		options: { deliverAs: "steer" },
+	): unknown;
+}
+
+function hasContinuationMessageSender(value: unknown): value is ContinuationMessageSender {
+	return isRecord(value) && typeof value.sendMessage === "function";
+}
+
+async function reinjectContinuation(pi: unknown, run: ActiveRun): Promise<boolean> {
+	if (!hasContinuationMessageSender(pi)) return false;
+	try {
+		await pi.sendMessage(
+			{
+				customType: "swe-forge-continuation",
+				content: continuityPrompt(run),
+				display: false,
+			},
+			{ deliverAs: "steer" },
+		);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function appendRuntimeEntry(pi: any, event: string, run: ActiveRun | undefined, details: Record<string, any> = {}): void {
@@ -600,92 +602,6 @@ function appendRuntimeEntry(pi: any, event: string, run: ActiveRun | undefined, 
 	}
 }
 
-function settingsSnapshot(filePath: string): SettingsFileSnapshot {
-	try {
-		const stat = fs.statSync(filePath);
-		if (!stat.isFile()) return { signature: "missing" };
-		return {
-			signature: `${stat.mtimeMs}:${stat.size}`,
-			settings: readJson(filePath),
-		};
-	} catch {
-		return { signature: "missing" };
-	}
-}
-
-function validReserve(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
-}
-
-function configuredReserveTokens(cwd: string, projectTrusted: boolean): number {
-	const home = os.homedir();
-	const globalPath = path.join(home, ".pi", "agent", "settings.json");
-	const projectPath = path.join(cwd, ".pi", "settings.json");
-	const global = settingsSnapshot(globalPath);
-	const project: SettingsFileSnapshot = projectTrusted ? settingsSnapshot(projectPath) : { signature: "untrusted" };
-	const cacheKey = `${canonicalPath(cwd)}|${canonicalPath(home)}|${projectTrusted ? "trusted" : "untrusted"}`;
-	const cached = reserveCache.get(cacheKey);
-	if (cached && cached.global.signature === global.signature && cached.project.signature === project.signature) {
-		return cached.reserve;
-	}
-
-	// ExtensionContext does not expose Pi's SettingsManager. Keep this adapter
-	// dependency-free and mirror its documented deep-merge precedence locally.
-	// Ignore malformed or unusable values at each level so a settings problem
-	// cannot stop the Forge workflow or replace a safe lower-precedence value.
-	const projectReserve = validReserve(project.settings?.compaction?.reserveTokens);
-	const globalReserve = validReserve(global.settings?.compaction?.reserveTokens);
-	const reserve = projectReserve ?? globalReserve ?? DEFAULT_RESERVE_TOKENS;
-	reserveCache.set(cacheKey, { global, project, reserve });
-	return reserve;
-}
-
-function projectSettingsTrusted(ctx: any): boolean {
-	if (typeof ctx.isProjectTrusted !== "function") return true;
-	try {
-		return ctx.isProjectTrusted() !== false;
-	} catch {
-		return false;
-	}
-}
-
-function compactionReason(
-	run: ActiveRun,
-	usage: { tokens: number | null; contextWindow: number },
-	cwd: string,
-	projectTrusted: boolean,
-): string | undefined {
-	if (!run.safeBoundary || !Number.isFinite(usage.contextWindow) || usage.contextWindow <= 0) return undefined;
-
-	const runtimeStatus = run.contextStatus.trim().toLowerCase();
-	// Overflow and an explicit compacting state belong to Pi's native recovery
-	// lifecycle. Forge must not compete with either one.
-	if (runtimeStatus === "overflow" || runtimeStatus === "compacting") return undefined;
-
-	const reserve = configuredReserveTokens(cwd, projectTrusted);
-	const expected = run.expectedContextTokens;
-	// A reliable near-limit state is stronger than an absent estimate. It is
-	// intentionally not reduced to a reserve comparison.
-	if (runtimeStatus === "near-limit") {
-		const remaining = usage.tokens === null ? "unknown" : Math.max(0, usage.contextWindow - usage.tokens);
-		return `runtime_status=near-limit remaining=${remaining} reserve=${reserve} expected_next=${expected ?? "unknown"}`;
-	}
-
-	if (usage.tokens !== null && Number.isFinite(usage.tokens)) {
-		const remaining = usage.contextWindow - usage.tokens;
-		if (expected !== undefined) {
-			// A known next-step requirement improves headroom without overriding a
-			// reliable host pressure signal handled above.
-			if (remaining > reserve + expected) return undefined;
-			return `remaining=${Math.max(0, remaining)} reserve=${reserve} expected_next=${expected}`;
-		}
-	}
-
-	// Projected pressure is planning evidence, not host telemetry. Without a
-	// reliable near-limit signal or a known headroom shortfall, it cannot by
-	// itself justify discarding conversation context.
-	return undefined;
-}
 
 export default function sweForgeRuntime(pi: any) {
 	let activeRun: ActiveRun | undefined;
@@ -696,9 +612,6 @@ export default function sweForgeRuntime(pi: any) {
 	let parsedInvocationPrompt: string | undefined;
 	let parsedInvocationAttempted = false;
 	let parsedInvocation: NormalizedInvocation | undefined;
-	let compactionInFlight = false;
-	let lastCompactionAt = 0;
-	let lastCompactionState = "";
 
 	const refresh = async (cwd: string, freshInvocation = false): Promise<ActiveRun | undefined> => {
 		const discoveredRuns = await resolveActiveRuns(pi, cwd);
@@ -864,63 +777,12 @@ export default function sweForgeRuntime(pi: any) {
 		return { action: "transform", text: "/git-sync merged" };
 	});
 
-	on("session_before_compact", async (event, ctx) => {
+	on("session_before_compact", async (_event, ctx) => {
 		activeRun = await refresh(ctx.cwd);
-		compactionInFlight = true;
-		if (activeRun) {
-			lastCompactionAt = Date.now();
-			lastCompactionState = `${activeRun.filePath}:${activeRun.updatedAt}:${activeRun.modifiedAt}`;
-		}
-		appendRuntimeEntry(pi, "compaction_started", activeRun, {
-			reason: event?.reason ?? "unknown",
-			willRetry: event?.willRetry ?? false,
-		});
 	});
 
 	on("session_compact", async (event, ctx) => {
-		compactionInFlight = false;
-		activeRun = await refresh(ctx.cwd);
-		appendRuntimeEntry(pi, "compaction_completed", activeRun, {
-			reason: event?.reason ?? "unknown",
-			willRetry: event?.willRetry ?? false,
-		});
-	});
-
-	on("agent_settled", async (_event, ctx) => {
 		const run = await refresh(ctx.cwd);
-		if (!run || compactionInFlight || ctx.hasPendingMessages?.()) return;
-		if (typeof ctx.getContextUsage !== "function" || typeof ctx.compact !== "function") return;
-		const usage = ctx.getContextUsage();
-		if (!usage) return;
-		const reason = compactionReason(run, usage, ctx.cwd, projectSettingsTrusted(ctx));
-		const stateVersion = `${run.filePath}:${run.updatedAt}:${run.modifiedAt}`;
-		if (
-			!reason ||
-			stateVersion === lastCompactionState ||
-			Date.now() - lastCompactionAt < COMPACTION_COOLDOWN_MS
-		) return;
-
-		lastCompactionAt = Date.now();
-		lastCompactionState = stateVersion;
-		compactionInFlight = true;
-		appendRuntimeEntry(pi, "proactive_compaction_requested", run, {
-			reason,
-			tokens: usage.tokens,
-			contextWindow: usage.contextWindow,
-		});
-		try {
-			ctx.compact({
-				customInstructions:
-					"Preserve the active SWE-Forge continuation as a reminder only. The external run-state is authoritative. Do not invent delivery state or repeat completed actions; after compaction, re-read run state and Git before continuing.",
-				onComplete: () => {
-					compactionInFlight = false;
-				},
-				onError: () => {
-					compactionInFlight = false;
-				},
-			});
-		} catch {
-			compactionInFlight = false;
-		}
+		if (run && event?.willRetry === true) await reinjectContinuation(pi, run);
 	});
 }

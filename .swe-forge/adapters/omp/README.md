@@ -134,10 +134,11 @@ the complete review contract, semantic acceptance, and blocking matrix.
 ## Lifecycle scope
 
 The adapter implements delegation, capability observation, state gating, and
-structured-result validation. It does not currently implement OMP context
-telemetry, SWE Forge state reinjection, proactive compaction, or task lifecycle
-state synchronization. Those capabilities remain unknown/unavailable to the
-canonical workflow and use durable-checkpoint/manual-recovery behavior.
+structured-result validation. It does not implement host context preservation,
+compaction, retry, or restoration. Those lifecycle mechanics remain private to
+OMP and its runtime. When a run resumes, the canonical workflow re-reads the
+authoritative continuation state and reconciles it with the checkout and
+evidence before continuing.
 
 ## Current API references and validation boundary
 

@@ -7,12 +7,11 @@ change between alpha releases.
 
 ## [Unreleased]
 
-- Context-aware routing now defaults to `SOLO` and records only the preferred
-  and effective topology, concise decision evidence, and safe native-capability
-  fallback; bounded `SUBAGENTS` work remains sequential in one checkout.
-- Run state now carries a compact durable continuation snapshot, and the Pi
-  adapter adds lifecycle-based state reinjection, active-PR shorthand recovery,
-  and safe-boundary proactive compaction.
+- Routing now defaults to `SOLO` and records only the preferred and effective
+  topology, concise decision evidence, and safe native-capability fallback;
+  bounded `SUBAGENTS` work remains sequential in one checkout.
+- Run state carries a durable continuation snapshot, and the Pi adapter reloads
+  that state around host lifecycle events and active-PR shorthand recovery.
 - Model/provider/reasoning-mode optimization remains intentionally out of scope
   for this change.
 - Final alpha hardening adds exact candidate-content evidence binding,

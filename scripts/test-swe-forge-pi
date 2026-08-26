@@ -114,18 +114,14 @@ continuation:
   next_action:
     kind: ${options.nextKind ?? "implement"}
     target: ${options.nextTarget ?? "next step"}
-    expected_context_tokens: ${options.expected ?? "unknown"}
+    acceptance:
+      - fixture continuation remains authoritative
   safe_boundary: true
   updated_at: ${options.updatedAt ?? "2040-01-01T00:00:00Z"}
   delivery:
     mode: PR
     pr_number: ${options.prNumber ?? "none"}
     pr_state: ${options.prState ?? "none"}
-  recovery:
-    host_signal: none
-    status: none
-context:
-  status: ${options.contextStatus ?? "healthy"}
 tasks: {}
 `;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -145,7 +141,6 @@ writeRuntimeState(oldState, {
   nextTarget: "pull request",
   prNumber: 184,
   prState: "OPEN",
-  contextStatus: "near-limit",
 });
 writeRuntimeState(newState, {
   runId: "new-run",
@@ -176,12 +171,14 @@ if (mismatchInspection.active !== false || mismatchInspection.reason !== "checko
 
 process.env.HOME = path.join(fixtureCwd, "home");
 fs.mkdirSync(path.join(process.env.HOME, ".pi", "agent"), { recursive: true });
+delete process.env.SWE_FORGE_STATE;
 process.env.SWE_FORGE_RUN_STATE = oldState;
 const handlers = new Map();
 const entries = [];
 const pi = {
   on(name, handler) { handlers.set(name, handler); },
   appendEntry(type, data) { entries.push({ type, data }); },
+  sendMessage(message, options) { this.continuationMessage = { message, options }; },
   exec(command, args) {
     try { return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }), stderr: "" }; }
     catch (error) { return { code: error?.status ?? 1, stdout: "", stderr: error?.message ?? String(error) }; }
@@ -192,8 +189,6 @@ const ctx = {
   cwd: fixtureCwd,
   isProjectTrusted: () => true,
   hasPendingMessages: () => false,
-  getContextUsage: () => ({ tokens: 90_000, contextWindow: 100_000 }),
-  compact(options) { this.compaction = options; },
 };
 
 const injected = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
@@ -217,9 +212,16 @@ if (boundedInjection.systemPrompt.includes(boundedMarker)) throw new Error("cont
 process.env.SWE_FORGE_RUN_STATE = oldState;
 const transformed = await handlers.get("input")({ text: "merged", source: "interactive" }, ctx);
 if (transformed?.text !== "/git-sync merged") throw new Error("active merged shorthand was not routed");
-await handlers.get("agent_settled")({}, ctx);
-if (!ctx.compaction) throw new Error("safe-boundary proactive compaction was not requested");
-if (!entries.some((entry) => entry.data.event === "proactive_compaction_requested")) throw new Error("compaction evidence missing");
+await handlers.get("session_before_compact")({}, ctx);
+process.env.SWE_FORGE_RUN_STATE = newState;
+await handlers.get("session_compact")({ willRetry: true }, ctx);
+if (
+  !pi.continuationMessage?.message?.content.includes("SWE-FORGE ACTIVE RUN") ||
+  !pi.continuationMessage.message.content.includes("safe_boundary: true") ||
+  !pi.continuationMessage.message.content.includes("acceptance: fixture continuation remains authoritative")
+) throw new Error("host retry did not receive complete continuation state");
+const recovered = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);
+if (!recovered?.systemPrompt.includes("phase: implementation")) throw new Error("host lifecycle did not reload continuation state");
 
 process.env.SWE_FORGE_RUN_STATE = newState;
 const refreshed = await handlers.get("before_agent_start")({ systemPrompt: "base" }, ctx);

@@ -130,6 +130,9 @@ require_text 'scripts/swe-forge verify "$HARNESS"' README.md
 require_text 'Neither mode merges automatically' README.md
 require_text 'one writable delivery checkout' README.md
 require_text 'Adapters are harness integration layers' docs/architecture.md
+require_text 'SWE Forge does not manage the harness context window' SWE-FORGE.md
+require_text 'host lifecycle hooks' .swe-forge/adapters/pi/README.md
+[ ! -e "$ROOT/.swe-forge/policies/context.md" ] || fail 'obsolete context policy remains'
 require_text 'one delivery checkout' docs/architecture.md
 require_text 'Writable delegated work is sequential' SWE-FORGE.md
 require_text 'schema-v4' SWE-FORGE.md
@@ -143,7 +146,6 @@ require_text 'Early discovery-shape assessment' .swe-forge/policies/execution-ro
 require_text 'Independent Review Handoff' .swe-forge/policies/verification.md
 require_text 'Acceptance handoff' .swe-forge/policies/verification.md
 require_text 'Cleanup Handoff' .swe-forge/policies/failure-recovery.md
-require_text 'projected pressure alone cannot trigger it' .swe-forge/adapters/pi/README.md
 require_text 'native `task` tool' .swe-forge/adapters/omp/README.md
 require_text 'schemaMode: strict' .swe-forge/adapters/omp/README.md
 require_text 'workerBriefing' .swe-forge/adapters/pi/README.md
@@ -166,7 +168,7 @@ require_text 'Model provider:' .swe-forge/contracts/receipt.md
 require_text 'Head:' .swe-forge/contracts/receipt.md
 require_text 'Evidence fingerprint:' .swe-forge/contracts/receipt.md
 require_text 'Generated at:' .swe-forge/contracts/receipt.md
-require_text 'context:' .swe-forge/contracts/run-state.md
+require_text 'safe_boundary:' .swe-forge/contracts/run-state.md
 require_text 'continuation:' .swe-forge/contracts/run-state.md
 require_text 'delivery_checkout:' .swe-forge/contracts/run-state.md
 require_text 'set-continuation' .swe-forge/tools/swe-forge-state

@@ -62,7 +62,6 @@ state=$TMP_ROOT/clean.state
     --forge-version 0.1.0-alpha.1 --harness Pi --harness-version 0.84.1 \
     --requested-mode AUTO --selected-mode SOLO --model-provider openai-codex \
     --routing-reason 'tightly coupled test fixture' --model test-model \
-    --context-status compacted --context-evidence 'manual fixture compaction' \
     --output "$TMP_ROOT/receipt.md" >/dev/null
   "$GATE" receipt --state "$state" --execution SOLO --delivery PR \
     --pr-url https://github.com/example/repo/pull/1 >/dev/null
@@ -73,7 +72,7 @@ state=$TMP_ROOT/clean.state
   "$GATE" receipt-verify --state "$state" >/dev/null
 )
 grep -F 'Final status: ACCEPTED' "$TMP_ROOT/receipt.md" >/dev/null || fail 'accepted receipt is missing final status'
-grep -F 'Context: compacted — manual fixture compaction' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing context evidence'
+if grep -F 'Context:' "$TMP_ROOT/receipt.md" >/dev/null; then fail 'receipt retains host context metadata'; fi
 grep -F 'Fresh review: PASS — 1 findings, 1 repaired' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing review summary'
 grep -F -- '- Harness: Pi 0.84.1' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing harness metadata'
 grep -F -- '- Routing: AUTO -> SOLO' "$TMP_ROOT/receipt.md" >/dev/null || fail 'receipt is missing routing metadata'
@@ -108,8 +107,7 @@ if grep -Eq '^continuation:' "$early_state/run-state.yaml"; then fail 'init unex
 "$state_tool" set-continuation --state "$early_state" \
   --workflow-active true --workflow ticket --phase implementation --step 1 \
   --awaiting none --next-action-kind implement --next-action-target state-tool \
-  --next-action-acceptance 'schema valid' --safe-boundary true \
-  --expected-context-tokens 100 >/dev/null
+  --next-action-acceptance 'schema valid' --safe-boundary true >/dev/null
 grep -F '    mode: GUIDED' "$early_state/run-state.yaml" >/dev/null
 updated_at=$(awk '$1 == "updated_at:" && section == "continuation" { print $2; exit } /^[^[:space:]#][^:]*:/ { section=$1; sub(/:$/, "", section) }' "$early_state/run-state.yaml")
 case "$updated_at" in *T*Z) ;; *) fail 'set-continuation generated malformed timestamp' ;; esac
@@ -149,7 +147,28 @@ sed 's/^schema_version: 4$/schema_version: 3/' "$state_ops" >"$schema_v3"
 expect_failure 'stale/unsupported run state' "$state_tool" validate --state "$schema_v3"
 obsolete_route=$TMP_ROOT/obsolete-route.yaml
 awk '/^routing:/{print; print "  initial: SOLO"; next} {print}' "$state_ops" >"$obsolete_route"
-expect_failure 'obsolete routing representation' "$state_tool" validate --state "$obsolete_route"
+expect_failure 'obsolete routing or context-control fields' "$state_tool" validate --state "$obsolete_route"
+obsolete_context=$TMP_ROOT/obsolete-context.yaml
+awk '/^tasks:/{print "context:"; print "  status: near-limit"} {print}' "$state_ops" >"$obsolete_context"
+task_context=$TMP_ROOT/task-context.yaml
+awk '/^tasks: \{\}$/{print "tasks:"; print "  context:"; print "    status: pending"; next} {print}' "$state_ops" >"$task_context"
+"$state_tool" validate --state "$task_context" >/dev/null
+flow_acceptance=$TMP_ROOT/flow-acceptance.yaml
+awk '
+/^    acceptance:$/ { print "    acceptance: [\"schema, valid\", \"second check\"]"; skip=1; next }
+skip && /^      - / { next }
+skip { skip=0 }
+{ print }
+' "$state_ops" >"$flow_acceptance"
+flow_projection=$("$state_tool" inspect --state "$flow_acceptance" --checkout "$propagation_repo")
+case "$flow_projection" in
+  *'"acceptance":["schema, valid","second check"]'*) ;;
+  *) fail 'state inspection lost flow-style continuation acceptance' ;;
+esac
+deep_recovery=$TMP_ROOT/deep-recovery.yaml
+awk '/^  delivery:/{print "    recovery:"; print "      host_signal: overflow"; print "      status: pending"} {print}' "$state_ops" >"$deep_recovery"
+expect_failure 'obsolete routing or context-control fields' "$state_tool" validate --state "$deep_recovery"
+expect_failure 'obsolete routing or context-control fields' "$state_tool" validate --state "$obsolete_context"
 invalid_route=$TMP_ROOT/invalid-route.yaml
 sed 's/^  current: SUBAGENTS$/  current: UNKNOWN/' "$propagation_state/run-state.yaml" >"$invalid_route"
 expect_failure 'invalid routing.current' "$state_tool" validate --state "$invalid_route"

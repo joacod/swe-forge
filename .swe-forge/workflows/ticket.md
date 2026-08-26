@@ -76,8 +76,9 @@ Before broad discovery, load and follow `policies/execution-routing.md` for its
 lightweight discovery-shape assessment. Keep `discovery_strategy` in the
 transient working spec or active context, using `ROOT_ONLY` unless there are
 clearly independent, read-only questions whose answers can return concise
-evidence and materially reduce root-context growth. This is an early research
+evidence and materially reduce root coordination. This is an early research
 strategy, not the final topology decision or durable routing state.
+
 
 For `DELEGATED_RESEARCH`, load `policies/delegation.md`, the bounded researcher
 role, and the task/result contracts before assigning a worker.
@@ -101,9 +102,10 @@ documentation, tests, and quality gates. If the ticket names an optional skill,
 load `policies/specialist-skills.md` and evaluate it on demand; otherwise do
 not search or load unrelated skills.
 
-Use parallel read-only research only when it reduces time or context load. All
+Use read-only research only when it reduces time or root coordination. All
 research must return evidence with file, symbol, command, or documentation
 references.
+
 
 ### 3. Specify
 
@@ -115,8 +117,11 @@ Translate the ticket into observable acceptance criteria and separate facts,
 assumptions, compatibility constraints, and blocking decisions. In `PR`, make
 the working spec ready before writable work without creating a repository
 artifact. Record its review focus, non-goals, testing decision, validation plan,
-and context strategy when applicable. Ask only blocking user questions and
-record low-risk assumptions.
+and assumptions. Ask only blocking user questions and record low-risk
+assumptions. Host context preservation, compaction, retry, and restoration are
+runtime concerns, not canonical Forge controls.
+
+
 
 ### 4. Architect
 
@@ -175,9 +180,11 @@ smallest useful approach, development mode, rationale, and residual risk.
 Register expected checks before running them. Classify each as required,
 conditional with an observable condition, or informational.
 
-For a long-running or context-risk ticket, load and follow `policies/context.md`
-when the host reports a near-limit or overflow condition. Report `not-observed`
-when no context limit is reached.
+For any host context discontinuity or recovery event, do not trust conversational
+memory alone. Re-read authoritative run state, inspect actual Git and evidence
+state where relevant, reconcile before continuing, and do not repeat completed
+semantic actions. Host retries remain distinct from SWE Forge retries.
+
 
 ### 8. Implement
 
@@ -252,9 +259,9 @@ passing partial checks for final integrated evidence.
 ### 14. Report
 
 Use the canonical final-report requirements in `SWE-FORGE.md`, including current
-validation, review, delivery, receipt, context, and cleanup evidence. Keep the
-report separate from private receipt evidence and project-facing PR content;
-never include worker transcripts.
+validation, review, delivery, receipt, continuity/recovery, and cleanup evidence.
+Keep the report separate from private receipt evidence and project-facing PR
+content; never include worker transcripts.
 
 ## Blocking and Recovery
 

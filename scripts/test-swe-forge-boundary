@@ -58,8 +58,6 @@ printf '%s\n' 'if harness == "omp": route' \
 expect_failure 'branch on semantic capabilities, not harness identity' \
   "$CHECK" "$fixture"
 rm "$fixture/.swe-forge/policies/omp-identity-branch.md"
-printf '%s\n' 'if proactive_compaction is available: use it' \
-  >"$fixture/.swe-forge/policies/capability-branch.md"
 printf '%s\n' 'function parseScalarYaml() {}' \
   >"$fixture/.swe-forge/adapters/pi/extensions/swe-forge-runtime.ts"
 expect_failure 'Adapter runtimes must consume canonical semantic ports' \

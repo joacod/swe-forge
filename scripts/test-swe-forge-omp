@@ -82,8 +82,8 @@ function makeState(name, current = "SUBAGENTS", runId = name) {
     "set-continuation", "--state", path.join(stateDir, "run-state.yaml"),
     "--workflow-active", "true", "--workflow", "ticket", "--phase", "implementation",
     "--step", "1", "--awaiting", "none", "--next-action-kind", "implement",
-    "--next-action-target", "fixture", "--safe-boundary", "true", "--expected-context-tokens", "unknown",
-    "--pr-number", "none", "--pr-state", "none", "--recovery-host-signal", "none", "--recovery-status", "none",
+    "--next-action-target", "fixture", "--safe-boundary", "true",
+    "--pr-number", "none", "--pr-state", "none",
   ]);
   return path.join(stateDir, "run-state.yaml");
 }
