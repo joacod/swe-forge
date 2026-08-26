@@ -86,9 +86,38 @@ if grep -F 'Merge performed: no' "$TMP_ROOT/receipt.md" >/dev/null; then fail 'r
 receipt_ref=$(awk -F': ' '$1 == "receipt_ref" { print $2; exit }' "$state/run-state.yaml")
 [ "$receipt_ref" != none ] || fail 'run state does not retain receipt reference'
 [ -f "$receipt_ref" ] || fail 'receipt reference does not point to a file'
-grep -F 'status: accepted' "$state/run-state.yaml" >/dev/null
+grep -F 'status: running' "$state/run-state.yaml" >/dev/null
 grep -F '  create_pull_request: complete' "$state/run-state.yaml" >/dev/null
 grep -F '  pull_request_ref: https://github.com/example/repo/pull/1' "$state/run-state.yaml" >/dev/null
+grep -F '  workflow_active: false' "$state/run-state.yaml" >/dev/null
+tampered_receipt=$TMP_ROOT/tampered-receipt.md
+sed 's#Pull request: https://github.com/example/repo/pull/1#Pull request: https://github.com/example/repo/pull/99#' \
+  "$state/receipt.md" >"$tampered_receipt"
+expect_failure 'receipt pull-request URL does not match run state' \
+  "$GATE" receipt-verify --state "$state" --receipt "$tampered_receipt"
+legacy_state=$TMP_ROOT/legacy-ledger.state
+cp -R "$state" "$legacy_state"
+awk -F '\t' 'BEGIN { OFS="\t" } { NF=8; print }' \
+  "$legacy_state/checkpoints.tsv" >"$legacy_state/checkpoints.tsv.tmp"
+mv "$legacy_state/checkpoints.tsv.tmp" "$legacy_state/checkpoints.tsv"
+expect_failure 'checkpoint ledger lacks current delivery fields' \
+  "$GATE" deliver-pr --state "$legacy_state"
+missing_review=$TMP_ROOT/missing-review.yaml
+awk '
+  /^review:/ { skip=1; next }
+  /^[^ ]/ { skip=0 }
+  !skip { print }
+' "$state/run-state.yaml" >"$missing_review"
+expect_failure 'missing current key: review' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$missing_review"
+missing_plan=$TMP_ROOT/missing-plan.yaml
+awk '
+  /^commit_plan:/ { skip=1; next }
+  /^[^ ]/ { skip=0 }
+  !skip { print }
+' "$state/run-state.yaml" >"$missing_plan"
+expect_failure 'missing current key: commit_plan' \
+  "$ROOT/scripts/swe-forge-state" validate --state "$missing_plan"
 review_repo=$(make_repo review-ceiling)
 review_state=$TMP_ROOT/review-ceiling.state
 (
@@ -275,6 +304,9 @@ grep -F 'requested_delivery: GUIDED' "$propagation_state/run-state.yaml" >/dev/n
 grep -F 'delivery_mode: GUIDED' "$propagation_state/run-state.yaml" >/dev/null
 expect_failure 'receipt delivery mode PR does not match run state GUIDED' \
   "$GATE" receipt --state "$propagation_state" --execution SOLO --delivery PR \
+  --pr-url https://github.com/example/repo/pull/2
+expect_failure 'pull-request URL is only valid for PR receipt delivery' \
+  "$GATE" receipt --state "$propagation_state" --execution SOLO --delivery GUIDED \
   --pr-url https://github.com/example/repo/pull/2
 grep -F '  current: SUBAGENTS' "$propagation_state/run-state.yaml" >/dev/null
 

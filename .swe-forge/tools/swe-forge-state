@@ -514,8 +514,8 @@ validate_state() {
 
   for key in workflow workflow_version schema_version run_id status requested_mode \
     requested_delivery delivery_mode reason fallback_used routing delivery_checkout \
-    delivery receipt_ref tasks; do
-    top_level "$key" "$file" || fail "schema-v4 state is missing top-level key: $key"
+    delivery receipt_ref commit_plan review tasks; do
+    top_level "$key" "$file" || fail "stale/unsupported run state: schema-v4 state is missing current key: $key; start a fresh run"
   done
 
   [ "$(value_for workflow "$file")" = swe-forge ] || fail 'workflow must be swe-forge'
@@ -559,18 +559,14 @@ validate_state() {
   validate_enum delivery.push "$file" not-authorized pending complete blocked
   validate_enum delivery.create_pull_request "$file" not-authorized pending complete blocked
   validate_enum delivery.sync "$file" not-authorized pending complete blocked
-  if top_level review "$file" 2>/dev/null; then
-    validate_review "$file"
-  fi
-  if top_level commit_plan "$file" 2>/dev/null; then
-    validate_commit_plan "$file"
-    plan_status=$(required_scalar commit_plan.status "$file")
-    delivery_mode=$(required_scalar delivery_mode "$file")
-    if [ "$delivery_mode" = PR ]; then
-      [ "$plan_status" != not-applicable ] || fail 'PR commit plan cannot be not-applicable'
-    else
-      [ "$plan_status" = not-applicable ] || fail 'GUIDED commit plan must be not-applicable'
-    fi
+  validate_review "$file"
+  validate_commit_plan "$file"
+  plan_status=$(required_scalar commit_plan.status "$file")
+  delivery_mode=$(required_scalar delivery_mode "$file")
+  if [ "$delivery_mode" = PR ]; then
+    [ "$plan_status" != not-applicable ] || fail 'PR commit plan cannot be not-applicable'
+  else
+    [ "$plan_status" = not-applicable ] || fail 'GUIDED commit plan must be not-applicable'
   fi
 
 
@@ -1074,12 +1070,16 @@ cleanup_review_lock() {
   fi
 }
 acquire_review_lock() {
+  lock_path=$(dirname "$state_path")/review.lock
   if [ "${SWE_FORGE_REVIEW_LOCK_HELD:-false}" = true ]; then
+    owner_pid=$(cat "$lock_path/pid" 2>/dev/null || true)
+    [ "$owner_pid" = "${PPID:-}" ] || \
+      fail 'review lock is not owned by the invoking gate'
     return 0
   fi
-  review_lock=$(dirname "$state_path")/review.lock
-  mkdir "$review_lock" 2>/dev/null || \
+  mkdir "$lock_path" 2>/dev/null || \
     fail 'review state is locked by another review activity; retry after it finishes'
+  review_lock=$lock_path
   printf '%s\n' "$$" >"$review_lock/pid"
 }
 
@@ -1549,18 +1549,10 @@ set_review() {
   state_path=$(state_file "$state_arg")
   acquire_review_lock
   validate_state "$state_path" >/dev/null
-  if top_level review "$state_path" 2>/dev/null; then
-    validate_review "$state_path"
-    current_attempts=$(required_scalar review.attempts "$state_path")
-    review_ceiling=$(required_scalar review.retry_ceiling "$state_path")
-    ceiling_provenance=$(required_scalar review.ceiling_provenance "$state_path")
-    contract_ref=$(required_scalar review.contract_ref "$state_path")
-  else
-    current_attempts=0
-    review_ceiling=2
-    ceiling_provenance=default
-    contract_ref=.swe-forge/contracts/review.md
-  fi
+  current_attempts=$(required_scalar review.attempts "$state_path")
+  review_ceiling=$(required_scalar review.retry_ceiling "$state_path")
+  ceiling_provenance=$(required_scalar review.ceiling_provenance "$state_path")
+  contract_ref=$(required_scalar review.contract_ref "$state_path")
   [ "$current_attempts" -lt "$review_ceiling" ] || \
     fail "review ceiling exhausted: $current_attempts/$review_ceiling executions already recorded; automatic reviewer-like activity is stopped"
   next_attempt=$((current_attempts + 1))
@@ -1895,39 +1887,19 @@ set_pull_request() {
       ;;
     *) fail "pull-request completion is not valid from status: $current_status" ;;
   esac
+  existing_ref=$(required_scalar delivery.pull_request_ref "$state_path")
+  [ "$existing_ref" = none ] || [ "$existing_ref" = "$url_arg" ] || \
+    fail 'pull-request completion URL does not match the recorded PR'
   state_tmp=$state_path.tmp.$$
   awk -v url="$url_arg" '
-    BEGIN {
-      section=""
-      status_count=0
-      checkout_status_count=0
-      commit_status_count=0
-      push_status_count=0
-      pr_status_count=0
-      pr_ref_count=0
-    }
+    BEGIN { section=""; active_count=0; pr_status_count=0; pr_ref_count=0 }
     /^[^[:space:]#][^:]*:/ {
       section=$1
       sub(/:$/, "", section)
     }
-    /^status:/ {
-      print "status: accepted"
-      status_count++
-      next
-    }
-    section == "delivery_checkout" && $0 ~ /^  status:/ {
-      print "  status: complete"
-      checkout_status_count++
-      next
-    }
-    section == "delivery" && $0 ~ /^  commit:/ {
-      print "  commit: complete"
-      commit_status_count++
-      next
-    }
-    section == "delivery" && $0 ~ /^  push:/ {
-      print "  push: complete"
-      push_status_count++
+    section == "continuation" && $0 ~ /^  workflow_active:/ {
+      print "  workflow_active: false"
+      active_count++
       next
     }
     section == "delivery" && $0 ~ /^  create_pull_request:/ {
@@ -1942,9 +1914,7 @@ set_pull_request() {
     }
     { print }
     END {
-      if (status_count != 1 || checkout_status_count != 1 ||
-          commit_status_count != 1 || push_status_count != 1 ||
-          pr_status_count != 1 || pr_ref_count != 1) exit 1
+      if (active_count != 1 || pr_status_count != 1 || pr_ref_count != 1) exit 1
     }
   ' "$state_path" >"$state_tmp" || fail 'pull-request completion could not update current run state'
   validate_state "$state_tmp" >/dev/null

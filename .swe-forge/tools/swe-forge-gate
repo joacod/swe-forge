@@ -201,9 +201,10 @@ validate_checkpoint_ledger() {
 }
 
 acquire_review_lock() {
-  REVIEW_LOCK=$STATE/review.lock
-  mkdir "$REVIEW_LOCK" 2>/dev/null || \
+  lock_path=$STATE/review.lock
+  mkdir "$lock_path" 2>/dev/null || \
     fail "review state is locked by another review activity; retry after it finishes"
+  REVIEW_LOCK=$lock_path
   printf '%s\n' "$$" >"$REVIEW_LOCK/pid"
 }
 review_repair_allowed() {
@@ -1450,7 +1451,7 @@ check_final_state() {
   baseline_head=$(meta_value baseline_head "$STATE/meta.env")
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
   git -C "$CHECKOUT" merge-base --is-ancestor "$baseline_head" "$current_head" || blocker "current HEAD is not based on the recorded baseline"
-  checkpoint_count=$(awk 'END { print NR }' "$STATE/checkpoints.tsv")
+  checkpoint_count=$(awk 'NF { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
   [ "$checkpoint_count" -gt 0 ] || blocker "no checkpoint evidence was recorded"
   if [ "$(delivery_mode_from_state)" = PR ]; then
     check_commit_plan_completion
@@ -1469,9 +1470,17 @@ check_final_state() {
     review_result=$(meta_value result "$STATE/review.env")
     review_head=$(meta_value head "$STATE/review.env")
     review_fp=$(meta_value fingerprint "$STATE/review.env")
+    review_attempt=$(meta_value attempt "$STATE/review.env")
+    review_ceiling=$(meta_value retry_ceiling "$STATE/review.env")
     [ "$review_result" = PASS ] || blocker "fresh review is not PASS: ${review_result:-missing}"
     [ "$review_head" = "$current_head" ] || blocker "review evidence is not for current HEAD"
     [ "$review_fp" = "$fp" ] || blocker "review evidence is not for current candidate fingerprint"
+    if [ "$(delivery_mode_from_state)" = PR ]; then
+      [ "$review_attempt" = "$review_state_attempts" ] || \
+        blocker "review evidence attempt does not match canonical run state"
+      [ "$review_ceiling" = "$review_state_ceiling" ] || \
+        blocker "review evidence ceiling does not match canonical run state"
+    fi
   else
     blocker "review evidence is missing"
   fi
@@ -1535,7 +1544,7 @@ receipt_text() {
   short_head=$(git -C "$CHECKOUT" rev-parse --short "$current_head")
   short_fp=$(printf '%s' "$current_fp" | cut -c 1-12)
   commit_count=$(git -C "$CHECKOUT" rev-list --count "$baseline_head..$current_head")
-  checkpoint_count=$(awk 'END { print NR }' "$STATE/checkpoints.tsv")
+  checkpoint_count=$(awk 'NF { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
   planned_checkpoint_count=$(awk -F "$TAB" '$9 == "planned" { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
   repair_checkpoint_count=$(awk -F "$TAB" '$9 == "review-repair" { count++ } END { print count + 0 }' "$STATE/checkpoints.tsv")
   printf '## SWE Forge receipt\n\n'
@@ -1696,6 +1705,8 @@ receipt_run() {
   fi
   case "$execution" in SOLO|SUBAGENTS) ;; *) fail "invalid execution topology: ${execution:-<missing>}" ;; esac
   case "$delivery" in GUIDED|PR) ;; *) fail "invalid delivery mode: ${delivery:-<missing>}" ;; esac
+  [ "$delivery" != GUIDED ] || [ -z "$PR_URL" ] || \
+    fail "a pull-request URL is only valid for PR receipt delivery"
   case "$receipt_requested_mode" in ''|AUTO|SOLO|SUBAGENTS) ;; *) fail "invalid requested topology metadata" ;; esac
   case "$receipt_selected_mode" in ''|SOLO|SUBAGENTS) ;; *) fail "invalid selected topology metadata" ;; esac
   for receipt_value in "$receipt_forge_version" "$receipt_harness" "$receipt_harness_version" \
@@ -1759,17 +1770,37 @@ receipt_verify() {
   receipt_branch=$(awk -F': ' '$1 == "Branch" { print $2; exit }' "$receipt_file")
   receipt_repo=$(awk -F': ' '$1 == "Repository" { print $2; exit }' "$receipt_file")
   receipt_status=$(awk -F': ' '$1 == "Final status" { print $2; exit }' "$receipt_file")
+  receipt_delivery=$(awk -F': ' '$1 == "Delivery" { print $2; exit }' "$receipt_file")
+  receipt_pr_url=$(awk -F': ' '$1 == "Pull request" { print $2; exit }' "$receipt_file")
+  receipt_review_attempts=$(awk -F': ' '$1 == "Review attempts" { print $2; exit }' "$receipt_file")
+  canonical_delivery=$(delivery_mode_from_state)
+  [ "$receipt_delivery" = "$canonical_delivery" ] || \
+    fail "receipt delivery mode $receipt_delivery does not match run state $canonical_delivery"
+  review_state_attempts=$(run_state_nested_value review attempts)
+  review_state_ceiling=$(run_state_nested_value review retry_ceiling)
+  if [ "$canonical_delivery" = PR ]; then
+    recorded_pr_url=$(run_state_nested_value delivery pull_request_ref)
+    [ -n "$recorded_pr_url" ] && [ "$recorded_pr_url" != none ] || \
+      fail "run state is missing the recorded pull-request URL"
+    [ "$receipt_pr_url" = "$recorded_pr_url" ] || \
+      fail "receipt pull-request URL does not match run state"
+    [ "$receipt_review_attempts" = "$review_state_attempts/$review_state_ceiling" ] || \
+      fail "receipt review attempts do not match canonical run state"
+  else
+    [ -z "$receipt_pr_url" ] || [ "$receipt_pr_url" = not-created ] || \
+      fail "guided receipt cannot contain a pull-request URL"
+  fi
   current_head=$(git -C "$CHECKOUT" rev-parse HEAD)
   current_short_head=$(git -C "$CHECKOUT" rev-parse --short "$current_head")
   [ "$current_short_head" = "$receipt_head" ] || fail "receipt is stale: Head does not match current HEAD"
   current_fp=$(fingerprint_for_checkout "$CHECKOUT")
   current_short_fp=$(printf '%s' "$current_fp" | cut -c 1-12)
   [ "$current_short_fp" = "$receipt_fp" ] || fail "receipt is stale: evidence fingerprint does not match current candidate"
-  [ "$receipt_branch" = "$(current_branch)" ] || fail "receipt is stale: branch does not match current branch"
+  [ "$receipt_branch" = "$(current_branch)" ] || fail "receipt branch does not match current branch"
   [ "$receipt_repo" = "$(repository_identity)" ] || fail "receipt repository identity does not match current repository"
   [ "$receipt_status" = ACCEPTED ] || fail "receipt does not report ACCEPTED"
-  delivery=$(awk -F': ' '$1 == "Delivery" { print $2; exit }' "$receipt_file")
-  if [ "$delivery" = PR ]; then PR_URL=$(awk -F': ' '$1 == "Pull request" { print $2; exit }' "$receipt_file"); check_final_state yes; else check_final_state no; fi
+  delivery=$receipt_delivery
+  if [ "$delivery" = PR ]; then PR_URL=$receipt_pr_url; check_final_state yes; else check_final_state no; fi
   [ "$final_blockers" -eq 0 ] || exit 1
   printf 'PASS: receipt is current and evidence-bound\n'
 }
