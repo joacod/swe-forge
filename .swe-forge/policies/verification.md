@@ -1,9 +1,9 @@
 # Verification Policy
 
-Verification supplies current evidence for the Acceptance Gate. It applies in
+Verification supplies current evidence for the Acceptance Gate. It applies to
 `SOLO` and `SUBAGENTS`; depth follows ticket risk and observable behavior.
 
-## Evidence and testing
+## Testing decision
 
 Prefer evidence in this order:
 
@@ -13,30 +13,20 @@ Prefer evidence in this order:
 4. focused reproduction or manual verification; and
 5. code/diff inspection for scope and integration.
 
-Code inspection alone does not prove changed behavior.
-
-Before implementation, record one testing decision:
-
-- behavior and public seam;
-- relevant existing coverage, or none found;
-- smallest useful approach: `regression`, `acceptance`, `characterization`,
-  `existing-sufficient`, `manual`, or `not-applicable`; and
-- rationale and residual risk when no automated test is added.
-
-Use regression coverage for a bug when practical, acceptance coverage for a
-behavior change, characterization for a behavior-preserving refactor, and
-focused manual evidence when no useful automated seam exists. TDD is optional;
-documentation and trivial changes may be `not-applicable`.
+Code inspection alone does not prove changed behavior. Before implementation,
+record behavior and public seam, existing coverage (or none), the smallest
+approach—`regression`, `acceptance`, `characterization`, `existing-sufficient`,
+`manual`, or `not-applicable`—and its rationale/residual risk. Use regression
+for bugs, acceptance for behavior changes, characterization for preserving
+refactors, manual evidence when no useful automated seam exists. TDD is
+optional; trivial or documentation changes may be `not-applicable`.
 
 ## Validation selection
 
-Use targeted checks for an implementation slice. Run final validation once the
-candidate is complete, against its exact current `HEAD`. After a repair, rerun
-only affected groups. The workflow must select the smallest final validation groups.
-`full` is reserved for CI, release preparation, high-risk cross-cutting work, or
-another justified broad risk.
-
-The validation entry point exposes this static map:
+Select the smallest groups covering the changed surfaces. Run final validation
+once against the exact clean committed `HEAD`; after a repair, rerun only
+affected groups. Reserve `full` for CI, release preparation, high-risk
+cross-cutting work, or another justified broad risk.
 
 | Group | Covers |
 | --- | --- |
@@ -50,39 +40,31 @@ The validation entry point exposes this static map:
 | `release` | release consistency/readiness |
 | `full` | core, invocation, evidence, installer, Pi, OMP, and workers |
 
-For example:
-
 ```text
 ./scripts/validate-swe-forge core
 ./scripts/validate-swe-forge pi workers
 ./scripts/validate-swe-forge full release
 ```
 
-With no group, the script preserves the full bundle. `--plan` shows checks
-without running them. The map is inspectable, not a dependency resolver.
-
-Classify each check as `required`, `conditional`, or `informational` before
-running it. Inspect side effects; migrations, deployment, publication,
-production/shared-service access, credentials, and destructive cleanup require
-isolation or explicit authorization. Commit, push, and PR creation are delivery
-actions, not validation.
+With no group, the script keeps the full bundle. The map is inspectable, not a
+dependency resolver. Classify checks as `required`, `conditional`, or
+`informational` before running them and inspect side effects. Isolate or
+explicitly authorize migrations, deployment, publication, production/shared
+services, credentials, and destructive cleanup. Commit, push, and PR creation
+are delivery actions, not validation.
 
 Report the exact action, scope/environment when material, result, evidence, and
-follow-up. Skipped or unavailable checks are not passes. A required or
-applicable conditional check that is skipped or unavailable blocks acceptance.
+follow-up. Distinguish passed, failed, skipped, unavailable, and not-applicable;
+a skipped or unavailable required/applicable conditional check blocks acceptance.
 
-## Independent Review Handoff
+## Review handoff
 
-The ticket workflow decides whether review is required. When it is, load the
+The ticket workflow decides whether review is required. When required, load the
 reviewer role and `../contracts/review.md`. Verification supplies current
-validation evidence; the reviewer role owns investigation and the review
-contract owns result shape and blocking semantics. The initial handoff uses the
-complete ticket-relevant `review_focus`; a repair receives only its affected
-finding, criteria, and checks.
+validation; the role and contract own review investigation and result shape.
+The initial handoff carries the complete ticket-relevant `review_focus`; a
+repair carries only its finding, criteria, and checks.
 
-## Acceptance handoff
-
-This policy contributes testing and quality evidence to the one Acceptance Gate
-in `SWE-FORGE.md`; it defines no competing gate. Do not rerun unchanged work
-for review, acceptance, or PR preparation, and do not await or poll remote CI
-after PR creation.
+The single Acceptance Gate is in `SWE-FORGE.md`. Do not rerun unchanged work for
+review, acceptance, or PR preparation, and do not await or poll remote CI after
+PR creation.

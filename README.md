@@ -1,57 +1,38 @@
 # SWE Forge
 
-SWE Forge turns an explicit coding ticket into one bounded, evidence-backed,
-reviewable delivery. It sits above the coding harness: it does not replace it.
-SWE Forge is harness-agnostic, opt-in, and owns one writable delivery checkout
-per run.
-
-## What it does
-
-It chooses the smallest useful path—`SOLO` or bounded `SUBAGENTS`—then helps
-inspect, implement, validate, independently review, and report the change.
-The extra confidence comes from validation and a fresh review bound to the
-same committed Git candidate; SWE Forge never merges automatically.
-
-## Harnesses
-
-Pi is first-class. OpenCode is compatible. OMP, Claude Code, Codex, and Cursor
-are experimental. Capabilities are intentionally asymmetric; see the
-[compatibility snapshot](docs/compatibility.md).
-
-## Install
-
-Until the first public release, install from a stable checkout:
-
-```bash
-git clone https://github.com/joacod/swe-forge.git ~/tools/swe-forge
-cd ~/tools/swe-forge
-HARNESS=pi
-scripts/swe-forge install "$HARNESS"
-scripts/swe-forge verify "$HARNESS"
-```
-
-Use `pi`, `opencode`, `omp`, `claude`, `codex`, or `cursor`. See the
-[installation guide](docs/installation.md) for harness-specific locations.
+SWE Forge is an opt-in, harness-agnostic workflow that turns one focused
+coding ticket into one evidence-backed, reviewable PR. It owns one writable
+delivery checkout and never merges automatically.
 
 ## Use
 
-Give the installed entry point one focused ticket:
+Install a harness projection from a stable checkout:
+
+```sh
+scripts/swe-forge install <harness>
+scripts/swe-forge verify <harness>
+```
+
+`v0.1.0-alpha.1` is planned, not yet published; use a development checkout
+until then.
+
+Invoke it with a ticket:
 
 ```text
 /swe-forge <ticket>
 ```
 
-PR delivery and automatic topology are the defaults. Use the explicit guided
-mode when a human pause is wanted:
+PR delivery and automatic topology are the defaults. Use `guided` when a human
+pause is wanted:
 
 ```text
 /swe-forge guided <ticket>
 ```
 
-SWE Forge selects `SOLO` or `SUBAGENTS` internally after inspecting the ticket
-and repository. Neither mode merges automatically.
+Forge adds proportional validation and one fresh review when warranted. Human
+PR review remains the final boundary.
 
-## Documentation
+## Details
 
 - [Workflow specification](SWE-FORGE.md)
 - [Architecture](docs/architecture.md)

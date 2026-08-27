@@ -1,9 +1,8 @@
 # Pi Adapter
 
-Pi exposes SWE Forge through prompt templates and an optional runtime
-extension. It has the strongest current validation confidence, but its richer
-host integration is not a canonical requirement. Canonical workflow behavior
-lives in the installed support tree.
+Pi exposes SWE Forge through prompt templates and an optional runtime extension.
+Canonical behavior lives in the installed support tree; richer Pi integration
+is not a core requirement.
 
 ## Installation
 
@@ -20,11 +19,10 @@ The installer links:
 ~/.pi/agent/swe-forge/
 ```
 
-Prompt and extension loaders resolve canonical files from
-`~/.pi/agent/swe-forge/`, never a project-local `.swe-forge/` tree. The shared
-invocation parser is under that support root. The optional `swe_forge_subagent`
-package is not installed; when absent, `SUBAGENTS` uses the canonical
-`SOLO`/sequential fallback.
+Loaders resolve canonical files from `~/.pi/agent/swe-forge/`, never a
+project-local `.swe-forge/`. The invocation parser is under that support root.
+The optional `swe_forge_subagent` package is not installed; `SUBAGENTS` falls
+back to `SOLO`/sequential when absent.
 
 ## Invocation
 
@@ -33,45 +31,28 @@ package is not installed; when absent, `SUBAGENTS` uses the canonical
 /swe-forge guided <ticket>      # guided human pause
 ```
 
-`SOLO` and `SUBAGENTS` are selected internally after ticket and repository
-inspection.
-
-The template runs only for an explicit `/swe-forge` prompt and passes
-`$ARGUMENTS` unchanged. The runtime invokes the shared parser once and injects
-normalized facts; the canonical workflow owns status handling. Delivery prompts
-load the canonical delivery policy. `/git-pr draft` is explicit; plain
-`/git-pr` remains normal/open.
+The template requires explicit `/swe-forge` and passes `$ARGUMENTS` unchanged.
+The runtime invokes the shared parser once and injects normalized facts. The
+canonical workflow owns status, delivery policy, and routing.
 
 ## Runtime boundary
 
-The extension:
+The extension probes the parser and optional worker capability at invocation,
+reads the bounded continuation projection, refreshes it through
+`before_agent_start` and lifecycle hooks, maps exact active-PR `merged` shorthand
+to `/git-sync merged`, and passes the validated root brief unchanged in
+`workerBriefing`.
 
-- probes the parser and optional native subagent capability at the explicit
-  invocation boundary;
-- reads only the bounded canonical continuation projection;
-- refreshes that projection through Pi's `before_agent_start` and its host lifecycle hooks;
-- maps exact active-PR `merged` shorthand to `/git-sync merged`; and
-- passes the root-created, validated worker brief unchanged in
-  `workerBriefing`.
+It does not choose topology, reconstruct state, or install the optional package.
+It gates native workers to canonical `SUBAGENTS`, checks role/profile/brief, and
+leaves results to root acceptance. Private worker environments are not Forge
+state; writable results are materialized and validated in the canonical checkout.
 
-It does not choose topology, reconstruct canonical state, or import/install the
-optional worker package. It gates native workers to canonical `SUBAGENTS`,
-checks their role/profile/brief, and leaves returned data to normal root
-acceptance. A host-private worker environment is not Forge state or result
-metadata; writable results are materialized and validated in the canonical
-delivery checkout.
+The host owns context preservation, compaction, retry, restoration, worker
+execution, and scheduling. Missing, stale, or incompatible capability/state
+uses visible `SOLO`/sequential fallback.
 
-The host decides context preservation, compaction, retry, restoration, worker
-physical execution, and scheduling. After a lifecycle discontinuity, the
-canonical workflow re-reads state and Git/validation evidence. A first
-capability probe may occur before a state snapshot; it is discovery only.
-Missing, stale, or incompatible capability/state uses the visible
-`SOLO`/sequential fallback.
-
-## References
-
-The adapter was checked against Pi 0.84.2 documentation and types on
-2026-08-15:
+Pi was checked against version `0.84.2` documentation and types on `2026-08-15`:
 
 - https://pi.dev/docs/latest/extensions
 - https://pi.dev/docs/latest/prompt-templates

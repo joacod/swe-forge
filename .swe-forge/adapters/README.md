@@ -1,8 +1,8 @@
 # Harness Adapters
 
-Adapters expose the canonical SWE Forge workflow through host-native prompts,
-commands, skills, tools, profiles, and lifecycle hooks. They are optional,
-asymmetric integration layers—not alternate workflow definitions.
+Adapters project the canonical SWE Forge workflow onto host prompts, commands,
+skills, tools, profiles, and lifecycle hooks. They are optional, asymmetric
+integration layers—not alternate workflow definitions.
 
 ## Canonical sources
 
@@ -12,48 +12,45 @@ Update these first:
 - [`workflows/`](../workflows/), [`agents/`](../agents/),
   [`contracts/`](../contracts/), and [`policies/`](../policies/).
 
-Adapter files may contain only host syntax, paths, permissions, capability
-observation, and translation that has no canonical equivalent. They point back
-to owners instead of copying their procedure. The registry
-[`registry.tsv`](registry.tsv) owns installation mappings.
+Adapter files contain only host syntax, paths, permissions, capability evidence,
+and translation without a canonical equivalent. Installation mappings belong to
+[`registry.tsv`](registry.tsv). Adapters point to owners instead of copying
+procedure.
 
-Shared references:
+Key references:
 
-- [`SWE-FORGE.md`](../../SWE-FORGE.md): activation, lifecycle, topology,
-  delivery, acceptance, and load map;
-- [`workflows/ticket.md`](../workflows/ticket.md): procedure;
-- [`tools/swe-forge-invocation`](../tools/swe-forge-invocation): parser;
+- [`SWE-FORGE.md`](../../SWE-FORGE.md): activation, invariants, delivery,
+  Acceptance Gate, and report;
+- [`workflows/ticket.md`](../workflows/ticket.md): procedure and load order;
 - [`contracts/worker-brief.md`](../contracts/worker-brief.md): worker brief;
 - [`policies/delegation.md`](../policies/delegation.md): worker boundaries;
-- [`policies/verification.md`](../policies/verification.md): quality gates;
+- [`policies/verification.md`](../policies/verification.md): quality evidence;
 - [`policies/evidence.md`](../policies/evidence.md): candidate evidence; and
-- [`policies/delivery.md`](../policies/delivery.md): action authorization.
+- [`policies/delivery.md`](../policies/delivery.md): authorization.
 
-Adapters forward the validated review focus and worker briefing unchanged.
-Forge owns scope, mutation, delivery-candidate, and acceptance semantics; the
-host decides worker physical execution and scheduling. Private worker
-worktrees, sandboxes, overlays, and containers stay out of Forge state and
-result metadata. Writable changes are materialized into the canonical delivery
-checkout and validated there before acceptance.
+Adapters pass validated review focus and worker briefs unchanged. Forge owns
+scope, mutation, candidate, and acceptance; the host owns physical execution
+and scheduling. Private worktrees, sandboxes, overlays, and containers are host
+details, not Forge state. Materialize writable changes in the canonical checkout
+and validate them before acceptance.
 
 ## Installation boundary
 
-Use the user-level link installer:
+Use the user-level link installer, one harness per invocation:
 
 ```text
 scripts/swe-forge install <harness>
 scripts/swe-forge verify <harness>
 ```
 
-Each invocation handles one harness and leaves project configuration alone.
-Conflicting harness configuration must be reviewed before installation. The
-adapter catalog is not installed.
+Leave project configuration alone. Review conflicts before installation. The
+registry is not installed.
 
 ## Adapters
 
-- [Pi](pi/README.md): first-class prompt and runtime bridge;
-- [OpenCode](opencode/README.md): compatible commands and native-agent bridge;
-- [OMP](omp/README.md): experimental prompt and runtime bridge;
+- [Pi](pi/README.md): first-class prompt/runtime bridge;
+- [OpenCode](opencode/README.md): compatible command/agent bridge;
+- [OMP](omp/README.md): experimental prompt/runtime bridge;
 - [Claude Code](claude-code/README.md): experimental skill projection; and
 - [Shared Agent Skill](shared/agent-skill/README.md): experimental Codex/Cursor
   projection.

@@ -1,21 +1,19 @@
 # Evidence Policy
 
-The executable helper keeps the small set of evidence that protects a
-reviewable delivery:
+The executable evidence helpers are:
 
 ```text
 .swe-forge/tools/swe-forge-gate
 .swe-forge/tools/swe-forge-state
 ```
 
-Run state remains authoritative for workflow continuation. Validation logs and
-status records belong outside the repository or under an already ignored
-`.swe-forge/runs/` path.
+Run state is authoritative for continuation. Keep validation logs and status
+records outside the repository or under ignored `.swe-forge/runs/`.
 
 ## Checks and candidate binding
 
-Record a check when it is run; do not preregister a plan or prove a procedural
-sequence:
+Record checks when run; do not preregister a plan or prove a procedural sequence.
+Typical actions are:
 
 ```sh
 .swe-forge/tools/swe-forge-gate preflight --state "$STATE" \
@@ -28,36 +26,29 @@ sequence:
 .swe-forge/tools/swe-forge-gate deliver-pr --state "$STATE"
 ```
 
-`validate` and `record-check-status` record the requirement, result, command or
-status reason, and the Git `HEAD` before and after the check. A final check must
-run against a clean committed candidate and must leave it unchanged. A command
-that changes the candidate is recorded as failed rather than silently allowing
-its evidence to drift. Required and applicable conditional final checks must
-pass; unavailable checks block, while informational results remain visible.
-The run-state `validation` record only binds the current aggregate result and
-candidate to that ledger; the ledger remains the detailed authority.
+`validate` and `record-check-status` record requirement, result, command or
+reason, and `HEAD` before and after. Final checks run against a clean committed
+candidate and must leave it unchanged; a mutating command fails its evidence.
+Required and applicable conditional checks must pass. Unavailable checks block;
+informational results remain visible. The small run-state `validation` record
+binds the aggregate result to a candidate; the ledger remains detailed authority.
 
-For a committed candidate, the full Git commit SHA is the only candidate
-identity. Final validation, review, and delivery must all refer to that same
-`HEAD`; no content fingerprint or phase-specific identity is needed. A review
-repair creates a new commit, reruns only affected final validation against its
-new `HEAD`, and reports that the repaired candidate was not independently
-re-reviewed.
+For a committed candidate, full Git commit SHA is the only identity. Final
+validation, review, and delivery use the same `HEAD`; no content fingerprint or
+phase identity is needed. A repair creates a new commit, reruns affected checks,
+and is reported as not independently re-reviewed.
 
-The gate never authorizes migrations, deployment, publication, credentials,
-production access, shared-environment effects, destructive cleanup, push, PR
-creation, or merge. It only checks local evidence and delivery prerequisites.
+The gate checks local evidence and prerequisites only. It never authorizes
+migration, deployment, publication, credentials, production/shared-environment
+access, destructive cleanup, push, PR creation, or merge.
 
 ## Delivery evidence
 
-`review` records one fresh review result and its candidate `HEAD` directly in
-run state. A concrete, localized repair is recorded through the run-state
-review transition after its additional commit; it cannot be turned into
-another review. `deliver-pr`
-requires a safe clean checkout, baseline ancestry, current final validation,
-and either a passing review for the same `HEAD` or a recorded repair whose
-validation is current for the repaired `HEAD`.
+`review` records one fresh review and its candidate `HEAD` in run state. A
+localized repair uses the run-state repair transition and cannot become another
+review. `deliver-pr` requires a safe clean checkout, baseline ancestry, current
+validation, and either a passing review for the same `HEAD` or a recorded repair
+with current repaired validation.
 
-Git history, validation results, the review result, the pull request, and the
-final harness report are the durable delivery evidence. No second delivery
-artifact is generated after the PR.
+Git history, validation results, review, the PR, and the final report are the
+delivery evidence. No second delivery artifact is generated.

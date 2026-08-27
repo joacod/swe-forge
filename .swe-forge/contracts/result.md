@@ -1,17 +1,14 @@
 # Worker Result Contract
 
-Workers return the smallest structured evidence needed for the root's next safe
-decision. The brief and run state remain authoritative for scope,
-authorization, topology, and delivery. A result reports evidence; it never
-grants authority.
+Return only the structured evidence the root needs for its next safe decision.
+The brief and run state own scope, authorization, topology, and delivery. A
+result reports evidence; it grants no authority.
 
-## One result shape
+## Ordinary result
 
-Ordinary worker results are one JSON object. `READ_ONLY` uses the common fields;
-`WRITABLE` adds the candidate, changed-path, Git, and assigned-validation
-fields. Optional fields are omitted when empty. The same JSON is passed through
-native structured-output APIs or returned as JSON text by hosts without that
-capability.
+Return one JSON object. `READ_ONLY` uses this shape; `WRITABLE` adds the fields
+below. Omit optional empty fields. Native structured output and text fallback
+use the same JSON.
 
 ```json
 {
@@ -25,18 +22,16 @@ capability.
 }
 ```
 
-`RESULT_PROFILE` is `READ_ONLY` or `WRITABLE`; `STATUS` is `DONE`, `BLOCKED`,
-or `FAILED`. `FINDINGS` and `EVIDENCE` are always non-empty. `RISKS` and
-`RECOMMENDED_ACTION` are optional non-empty arrays (or `null` when a native
-schema requires an explicit nullable field). `BLOCKED` and `FAILED` results
-must include a non-empty `RECOMMENDED_ACTION`.
-
-A read-only result contains no implementation or delivery fields. A command
-used to investigate is evidence, not an implementation validation record.
+`RESULT_PROFILE` is `READ_ONLY` or `WRITABLE`; `STATUS` is `DONE`, `BLOCKED`, or
+`FAILED`. `FINDINGS` and `EVIDENCE` are non-empty. `RISKS` and
+`RECOMMENDED_ACTION` are optional non-empty arrays, or `null` when a native
+schema requires it. `BLOCKED` and `FAILED` require `RECOMMENDED_ACTION`.
+Read-only results contain no implementation or delivery fields. Investigation
+commands are evidence, not implementation validation records.
 
 ## Writable result
 
-A bounded shared-checkout writer adds these fields to the same object:
+A shared-checkout writer adds:
 
 ```json
 {
@@ -67,22 +62,20 @@ A bounded shared-checkout writer adds these fields to the same object:
 }
 ```
 
-`BASE_SHA`, `HEAD_SHA`, and `BRANCH` identify the canonical delivery candidate,
-not a private host environment. `FILES_CHANGED`, `GIT_STATE`, and `VALIDATION`
-are required for a writable result. `BASE_SHA` is a full SHA; `HEAD_SHA` is a
-full SHA or `none`; changed paths are repository-relative. `DELIVERABLE_COMMITS`
-and `SCOPE_EXCEPTIONS` are conditional and omitted when empty.
+`BASE_SHA`, `HEAD_SHA`, and `BRANCH` identify the canonical candidate, not a
+private environment. `BASE_SHA` and `HEAD_SHA` are full SHAs, except
+`HEAD_SHA: none`; paths are repository-relative. `FILES_CHANGED`, `GIT_STATE`,
+and `VALIDATION` are required. Omit `DELIVERABLE_COMMITS` and
+`SCOPE_EXCEPTIONS` when empty.
 
-Validation records require `command`, `requirement`, `condition`, `applies`,
-`result`, and `evidence`. A required check applies and passes; an applicable
-conditional check passes for `DONE`; a non-applicable conditional check is
-`not-applicable`. A `DONE` writable result cannot claim no changed files or a
-failed applicable check.
+Each validation item requires `command`, `requirement`, `condition`, `applies`,
+`result`, and `evidence`. A `DONE` writable result needs changed files and no
+failed applicable check. Required and applicable conditional checks pass;
+non-applicable conditionals are `not-applicable`.
 
 ## Executable boundary
 
-The portable tool validates the same object used by every host and emits the
-native schema when a host supports strict structured output:
+The portable tool validates the same object for every host:
 
 ```text
 .swe-forge/tools/swe-forge-worker-result schema --profile READ_ONLY --task-id ID
@@ -92,27 +85,19 @@ native schema when a host supports strict structured output:
   [--task-id ID] --result FILE|-
 ```
 
-`schema` emits a direct JSON Schema, not a transport description. `validate`
-rejects malformed, duplicate-key, profile-mismatched, task-mismatched,
-incomplete, or ambiguous ordinary results. It does not validate the dedicated
-review contract.
-
-`REVIEW` remains a separate profile using [review.md](review.md), never an
-ordinary implementation result. Native review schemas may be supplied
-straight to a structured-output host; the root still applies the review
-contract and fresh-context rules.
+`schema` emits direct JSON Schema. `validate` rejects malformed, duplicate-key,
+profile-mismatched, task-mismatched, incomplete, or ambiguous ordinary results.
+It does not validate the dedicated review contract. `REVIEW` uses
+`contracts/review.md`, never an ordinary implementation result; native review
+schemas may go directly to a structured-output host, but the root still applies
+fresh-context and contract rules.
 
 ## Consumption
 
 Correlate `TASK_ID` and `STATUS` first. For `READ_ONLY`, check findings,
-references, risks, and next action. For `WRITABLE`, additionally check the
-canonical candidate identity, changed paths, Git state, assigned validation,
-and blockers. A `DONE` result is eligible for a dependent worker only after the
-root validates it against the task and derives a compact, B-specific
-`dependency_digest` in B's brief. The digest is not a result field or peer
-message.
-
-Reject incomplete, ambiguous, profile-mismatched, or scope-expanding results
-as `BLOCKED`; do not fill missing evidence from the brief or memory. Workers do
-not create PRs, push, merge, publish, deploy, reroute, or recursively delegate
-by default.
+evidence, risks, and next action. For `WRITABLE`, also check candidate identity,
+changed paths, Git state, assigned validation, and blockers. A `DONE` result can
+feed dependent work only after root validation and a compact, B-specific
+`dependency_digest` in B's brief. Reject incomplete, ambiguous,
+profile-mismatched, or scope-expanding results as `BLOCKED`; never fill fields
+from memory. Workers do not deliver or recursively delegate by default.

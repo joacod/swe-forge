@@ -1,19 +1,19 @@
 # Ephemeral Working Spec Contract
 
-A working spec is a short PR planning artifact. The original ticket remains
-authoritative; this spec makes its intent, boundaries, evidence, and review
-scope executable without creating project documentation.
+A working spec is a short PR planning artifact. The ticket remains
+authoritative; the spec makes intent, boundaries, evidence, and review scope
+executable without creating project documentation.
 
 ## Storage
 
-Keep it in active context or in the run's restricted temporary directory. Never
-commit it, write it into the repository, or add an ignore rule for it. Delete
-external copies during cleanup. Run state, not this spec, owns continuation;
-worker dependency digests are derived at launch and do not belong here.
+Keep it in active context or the run's restricted temporary directory. Never
+commit it, put it in the repository, or add an ignore rule. Delete external
+copies during cleanup. Run state owns continuation; dependency digests are
+created at launch and do not belong here.
 
 ## Minimum shape
 
-Do not fill ceremonial sections. A ready spec normally contains only:
+Omit ceremonial sections. A ready spec normally contains:
 
 ```yaml
 spec_version: 1
@@ -39,7 +39,7 @@ risks:
   - <meaningful risk and mitigation>
 
 validation:
-  testing: <concise testing decision, or not-applicable>
+  testing: <testing decision, or not-applicable>
   checks:
     - command: <command or manual check>
       requirement: required | conditional | informational
@@ -57,29 +57,27 @@ review_focus:
   finding_rule: <what makes a finding actionable>
 ```
 
-`scope.out`, `risks`, and the review lists may be omitted when genuinely empty;
-acceptance must remain observable. For a behavior change, expand `testing` with
-its behavior, seam, existing coverage, approach, and rationale. Add
-`assumptions` or `open_questions` only when they affect safe implementation. Add a bounded `discovery_strategy` only
-when read-only discovery leaves the root; add routing facts only when needed to
-explain a topology decision. Delivery authorization and continuation belong to
-run state and the delivery policy, not this spec.
+Omit empty `scope.out`, `risks`, and review lists. Acceptance stays observable.
+For behavior changes, expand `testing` with behavior, seam, existing coverage,
+approach, and rationale. Add `assumptions`, `open_questions`, discovery shape,
+or routing facts only when they affect safe implementation or explain the
+selected topology. Delivery authorization and continuation belong to run state
+and delivery policy.
 
 ## Readiness
 
 A `ready` spec has a concrete goal, bounded scope, observable acceptance,
-smallest compatible approach, meaningful risks when present, a testing decision,
-selected validation, and an initial review focus covering every ticket-relevant
-criterion and constraint. It may omit an interview when the ticket already
-provides those facts. Ask the user about blocking intent, compatibility, risk,
-or external-action decisions; record low-risk assumptions instead.
+smallest approach, meaningful risks when present, testing decision, selected
+validation, and initial review focus covering every ticket criterion and
+constraint. Skip an interview when the ticket supplies these facts. Ask only
+blocking intent, compatibility, risk, or external-action questions; record
+low-risk assumptions.
 
-The initial `review_focus` is the sole structured review scope. It may reference
-acceptance IDs instead of copying their prose. After a concrete, localized,
-clearly repairable finding, create a separate transient repair context with only
-the finding, repair delta, directly affected criteria, and affected checks. It
-is never a second review assignment.
+`review_focus` is the sole structured review scope and may reference acceptance
+IDs. After one concrete, localized, clearly repairable finding, create a separate
+transient repair context containing only the finding, repair delta, affected
+criteria, and checks. It is not a second review assignment.
 
 Host context preservation, compaction, retries, and restoration are runtime
-concerns. After a discontinuity, recovery re-reads run state and repository and
-evidence reality before resuming.
+concerns. After discontinuity, recovery re-reads state, repository, and evidence
+before resuming.

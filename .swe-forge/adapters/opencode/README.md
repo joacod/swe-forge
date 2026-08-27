@@ -1,17 +1,16 @@
 # OpenCode Adapter
 
 OpenCode is a Compatible adapter exposing SWE Forge through user-level
-commands. Canonical files remain `AGENTS.md`, `SWE-FORGE.md`, and
-`.swe-forge/`; this adapter only translates host syntax and permissions.
+commands. It translates host syntax and permissions; canonical files remain
+`AGENTS.md`, `SWE-FORGE.md`, and `.swe-forge/`.
 
 ## Commands
 
 The installer links `commands/swe-forge.md` to
 `~/.config/opencode/commands/`. `$ARGUMENTS` and file references load the
-canonical support tree only when the user types `/swe-forge`. The shared
-invocation parser runs once; ordinary prompts do not activate Forge.
+support tree only for explicit `/swe-forge`; the shared parser runs once.
 
-Delivery actions remain separate:
+Delivery actions stay separate:
 
 ```text
 /git-commit [paths|message]
@@ -20,18 +19,21 @@ Delivery actions remain separate:
 /git-sync
 ```
 
-Each delivery command loads `policies/delivery.md`; `/git-pr draft` is an
-explicit draft request and plain `/git-pr` remains normal/open.
+Each loads `policies/delivery.md`. `/git-pr draft` is explicit; plain `/git-pr`
+remains normal/open.
 
 ## Native subagents
 
-When routing selects `SUBAGENTS`, create and validate the canonical JSON worker
-brief with `../../tools/swe-forge-worker-brief validate --brief FILE` and pass
-it unchanged with the role and result/review contract. Writable workers in one
-delivery checkout run sequentially; the root owns materialization, integration,
-and delivery.
+When routing selects `SUBAGENTS`, validate and pass one unchanged canonical JSON
+brief with its role and result/review contract:
 
-A custom `.opencode/agents/` entry should be a thin host bridge, for example:
+```text
+../../tools/swe-forge-worker-brief validate --brief FILE
+```
+
+Writable workers in one checkout are sequential; the root owns materialization,
+integration, and delivery. A custom `.opencode/agents/` entry should be a thin
+bridge, for example:
 
 ```markdown
 ---
@@ -46,15 +48,11 @@ Read `.swe-forge/agents/reviewer.md` and return findings using
 `.swe-forge/contracts/review.md`.
 ```
 
-Keep runtime and permission choices in OpenCode configuration. Read-only roles
-must not receive edit access; writable scope comes from the task contract.
+Keep runtime and permissions in OpenCode configuration. Read-only roles receive
+no edit access; writable scope comes from the task contract.
 
-## References
-
-The adapter follows OpenCode's command, agent, skill, and permission
-conventions. See [shared adapter behavior](../README.md) and:
-
-- https://opencode.ai/docs/agents/
-- https://opencode.ai/docs/commands/
-- https://opencode.ai/docs/skills/
-- https://opencode.ai/docs/rules/
+References: [shared adapter behavior](../README.md),
+[agents](https://opencode.ai/docs/agents/),
+[commands](https://opencode.ai/docs/commands/),
+[skills](https://opencode.ai/docs/skills/), and
+[rules](https://opencode.ai/docs/rules/).

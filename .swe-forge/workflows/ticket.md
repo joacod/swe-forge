@@ -1,176 +1,120 @@
-# General Ticket Workflow
+# Ticket Workflow
 
-Read this procedure after an explicit SWE Forge invocation. It defines order
-and stage-triggered loading; the linked policies and contracts own the details.
+Read this procedure after explicit SWE Forge activation. It defines order and
+stage-triggered loading; linked policies, contracts, and roles own details.
 
 ## Artifact boundary
 
-Use only the state needed for the current ticket. Keep a PR working spec and
-worker briefs in restricted temporary storage or active context; never commit
-them. Keep run state and validation evidence outside the repository or under an
-already ignored `.swe-forge/runs/` path. Delegated work uses
-`contracts/task.md` and `contracts/result.md`; an independent review uses
-`contracts/review.md`.
+Keep the transient PR working spec, task contracts, worker briefs, and results
+in active context or restricted temporary storage. Never commit them. Keep run
+state and validation evidence outside the repository or under ignored
+`.swe-forge/runs/`. Use `contracts/task.md`, `result.md`, and `review.md` for
+delegated work and review.
 
 ## Procedure
 
 ### 1. Ingest
 
 Invoke `.swe-forge/tools/swe-forge-invocation` exactly once with the complete
-raw argument string, unless the host already supplied its normalized result.
-Keep the raw invocation immutable and consume these facts without reparsing:
-`raw_arguments`, `parsed_ticket`, `delivery_mode`, and `input_status`.
+raw argument string unless the host supplied normalized facts. Keep
+`raw_arguments` immutable and consume only `parsed_ticket`, `delivery_mode`, and
+`input_status`.
 
-`COMPLETE` proceeds. `EMPTY` and `INCOMPLETE` ask for the missing ticket; do
-not initialize a run. Pass the selected internal routing and `delivery_mode`
-unchanged to state initialization. Preserve user-supplied skill references as
-input, not as permission to install or execute code.
-
-Record the requested behavior, constraints, non-goals, affected surfaces,
-requested validation, and any delivery/checkpoint preference. The ticket
-remains authoritative.
+`COMPLETE` proceeds. `EMPTY` and `INCOMPLETE` request the missing ticket; do
+not initialize a run. Preserve skill references as input, not installation or
+execution permission. Record the ticket's requested behavior, constraints,
+non-goals, affected surfaces, validation, and delivery/checkpoint preference.
+Pass normalized `delivery_mode` and selected internal routing unchanged to state
+initialization.
 
 ### 2. Discover and scope
 
-Perform only lightweight, root-owned discovery first: identify the requested
-outcome, likely surfaces, and whether the work is coupled.
+Start with lightweight root-owned discovery. Load `policies/specification.md`
+and make exactly one semantic `scope_decision`:
 
-#### Early semantic scope decision
+- `PROCEED` continues;
+- `TOO_BROAD` explains independent chunks, suggests separate tickets, and
+  stops before specification, decomposition, routing, validation,
+  implementation, review, and delivery.
 
-After that discovery, load and follow `policies/specification.md` for the one
-`scope_decision: PROCEED | TOO_BROAD`. If `TOO_BROAD`, explain the independent
-chunks, suggest separate tickets, and stop before downstream workflow
-machinery. If `PROCEED`, continue.
+Before broad discovery after `PROCEED`, load
+`policies/execution-routing.md` and assess discovery shape separately from final
+topology. Delegate only independent, read-only questions with concise evidence;
+fan out once and fan in once at the root. Keep coupled questions in the root.
+Then inspect relevant code, dependencies, tests, conventions, and quality gates.
+Load `policies/specialist-skills.md` only for a named or clearly fitting skill.
 
-Before broad discovery, load `policies/execution-routing.md` for its separate
-discovery-shape assessment. This is not the final topology decision. Use
-`DELEGATED_RESEARCH` only for bounded, independent, read-only questions with
-concise evidence; keep coupled questions in the root. A logical batch has one
-root fan-in barrier, while the host may schedule ready work concurrently or
-sequentially. Do not use this assessment as the final topology decision.
+### 3. Specify and route
 
-After `PROCEED`, inspect relevant entry points, dependencies, analogous code,
-tests, conventions, and quality gates. Load `policies/specialist-skills.md`
-only when the ticket names a skill or an already available skill clearly fits.
+For `PR`, load `contracts/working-spec.md` and build the transient spec. Derive
+observable acceptance, bounded scope and non-goals, the smallest approach,
+risks, testing, validation, and initial review focus. Ask only blocking
+questions; record low-risk assumptions.
 
-### 3. Specify
+Choose the compatible approach and ownership order before editing. Load
+`policies/execution-routing.md` for final routing. Prefer `SOLO`; choose
+`SUBAGENTS` only when bounded delegation has independent value and fresh native
+capability. Record preferred/current topology, reason, and fallback.
 
-Before specification or clarification behavior is needed, load
-`policies/specification.md`. In `PR`, also load
-`contracts/working-spec.md` before building the transient spec.
+When delegating, load `policies/delegation.md`, the role, and task/result/review
+contracts. Give each task one objective, non-overlapping scope, dependencies,
+acceptance, assigned validation, risk, and authorization. Immediately before a
+launch, create one canonical JSON worker brief, validate it with:
 
-Translate the ticket into observable acceptance, bounded scope/non-goals, an
-approach, meaningful risks, and validation. Ask only blocking user questions;
-record low-risk assumptions. A PR spec is ready when those fields and its
-initial ticket-relevant `review_focus` are clear. Do not create a repository
-specification artifact.
+```text
+../tools/swe-forge-worker-brief validate --brief FILE
+```
 
-### 4. Architect
+Pass that brief unchanged with the role and selected contract. Accepted
+preceding work may supply only a compact, task-specific `dependency_digest`.
 
-Choose the smallest compatible approach from repository evidence. Identify
-affected interfaces, data flow, compatibility concerns, and risks. Do not edit
-during architecture analysis or add speculative abstractions.
+### 4. Test, implement, integrate
 
-### 5. Decompose
+Before selecting or executing checks, load `policies/verification.md`; load
+`policies/evidence.md` when recording executable evidence or relying on a Git
+candidate identity. Record one testing decision before implementation:
+behavior, seam, existing coverage, smallest useful approach, and rationale.
 
-Use delegation only when a distinct task can be evaluated independently and
-will reduce root coordination. Load `policies/delegation.md`, the relevant
-role, and task/result/review contracts before assigning work. Keep ownership
-non-overlapping and writes sequential in the canonical delivery candidate.
+Before the first writable setup or edit, load `policies/delivery.md`. Use one
+canonical delivery branch and checkout. Materialize delegated writes there and
+accept them sequentially after checking task identity, scope, candidate
+identity, Git state, assigned validation, and blockers. Workers cannot authorize
+delivery or expand scope.
 
-For each delegated task, create the bounded task contract. At launch, create
-one canonical JSON worker brief and validate it with
-`.swe-forge/tools/swe-forge-worker-brief validate --brief FILE`, then pass the
-validated brief unchanged with the canonical role and result contract. The
-brief, not a transcript or full run state, is the worker context.
+### 5. Verify
 
-### 6. Route
+Run the smallest final validation groups covering changed surfaces once the
+candidate is complete and cleanly committed. Bind every result to its full Git
+`HEAD`; report passed, failed, skipped, unavailable, and not-applicable checks
+distinctly. A repair reruns only affected checks against the new `HEAD`.
 
-Before making the final topology decision, load
-`policies/execution-routing.md`. Choose `SOLO` unless bounded delegation has a
-real benefit and the native capability is fresh and compatible. Record the
-preferred/effective choice and concise reason; preserve the safe sequential
-fallback when capability is unavailable. Topology selection does not bypass
-scope, safety, validation, or delivery authorization.
-
-### 7. Test strategy
-
-Before selecting or executing validation, load `policies/verification.md`.
-When recording executable validation evidence or relying on Git candidate
-identity, also load `policies/evidence.md`.
-
-Before implementation, record a concise testing decision: observable behavior,
-test seam, existing coverage, smallest useful approach, and rationale. Classify
-checks as required, conditional, or informational and inspect their side
-effects. Reconcile actual Git and evidence state after any context
-discontinuity or recovery; do not repeat completed semantic work from memory.
-
-### 8. Implement
-
-Before the first writable checkout/setup operation, load
-`policies/delivery.md`. It owns checkout, branch, commit, push, PR, and cleanup
-rules. Implement only the bounded approach and selected dependency waves.
-
-Preserve dirty, detached, protected, or ambiguous state. Delegated writes are
-materialized, validated, and accepted sequentially in the canonical delivery
-checkout. Workers return structured evidence and cannot authorize delivery.
-Use ordinary Git commits as the work requires; no implementation checkpoint,
-predeclared commit slice, or process proof is required in PR mode.
-
-### 9. Integrate
-
-The root consumes each result through its selected contract. Check task
-identity, scope, canonical candidate evidence, assigned validation, and
-blockers. After accepting dependency A, derive only a concise B-relevant
-`dependency_digest` in B's next briefing. Do not create peer messages or
-per-ticket handoff files.
-
-### 10. Verify
-
-Select the smallest final validation groups covering the changed surfaces and
-run them once against the completed clean committed candidate. Record each
-result against its full Git `HEAD`. A review repair reruns only affected checks
-against the new committed `HEAD`; it establishes current evidence but does not
-start another review. Report passed, failed, skipped, unavailable, and
-not-applicable checks distinctly. Later review, acceptance, and delivery gates
-consume this evidence; they do not rerun unchanged validation.
-
-### 11. Review
+### 6. Review and repair
 
 When the review trigger applies, load the reviewer role and
-`contracts/review.md`. In PR mode, review the final validated candidate from
-fresh read-only context. The initial handoff contains the Git `HEAD`, original
-ticket, complete initial `review_focus`, final diff, and validation evidence—one
-concise **initial handoff**, not workflow prose or a transcript.
+`contracts/review.md`. Use fresh read-only context and pass one concise initial
+handoff containing the ticket, complete review focus, candidate `HEAD`, final
+diff, and validation evidence—not a transcript or workflow prose.
 
-A `CHANGES_REQUIRED` result permits one **focused repair context** only when
-the finding is concrete, localized, and clearly repairable. Commit the repair,
-rerun only affected validation, and mark the review repaired in run state. The
-repaired candidate is not independently re-reviewed; fundamental or uncertain
-findings block delivery.
+`CHANGES_REQUIRED` permits one focused repair only when the finding is concrete,
+localized, and clearly repairable. Commit it, rerun affected validation, and
+record that the repaired candidate was not independently re-reviewed.
+Fundamental or uncertain findings block.
 
-### 12. Recover
+### 7. Accept, deliver, report
 
-Before a `BLOCKED` or `FAILED` recovery path, load
-`policies/failure-recovery.md`. Apply its bounded retry and preservation rules.
-A fundamental, uncertain, unsafe, or unrepairable review finding blocks
-delivery rather than starting a review/recovery loop.
+Apply the one Acceptance Gate in `SWE-FORGE.md`. Perform only authorized
+checkout, commit, push, PR, merge, publication, deployment, and cleanup actions.
+Use the final report requirements there. Do not await or poll remote CI after PR
+creation.
 
-### 13. Final acceptance and delivery
+## Recovery
 
-The canonical Acceptance Gate is in `SWE-FORGE.md`; policies and contracts
-supply evidence but do not define competing gates. Compare the final integrated
-diff with the original ticket, acceptance, review focus, and constraints. Use
-the current validation and allowed review/repair evidence for the exact Git
-`HEAD`, then perform only authorized delivery actions.
-
-### 14. Report
-
-Use the final-report requirements in `SWE-FORGE.md`. Keep the report separate
-from worker results and project-facing PR content.
+On `BLOCKED` or `FAILED`, load `policies/failure-recovery.md`. Inspect actual
+state, Git, and evidence before continuing; preserve the candidate and do not
+repeat completed semantic work. Use its bounded retry and repair rules.
 
 ## Blocking
 
-On an unmet gate, preserve the candidate and report the missing acceptance,
-evidence, authorization, or environment condition. Never change a status to
-`DONE` or `ACCEPTED` without its required evidence.
+If a gate is unmet, preserve the candidate and report the missing acceptance,
+evidence, authorization, or environment condition. Never report `DONE` or
+`ACCEPTED` without its required evidence.
