@@ -1,5 +1,4 @@
-import { realpathSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import {
   assertRealAncestors,
   ensureDirectory,
@@ -32,11 +31,17 @@ import {
   loadAdapterRows,
   type AdapterRow,
 } from "./registry";
+import {
+  checkoutInstallSource,
+  normalizeInstallSource,
+  type InstallSource,
+} from "./source";
 
 export type InstallerAction = "install" | "verify" | "status" | "doctor" | "update" | "uninstall";
 
 export interface InstallerOptions {
   readonly sourceRoot?: string;
+  readonly source?: InstallSource;
   readonly home?: string;
   readonly fileSystem?: InstallFileSystem;
   readonly stdout?: (line: string) => void;
@@ -79,9 +84,6 @@ Installations link the selected harness projection and canonical support tree
 back to this SWE Forge checkout under the user's home directory.
 `;
 
-function defaultSourceRoot(): string {
-  return realpathSync(resolve(import.meta.dir, "../.."));
-}
 
 function stripTrailingNewlines(value: string): string {
   return value.replace(/\n+$/, "");
@@ -104,9 +106,15 @@ function rejectUnsupportedPath(path: string): void {
     throw new Error(`paths containing tabs or newlines are not supported: ${path}`);
   }
 }
+function resolveInstallSource(options: InstallerOptions): InstallSource {
+  if (options.source !== undefined && options.sourceRoot !== undefined) {
+    throw new Error("source and sourceRoot cannot both be set");
+  }
+  return normalizeInstallSource(options.source ?? checkoutInstallSource(options.sourceRoot));
+}
 
 export class Installer {
-  public readonly sourceRoot: string;
+  public readonly source: InstallSource;
   public readonly fileSystem: InstallFileSystem;
   public readonly transaction: InstallTransaction;
   private readonly homeInput: string | undefined;
@@ -124,7 +132,7 @@ export class Installer {
   private verifyFailures = 0;
 
   public constructor(options: InstallerOptions = {}) {
-    this.sourceRoot = realpathSync(options.sourceRoot ?? defaultSourceRoot());
+    this.source = resolveInstallSource(options);
     this.fileSystem = options.fileSystem ?? nativeInstallFileSystem;
     this.transaction = new InstallTransaction(this.fileSystem);
     this.homeInput = options.home === undefined ? process.env.HOME : options.home;
@@ -225,7 +233,7 @@ export class Installer {
     }
 
     const harness = requestedHarness === "claude-code" ? "claude" : requestedHarness;
-    if (!adapterRegistryContains(this.sourceRoot, harness)) {
+    if (!adapterRegistryContains(this.source.realRoot, harness)) {
       return this.failWith(
         `unsupported harness: ${harness} (see .swe-forge/adapters/registry.tsv)`,
       );
@@ -264,7 +272,7 @@ export class Installer {
   }
 
   private prepareManifests(): void {
-    const supportRoot = join(this.sourceRoot, ".swe-forge");
+    const supportRoot = this.realSource(".swe-forge");
     const excluded: Record<string, true> = {
       adapters: true,
       runs: true,
@@ -276,13 +284,13 @@ export class Installer {
       if (name.startsWith(".") || excluded[name] === true) continue;
       const path = join(supportRoot, name);
       try {
-        if (this.fileSystem.stat(path).isDirectory()) directories.push(path);
+        if (this.fileSystem.stat(path).isDirectory()) directories.push(name);
       } catch {
         // The shell glob skips entries that disappear during discovery.
       }
     }
     this.canonicalDirectories = directories;
-    this.rows = loadAdapterRows(this.sourceRoot, this.harness);
+    this.rows = loadAdapterRows(this.source.realRoot, this.harness);
   }
 
   private validateHome(): void {
@@ -310,8 +318,20 @@ export class Installer {
     return `${this.home}/${relative}`;
   }
 
+  private logicalSource(relative: string): string {
+    return `${this.source.logicalRoot}/${relative}`;
+  }
+
+  private realSource(relative: string): string {
+    return `${this.source.realRoot}/${relative}`;
+  }
+
   private adapterSource(relative: string): string {
-    return `${this.sourceRoot}/.swe-forge/adapters/${relative}`;
+    return this.logicalSource(`.swe-forge/adapters/${relative}`);
+  }
+
+  private canonicalDirectory(name: string): string {
+    return this.logicalSource(`.swe-forge/${name}`);
   }
 
   private buildManifestInventory(): readonly ManifestInventoryEntry[] {
@@ -331,12 +351,11 @@ export class Installer {
       });
     };
 
-    add("file", `${this.sourceRoot}/AGENTS.md`, `${destinationRoot}/AGENTS.md`);
-    add("file", `${this.sourceRoot}/SWE-FORGE.md`, `${destinationRoot}/SWE-FORGE.md`);
-    add("file", `${this.sourceRoot}/VERSION`, `${destinationRoot}/VERSION`);
-    for (const sourceDirectory of this.canonicalDirectories) {
-      const name = sourceDirectory.slice(sourceDirectory.lastIndexOf("/") + 1);
-      add("dir", sourceDirectory, `${destinationRoot}/.swe-forge/${name}`);
+    add("file", this.logicalSource("AGENTS.md"), `${destinationRoot}/AGENTS.md`);
+    add("file", this.logicalSource("SWE-FORGE.md"), `${destinationRoot}/SWE-FORGE.md`);
+    add("file", this.logicalSource("VERSION"), `${destinationRoot}/VERSION`);
+    for (const name of this.canonicalDirectories) {
+      add("dir", this.canonicalDirectory(name), `${destinationRoot}/.swe-forge/${name}`);
     }
 
     for (const row of this.rows) {
@@ -377,13 +396,12 @@ export class Installer {
   }
 
   private preflightCanonical(destinationRoot: string): void {
-    this.preflightFile(`${this.sourceRoot}/AGENTS.md`, `${destinationRoot}/AGENTS.md`);
-    this.preflightFile(`${this.sourceRoot}/SWE-FORGE.md`, `${destinationRoot}/SWE-FORGE.md`);
-    this.preflightFile(`${this.sourceRoot}/VERSION`, `${destinationRoot}/VERSION`);
+    this.preflightFile(this.logicalSource("AGENTS.md"), `${destinationRoot}/AGENTS.md`);
+    this.preflightFile(this.logicalSource("SWE-FORGE.md"), `${destinationRoot}/SWE-FORGE.md`);
+    this.preflightFile(this.logicalSource("VERSION"), `${destinationRoot}/VERSION`);
     this.preflightContainer(`${destinationRoot}/.swe-forge`);
-    for (const sourceDirectory of this.canonicalDirectories) {
-      const name = sourceDirectory.slice(sourceDirectory.lastIndexOf("/") + 1);
-      this.preflightDirectoryLink(sourceDirectory, `${destinationRoot}/.swe-forge/${name}`);
+    for (const name of this.canonicalDirectories) {
+      this.preflightDirectoryLink(this.canonicalDirectory(name), `${destinationRoot}/.swe-forge/${name}`);
     }
   }
 
@@ -472,13 +490,12 @@ export class Installer {
   }
 
   private installCanonical(destinationRoot: string): void {
-    this.installFile(`${this.sourceRoot}/AGENTS.md`, `${destinationRoot}/AGENTS.md`);
-    this.installFile(`${this.sourceRoot}/SWE-FORGE.md`, `${destinationRoot}/SWE-FORGE.md`);
-    this.installFile(`${this.sourceRoot}/VERSION`, `${destinationRoot}/VERSION`);
+    this.installFile(this.logicalSource("AGENTS.md"), `${destinationRoot}/AGENTS.md`);
+    this.installFile(this.logicalSource("SWE-FORGE.md"), `${destinationRoot}/SWE-FORGE.md`);
+    this.installFile(this.logicalSource("VERSION"), `${destinationRoot}/VERSION`);
     this.installDirectoryContainer(`${destinationRoot}/.swe-forge`);
-    for (const sourceDirectory of this.canonicalDirectories) {
-      const name = sourceDirectory.slice(sourceDirectory.lastIndexOf("/") + 1);
-      this.installDirectoryLink(sourceDirectory, `${destinationRoot}/.swe-forge/${name}`);
+    for (const name of this.canonicalDirectories) {
+      this.installDirectoryLink(this.canonicalDirectory(name), `${destinationRoot}/.swe-forge/${name}`);
     }
   }
 
@@ -515,17 +532,16 @@ export class Installer {
   }
 
   private verifyCanonical(destinationRoot: string): void {
-    this.verifyFile(`${this.sourceRoot}/AGENTS.md`, `${destinationRoot}/AGENTS.md`);
-    this.verifyFile(`${this.sourceRoot}/SWE-FORGE.md`, `${destinationRoot}/SWE-FORGE.md`);
-    this.verifyFile(`${this.sourceRoot}/VERSION`, `${destinationRoot}/VERSION`);
+    this.verifyFile(this.logicalSource("AGENTS.md"), `${destinationRoot}/AGENTS.md`);
+    this.verifyFile(this.logicalSource("SWE-FORGE.md"), `${destinationRoot}/SWE-FORGE.md`);
+    this.verifyFile(this.logicalSource("VERSION"), `${destinationRoot}/VERSION`);
     const supportRoot = `${destinationRoot}/.swe-forge`;
     if (!pathExists(supportRoot, this.fileSystem) || !isRealDirectory(supportRoot, this.fileSystem)) {
       this.verifyFailure(`${supportRoot} must be a real directory`);
       return;
     }
-    for (const sourceDirectory of this.canonicalDirectories) {
-      const name = sourceDirectory.slice(sourceDirectory.lastIndexOf("/") + 1);
-      this.verifyDirectoryMapping(sourceDirectory, `${supportRoot}/${name}`);
+    for (const name of this.canonicalDirectories) {
+      this.verifyDirectoryMapping(this.canonicalDirectory(name), `${supportRoot}/${name}`);
     }
   }
 
@@ -547,7 +563,7 @@ export class Installer {
 
   private sourceVersion(): string {
     try {
-      const contents = this.fileSystem.readFile(`${this.sourceRoot}/VERSION`);
+      const contents = this.fileSystem.readFile(this.realSource("VERSION"));
       const firstLine = contents.split("\n")[0] ?? "";
       return firstLine.length === 0 ? "unknown" : firstLine;
     } catch {
@@ -556,19 +572,19 @@ export class Installer {
   }
 
   private sourceCommit(): string {
-    const result = runCommand(["git", "-C", this.sourceRoot, "rev-parse", "--short", "HEAD"]);
+    const result = runCommand(["git", "-C", this.source.realRoot, "rev-parse", "--short", "HEAD"]);
     if (result.exitCode !== 0) return "unknown";
     const commit = stripTrailingNewlines(result.stdout);
     return commit.length === 0 ? "unknown" : commit;
   }
 
   private sourceTreeState(): "clean" | "dirty" {
-    const diff = runCommand(["git", "-C", this.sourceRoot, "diff", "--quiet", "--ignore-submodules", "--"]);
+    const diff = runCommand(["git", "-C", this.source.realRoot, "diff", "--quiet", "--ignore-submodules", "--"]);
     if (diff.exitCode !== 0) return "dirty";
     const status = runCommand([
       "git",
       "-C",
-      this.sourceRoot,
+      this.source.realRoot,
       "status",
       "--porcelain=v1",
       "--untracked-files=all",
@@ -578,13 +594,13 @@ export class Installer {
 
   private printVersion(): void {
     this.info(`SWE Forge version: ${this.sourceVersion()}`);
-    this.info(`source: ${this.sourceRoot}`);
+    this.info(`source: ${this.source.logicalRoot}`);
     this.info(`commit: ${this.sourceCommit()}`);
     this.info(`worktree: ${this.sourceTreeState()}`);
   }
 
   private statusRequested(): boolean {
-    this.info(`source: ${this.sourceRoot}`);
+    this.info(`source: ${this.source.logicalRoot}`);
     this.info(`version: ${this.sourceVersion()}`);
     this.info(`commit: ${this.sourceCommit()}`);
     this.info(`source state: ${this.sourceTreeState()}`);
@@ -701,7 +717,7 @@ export class Installer {
     if (!this.verifyRequested()) throw new Error("installation completed but verification failed");
     writeManifest({
       paths: this.requirePaths(),
-      sourceRoot: this.sourceRoot,
+      sourceRoot: this.source.logicalRoot,
       sourceVersion: this.sourceVersion(),
       sourceCommit: this.sourceCommit(),
       harness: this.harness,
@@ -710,7 +726,7 @@ export class Installer {
       transaction: this.transaction,
     });
     this.transaction.active = false;
-    this.info(`source: ${this.sourceRoot}`);
+    this.info(`source: ${this.source.logicalRoot}`);
     this.info("installation: user harness configuration");
     this.info(`home: ${this.home}`);
     this.info(`manifest: ${this.requirePaths().path}`);
@@ -746,7 +762,7 @@ export class Installer {
     if (!this.verifyRequested()) throw new Error("updated installation failed verification");
     writeManifest({
       paths: this.requirePaths(),
-      sourceRoot: this.sourceRoot,
+      sourceRoot: this.source.logicalRoot,
       sourceVersion: this.sourceVersion(),
       sourceCommit: this.sourceCommit(),
       harness: this.harness,

@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { InstallSignal, nativeInstallFileSystem, type InstallFileSystem } from "../src/install/filesystem";
 import { Installer, runInstaller } from "../src/install/installer";
+import { checkoutInstallSource, releaseInstallSource } from "../src/install/source";
 
 const root = resolve(import.meta.dir, "..");
 const publicInstaller = join(root, "scripts", "swe-forge");
@@ -221,6 +222,39 @@ function assertProjection(home: string, harness: (typeof harnesses)[number]): vo
   }
   assertSupportTree(support);
 }
+
+test("install sources separate release projection and real roots", () => {
+  const fixtureRoot = makeRoot("swe-forge-install-source-");
+  try {
+    const realRoot = join(fixtureRoot, "versions", "1.2.3", "canonical");
+    mkdirSync(realRoot, { recursive: true });
+    const logicalRoot = join(fixtureRoot, "current", "canonical");
+    mkdirSync(join(fixtureRoot, "current"), { recursive: true });
+    symlinkSync(realRoot, logicalRoot);
+
+    const release = releaseInstallSource(logicalRoot, realRoot);
+    expect(release).toEqual({
+      mode: "release",
+      logicalRoot,
+      realRoot: realpathSync(realRoot),
+    });
+    expect(realpathSync(release.logicalRoot)).toBe(release.realRoot);
+    expect(release.logicalRoot).not.toBe(release.realRoot);
+    expect(new Installer({ source: release }).source).toEqual(release);
+
+    const checkoutAlias = join(fixtureRoot, "checkout-alias");
+    symlinkSync(realRoot, checkoutAlias);
+    const checkout = checkoutInstallSource(checkoutAlias);
+    expect(checkout).toEqual({
+      mode: "checkout",
+      logicalRoot: realpathSync(realRoot),
+      realRoot: realpathSync(realRoot),
+    });
+    expect(new Installer({ sourceRoot: checkoutAlias }).source).toEqual(checkout);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
 
 test("public installer preserves lifecycle for every registered harness", () => {
   const fixtureRoot = makeRoot("swe-forge-installer-lifecycle-");
