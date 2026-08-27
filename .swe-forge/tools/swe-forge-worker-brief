@@ -1,10 +1,15 @@
 #!/bin/sh
 
-# Compatibility entrypoint for the typed worker-brief validator and inspector.
-# Keep this established executable path stable for adapters and installations.
+# Release payloads place the compiled executable beside the .swe-forge tree.
+# Source checkouts retain the direct Bun/TypeScript development path.
 
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
+STANDALONE=$SCRIPT_DIR/../../swe-forge
+if [ -x "$STANDALONE" ]; then
+  exec "$STANDALONE" internal worker-brief "$@"
+fi
+
 ROOT=$(CDPATH= cd "$SCRIPT_DIR/../.." && pwd -P)
 exec bun "$ROOT/src/core/worker/brief-cli.ts" "$@"

@@ -150,6 +150,10 @@ export async function buildStandalone(): Promise<{
   mkdirSync(standaloneBuildDirectory, { recursive: true });
   rmSync(standaloneOutputPath, { force: true });
   const assets = enumerateReleasePayload(root);
+  // Bun 1.4.0's native compile.assets collides on repeated basenames when
+  // given the inventory's source files. A staged directory preserves paths
+  // only by adding a copied tree and runtime prefix, so static file imports
+  // remain the smaller exact-inventory implementation.
   writeFileSync(generatedAssetsPath, renderEmbeddedAssetsModule(assets, generatedAssetsPath));
   writeFileSync(entryPath, renderEntryModule(entryPath, generatedAssetsPath, root));
 

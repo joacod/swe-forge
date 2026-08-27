@@ -1,14 +1,34 @@
 import type { EmbeddedPayload } from "./embedded-payload";
+import { runEvidenceCli } from "../core/evidence/cli";
+import { runWorkerBriefCli } from "../core/worker/brief-cli";
+import { runWorkerResultCli } from "../core/worker/result-cli";
+import { runInvocationCli } from "../invocation-cli";
+import { runStateCli } from "../state-cli";
 
 const USAGE = `Usage:
   swe-forge version
   swe-forge payload [inspect]
   swe-forge payload read PATH
+  swe-forge internal invocation [ARGS...]
+  swe-forge internal state [ARGS...]
+  swe-forge internal gate [ARGS...]
+  swe-forge internal worker-brief [ARGS...]
+  swe-forge internal worker-result [ARGS...]
 
 The standalone executable reports its version from the embedded release payload.
-The payload commands are read-only inspection; installation remains a
-source-checkout operation.
+The payload commands are read-only inspection; internal commands expose the
+canonical typed tool ports used by release-mode compatibility wrappers.
 `;
+
+type InternalRunner = (args: readonly string[]) => number | Promise<number>;
+
+const INTERNAL_RUNNERS: Readonly<Record<string, InternalRunner>> = {
+  invocation: runInvocationCli,
+  state: runStateCli,
+  gate: runEvidenceCli,
+  "worker-brief": runWorkerBriefCli,
+  "worker-result": runWorkerResultCli,
+};
 
 function fail(message: string): number {
   process.stderr.write(`FAIL: ${message}\n`);
@@ -46,6 +66,13 @@ async function readPayloadAsset(payload: EmbeddedPayload, path: string): Promise
   return 0;
 }
 
+async function runInternal(args: readonly string[]): Promise<number> {
+  const name = args[0];
+  if (name === undefined) return fail("internal requires a command");
+  if (!Object.hasOwn(INTERNAL_RUNNERS, name)) return fail(`unknown internal command: ${name}`);
+  return await INTERNAL_RUNNERS[name](args.slice(1));
+}
+
 export async function runStandaloneCli(
   args: readonly string[] = process.argv.slice(2),
   payload: EmbeddedPayload,
@@ -68,6 +95,8 @@ export async function runStandaloneCli(
           return await readPayloadAsset(payload, args[2]!);
         }
         return fail("use payload [inspect] or payload read PATH");
+      case "internal":
+        return await runInternal(args.slice(1));
       default:
         return fail(`unknown command: ${args[0]}`);
     }
