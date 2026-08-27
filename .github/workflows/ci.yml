@@ -26,6 +26,23 @@ jobs:
           # Formatting checks compare commits, not the clean checkout.
           fetch-depth: 0
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check dependency policy
+        run: bun run check:dependencies
+
+      - name: Type-check TypeScript
+        run: bun run typecheck
+
+      - name: Run Bun tests
+        run: bun run test
+
       - name: Run canonical validation
         run: ./scripts/validate-swe-forge core invocation installer workers
 

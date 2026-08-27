@@ -27,6 +27,16 @@ Keep Forge opinionated for this repository and author. Stay harness-agnostic
 where that has real value, but do not add abstractions for hypothetical
 consumers. Forkability is fine.
 
+## Dependency policy
+
+- Runtime package dependencies are zero by default. Before adding one,
+  demonstrate why Bun/Node built-ins or a small local implementation are
+  insufficient; convenience alone is not justification.
+- Any exception must account for security, maintenance, transitive dependency,
+  and lifecycle-script cost.
+- Development dependencies stay minimal, exact-pinned, and justified by
+  concrete correctness or tooling value.
+
 ## Maintaining SWE Forge
 
 - Support only the current run-state schema. Change producers, consumers,
