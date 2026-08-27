@@ -30,13 +30,17 @@ Run from the project root. No arguments keeps the full fixture bundle:
 
 Use `--list` or `--plan` to inspect selection. Groups are `core`, `invocation`,
 `evidence`, `installer`, `pi`, `omp`, `workers`, and `release`; `full` selects
-all non-release groups. Use `full` for CI, high-risk cross-cutting work, or
-release preparation. `git diff --check` is separate.
+all non-release groups. Automatic PR CI uses the focused canonical groups
+`core invocation installer workers` on Ubuntu rather than every harness or
+operating system. Version tags additionally run `release` readiness. Use
+`full` for high-risk cross-cutting work or explicit complete validation; use
+`release` for release preparation. `git diff --check` is separate.
 
-The local Pi fixture may skip when Node cannot execute TypeScript; CI pins Node
-`22.19.0` and fails that condition. Documentation-only changes still need
-structural checks and final diff review. Changes to gates, state validators,
-conformance, release checks, installer, or registry need their focused fixtures.
+The Pi and OMP fixtures are opt-in local checks for adapter changes, not
+automatic PR gates. They may skip when Node cannot execute TypeScript.
+Documentation-only changes still need structural checks and final diff review.
+Changes to gates, state validators, conformance, release checks, installer, or
+registry need their focused fixtures.
 
 ## Pull requests
 

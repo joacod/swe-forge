@@ -75,10 +75,12 @@ does not justify a tier change.
 
 ## Core validation
 
-The dependency-free core runs on Ubuntu and macOS in CI: shell syntax,
-structural checks, evidence, release-readiness preparation, and diff formatting.
-The Pi runtime job uses Node `22.19.0`; an older local Node may skip the
-TypeScript fixture. Windows is not a claimed target.
+Automatic CI runs the canonical validation groups on Ubuntu: shell syntax,
+structural checks, invocation, installer, worker contracts, and diff formatting.
+Release tags also run release-readiness validation. Harness-specific runtime
+fixtures and operating-system portability checks are not automatic CI gates;
+run them explicitly when their adapter or portability question is in scope.
+Windows is not a claimed target.
 
 For a new harness release, run repository checks, install its projection in a
 fake home, run `status` and `doctor`, and invoke a small explicit

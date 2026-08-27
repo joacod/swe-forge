@@ -48,6 +48,11 @@ consumers. Forkability is fine.
   delegation, or harness boundaries, read `docs/architecture.md`. For adapter
   work, also read `docs/adding-a-harness.md`, `.swe-forge/adapters/README.md`,
   and the target adapter README.
+- For CI work, treat `.github/workflows/ci.yml` and
+  `scripts/validate-swe-forge --list`/`--plan` as the sources of truth. For
+  non-CI work, do not inspect the workflow or run its unrelated groups. Do not
+  infer automatic CI coverage from supported harnesses or operating systems,
+  or run every harness/OS group without a ticket-specific reason.
 - Keep canonical routing harness-agnostic: it selects topology; adapters
   translate host capabilities without selecting topology.
 - Keep harness APIs, paths, lifecycle hooks, approvals, task mechanisms,

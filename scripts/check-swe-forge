@@ -85,19 +85,31 @@ for executable in \
 done
 
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail 'missing GitHub Actions CI workflow'
+ci_contains '  push:'
+ci_contains '      - main'
+ci_contains "      - 'v*'"
+ci_contains '  pull_request:'
+ci_contains '  workflow_dispatch:'
 ci_contains 'fetch-depth: 0'
 ci_contains 'github.event.pull_request.base.sha'
 ci_contains 'git diff --check "$BASE_SHA...$CURRENT_SHA"'
-ci_contains './scripts/validate-swe-forge core invocation evidence installer workers'
-ci_contains './scripts/validate-swe-forge pi'
-ci_contains './scripts/validate-swe-forge omp'
-ci_contains './scripts/validate-swe-forge evidence installer'
-ci_contains './scripts/validate-swe-forge full'
-ci_contains './scripts/validate-swe-forge full release'
-for job in pr-validation main-validation pi-runtime omp-runtime macos-portability release-validation; do
+ci_contains './scripts/validate-swe-forge core invocation installer workers'
+ci_contains './scripts/validate-swe-forge release'
+for job in validation; do
   ci_job_exists "$job"
 done
-ci_contains 'node-version: 22.19.0'
+
+ci_absent() {
+  needle=$1
+  if grep -F -- "$needle" "$ROOT/.github/workflows/ci.yml" >/dev/null 2>&1; then
+    fail ".github/workflows/ci.yml retains removed CI structure: $needle"
+  fi
+}
+
+ci_absent 'pi-runtime:'
+ci_absent 'omp-runtime:'
+ci_absent 'macos-portability:'
+ci_absent 'node-version:'
 validate_registry
 
 for role in orchestrator researcher architect implementer reviewer debugger test-engineer \
@@ -152,6 +164,6 @@ for required_file in \
 done
 agent_config=$ROOT/.swe-forge/adapters/shared/agent-skill/swe-forge/agents/openai.yaml
 [ -f "$agent_config" ] || fail 'missing agent invocation configuration'
-grep -Fx 'allow_implicit_invocation: false' "$agent_config" >/dev/null 2>&1 || \
+grep -Fx '  allow_implicit_invocation: false' "$agent_config" >/dev/null 2>&1 || \
   fail 'agent invocation configuration must disable implicit invocation'
 printf '%s\n' 'PASS: SWE Forge structural checks'
