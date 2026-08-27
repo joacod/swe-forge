@@ -6,27 +6,47 @@ delivery checkout and never merges automatically.
 
 ## Use
 
-Install a harness projection from a stable checkout:
+### Standalone release executable
+
+A compiled release executable carries the canonical workflow, adapters, and
+runtime tools. It does not need a repository checkout, Bun, Node.js, or Python
+to install or run the installed canonical tools:
+
+```sh
+./swe-forge install <harness>
+./swe-forge verify <harness>
+./swe-forge update
+```
+
+`install` validates the embedded payload, publishes its immutable version under
+the XDG data root (or `$HOME/.local/share`), activates the global
+`swe-forge/current` pointer, and installs the selected harness projection.
+`update` activates the release represented by the running executable and
+reconciles every managed harness manifest. Harness projections and manifests
+always target `swe-forge/current/canonical`; they never store a direct
+`versions/<version>` target.
+
+### Source checkout
+
+The source-checkout wrapper is intentionally checkout-oriented. It requires
+Bun and delegates to the canonical TypeScript installer at
+`src/install/cli.ts`:
 
 ```sh
 scripts/swe-forge install <harness>
 scripts/swe-forge verify <harness>
+scripts/swe-forge update <harness>
 ```
 
-The source-checkout wrapper requires Bun and delegates to the canonical
-TypeScript installer at `src/install/cli.ts`.
+Source-checkout updates remain per-harness. They do not activate managed
+standalone releases.
 
 For artifact development, `bun run build:standalone` creates
-`build/standalone/swe-forge`, a Bun executable carrying a deterministic embedded
-release payload. Run `build/standalone/swe-forge payload inspect` to inspect its
-embedded paths. It is not yet the public installation path: source-checkout
-installation remains authoritative. `v0.1.0-alpha.1` is planned, not yet
-published; use a development checkout until then.
-
-`build/standalone/swe-forge payload materialize --activate` publishes that
-embedded canonical payload under the XDG data root (or `$HOME/.local/share`)
-and switches its managed `current` pointer. It does not install harness
-projections.
+`build/standalone/swe-forge`, a Bun executable carrying a deterministic
+embedded release payload. `./swe-forge payload materialize --activate` is the
+low-level payload publication command; it does not install harness projections.
+`v0.1.0-alpha.1` is planned, not yet published; use a development checkout
+until the separate release publication task completes.
 
 Invoke it with a ticket:
 

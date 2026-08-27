@@ -192,23 +192,40 @@ test("creates and switches the stable current pointer only when activated", asyn
     const firstPayload = makePayload(fixtureRoot, "4.0.0");
     const secondPayload = makePayload(fixtureRoot, "4.1.0");
     const layout = managedReleaseLayout(dataRoot);
+    const firstRuntime = join(fixtureRoot, "swe-forge-runtime-4.0.0");
+    const secondRuntime = join(fixtureRoot, "swe-forge-runtime-4.1.0");
 
-    const first = await materializeEmbeddedRelease(firstPayload, { dataRoot, activate: true });
+    const first = await materializeEmbeddedRelease(firstPayload, {
+      dataRoot,
+      activate: true,
+      runtimePath: firstRuntime,
+    });
     expect(first.activated).toBe(true);
     expect(first.activeVersion).toBe("4.0.0");
     expect(readlinkSync(layout.current)).toBe("versions/4.0.0");
     expect(realpathSync(layout.current)).toBe(realpathSync(first.versionPath));
+    expect(readlinkSync(join(dataRoot, "swe-forge-runtime"))).toBe(firstRuntime);
 
-    const second = await materializeEmbeddedRelease(secondPayload, { dataRoot, activate: true });
+    const second = await materializeEmbeddedRelease(secondPayload, {
+      dataRoot,
+      activate: true,
+      runtimePath: secondRuntime,
+    });
     expect(second.published).toBe(true);
     expect(second.activated).toBe(true);
     expect(readlinkSync(layout.current)).toBe("versions/4.1.0");
     expect(realpathSync(layout.current)).toBe(realpathSync(second.versionPath));
+    expect(readlinkSync(join(dataRoot, "swe-forge-runtime"))).toBe(secondRuntime);
 
-    const switchedBack = await materializeEmbeddedRelease(firstPayload, { dataRoot, activate: true });
+    const switchedBack = await materializeEmbeddedRelease(firstPayload, {
+      dataRoot,
+      activate: true,
+      runtimePath: firstRuntime,
+    });
     expect(switchedBack.reused).toBe(true);
     expect(switchedBack.activated).toBe(true);
     expect(readlinkSync(layout.current)).toBe("versions/4.0.0");
+    expect(readlinkSync(join(dataRoot, "swe-forge-runtime"))).toBe(firstRuntime);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

@@ -1,15 +1,26 @@
 #!/bin/sh
 
-# Release payloads place the compiled executable beside the .swe-forge tree.
-# Source checkouts retain the direct Bun/TypeScript development path.
+# Managed release payloads use the active standalone runtime pointer. Source
+# checkouts retain the direct Bun/TypeScript development path.
 
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
-STANDALONE=$SCRIPT_DIR/../../swe-forge
-if [ -x "$STANDALONE" ]; then
-  exec "$STANDALONE" internal gate "$@"
+if [ -n "${XDG_DATA_HOME:-}" ]; then
+  DATA_ROOT=$XDG_DATA_HOME
+elif [ -n "${HOME:-}" ]; then
+  DATA_ROOT=$HOME/.local/share
+else
+  DATA_ROOT=
 fi
+case "$SCRIPT_DIR" in
+  "$DATA_ROOT"/swe-forge/versions/*/canonical/.swe-forge/tools)
+    STANDALONE=$DATA_ROOT/swe-forge-runtime
+    if [ -x "$STANDALONE" ]; then
+      exec "$STANDALONE" internal gate "$@"
+    fi
+    ;;
+esac
 
 ROOT=$(CDPATH= cd "$SCRIPT_DIR/../.." && pwd -P)
 exec bun "$ROOT/src/core/evidence/cli.ts" "$@"

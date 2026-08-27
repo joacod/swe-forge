@@ -1,6 +1,7 @@
 export interface EmbeddedAsset {
   readonly path: string;
   readonly embeddedPath: string;
+  readonly mode?: number;
 }
 
 const VERSION_PATH = "VERSION";
@@ -33,7 +34,17 @@ export class EmbeddedPayload {
     const copied = assets.map((asset) => {
       assertLogicalPath(asset.path);
       if (asset.embeddedPath.length === 0) throw new Error(`embedded asset has no source: ${asset.path}`);
-      return Object.freeze({ path: asset.path, embeddedPath: asset.embeddedPath });
+      if (
+        asset.mode !== undefined &&
+        (!Number.isInteger(asset.mode) || asset.mode < 0 || asset.mode > 0o777)
+      ) {
+        throw new Error(`embedded asset has an invalid mode: ${asset.path}`);
+      }
+      return Object.freeze({
+        path: asset.path,
+        embeddedPath: asset.embeddedPath,
+        ...(asset.mode === undefined ? {} : { mode: asset.mode }),
+      });
     });
     const byPath = new Map<string, EmbeddedAsset>();
     const embeddedPaths = new Set<string>();
@@ -60,6 +71,12 @@ export class EmbeddedPayload {
 
   public listPaths(): readonly string[] {
     return this.assets.map((asset) => asset.path);
+  }
+
+  public mode(path: string): number | undefined {
+    const asset = this.assetsByPath.get(path);
+    if (asset === undefined) throw new Error(`embedded asset is not present: ${path}`);
+    return asset.mode;
   }
 
   public async read(path: string): Promise<Uint8Array> {
