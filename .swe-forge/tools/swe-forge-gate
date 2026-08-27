@@ -401,9 +401,9 @@ check_final_validations() {
   blockers=
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    result=$(latest_status "$name" "$wanted_head" yes)
-    status=${result%%"$TAB"*}
-    rest=${result#*"$TAB"}
+    validation_record=$(latest_status "$name" "$wanted_head" yes)
+    status=${validation_record%%"$TAB"*}
+    rest=${validation_record#*"$TAB"}
     reason=${rest%%"$TAB"*}
     requirement=${rest#*"$TAB"}
     [ "$requirement" != informational ] || continue
