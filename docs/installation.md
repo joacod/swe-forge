@@ -21,7 +21,7 @@ scripts/swe-forge update <harness>
 scripts/swe-forge uninstall <harness>
 ```
 
-Install Python 3 for delegated workers; `SOLO` does not need it. Harnesses are
+Install Bun for the typed canonical tools and delegated workers. Harnesses are
 `opencode`, `omp`, `claude`, `codex`, `cursor`, and `pi`. Links reflect reviewed
 source changes. See [compatibility](compatibility.md) for tiers and evidence.
 
