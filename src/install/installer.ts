@@ -64,13 +64,13 @@ interface ProcessResult {
 }
 
 const USAGE = `Usage:
-  scripts/swe-forge version
-  scripts/swe-forge install <harness> [options]
-  scripts/swe-forge verify <harness>
-  scripts/swe-forge status <harness>
-  scripts/swe-forge doctor <harness>
-  scripts/swe-forge update <harness> [options]
-  scripts/swe-forge uninstall <harness>
+  swe-forge version
+  swe-forge install <harness> [options]
+  swe-forge verify <harness>
+  swe-forge status <harness>
+  swe-forge doctor <harness>
+  swe-forge update <harness> [options]
+  swe-forge uninstall <harness>
 
 Options:
   --dry-run           Plan install/update without writing anything.
@@ -148,7 +148,7 @@ export class Installer {
     try {
       this.transaction.rollback();
     } catch {
-      // Rollback is best effort, matching the shell implementation.
+      // Rollback is best effort.
     }
     this.transaction.active = false;
   }

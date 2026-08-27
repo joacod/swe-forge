@@ -54,7 +54,8 @@ function splitRegistryLine(line: string): readonly [string, string, string, stri
 function registryLines(path: string): readonly string[] {
   const contents = readFileSync(path, "utf8");
   const lines = contents.split("\n");
-  return lines.slice(0, -1);
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
 }
 
 function sourceExistsAsExpected(path: string, kind: AdapterKind): boolean {
@@ -64,6 +65,44 @@ function sourceExistsAsExpected(path: string, kind: AdapterKind): boolean {
   } catch {
     return false;
   }
+}
+
+function parseAdapterRows(sourceRoot: string, registryPath: string): readonly AdapterRow[] {
+  const rows: AdapterRow[] = [];
+  let lineNumber = 0;
+
+  for (const line of registryLines(registryPath)) {
+    lineNumber += 1;
+    const [harness, kind, source, destination, support] = splitRegistryLine(line);
+    if (harness === "" || harness.startsWith("#")) continue;
+
+    if (!registryRowIsValid(harness, kind, source, destination, support)) {
+      throw new Error(`invalid adapter registry row at line ${lineNumber}`);
+    }
+    const adapterKind: AdapterKind = kind === "file" ? "file" : "tree";
+    const sourcePath = join(sourceRoot, ".swe-forge", "adapters", source);
+    if (!sourceExistsAsExpected(sourcePath, adapterKind)) {
+      throw new Error(
+        `adapter registry ${kind} source is missing at line ${lineNumber}: ${source}`,
+      );
+    }
+    rows.push({
+      lineNumber,
+      harness,
+      kind: adapterKind,
+      source,
+      destination,
+      support,
+    });
+  }
+  return rows;
+}
+
+export function validateAdapterRegistry(
+  sourceRoot: string,
+  registryPath = join(sourceRoot, ".swe-forge", "adapters", "registry.tsv"),
+): void {
+  parseAdapterRows(sourceRoot, registryPath);
 }
 
 export function registeredHarnesses(registryPath: string): ReadonlySet<string> {
@@ -81,38 +120,9 @@ export function loadAdapterRows(
   harness: string,
   registryPath = join(sourceRoot, ".swe-forge", "adapters", "registry.tsv"),
 ): readonly AdapterRow[] {
-  const selected: AdapterRow[] = [];
-  let lineNumber = 0;
-
-  for (const line of registryLines(registryPath)) {
-    lineNumber += 1;
-    const [rowHarness, kind, source, destination, support] = splitRegistryLine(line);
-    if (rowHarness === "" || rowHarness.startsWith("#")) continue;
-
-    if (!registryRowIsValid(rowHarness, kind, source, destination, support)) {
-      throw new Error(`invalid adapter registry row at line ${lineNumber}`);
-    }
-    const adapterKind: AdapterKind = kind === "file" ? "file" : "tree";
-
-    const sourcePath = join(sourceRoot, ".swe-forge", "adapters", source);
-    if (!sourceExistsAsExpected(sourcePath, adapterKind)) {
-      throw new Error(
-        `adapter registry ${kind} source is missing at line ${lineNumber}: ${source}`,
-      );
-    }
-
-    if (rowHarness === harness) {
-      selected.push({
-        lineNumber,
-        harness: rowHarness,
-        kind: adapterKind,
-        source,
-        destination,
-        support,
-      });
-    }
-  }
-
+  const selected = parseAdapterRows(sourceRoot, registryPath).filter(
+    (row) => row.harness === harness,
+  );
   if (selected.length === 0) {
     throw new Error(`no adapter targets registered for harness: ${harness}`);
   }

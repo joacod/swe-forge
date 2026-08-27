@@ -8,8 +8,8 @@ separate.
 
 ## Commands
 
-The dependency-free installer uses the user's home directory and handles one
-harness per invocation:
+The Bun-based installer has no runtime package dependencies, uses the user's
+home directory, and handles one harness per invocation:
 
 ```bash
 scripts/swe-forge version
@@ -21,9 +21,11 @@ scripts/swe-forge update <harness>
 scripts/swe-forge uninstall <harness>
 ```
 
-Install Bun for the typed canonical tools and delegated workers. Harnesses are
-`opencode`, `omp`, `claude`, `codex`, `cursor`, and `pi`. Links reflect reviewed
-source changes. See [compatibility](compatibility.md) for tiers and evidence.
+Install Bun for the canonical TypeScript CLI, internal tools, and delegated
+workers. `scripts/swe-forge` is a thin source-checkout wrapper around
+`src/install/cli.ts`. Harnesses are `opencode`, `omp`, `claude`, `codex`,
+`cursor`, and `pi`. Links reflect reviewed source changes. See
+[compatibility](compatibility.md) for tiers and evidence.
 
 ## Source checkout
 
@@ -39,6 +41,11 @@ cd ~/tools/swe-forge
 Before publication, use a development clone; do not claim the tag is available.
 A personal checkout may follow `main`, but public installations should use a
 release tag.
+
+The source-checkout wrapper requires Bun and delegates installer behavior to
+the canonical TypeScript entrypoint at `src/install/cli.ts`. Direct invocation
+of that entrypoint is useful for development checks; the wrapper remains the
+source-checkout command shown below.
 
 Install each desired harness explicitly:
 
@@ -195,12 +202,12 @@ state outside the repository or under ignored `.swe-forge/runs/`.
 
 ## Filesystem safety
 
-The installer rejects symlinked directories beneath the user home, serializes
-cooperating installs with a home-level lock, and rolls back links/directories it
-created after failure. It does not remove or restore pre-existing entries;
-conflicts stop before links are written.
+The installer uses Bun/Node filesystem APIs and rejects symlinked directories
+beneath the user home, serializes cooperating installs with a home-level lock,
+and rolls back links/directories it created after failure. It does not remove
+or restore pre-existing entries; conflicts stop before links are written.
 
-Portable POSIX shell cannot provide descriptor-relative no-follow operations.
-Do not install under a hierarchy concurrently controlled by an untrusted
-process. Remove a stale `.swe-forge-install.lock` only after confirming no
-installation is active.
+Path-based filesystem operations cannot provide descriptor-relative no-follow
+semantics. Do not install under a hierarchy concurrently controlled by an
+untrusted process. Remove a stale `.swe-forge-install.lock` only after
+confirming no installation is active.

@@ -241,7 +241,7 @@ export function writeManifest(input: ManifestWriteInput): void {
     try {
       fs.unlink(temporary);
     } catch {
-      // The shell implementation also ignores cleanup failures here.
+      // Cleanup is best effort.
     }
     if (error instanceof InstallSignal) throw error;
     throw new Error("could not write managed installation manifest");

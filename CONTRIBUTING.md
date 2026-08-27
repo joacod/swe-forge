@@ -4,6 +4,14 @@ SWE Forge has a portable canonical core and asymmetric harness projections.
 Preserve that boundary. Support tiers describe maintenance/evidence, not
 semantic priority or parity.
 
+## Runtime prerequisite
+
+Install [Bun](https://bun.sh/) before running repository tools. The public
+`scripts/swe-forge` command is a thin source-checkout wrapper around the
+canonical TypeScript installer at `src/install/cli.ts`; Bun is also the runtime
+for the internal canonical tools and tests. Runtime package dependencies remain
+zero.
+
 ## Before editing
 
 - Read `AGENTS.md`; for canonical or boundary changes, also read
@@ -22,11 +30,19 @@ semantic priority or parity.
 Run from the project root. No arguments keeps the full fixture bundle:
 
 ```sh
-./scripts/validate-swe-forge
+bun install --frozen-lockfile
+bun run check:dependencies
+bun run typecheck
+bun test
+./scripts/swe-forge version
+./scripts/test-swe-forge
 ./scripts/validate-swe-forge core
-./scripts/validate-swe-forge evidence invocation
+./scripts/validate-swe-forge installer
 ./scripts/validate-swe-forge full release
 ```
+
+Use `./scripts/swe-forge` for source-checkout ergonomics or invoke
+`bun src/install/cli.ts ...` directly when checking the canonical installer.
 
 Use `--list` or `--plan` to inspect selection. Groups are `core`, `invocation`,
 `evidence`, `installer`, `pi`, `omp`, `workers`, and `release`; `full` selects

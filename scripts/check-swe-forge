@@ -21,33 +21,24 @@ ci_job_exists() {
     fail ".github/workflows/ci.yml is missing job: $job"
 }
 
-REGISTRY_VALIDATOR=$ROOT/scripts/lib/registry.sh
-[ -f "$REGISTRY_VALIDATOR" ] || fail 'missing adapter registry validator'
-. "$REGISTRY_VALIDATOR"
-
 validate_registry() {
-  line_number=0
-  while IFS='|' read -r harness kind source destination support; do
-    line_number=$((line_number + 1))
-    case "$harness" in
-      '')
-        [ -z "$kind$source$destination$support" ] || \
-          fail "invalid adapter registry row at line $line_number"
-        continue
-        ;;
-      \#*) continue ;;
-    esac
-    swe_forge_registry_row_is_valid "$harness" "$kind" "$source" "$destination" "$support" || \
-      fail "invalid adapter registry row at line $line_number"
-    case "$kind" in
-      file) [ -f "$ROOT/.swe-forge/adapters/$source" ] || fail "missing adapter registry file source at line $line_number" ;;
-      tree) [ -d "$ROOT/.swe-forge/adapters/$source" ] || fail "missing adapter registry tree source at line $line_number" ;;
-    esac
-  done <"$ROOT/.swe-forge/adapters/registry.tsv"
+  if ! (
+    CDPATH= cd "$ROOT"
+    bun -e '
+      import { validateAdapterRegistry } from "./src/install/registry.ts";
+      try {
+        validateAdapterRegistry(process.cwd());
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+    '
+  ); then
+    fail 'invalid adapter registry'
+  fi
 }
 
 sh -n \
-  "$ROOT/scripts/lib/registry.sh" \
   "$ROOT/scripts/swe-forge" \
   "$ROOT/scripts/check-swe-forge" \
   "$ROOT/scripts/test-swe-forge" \
@@ -72,7 +63,7 @@ sh -n \
   "$ROOT/.swe-forge/tools/swe-forge-worker-result"
 
 for executable in \
-  scripts/check-swe-forge scripts/validate-swe-forge scripts/test-swe-forge \
+  scripts/swe-forge scripts/check-swe-forge scripts/validate-swe-forge scripts/test-swe-forge \
   scripts/test-validate-swe-forge scripts/test-swe-forge-gate \
   scripts/test-swe-forge-pi scripts/test-swe-forge-omp \
   scripts/test-swe-forge-invocation scripts/test-swe-forge-briefing \
@@ -135,6 +126,7 @@ for required_file in \
   AGENTS.md \
   SWE-FORGE.md \
   README.md \
+  src/install/cli.ts \
   docs/architecture.md \
   docs/installation.md \
   .swe-forge/adapters/README.md \

@@ -224,7 +224,7 @@ export class InstallTransaction {
         try {
           this.fs.symlink(link.target, link.path);
         } catch {
-          // Rollback is best effort, matching the shell implementation.
+          // Rollback is best effort.
         }
       }
     }
@@ -237,7 +237,7 @@ export class InstallTransaction {
         this.fs.writeFile(this.manifestState.path, this.manifestState.contents);
         this.fs.chmod(this.manifestState.path, this.manifestState.mode);
       } catch {
-        // Rollback is best effort, matching the shell implementation.
+        // Rollback is best effort.
       }
     } else if (this.manifestState?.existed === false && this.manifestState.published) {
       this.removePath(this.manifestState.path);
@@ -261,7 +261,7 @@ export class InstallTransaction {
         const code = (error as { code?: string }).code;
         if (code === "ENOENT" || code === "ENOTDIR") return;
       }
-      // `rm -f` in the legacy implementation ignores unlink failures during rollback.
+      // Ignore cleanup failures during rollback.
     }
   }
 }

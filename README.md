@@ -13,6 +13,9 @@ scripts/swe-forge install <harness>
 scripts/swe-forge verify <harness>
 ```
 
+The source-checkout wrapper requires Bun and delegates to the canonical
+TypeScript installer at `src/install/cli.ts`.
+
 `v0.1.0-alpha.1` is planned, not yet published; use a development checkout
 until then.
 
