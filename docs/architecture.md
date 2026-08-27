@@ -57,6 +57,11 @@ Portable tools expose narrow ports for state inspection/selection, worker-brief
 validation/inspection, and worker-result schemas/validation. Bun is the runtime
 for the typed TypeScript ports; they do not maintain another serialization.
 Adapters consume these ports rather than parsing canonical representations.
+The repository validation coordinator follows the same boundary:
+`scripts/validate-swe-forge` is a thin shell entrypoint for
+`src/validation-cli.ts`, which owns group selection, check execution, and
+reporting. Shell remains for compatibility/bootstrap wrappers, concise
+structural or release checks, and black-box filesystem/Git/runtime fixtures.
 
 ## Candidate and state
 

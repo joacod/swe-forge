@@ -3,8 +3,8 @@
 set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
-GATE=$ROOT/scripts/swe-forge-gate
-STATE_TOOL=$ROOT/scripts/swe-forge-state
+GATE=$ROOT/.swe-forge/tools/swe-forge-gate
+STATE_TOOL=$ROOT/.swe-forge/tools/swe-forge-state
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-gate-test.XXXXXX")
 cleanup() { rm -rf "$TMP_ROOT"; }
 trap cleanup EXIT HUP INT TERM

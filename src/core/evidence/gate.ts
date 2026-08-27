@@ -30,18 +30,18 @@ import {
 import { runGit, runProcessToFile, stripTrailingNewlines } from "./process";
 
 export const usage = `Usage:
-  scripts/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
+  .swe-forge/tools/swe-forge-gate preflight --state DIR [--branch BRANCH] [--base REF]
     [--routing-preferred MODE] [--routing-current MODE]
     [--delivery-mode MODE]
-  scripts/swe-forge-gate validate --state DIR --name NAME
+  .swe-forge/tools/swe-forge-gate validate --state DIR --name NAME
     [--requirement required|conditional|informational] [--condition TEXT] [--final]
     -- COMMAND [ARGS...]
-  scripts/swe-forge-gate record-check-status --state DIR --name NAME
+  .swe-forge/tools/swe-forge-gate record-check-status --state DIR --name NAME
     [--requirement required|conditional|informational] [--condition TEXT]
     --status passed|failed|unavailable|not-applicable [--reason TEXT] [--final]
-  scripts/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED
+  .swe-forge/tools/swe-forge-gate review --state DIR --result PASS|CHANGES_REQUIRED
     --source SOURCE [--findings N] [--blocked-by ID...]
-  scripts/swe-forge-gate deliver-pr --state DIR
+  .swe-forge/tools/swe-forge-gate deliver-pr --state DIR
 
 The guard records validation and review evidence against Git HEAD. It never
 launches agents, controls external orchestration, pushes, creates a PR,

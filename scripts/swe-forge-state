@@ -1,4 +1,0 @@
-#!/bin/sh
-
-ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
-exec "$ROOT/.swe-forge/tools/swe-forge-state" "$@"

@@ -9,8 +9,8 @@ semantic priority or parity.
 Install [Bun](https://bun.sh/) before running repository tools. The public
 `scripts/swe-forge` command is a thin source-checkout wrapper around the
 canonical TypeScript installer at `src/install/cli.ts`; Bun is also the runtime
-for the internal canonical tools and tests. Runtime package dependencies remain
-zero.
+for the typed validation coordinator, internal canonical tools, and tests.
+Runtime package dependencies remain zero.
 
 ## Before editing
 
