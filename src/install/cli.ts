@@ -1,4 +1,4 @@
-// Internal parity entrypoint. The public installer remains scripts/swe-forge.
+// Canonical SWE Forge installer CLI entrypoint.
 import { runInstaller } from "./installer";
 
 if (import.meta.main) {

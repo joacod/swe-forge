@@ -331,7 +331,6 @@ run_named_check() {
   case "$check" in
     syntax)
       run_check "$label" syntax sh -n \
-        "$ROOT/scripts/lib/registry.sh" \
         "$ROOT/scripts/swe-forge" \
         "$ROOT/scripts/check-swe-forge" \
         "$ROOT/scripts/test-swe-forge" \

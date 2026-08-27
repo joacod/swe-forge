@@ -49,7 +49,9 @@ prepare() {
   require_text "$version" docs/compatibility.md
   require_text "scripts/swe-forge install" README.md
   require_text "scripts/swe-forge install" docs/installation.md
-  require_text "VERSION" scripts/swe-forge
+  require_text "bun" scripts/swe-forge
+  require_text "src/install/cli.ts" scripts/swe-forge
+  require_text "runInstaller" src/install/cli.ts
   require_text "v$version" "$notes"
   require_text "git clone --branch $expected_tag" "$notes"
   # A release candidate must not carry staged, unstaged, or untracked content.
