@@ -68,6 +68,7 @@ scenario records the observable outcome rather than repeating its procedure.
 | Trivial localized `SOLO` change | Review may be skipped with a recorded reason. | verification |
 | Committed candidate at a phase boundary | Consume current Git-HEAD-bound evidence; do not rerun unchanged broad validation. | verification |
 | PR creation completion boundary | After local gates and URL recording, report completion without awaiting or polling remote CI. | delivery/evidence |
+| Compact final report | Lead with status, PR/no-PR outcome, qualitative confidence, meaningful validation, review/repair, and residual risk; omit internal workflow details unless notable or requested. | SWE-FORGE.md |
 
 ## Authorization and routing
 

@@ -38,5 +38,9 @@ without evidence, or infer one delivery authorization from another. Follow
 
 ## Output
 
-Keep a concise run summary: scope decision, topology, acceptance, assumptions,
-tasks/results, validation, review, risks, delivery, and final status.
+The final user-facing result follows the compact contract in `SWE-FORGE.md`:
+status, PR or no-PR outcome, qualitative confidence, meaningful validation,
+review/repair result, and remaining risk. Keep topology, continuity/recovery,
+task/result, cleanup, and internal evidence details out of the normal result;
+include a short diagnostic only when one is notable or requested. Confidence
+is derived at report time and is not persisted or used as another gate.

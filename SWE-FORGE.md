@@ -186,12 +186,101 @@ awaited or polled.
 
 ## Final report
 
-Begin with a short plain human `Work summary`, then report:
+The normal final harness result is a concise, user-facing summary. Put the
+outcome first and use this shape for a successful PR:
 
-- final status and preferred/effective topology and delivery mode;
-- approach, changed files, assumptions, risks, and continuity/recovery facts;
-- testing decision, exact validation results, review/repair result, and any
-  skipped or unavailable checks; and
-- delivery, PR, cleanup, and remaining temporary-state status.
+```text
+Status: ACCEPTED
+PR: <url>
+Confidence: HIGH
+
+Validation:
+- <meaningful check>: passed
+
+Review:
+- PASS
+
+Remaining risk:
+- none
+```
+
+The report must:
+
+- preserve the deterministic status (`ACCEPTED`, `BLOCKED`, or `FAILED`);
+- include a PR URL only after the PR has been created and recorded;
+- list the meaningful validation performed against the delivered candidate,
+  mentioning skipped or unavailable checks only when they affect the result;
+- state the independent review result and any localized repair, including that
+  a repaired candidate was not independently re-reviewed; and
+- name only meaningful residual risk, or `- none`.
+
+After one allowed localized repair, make the lower confidence and review
+boundary explicit:
+
+```text
+Status: ACCEPTED
+PR: <url>
+Confidence: MEDIUM
+
+Validation:
+- affected checks passed
+
+Review:
+- one localized issue found and repaired
+- repaired candidate was not independently re-reviewed
+
+Remaining risk:
+- <meaningful residual risk>
+```
+
+For a blocked run, keep the result short and explicit:
+
+```text
+Status: BLOCKED
+Confidence: BLOCKED
+No PR created.
+
+Reason:
+- <decision, authorization, access, environment, or evidence blocker>
+```
+
+A `FAILED` result uses the same concise status-and-reason shape and must not
+imply that a PR was delivered. For `GUIDED`, omit the PR line or state that a
+PR is not applicable.
+
+### Confidence
+
+`Confidence` is a human-readable summary of the existing evidence, chosen
+after the deterministic status. It is not an acceptance criterion, a second
+gate, or persisted run state. Derive it from current-candidate validation,
+independent review, repair status, bounded uncertainty, and meaningful
+residual risk. Do not use percentages, formulas, a confidence ledger, or an
+additional reviewer.
+
+Use the smallest useful vocabulary:
+
+- `HIGH`: the accepted candidate's required and applicable validation passed,
+  independent review returned `PASS`, and no repair or material unresolved
+  uncertainty remains. This is not a guarantee of correctness; list ordinary
+  residual risk when it matters.
+- `MEDIUM`: the candidate is accepted with a bounded limitation, such as one
+  localized repair whose affected checks passed but was not independently
+  re-reviewed, a review that was not required, or limited but sufficient
+  validation. State the limitation and remaining risk.
+- `LOW`: the candidate is accepted only with notable bounded uncertainty or
+  residual risk that remains useful for the user to know. Explain it plainly.
+- `BLOCKED`: the run is blocked and no PR was created; this is a delivery state,
+  not a quality estimate.
+
+### Optional diagnostics
+
+Do not make routine topology or workflow machinery part of the normal result.
+Preferred/requested topology, routine fallback details, delivery mode,
+continuity or recovery facts, receipts, cleanup state, internal evidence or
+ledger bookkeeping, worker/task details, changed-file lists, implementation
+approach, and assumptions remain available in internal state or host logs but
+are omitted from the default report. Add a short diagnostic note only when one
+of these facts is notable, materially affects interpretation, or the user asks
+for it. Topology must never lead a successful result.
 
 Keep worker transcripts and workflow metadata out of project-facing PR content.
