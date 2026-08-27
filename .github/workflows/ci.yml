@@ -1,8 +1,16 @@
 name: CI
 
-# Automatic CI is temporarily disabled. Run this workflow manually when
-# validation is explicitly needed.
+# Feature branches are covered by pull_request only; push CI is reserved for
+# the integrated main branch and versioned release tags.
 on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -62,10 +70,11 @@ jobs:
           SWE_FORGE_OMP_CI: "1"
         run: ./scripts/validate-swe-forge omp
 
-  # These checks intentionally overlap Linux validation: the question here is
-  # whether shell, date/stat, and filesystem behavior also works on macOS.
+  # Linux provides pre-merge coverage. Run this focused portability check on
+  # integrated, release, and manual runs to catch macOS shell/filesystem
+  # differences without duplicating the expensive fixture on every PR.
   macos-portability:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: macos-latest
     steps:
       - name: Check out repository

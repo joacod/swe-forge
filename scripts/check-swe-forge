@@ -85,6 +85,11 @@ for executable in \
 done
 
 [ -f "$ROOT/.github/workflows/ci.yml" ] || fail 'missing GitHub Actions CI workflow'
+ci_contains '  push:'
+ci_contains '      - main'
+ci_contains "      - 'v*'"
+ci_contains '  pull_request:'
+ci_contains '  workflow_dispatch:'
 ci_contains 'fetch-depth: 0'
 ci_contains 'github.event.pull_request.base.sha'
 ci_contains 'git diff --check "$BASE_SHA...$CURRENT_SHA"'
@@ -152,6 +157,6 @@ for required_file in \
 done
 agent_config=$ROOT/.swe-forge/adapters/shared/agent-skill/swe-forge/agents/openai.yaml
 [ -f "$agent_config" ] || fail 'missing agent invocation configuration'
-grep -Fx 'allow_implicit_invocation: false' "$agent_config" >/dev/null 2>&1 || \
+grep -Fx '  allow_implicit_invocation: false' "$agent_config" >/dev/null 2>&1 || \
   fail 'agent invocation configuration must disable implicit invocation'
 printf '%s\n' 'PASS: SWE Forge structural checks'
