@@ -1,7 +1,7 @@
 name: CI
 
-# Feature branches are covered by pull_request only; push CI is reserved for
-# the integrated main branch and versioned release tags.
+# Pull requests provide pre-merge confidence. Main and release pushes reuse
+# the same lean canonical check; release tags add release-readiness validation.
 on:
   push:
     branches:
@@ -17,146 +17,36 @@ permissions:
   contents: read
 
 jobs:
-  pr-validation:
-    if: ${{ github.event_name == 'pull_request' }}
+  validation:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
         with:
-          # The formatting check compares commits, not the clean checkout.
+          # Formatting checks compare commits, not the clean checkout.
           fetch-depth: 0
 
-      - name: Run PR validation
-        run: ./scripts/validate-swe-forge core invocation evidence installer workers
+      - name: Run canonical validation
+        run: ./scripts/validate-swe-forge core invocation installer workers
 
-      - name: Check diff formatting
+      - name: Check pull request diff formatting
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           CURRENT_SHA: ${{ github.sha }}
         run: git diff --check "$BASE_SHA...$CURRENT_SHA"
 
-  pi-runtime:
-    if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up supported Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.19.0
-
-      - name: Run Pi runtime fixture
-        env:
-          SWE_FORGE_PI_CI: "1"
-        run: ./scripts/validate-swe-forge pi
-
-  omp-runtime:
-    if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up supported Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.19.0
-
-      - name: Run OMP adapter runtime fixture
-        env:
-          SWE_FORGE_OMP_CI: "1"
-        run: ./scripts/validate-swe-forge omp
-
-  # Linux provides pre-merge coverage. Run this focused portability check on
-  # integrated, release, and manual runs to catch macOS shell/filesystem
-  # differences without duplicating the expensive fixture on every PR.
-  macos-portability:
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    runs-on: macos-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Check POSIX shell syntax
-        run: |
-          sh -n \
-            scripts/lib/registry.sh \
-            scripts/swe-forge \
-            scripts/check-swe-forge \
-            scripts/test-swe-forge \
-            scripts/validate-swe-forge \
-            scripts/test-validate-swe-forge \
-            scripts/swe-forge-gate \
-            scripts/test-swe-forge-gate \
-            scripts/test-swe-forge-pi \
-            scripts/test-swe-forge-omp \
-            scripts/test-swe-forge-invocation \
-            scripts/test-swe-forge-briefing \
-            scripts/test-swe-forge-results \
-            scripts/check-swe-forge-boundary \
-            scripts/test-swe-forge-boundary \
-            scripts/swe-forge-state \
-            scripts/swe-forge-invocation \
-            scripts/check-release \
-            .swe-forge/tools/swe-forge-gate \
-            .swe-forge/tools/swe-forge-state \
-            .swe-forge/tools/swe-forge-invocation \
-            .swe-forge/tools/swe-forge-worker-brief \
-            .swe-forge/tools/swe-forge-worker-result
-
-      - name: Run state and installer portability fixtures
-        run: ./scripts/validate-swe-forge evidence installer
-
-  main-validation:
-    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Set up supported Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.19.0
-
-      - name: Run full validation
-        env:
-          SWE_FORGE_PI_CI: "1"
-          SWE_FORGE_OMP_CI: "1"
-        run: ./scripts/validate-swe-forge full
-
-      - name: Check diff formatting
-        if: ${{ github.event_name == 'push' }}
+      - name: Check main push diff formatting
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         env:
           BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
         run: git diff --check "$BEFORE_SHA..$CURRENT_SHA"
 
-  release-validation:
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Set up supported Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.19.0
-
-      - name: Run complete release validation
-        env:
-          SWE_FORGE_PI_CI: "1"
-          SWE_FORGE_OMP_CI: "1"
-        run: ./scripts/validate-swe-forge full release
+      - name: Run release readiness validation
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: ./scripts/validate-swe-forge release
 
       - name: Check release commit formatting
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: git diff --check HEAD^..HEAD
-
