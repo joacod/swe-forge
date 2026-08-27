@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   chmodSync,
   copyFileSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -12,9 +13,13 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createEmbeddedPayload } from "../src/distribution/embedded-payload";
+import { materializeEmbeddedRelease } from "../src/distribution/managed-payload";
+import { runInstaller } from "../src/install/installer";
+import { nativeInstallFileSystem, type InstallFileSystem } from "../src/install/filesystem";
+import { releaseInstallSource } from "../src/install/source";
 import { buildStandalone } from "../scripts/build-standalone";
 import {
   enumerateReleasePayload,
@@ -45,6 +50,61 @@ function run(command: readonly string[], cwd: string, env: Record<string, string
 
 function assetPaths(): readonly string[] {
   return enumerateReleasePayload(root).map((asset) => asset.path);
+}
+
+async function buildStandaloneFixture(
+  outputPath: string,
+  versionSourcePath: string,
+): Promise<void> {
+  const staging = mkdtempSync(join(realpathSync(tmpdir()), "swe-forge-standalone-fixture-build-"));
+  const generatedAssetsPath = join(staging, "embedded-assets.ts");
+  const entryPath = join(staging, "entry.ts");
+  const assets = enumerateReleasePayload(root).map((asset) =>
+    asset.path === "VERSION" ? { ...asset, sourcePath: versionSourcePath } : asset,
+  );
+  const importPath = (sourcePath: string): string => {
+    const value = relative(dirname(entryPath), sourcePath).split("\\").join("/");
+    return value.startsWith(".") ? value : `./${value}`;
+  };
+  try {
+    writeFileSync(generatedAssetsPath, renderEmbeddedAssetsModule(assets, generatedAssetsPath));
+    writeFileSync(
+      entryPath,
+      [
+        "// Generated standalone fixture entry.",
+        `import { createEmbeddedPayload } from ${JSON.stringify(importPath(join(root, "src/distribution/embedded-payload.ts")))};`,
+        `import { runStandaloneCli } from ${JSON.stringify(importPath(join(root, "src/distribution/standalone-cli.ts")))};`,
+        `import { embeddedAssets } from ${JSON.stringify(importPath(generatedAssetsPath))};`,
+        "",
+        "process.exitCode = await runStandaloneCli(process.argv.slice(2), createEmbeddedPayload(embeddedAssets));",
+        "",
+      ].join("\n"),
+    );
+
+    const workingDirectory = process.cwd();
+    let result: { readonly success: boolean; readonly logs: readonly { readonly message: string }[] };
+    try {
+      process.chdir(staging);
+      result = await Bun.build({
+        entrypoints: [entryPath],
+        format: "esm",
+        compile: {
+          outfile: outputPath,
+          autoloadBunfig: false,
+          autoloadDotenv: false,
+          autoloadPackageJson: false,
+          autoloadTsconfig: false,
+        },
+      });
+    } finally {
+      process.chdir(workingDirectory);
+    }
+    if (!result.success) {
+      throw new Error(result.logs.map((log) => log.message).join("\n"));
+    }
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
+  }
 }
 
 test("release payload inventory is canonical, sorted, and excludes local files", () => {
@@ -157,9 +217,8 @@ test("compiled executable reports embedded version and runs canonical ports afte
   const releaseRoot = join(fixture, "release");
   const relocated = join(releaseRoot, "swe-forge");
   const home = join(fixture, "home");
-  const toolRoot = join(releaseRoot, ".swe-forge", "tools");
+  mkdirSync(releaseRoot);
   mkdirSync(home);
-  mkdirSync(toolRoot, { recursive: true });
   copyFileSync(built.outputPath, relocated);
   chmodSync(relocated, 0o755);
   const env: Record<string, string> = {
@@ -219,16 +278,19 @@ test("compiled executable reports embedded version and runs canonical ports afte
       "swe-forge-worker-brief",
       "swe-forge-worker-result",
     ] as const;
-    for (const toolName of toolNames) {
-      const tool = run([relocated, "payload", "read", `.swe-forge/tools/${toolName}`], fixture, env);
-      expect(tool.exitCode).toBe(0);
-      expect(tool.stderr).toBe("");
-      const toolPath = join(toolRoot, toolName);
-      writeFileSync(toolPath, tool.stdout, { encoding: "utf8", mode: 0o755 });
-      chmodSync(toolPath, 0o755);
-    }
-    expect(readdirSync(releaseRoot).sort()).toEqual([".swe-forge", "swe-forge"]);
+    const toolRoot = join(
+      fixture,
+      "data",
+      "swe-forge",
+      "current",
+      "canonical",
+      ".swe-forge",
+      "tools",
+    );
     expect(readdirSync(toolRoot).sort()).toEqual([...toolNames].sort());
+    for (const toolName of toolNames) {
+      expect(lstatSync(join(toolRoot, toolName)).mode & 0o111).not.toBe(0);
+    }
 
     const runtimeBin = join(fixture, "runtime-bin");
     mkdirSync(runtimeBin);
@@ -242,6 +304,7 @@ test("compiled executable reports embedded version and runs canonical ports afte
       HOME: home,
       PATH: runtimeBin,
       TMPDIR: fixture,
+      XDG_DATA_HOME: join(fixture, "data"),
     };
     for (const runtime of ["bun", "node", "python", "python3"]) {
       const unavailable = run(["/bin/sh", "-c", `command -v ${runtime}`], fixture, runtimeEnv);
@@ -404,3 +467,227 @@ test("compiled executable reports embedded version and runs canonical ports afte
     rmSync(fixture, { recursive: true, force: true });
   }
 }, 120_000);
+
+test("standalone installation keeps global release activation and shared ownership", async () => {
+  const fixture = mkdtempSync(join(realpathSync(tmpdir()), "swe-forge-standalone-install-"));
+  const bin = join(fixture, "bin");
+  const home = join(fixture, "home");
+  const dataRoot = join(fixture, "data");
+  const runtimeBin = join(fixture, "runtime-bin");
+  mkdirSync(bin);
+  mkdirSync(home);
+  mkdirSync(runtimeBin);
+
+  const built = await buildStandalone();
+  const versionOne = readFileSync(join(root, "VERSION"), "utf8").split("\n")[0]!;
+  const versionTwo = "0.1.0-alpha.2";
+  const standaloneOne = join(bin, "swe-forge-v1");
+  const standaloneTwo = join(bin, "swe-forge-v2");
+  copyFileSync(built.outputPath, standaloneOne);
+  chmodSync(standaloneOne, 0o755);
+  const versionTwoPath = join(fixture, "VERSION-v2");
+  writeFileSync(versionTwoPath, `${versionTwo}\n`);
+  await buildStandaloneFixture(standaloneTwo, versionTwoPath);
+  chmodSync(standaloneTwo, 0o755);
+
+  const dirnamePath = run(["/bin/sh", "-c", "command -v dirname"], fixture, {
+    PATH: process.env.PATH ?? "",
+  });
+  expect(dirnamePath.exitCode).toBe(0);
+  symlinkSync(dirnamePath.stdout.trim(), join(runtimeBin, "dirname"));
+  const environment: Record<string, string> = {
+    HOME: home,
+    PATH: runtimeBin,
+    TMPDIR: fixture,
+    XDG_DATA_HOME: dataRoot,
+  };
+  const currentCanonical = join(dataRoot, "swe-forge", "current", "canonical");
+  const support = join(home, ".agents", "swe-forge");
+  const skill = join(home, ".agents", "skills", "swe-forge");
+  const runtimePointer = join(dataRoot, "swe-forge-runtime");
+  const stateDirectory = join(home, ".swe-forge-install-state");
+
+  const assertLink = (path: string, target: string): void => {
+    expect(lstatSync(path).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(path)).toBe(target);
+  };
+  const assertManifest = (harness: string, version: string): void => {
+    const contents = readFileSync(join(stateDirectory, `${harness}.tsv`), "utf8");
+    expect(contents).toContain(`source_root=${currentCanonical}\n`);
+    expect(contents).toContain(`source_version=${version}\n`);
+    const entries = contents.split("\n").filter((line) => line.startsWith("entry\t"));
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      const fields = entry.split("\t");
+      expect(fields).toHaveLength(5);
+      expect(fields[4]).toContain(currentCanonical);
+      expect(fields[4]).not.toContain("/versions/");
+    }
+  };
+
+  try {
+    for (const runtime of ["bun", "node", "python", "python3"]) {
+      const unavailable = run(["/bin/sh", "-c", `command -v ${runtime}`], fixture, environment);
+      expect(unavailable.exitCode).not.toBe(0);
+    }
+    const dryRun = run([standaloneOne, "install", "codex", "--dry-run"], fixture, environment);
+    expect(dryRun.exitCode).toBe(0);
+    expect(dryRun.stderr).toBe("");
+    expect(dryRun.stdout).toContain("dry-run: no files, links, locks, or manifests will be changed");
+    expect(lstatSync(dataRoot, { throwIfNoEntry: false })).toBeUndefined();
+    expect(lstatSync(runtimePointer, { throwIfNoEntry: false })).toBeUndefined();
+    expect(lstatSync(stateDirectory, { throwIfNoEntry: false })).toBeUndefined();
+
+
+    const installCodex = run([standaloneOne, "install", "codex"], fixture, environment);
+    expect(installCodex.exitCode).toBe(0);
+    expect(installCodex.stderr).toBe("");
+    expect(readlinkSync(join(dataRoot, "swe-forge", "current"))).toBe(`versions/${versionOne}`);
+    expect(realpathSync(runtimePointer)).toBe(realpathSync(standaloneOne));
+    assertManifest("codex", versionOne);
+    assertLink(join(support, "AGENTS.md"), join(currentCanonical, "AGENTS.md"));
+    assertLink(
+      join(support, ".swe-forge", "tools"),
+      join(currentCanonical, ".swe-forge", "tools"),
+    );
+    assertLink(
+      skill,
+      join(currentCanonical, ".swe-forge", "adapters", "shared", "agent-skill", "swe-forge"),
+    );
+
+    const installCursor = run([standaloneOne, "install", "cursor"], fixture, environment);
+    expect(installCursor.exitCode).toBe(0);
+    expect(installCursor.stderr).toBe("");
+    expect(readdirSync(stateDirectory).sort()).toEqual(["codex.tsv", "cursor.tsv"]);
+    assertManifest("cursor", versionOne);
+    assertLink(skill, join(currentCanonical, ".swe-forge", "adapters", "shared", "agent-skill", "swe-forge"));
+
+    const invocationTool = join(support, ".swe-forge", "tools", "swe-forge-invocation");
+    const invocationOne = run(
+      [invocationTool, "parse", "--raw-arguments", "guided standalone installation"],
+      fixture,
+      environment,
+    );
+    expect(invocationOne.exitCode).toBe(0);
+    expect(JSON.parse(invocationOne.stdout)).toMatchObject({
+      parsed_ticket: "standalone installation",
+      delivery_mode: "GUIDED",
+    });
+    expect(invocationOne.stderr).toBe("");
+    const verify = run([standaloneOne, "verify", "codex"], fixture, environment);
+    expect(verify.exitCode).toBe(0);
+    expect(verify.stdout).toContain("PASS: SWE Forge codex installation is valid");
+    expect(verify.stderr).toBe("");
+    const status = run([standaloneOne, "status", "codex"], fixture, environment);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain(`source: ${currentCanonical}`);
+    expect(status.stdout).toContain("verification: PASS");
+    expect(status.stderr).toBe("");
+    const doctor = run([standaloneOne, "doctor", "codex"], fixture, environment);
+    expect(doctor.exitCode).toBe(0);
+    expect(doctor.stdout).toContain("doctor: PASS");
+    expect(doctor.stderr).toBe("");
+
+    const update = run([standaloneTwo, "update"], fixture, environment);
+    expect(update.exitCode).toBe(0);
+    expect(update.stderr).toBe("");
+    expect(readlinkSync(join(dataRoot, "swe-forge", "current"))).toBe(`versions/${versionTwo}`);
+    expect(realpathSync(runtimePointer)).toBe(realpathSync(standaloneTwo));
+    assertManifest("codex", versionTwo);
+    assertManifest("cursor", versionTwo);
+    assertLink(join(support, "AGENTS.md"), join(currentCanonical, "AGENTS.md"));
+    assertLink(skill, join(currentCanonical, ".swe-forge", "adapters", "shared", "agent-skill", "swe-forge"));
+
+    const invocationTwo = run(
+      [invocationTool, "parse", "--raw-arguments", "guided updated installation"],
+      fixture,
+      environment,
+    );
+    expect(invocationTwo.exitCode).toBe(0);
+    expect(JSON.parse(invocationTwo.stdout)).toMatchObject({
+      parsed_ticket: "updated installation",
+      delivery_mode: "GUIDED",
+    });
+    expect(invocationTwo.stderr).toBe("");
+
+    const uninstallCodex = run([standaloneTwo, "uninstall", "codex"], fixture, environment);
+    expect(uninstallCodex.exitCode).toBe(0);
+    expect(uninstallCodex.stderr).toBe("");
+    expect(readdirSync(stateDirectory)).toEqual(["cursor.tsv"]);
+    assertLink(skill, join(currentCanonical, ".swe-forge", "adapters", "shared", "agent-skill", "swe-forge"));
+    expect(readFileSync(join(stateDirectory, "cursor.tsv"), "utf8")).toContain(
+      `${currentCanonical}/.swe-forge/tools`,
+    );
+
+    const uninstallCursor = run([standaloneTwo, "uninstall", "cursor"], fixture, environment);
+    expect(uninstallCursor.exitCode).toBe(0);
+    expect(uninstallCursor.stderr).toBe("");
+    expect(lstatSync(stateDirectory, { throwIfNoEntry: false })).toBeUndefined();
+    expect(lstatSync(skill, { throwIfNoEntry: false })).toBeUndefined();
+    expect(lstatSync(join(support, "AGENTS.md"), { throwIfNoEntry: false })).toBeUndefined();
+
+    const reinstall = run([standaloneTwo, "install", "codex"], fixture, environment);
+    expect(reinstall.exitCode).toBe(0);
+    const foreignTarget = join(fixture, "foreign-target");
+    writeFileSync(foreignTarget, "foreign\n");
+    rmSync(skill);
+    symlinkSync(foreignTarget, skill);
+    const modified = run([standaloneTwo, "update"], fixture, environment);
+    expect(modified.exitCode).toBe(1);
+    expect(modified.stderr).toContain("managed link was modified");
+    assertLink(skill, foreignTarget);
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+}, 180_000);
+
+test("release projection failure rolls back harness links but keeps its version", async () => {
+  const fixture = mkdtempSync(join(realpathSync(tmpdir()), "swe-forge-release-rollback-"));
+  try {
+    const dataRoot = join(fixture, "data");
+    const home = join(fixture, "home");
+    mkdirSync(home);
+    const payload = createEmbeddedPayload(
+      enumerateReleasePayload(root).map((asset) => ({
+        path: asset.path,
+        embeddedPath: asset.sourcePath,
+        mode: asset.mode,
+      })),
+    );
+    const materialized = await materializeEmbeddedRelease(payload, {
+      dataRoot,
+      activate: true,
+    });
+    const source = releaseInstallSource(
+      join(materialized.layout.current, "canonical"),
+      materialized.canonicalPath,
+    );
+    let linkAttempts = 0;
+    const fileSystem: InstallFileSystem = {
+      ...nativeInstallFileSystem,
+      symlink: (target, path) => {
+        linkAttempts += 1;
+        if (linkAttempts >= 3) throw new Error("injected release projection failure");
+        nativeInstallFileSystem.symlink(target, path);
+      },
+    };
+    const stderr: string[] = [];
+    const result = runInstaller(["install", "opencode"], {
+      source,
+      home,
+      fileSystem,
+      stderr: (line) => stderr.push(line),
+    });
+
+    expect(result).toBe(1);
+    expect(stderr.join("\n")).toContain("could not install source link");
+    expect(readlinkSync(materialized.layout.current)).toBe(`versions/${materialized.version}`);
+    expect(readFileSync(join(materialized.canonicalPath, "VERSION"), "utf8")).toBe(
+      `${materialized.version}\n`,
+    );
+    expect(lstatSync(join(home, ".swe-forge-install-state"), { throwIfNoEntry: false })).toBeUndefined();
+    expect(lstatSync(join(home, ".config"), { throwIfNoEntry: false })).toBeUndefined();
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});

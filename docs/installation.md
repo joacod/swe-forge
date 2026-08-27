@@ -1,15 +1,35 @@
 # Installation
 
 SWE Forge is a harness-agnostic workflow with a portable canonical repository.
-Keep one stable checkout as source of truth and install user-level harness
-projections as links to it. Projects are operated on, not installed into.
-Installation availability, support tier, and real-harness validation are
-separate.
+Standalone installs use one active immutable release as their canonical source;
+source-checkout installs use the reviewed checkout directly. Projects are
+operated on, not installed into. Installation availability, support tier, and
+real-harness validation are separate.
 
 ## Commands
 
-The Bun-based installer has no runtime package dependencies, uses the user's
-home directory, and handles one harness per invocation:
+### Standalone release executable
+
+The compiled executable carries a validated release payload and has no runtime
+npm dependencies. It can install and run the canonical tools without a
+repository checkout, Bun, Node.js, or Python:
+
+```bash
+./swe-forge install <harness>
+./swe-forge verify <harness>
+./swe-forge status <harness>
+./swe-forge doctor <harness>
+./swe-forge update
+./swe-forge uninstall <harness>
+```
+
+`install` and `update` activate the release represented by the running
+executable. `update` reconciles every managed harness manifest; canonical
+release activation is global rather than harness-specific.
+
+### Source-checkout installer
+
+The Bun-based source-checkout installer handles one harness per invocation:
 
 ```bash
 scripts/swe-forge version
@@ -22,10 +42,10 @@ scripts/swe-forge uninstall <harness>
 ```
 
 Install Bun for the canonical TypeScript CLI, internal tools, and delegated
-workers. `scripts/swe-forge` is a thin source-checkout wrapper around
-`src/install/cli.ts`. Harnesses are `opencode`, `omp`, `claude`, `codex`,
-`cursor`, and `pi`. Links reflect reviewed source changes. See
-[compatibility](compatibility.md) for tiers and evidence.
+workers. `scripts/swe-forge` is a thin wrapper around `src/install/cli.ts`.
+Harnesses are `opencode`, `omp`, `claude`, `codex`, `cursor`, and `pi`. Links
+reflect reviewed source changes. See [compatibility](compatibility.md) for
+tiers and evidence.
 
 ## Source checkout
 
@@ -42,12 +62,8 @@ Before publication, use a development clone; do not claim the tag is available.
 A personal checkout may follow `main`, but public installations should use a
 release tag.
 
-The source-checkout wrapper requires Bun and delegates installer behavior to
-the canonical TypeScript entrypoint at `src/install/cli.ts`. Direct invocation
-of that entrypoint is useful for development checks; the wrapper remains the
-source-checkout command shown below.
-
-Install each desired harness explicitly:
+Use the source-checkout wrapper shown under Commands. Install each desired
+harness explicitly:
 
 ```bash
 scripts/swe-forge install opencode
@@ -59,8 +75,29 @@ scripts/swe-forge install pi
 ```
 
 The installer does not modify harness settings, permissions, models,
-credentials, or personal/project configuration. Harness project configuration is
-separate.
+credentials, or personal/project configuration. Harness project configuration
+is separate.
+
+## Standalone release lifecycle
+
+The executable first validates its embedded inventory and `VERSION`, then
+materializes an immutable release at:
+
+```text
+$XDG_DATA_HOME/swe-forge/versions/<version>/canonical
+```
+
+`$XDG_DATA_HOME` defaults to `$HOME/.local/share` when unset. When activated,
+`$XDG_DATA_HOME/swe-forge/current` points to that version.
+Harness projections and manifests store logical targets below
+`$XDG_DATA_HOME/swe-forge/current/canonical`, never direct
+`versions/<version>` paths. The standalone runtime pointer at
+`$XDG_DATA_HOME/swe-forge-runtime` lets installed canonical wrappers execute
+the active release without Bun, Node.js, or Python.
+
+Release installation reuses the same registry, ownership, conflict refusal,
+manifest, and rollback machinery as checkout installation. A failed projection
+installation leaves its valid immutable version directory in place.
 
 ## Projection locations
 
@@ -73,8 +110,9 @@ separate.
 | Cursor | `~/.agents/skills/swe-forge/` | `~/.agents/swe-forge/` |
 | Pi | `~/.pi/agent/prompts/`, `~/.pi/agent/extensions/` | `~/.pi/agent/swe-forge/` |
 
-Codex and Cursor share the Agent Skill projection. There is no multi-harness
-install command.
+Codex and Cursor share the Agent Skill projection. Install still handles one
+harness at a time; standalone `update` is the only command that reconciles all
+managed harness manifests.
 
 ### OMP native `SUBAGENTS`
 
@@ -137,18 +175,28 @@ The main Forge installation remains required because the package reads
 
 `version` reports release, source commit, and tree state. `status` reports
 source, harness, managed paths, and verification; `doctor` adds remediation.
-Use `--dry-run` with `install` or `update` for preflight/conflict checks without
-creating a lock, link, directory, or manifest:
+
+Source-checkout dry runs preserve their existing per-harness interface:
 
 ```bash
 scripts/swe-forge install opencode --dry-run
 scripts/swe-forge update opencode --dry-run
 ```
 
+Standalone dry runs use the release executable without changing the managed
+data root:
+
+```bash
+./swe-forge install opencode --dry-run
+./swe-forge update --dry-run
+```
+
 Successful installation records an exact manifest at
 `~/.swe-forge-install-state/<harness>.tsv`, including source revision and every
-managed link. `update` restores missing links, relinks changed source
-projections, removes stale managed links, and refuses modified or ambiguous
+managed link. Source-checkout `update <harness>` reconciles that harness.
+Standalone `update` activates its running release and reconciles every managed
+harness manifest. Both modes restore missing links, relink changed source
+projections, remove stale managed links, and refuse modified or ambiguous
 entries. `uninstall` removes only links matching the manifest and refuses
 modified entries. Shared support links remain while another harness owns them.
 
@@ -188,17 +236,22 @@ Ordinary prompts remain ordinary.
 
 ## Update
 
-For development, fetch and review source changes manually. For a pinned public
-installation, review a newer release tag first:
+For a standalone release executable, review the executable before activation:
 
-1. update the stable source checkout;
-2. run `scripts/swe-forge version`;
-3. run `status`, `doctor`, and `verify <harness>`;
-4. run `scripts/swe-forge update <harness>`; and
-5. review activation, contracts, policies, and adapter changes.
+1. run `./swe-forge version` and `./swe-forge payload inspect`;
+2. run `./swe-forge update --dry-run`; and
+3. run `./swe-forge update`.
 
-`update` never fetches, switches branches, or publishes. Keep temporary run
-state outside the repository or under ignored `.swe-forge/runs/`.
+This activates the executable's validated release globally. It does not fetch,
+switch branches, publish, or garbage-collect older immutable versions.
+
+For a source checkout, fetch and review source changes manually, then run
+`version`, `status`, `doctor`, and `verify <harness>` before
+`scripts/swe-forge update <harness>`. Source-checkout update does not activate
+managed standalone releases.
+
+Keep temporary run state outside the repository or under ignored
+`.swe-forge/runs/`.
 
 ## Filesystem safety
 

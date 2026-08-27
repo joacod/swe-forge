@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  chmodSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -26,6 +27,7 @@ export interface ManagedReleaseFileSystem {
   readonly rmdir: (path: string) => void;
   readonly readFile: (path: string) => Uint8Array;
   readonly writeFile: (path: string, contents: Uint8Array) => void;
+  readonly chmod?: (path: string, mode: number) => void;
 }
 
 export const nativeManagedReleaseFileSystem: ManagedReleaseFileSystem = {
@@ -39,6 +41,7 @@ export const nativeManagedReleaseFileSystem: ManagedReleaseFileSystem = {
   rmdir: rmdirSync,
   readFile: readFileSync,
   writeFile: writeFileSync,
+  chmod: chmodSync,
 };
 
 export interface ManagedReleaseLayout {
@@ -53,6 +56,8 @@ export interface MaterializeEmbeddedReleaseOptions {
   readonly dataRoot?: string;
   /** Publish the stable `current` pointer after the version is materialized. */
   readonly activate?: boolean;
+  /** Absolute standalone executable to publish at the stable runtime pointer. */
+  readonly runtimePath?: string;
   readonly fileSystem?: ManagedReleaseFileSystem;
 }
 
@@ -70,11 +75,13 @@ export interface MaterializedEmbeddedRelease {
 interface ReleaseAsset {
   readonly path: string;
   readonly bytes: Uint8Array;
+  readonly mode?: number;
 }
 
 interface ExpectedFile {
   readonly kind: "file";
   readonly bytes: Uint8Array;
+  readonly mode: number;
 }
 
 interface ExpectedDirectory {
@@ -88,7 +95,9 @@ const MANAGED_DIRECTORY_NAME = "swe-forge";
 const VERSIONS_DIRECTORY_NAME = "versions";
 const CURRENT_NAME = "current";
 const CANONICAL_DIRECTORY_NAME = "canonical";
+const STANDALONE_RUNTIME_NAME = "swe-forge-runtime";
 const VERSION_PATH = "VERSION";
+const DEFAULT_ASSET_MODE = 0o644;
 const VERSION_COMPONENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/u;
 const MAX_PATH_COMPONENT_LENGTH = 255;
 
@@ -143,6 +152,11 @@ function assertAbsoluteDataRoot(path: string): void {
       fail(`data root contains an oversized path component: ${part}`);
     }
   }
+}
+
+function assertAbsoluteRuntimePath(path: string): void {
+  assertPathText(path, "standalone runtime path");
+  if (!isAbsolute(path)) fail(`standalone runtime path must be absolute: ${path}`);
 }
 
 function assertAssetPath(path: string): readonly string[] {
@@ -265,7 +279,11 @@ function buildExpectedTree(assets: readonly ReleaseAsset[]): ExpectedDirectory {
       const existing = directory.children.get(part);
       if (isFile) {
         if (existing !== undefined) fail(`embedded asset inventory has a path conflict: ${asset.path}`);
-        directory.children.set(part, { kind: "file", bytes: asset.bytes });
+        directory.children.set(part, {
+          kind: "file",
+          bytes: asset.bytes,
+          mode: asset.mode ?? DEFAULT_ASSET_MODE,
+        });
         continue;
       }
 
@@ -323,6 +341,10 @@ function verifyExpectedDirectory(
     if (stats.isSymbolicLink() || !stats.isFile()) {
       fail(`published release entry is not a regular file: ${childLogicalPath}`);
     }
+    if ((stats.mode & 0o777) !== node.mode) {
+      fail(`published release entry has incorrect mode: ${childLogicalPath}`);
+    }
+
     if (!bytesEqual(fs.readFile(childPath), node.bytes)) {
       fail(`published release entry has incorrect content: ${childLogicalPath}`);
     }
@@ -442,6 +464,38 @@ function switchCurrent(
   }
 }
 
+function inspectRuntimePointer(path: string, fs: ManagedReleaseFileSystem): string | undefined {
+  if (!pathExists(path, fs)) return undefined;
+  const stats = fs.lstat(path);
+  if (!stats.isSymbolicLink()) fail(`standalone runtime pointer must be a symlink: ${path}`);
+  const target = fs.readlink(path);
+  assertAbsoluteRuntimePath(target);
+  return target;
+}
+
+function switchRuntime(
+  layout: ManagedReleaseLayout,
+  target: string,
+  fs: ManagedReleaseFileSystem,
+): void {
+  assertAbsoluteRuntimePath(target);
+  ensureRealDirectory(layout.dataRoot, "data root", fs);
+  const pointer = join(layout.dataRoot, STANDALONE_RUNTIME_NAME);
+  if (inspectRuntimePointer(pointer, fs) === target) return;
+
+  const temporary = temporaryPath(layout.dataRoot, ".runtime-", fs);
+  try {
+    fs.symlink(target, temporary);
+    fs.rename(temporary, pointer);
+  } finally {
+    if (pathExists(temporary, fs)) removeOwnedTree(temporary, fs);
+  }
+
+  if (inspectRuntimePointer(pointer, fs) !== target) {
+    fail(`standalone runtime publication did not produce the expected target: ${pointer}`);
+  }
+}
+
 async function readEmbeddedRelease(payload: EmbeddedPayload): Promise<{
   readonly version: string;
   readonly assets: readonly ReleaseAsset[];
@@ -460,7 +514,11 @@ async function readEmbeddedRelease(payload: EmbeddedPayload): Promise<{
   const assets: ReleaseAsset[] = [];
   for (const path of paths) {
     assertAssetPath(path);
-    assets.push({ path, bytes: new Uint8Array(await payload.read(path)) });
+    assets.push({
+      path,
+      bytes: new Uint8Array(await payload.read(path)),
+      mode: payload.mode(path),
+    });
   }
   const versionAsset = assets.find((asset) => asset.path === VERSION_PATH);
   if (versionAsset === undefined || versionFromBytes(versionAsset.bytes) !== version) {
@@ -507,7 +565,10 @@ export async function materializeEmbeddedRelease(
   const fileSystem = options.fileSystem ?? nativeManagedReleaseFileSystem;
   const embedded = await readEmbeddedRelease(payload);
   const layout = managedReleaseLayout(options.dataRoot);
-
+  if (options.runtimePath !== undefined) {
+    if (options.activate !== true) fail("standalone runtime path requires activation");
+    assertAbsoluteRuntimePath(options.runtimePath);
+  }
   ensureRealDirectory(layout.dataRoot, "data root", fileSystem);
   assertManagedRootInventory(layout, fileSystem);
   const existingCurrentVersion = inspectCurrent(layout, fileSystem);
@@ -536,6 +597,7 @@ export async function materializeEmbeddedRelease(
           fail(`temporary release has a conflicting entry: ${asset.path}`);
         }
         fileSystem.writeFile(destination, asset.bytes);
+        fileSystem.chmod?.(destination, asset.mode ?? DEFAULT_ASSET_MODE);
       }
       verifyExactVersion(temporary, embedded.version, expectedTree, fileSystem);
 
@@ -560,6 +622,9 @@ export async function materializeEmbeddedRelease(
       activated = true;
     }
     activeVersion = embedded.version;
+  }
+  if (options.runtimePath !== undefined) {
+    switchRuntime(layout, options.runtimePath, fileSystem);
   }
 
   return {

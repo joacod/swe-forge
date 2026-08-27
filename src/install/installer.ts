@@ -376,7 +376,11 @@ export class Installer {
   private preflightFile(source: string, destination: string): void {
     assertRealAncestors(destination, this.fileSystem);
     if (!pathExists(destination, this.fileSystem)) return;
-    if (samePath(source, destination, this.fileSystem)) return;
+    if (this.source.mode === "release") {
+      if (isSymlink(destination, this.fileSystem) && this.fileSystem.readlink(destination) === source) return;
+    } else if (samePath(source, destination, this.fileSystem)) {
+      return;
+    }
     if (isRealDirectory(destination, this.fileSystem)) {
       this.conflict(`${destination} exists as a directory`);
       return;
@@ -391,7 +395,11 @@ export class Installer {
   private preflightDirectoryLink(source: string, destination: string): void {
     assertRealAncestors(destination, this.fileSystem);
     if (!pathExists(destination, this.fileSystem)) return;
-    if (samePath(source, destination, this.fileSystem)) return;
+    if (this.source.mode === "release") {
+      if (isSymlink(destination, this.fileSystem) && this.fileSystem.readlink(destination) === source) return;
+    } else if (samePath(source, destination, this.fileSystem)) {
+      return;
+    }
     this.conflict(`${destination} already exists and is not linked to the SWE Forge source`);
   }
 
@@ -518,7 +526,11 @@ export class Installer {
     }
     if (!isSymlink(destination, this.fileSystem)) {
       this.verifyFailure(`${destination} is not a source link`);
-    } else if (!samePath(source, destination, this.fileSystem)) {
+    } else if (
+      this.source.mode === "release"
+        ? this.fileSystem.readlink(destination) !== source
+        : !samePath(source, destination, this.fileSystem)
+    ) {
       this.verifyFailure(`${destination} does not link to the current SWE Forge source`);
     }
   }
@@ -526,7 +538,11 @@ export class Installer {
   private verifyDirectoryMapping(source: string, destination: string): void {
     if (!isSymlink(destination, this.fileSystem)) {
       this.verifyFailure(`${destination} is not a source directory link`);
-    } else if (!samePath(source, destination, this.fileSystem)) {
+    } else if (
+      this.source.mode === "release"
+        ? this.fileSystem.readlink(destination) !== source
+        : !samePath(source, destination, this.fileSystem)
+    ) {
       this.verifyFailure(`${destination} does not link to the current SWE Forge source`);
     }
   }
@@ -572,6 +588,7 @@ export class Installer {
   }
 
   private sourceCommit(): string {
+    if (this.source.mode === "release") return "unknown";
     const result = runCommand(["git", "-C", this.source.realRoot, "rev-parse", "--short", "HEAD"]);
     if (result.exitCode !== 0) return "unknown";
     const commit = stripTrailingNewlines(result.stdout);
@@ -579,6 +596,7 @@ export class Installer {
   }
 
   private sourceTreeState(): "clean" | "dirty" {
+    if (this.source.mode === "release") return "clean";
     const diff = runCommand(["git", "-C", this.source.realRoot, "diff", "--quiet", "--ignore-submodules", "--"]);
     if (diff.exitCode !== 0) return "dirty";
     const status = runCommand([

@@ -87,7 +87,12 @@ recovery re-reads state and actual Git/evidence.
 
 ## Installation
 
-The adapter registry is the installation source of truth. Installation links the
-selected user-level projection and canonical support tree; it never installs the
-adapter catalog or changes project configuration. Adapter docs contain host
-syntax and observed capability evidence only.
+The adapter registry is the installation source of truth. Source-checkout
+installation supplies the checkout as both logical and real source. A standalone
+release validates and materializes its embedded payload under the managed
+`versions/<version>/canonical` path, activates global `current`, and passes
+`current/canonical` as the logical source plus the version directory as the
+real validation source to the same installer. Harness manifests own projections;
+they never own release activation or persist a direct version target. Installation
+never installs the adapter catalog or changes project configuration. Adapter
+docs contain host syntax and observed capability evidence only.

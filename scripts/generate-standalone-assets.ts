@@ -10,6 +10,7 @@ import {
 export interface ReleaseAsset {
   readonly path: string;
   readonly sourcePath: string;
+  readonly mode?: number;
 }
 
 // This mirrors the installer's canonical support inventory. Git-tracked files
@@ -98,6 +99,7 @@ function addAsset(
 ): void {
   const normalized = normalizeRepositoryPath(repositoryPath);
   const sourcePath = assertTrackedFile(root, tracked, normalized);
+  const mode = lstatSync(sourcePath).mode & 0o777;
   const existing = assets.get(normalized);
   if (existing !== undefined && existing.sourcePath !== sourcePath) {
     fail(`release asset has conflicting sources: ${normalized}`);
@@ -107,7 +109,7 @@ function addAsset(
       fail(`release asset source is listed more than once: ${sourcePath}`);
     }
   }
-  assets.set(normalized, { path: normalized, sourcePath });
+  assets.set(normalized, { path: normalized, sourcePath, mode });
 }
 
 function trackedFilesUnder(
@@ -242,7 +244,9 @@ export function renderEmbeddedAssetsModule(
   }
   lines.push("", "export const embeddedAssets = [");
   for (const [index, asset] of assets.entries()) {
-    lines.push(`  { path: ${JSON.stringify(asset.path)}, embeddedPath: asset${index} },`);
+    lines.push(
+      `  { path: ${JSON.stringify(asset.path)}, embeddedPath: asset${index}, mode: ${asset.mode ?? 0o644} },`,
+    );
   }
   lines.push("] as const;", "");
   return `${lines.join("\n")}`;
