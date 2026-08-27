@@ -1,8 +1,8 @@
 # Compatibility
 
-SWE Forge is preparing its first alpha, `v0.1.0-alpha.1`. It has a portable
-canonical core and optional asymmetric adapters. This document records current
-evidence, not a promise that future harness releases remain compatible.
+SWE Forge is preparing the `v0.1.0-alpha.1` release candidate. It has a
+portable canonical core and optional asymmetric adapters. This document records
+current evidence, not a promise that future harness releases remain compatible.
 
 ## Support tiers
 
@@ -73,14 +73,31 @@ the canonical workflow does not negotiate host telemetry or compaction parity.
 OMP was Experimental before and after the `2026-08-25` run. One dogfood run
 does not justify a tier change.
 
-## Core validation
+## Standalone runtime support
 
-Automatic CI runs the canonical validation groups on Ubuntu: shell syntax,
+The release builder accepts only these first-alpha targets:
+
+| Target | Runtime evidence |
+| --- | --- |
+| macOS arm64 | Native artifact build and clean-room lifecycle validation on the release workstation |
+| Linux x64 (glibc) | Native build and clean-room validation required in the native release CI job |
+
+The artifact target, Bun version, embedded asset count, payload SHA-256, and
+artifact SHA-256 are recorded in the generated metadata sidecar. A target is
+distributable only after its native clean-room job passes. macOS arm64 has
+passed the local release-workstation check; Linux x64 (glibc) remains gated by
+the native CI job. Windows, macOS x64, Linux arm64, musl Linux, and other
+targets are not claimed.
+
+## Core and release validation
+
+Pull-request CI runs the canonical validation groups on Ubuntu: shell syntax,
 structural checks, invocation, installer, worker contracts, and diff formatting.
-Release tags also run release-readiness validation. Harness-specific runtime
-fixtures and operating-system portability checks are not automatic CI gates;
-run them explicitly when their adapter or portability question is in scope.
-Windows is not a claimed target.
+Main, tag, and manual release runs also build target-specific standalone
+artifacts, verify their embedded inventory and checksums, and execute the
+clean-room lifecycle suite on native macOS arm64 and Linux x64 runners.
+Harness-specific runtime evidence remains separate from projection and
+standalone portability evidence. Windows is not a claimed target.
 
 For a new harness release, run repository checks, install its projection in a
 fake home, run `status` and `doctor`, and invoke a small explicit

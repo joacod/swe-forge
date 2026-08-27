@@ -83,7 +83,13 @@ ci_contains 'github.event.pull_request.base.sha'
 ci_contains 'git diff --check "$BASE_SHA...$CURRENT_SHA"'
 ci_contains './scripts/validate-swe-forge core invocation installer workers'
 ci_contains './scripts/validate-swe-forge release'
-for job in validation; do
+ci_contains 'bun run check:package'
+ci_contains 'standalone:'
+ci_contains 'bun-darwin-arm64'
+ci_contains 'bun-linux-x64'
+ci_contains 'bun run build:release'
+ci_contains 'test-standalone-release.ts'
+for job in validation standalone; do
   ci_job_exists "$job"
 done
 
@@ -123,6 +129,11 @@ for required_file in \
   AGENTS.md \
   SWE-FORGE.md \
   README.md \
+  package.json \
+  scripts/build-release.ts \
+  scripts/check-package.ts \
+  scripts/check-release.ts \
+  scripts/test-standalone-release.ts \
   src/install/cli.ts \
   src/validation-cli.ts \
   docs/architecture.md \

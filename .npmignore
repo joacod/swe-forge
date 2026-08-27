@@ -1,0 +1,28 @@
+# Release and test output
+build/
+coverage/
+test/
+
+# Local SWE Forge state; never package run data
+.swe-forge/runs/
+.swe-forge/.runs/
+.swe-forge/generated/
+.swe-forge/run-state*.yml
+.swe-forge/run-state*.yaml
+
+# Adapter documentation is not needed by the source entrypoint
+.swe-forge/adapters/README.md
+.swe-forge/adapters/*/README.md
+.swe-forge/adapters/shared/*/README.md
+
+# Repository-only tooling and metadata
+scripts/build-standalone.ts
+scripts/build-release.ts
+scripts/check-release
+scripts/check-release.ts
+scripts/check-swe-forge
+scripts/check-dependencies.ts
+scripts/generate-standalone-assets.ts
+scripts/test-*.ts
+scripts/test-*
+scripts/validate-swe-forge

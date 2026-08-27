@@ -1,3 +1,21 @@
+import { createHash } from "node:crypto";
+
+export interface PayloadIdentityAsset {
+  readonly path: string;
+  readonly bytes: Uint8Array;
+  readonly mode?: number;
+}
+
+export function payloadIdentity(assets: readonly PayloadIdentityAsset[]): string {
+  const hash = createHash("sha256");
+  for (const asset of assets) {
+    hash.update(`${asset.path}\0${asset.mode ?? 0o644}\0${asset.bytes.byteLength}\0`);
+    hash.update(asset.bytes);
+    hash.update("\n");
+  }
+  return hash.digest("hex");
+}
+
 export interface EmbeddedAsset {
   readonly path: string;
   readonly embeddedPath: string;
@@ -91,6 +109,17 @@ export class EmbeddedPayload {
 
   public async readVersion(): Promise<string> {
     return versionFromText(await this.readText(VERSION_PATH));
+  }
+  public async identity(): Promise<string> {
+    const assets: PayloadIdentityAsset[] = [];
+    for (const asset of this.assets) {
+      assets.push({
+        path: asset.path,
+        bytes: await this.read(asset.path),
+        mode: asset.mode,
+      });
+    }
+    return payloadIdentity(assets);
   }
 
   public async validate(): Promise<void> {

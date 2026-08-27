@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { EmbeddedPayload } from "./embedded-payload";
 import {
-  defaultDataRoot,
   materializeEmbeddedRelease,
   type ManagedReleaseLayout,
 } from "./managed-payload";
@@ -18,7 +17,7 @@ import { runStateCli } from "../state-cli";
 
 const USAGE = `Usage:
   swe-forge version
-  swe-forge install HARNESS [--dry-run]
+  swe-forge --version
   swe-forge verify HARNESS
   swe-forge status HARNESS
   swe-forge doctor HARNESS
@@ -74,6 +73,7 @@ async function inspectPayload(payload: EmbeddedPayload): Promise<number> {
     `${JSON.stringify({
       embedded: payload.hasPayload(),
       version: await payload.readVersion(),
+      payload_sha256: await payload.identity(),
       asset_count: assets.length,
       assets,
     })}\n`,
@@ -135,7 +135,7 @@ async function withTemporaryDryRunSource<T>(
       dataRoot: join(temporaryRoot, "data"),
       activate: true,
     });
-    const logicalRoot = join(defaultDataRoot(), "swe-forge", "current", "canonical");
+    const logicalRoot = join(result.layout.current, "canonical");
     const source = releaseInstallSource(logicalRoot, result.canonicalPath);
     return await callback(source);
   } finally {
@@ -315,7 +315,8 @@ export async function runStandaloneCli(
   try {
     switch (args[0]) {
       case "version":
-        if (args.length !== 1) return fail("version does not accept additional arguments");
+      case "--version":
+        if (args.length !== 1) return fail(`${args[0]} does not accept additional arguments`);
         return await reportVersion(payload);
       case "install":
         return await installStandalone(payload, args.slice(1));

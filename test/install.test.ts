@@ -307,6 +307,11 @@ test("public wrapper delegates version to the canonical CLI", () => {
     expect(publicResult.exitCode).toBe(0);
     expect(publicResult.stdout).toBe(canonicalResult.stdout);
     expect(publicResult.stderr).toBe(canonicalResult.stderr);
+    const publicFlagResult = runPublic(fixtureRoot, ["--version"]);
+    const canonicalFlagResult = runProcess([process.execPath, canonicalInstaller, "--version"], fixtureRoot);
+    expect(publicFlagResult.exitCode).toBe(0);
+    expect(publicFlagResult.stdout).toBe(canonicalFlagResult.stdout);
+    expect(publicFlagResult.stderr).toBe(canonicalFlagResult.stderr);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

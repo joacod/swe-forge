@@ -6,6 +6,44 @@ import {
   renderEmbeddedAssetsModule,
   type ReleaseAsset,
 } from "./generate-standalone-assets";
+import { payloadIdentity } from "../src/distribution/embedded-payload";
+
+export const supportedStandaloneTargets = ["bun-darwin-arm64", "bun-linux-x64"] as const;
+export type StandaloneTarget = (typeof supportedStandaloneTargets)[number];
+
+export interface StandaloneBuildOptions {
+  readonly outputPath?: string;
+  readonly target?: StandaloneTarget;
+  readonly verify?: boolean;
+}
+export interface StandaloneBuildResult {
+  readonly outputPath: string;
+  readonly assets: readonly ReleaseAsset[];
+  readonly payloadSha256: string;
+  readonly target?: StandaloneTarget;
+}
+
+interface CompileResult {
+  readonly success: boolean;
+  readonly logs: readonly { readonly message: string }[];
+}
+
+function nativeStandaloneTarget(): StandaloneTarget | undefined {
+  const target = `bun-${process.platform}-${process.arch}`;
+  return (supportedStandaloneTargets as readonly string[]).includes(target)
+    ? (target as StandaloneTarget)
+    : undefined;
+}
+
+function payloadSha256(assets: readonly ReleaseAsset[]): string {
+  return payloadIdentity(
+    assets.map((asset) => ({
+      path: asset.path,
+      bytes: new Uint8Array(readFileSync(asset.sourcePath)),
+      mode: asset.mode,
+    })),
+  );
+}
 
 export const standaloneBuildDirectory = resolve(import.meta.dir, "../build/standalone");
 export const standaloneOutputPath = join(standaloneBuildDirectory, "swe-forge");
@@ -74,6 +112,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function assertEmbeddedInspection(
   inspectionText: string,
   expectedVersion: string,
+  expectedPayloadSha256: string,
   assets: readonly ReleaseAsset[],
 ): void {
   let value: unknown;
@@ -85,6 +124,9 @@ function assertEmbeddedInspection(
   if (!isRecord(value)) fail("standalone payload inspection did not return an object");
   if (value.embedded !== true) fail("standalone payload reports that no payload is embedded");
   if (value.version !== expectedVersion) fail("standalone payload version differs from VERSION");
+  if (value.payload_sha256 !== expectedPayloadSha256) {
+    fail("standalone payload identity differs from the source inventory");
+  }
   if (value.asset_count !== assets.length) fail("standalone payload asset count differs from the inventory");
   if (!Array.isArray(value.assets)) fail("standalone payload inspection has no asset list");
 
@@ -105,6 +147,7 @@ function assertEmbeddedInspection(
 function verifyCompiledPayload(
   outputPath: string,
   root: string,
+  expectedPayloadSha256: string,
   assets: readonly ReleaseAsset[],
 ): void {
   const isolated = mkdtempSync(join(tmpdir(), "swe-forge-standalone-build-"));
@@ -133,23 +176,27 @@ function verifyCompiledPayload(
 
     const inspection = run([outputPath, "payload", "inspect"], isolated, env);
     if (inspection.exitCode !== 0) fail(`standalone payload inspection failed: ${inspection.stderr.trim()}`);
-    assertEmbeddedInspection(inspection.stdout, expectedVersion, assets);
+    assertEmbeddedInspection(inspection.stdout, expectedVersion, expectedPayloadSha256, assets);
   } finally {
     rmSync(isolated, { recursive: true, force: true });
   }
 }
 
-export async function buildStandalone(): Promise<{
-  readonly outputPath: string;
-  readonly assets: readonly ReleaseAsset[];
-}> {
+export async function buildStandalone(
+  options: StandaloneBuildOptions = {},
+): Promise<StandaloneBuildResult> {
   const root = rootPath();
   const generatedAssetsPath = join(standaloneBuildDirectory, "embedded-assets.ts");
   const entryPath = join(standaloneBuildDirectory, "entry.ts");
+  const outputPath = options.outputPath ?? standaloneOutputPath;
+  const target = options.target;
+  const verify = options.verify ?? (target === undefined || target === nativeStandaloneTarget());
 
   mkdirSync(standaloneBuildDirectory, { recursive: true });
-  rmSync(standaloneOutputPath, { force: true });
+  mkdirSync(dirname(outputPath), { recursive: true });
+  rmSync(outputPath, { force: true });
   const assets = enumerateReleasePayload(root);
+  const expectedPayloadSha256 = payloadSha256(assets);
   // Bun 1.4.0's native compile.assets collides on repeated basenames when
   // given the inventory's source files. A staged directory preserves paths
   // only by adding a copied tree and runtime prefix, so static file imports
@@ -160,7 +207,7 @@ export async function buildStandalone(): Promise<{
   removeCompileStagingFiles();
   try {
     const workingDirectory = process.cwd();
-    let result: Awaited<ReturnType<typeof Bun.build>>;
+    let result: CompileResult;
     try {
       // Bun's compile staging file follows the working directory. Keep that
       // generated file beside the ignored standalone output rather than at the
@@ -170,7 +217,8 @@ export async function buildStandalone(): Promise<{
         entrypoints: [entryPath],
         format: "esm",
         compile: {
-          outfile: standaloneOutputPath,
+          ...(target === undefined ? {} : { target }),
+          outfile: outputPath,
           autoloadBunfig: false,
           autoloadDotenv: false,
           autoloadPackageJson: false,
@@ -185,11 +233,11 @@ export async function buildStandalone(): Promise<{
       fail("Bun compilation failed");
     }
 
-    verifyCompiledPayload(standaloneOutputPath, root, assets);
+    if (verify) verifyCompiledPayload(outputPath, root, expectedPayloadSha256, assets);
   } finally {
     removeCompileStagingFiles();
   }
-  return { outputPath: standaloneOutputPath, assets };
+  return { outputPath, assets, payloadSha256: expectedPayloadSha256, ...(target === undefined ? {} : { target }) };
 }
 
 if (import.meta.main) {
@@ -197,6 +245,7 @@ if (import.meta.main) {
     const result = await buildStandalone();
     process.stdout.write(`Built standalone executable: ${result.outputPath}\n`);
     process.stdout.write(`Embedded release assets: ${result.assets.length}\n`);
+    process.stdout.write(`Embedded payload SHA-256: ${result.payloadSha256}\n`);
     for (const asset of result.assets) process.stdout.write(`  ${asset.path}\n`);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

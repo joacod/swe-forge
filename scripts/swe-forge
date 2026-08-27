@@ -2,5 +2,14 @@
 
 set -eu
 
-ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd -P)
+SCRIPT_PATH=$0
+while [ -L "$SCRIPT_PATH" ]; do
+  SCRIPT_DIR=$(CDPATH= cd "$(dirname "$SCRIPT_PATH")" && pwd -P)
+  SCRIPT_LINK=$(readlink "$SCRIPT_PATH")
+  case "$SCRIPT_LINK" in
+    /*) SCRIPT_PATH=$SCRIPT_LINK ;;
+    *) SCRIPT_PATH=$SCRIPT_DIR/$SCRIPT_LINK ;;
+  esac
+done
+ROOT=$(CDPATH= cd "$(dirname "$SCRIPT_PATH")/.." && pwd -P)
 exec bun "$ROOT/src/install/cli.ts" "$@"
