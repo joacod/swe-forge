@@ -20,11 +20,10 @@ tasks:
     dependencies: [api-research, ui-research]
 ```
 
-Each researcher receives one bounded question, allowed reads, an evidence
-budget, and the `READ_ONLY` result contract. The root submits the independent
-questions as one logical fan-out, waits at one fan-in barrier, and resolves
-contradictions centrally. The host may schedule them concurrently or
-sequentially.
+Each researcher gets one bounded question, allowed reads, evidence budget, and
+the `READ_ONLY` result contract. Submit one logical fan-out, wait at one root
+fan-in barrier, and resolve contradictions centrally. The host may schedule
+ready items concurrently or sequentially.
 
 ## Specification
 
@@ -38,31 +37,31 @@ acceptance:
   - invalid limits use the established HTTP 400 shape
   - cursors and URL state behave correctly
   - focused tests pass
-approach: Reuse existing repository pagination and query-string helpers.
-risks:
-  - reset a stale cursor when status changes
+approach: Reuse existing pagination and query-string helpers.
+risks: [reset a stale cursor when status changes]
 validation:
   testing:
     behavior: API filtering/cursors and URL-backed admin pagination
     seam: API response and admin URL/query boundaries
     approach: acceptance
-    rationale: Focused API/UI cases cover both public surfaces.
+    rationale: Focused API/UI cases cover both surfaces.
   checks: [focused API tests, focused UI tests, relevant typecheck]
+review_focus:
+  goal: Confirm endpoint behavior, URL state, and compatibility.
+  acceptance_criteria_checked: [filtering, invalid limits, cursors, URL state]
 ```
 
-Research is useful because the API and UI facts can be checked independently;
-implementation remains one bounded writer because their contract is coupled.
-If native workers are unavailable, use root-owned sequential research without
-claiming delegation.
+Research is independent; implementation remains one bounded writer because the
+contract is coupled. Without native workers, use root-owned sequential research
+without claiming delegation.
 
 ## Handoff
 
-Before launch, create and validate one canonical JSON worker brief. The
-implementation brief contains only its objective, allowed scope, acceptance,
-validation, permissions, and accepted dependency digest. It does not contain
-the root transcript or full research results. The JSON result is validated in
-the canonical delivery checkout before root acceptance.
+Create and validate one canonical JSON worker brief. The implementation brief
+contains its objective, allowed scope, acceptance, validation, permissions, and
+accepted dependency digest—not the transcript or full research. Validate the
+result in the canonical checkout before root acceptance.
 
-The root then runs final validation once, performs one fresh review of the same
-candidate, and applies the normal Acceptance Gate. One concrete localized
-review finding may receive one focused repair; no second review is launched.
+Run final validation once, review the same candidate once, and apply the normal
+Acceptance Gate. One concrete localized finding may get one focused repair; no
+second review.

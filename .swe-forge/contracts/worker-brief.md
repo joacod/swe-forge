@@ -1,28 +1,22 @@
 # Worker Briefing Contract
 
-The worker brief is the one canonical worker-facing assignment. The root owns
-the task contract and run state, then creates this bounded JSON object
-immediately before launch. There is no second input record set or re-render step.
+The worker brief is the one canonical worker assignment. The root owns the task
+contract and run state, creates this bounded JSON immediately before launch, and
+passes it unchanged. There is no second input record or re-render step.
 
 ## Validation and adapter port
 
-Use the portable tool to validate the object before launch:
+Validate it before launch:
 
 ```text
 .swe-forge/tools/swe-forge-worker-brief validate --brief FILE|-
 .swe-forge/tools/swe-forge-worker-brief inspect --brief FILE|-
 ```
 
-`validate` checks the complete shape and the permission/profile relationships.
-`inspect` performs the same validation and emits only `task_id`, `profile`, and
-`write_access` for a host adapter. Neither command decides scope, acceptance,
-dependency relevance, routing, or delivery. The root must pass the validated
-JSON unchanged to the worker.
-
-JSON is intentionally both the native structured form and the text fallback:
-hosts without structured-output support receive the same concise JSON text and
-must return the result fields in `contracts/result.md`. Do not introduce a
-host-specific alternate encoding.
+`validate` checks shape and permission/profile relationships. `inspect` does the
+same and emits only `task_id`, `profile`, and `write_access`. Neither decides
+scope, acceptance, dependency relevance, routing, or delivery. JSON is both the
+native form and text fallback; hosts must return fields from `contracts/result.md`.
 
 ## Canonical shape
 
@@ -86,30 +80,26 @@ host-specific alternate encoding.
 }
 ```
 
-`dependencies` is omitted when there are no dependency facts. Empty digest
-categories are omitted, and every completed digest includes a non-empty
-`source_refs` list pointing to the accepted result or evidence. A completed
-dependency is included only after the root has accepted its result and selected
-the facts relevant to this task; the brief cannot turn a pending or unaccepted
-result into an accepted fact.
+Omit `dependencies` without dependency facts and empty digest categories.
+Every completed digest has non-empty `source_refs` to an accepted result or
+evidence. A dependency is included only after root acceptance; a brief cannot
+promote pending work.
 
-The profile and actions are derived from the role and write access:
+## Profile rules
 
-| Worker | Profile | Allowed actions | Contract |
+| Worker | Profile | Actions | Contract |
 | --- | --- | --- | --- |
 | read-only ordinary worker | `READ_ONLY` | `read`, `validation` | `result.md` |
 | read-write worker | `WRITABLE` | `read`, `edit`, `validation` | `result.md` |
 | reviewer | `REVIEW` | `read` | `review.md` |
 
-Every delegated brief uses `SUBAGENTS`, disables recursive delegation, and
-forbids delivery, recursive delegation, peer communication, scope expansion,
-and topology decisions. Reviewers may inspect assigned validation evidence but
-are not granted validation actions. Read-only workers use
-`allowed_writes: ["none"]`.
-Read-write workers list their owned paths. Physical worktrees, checkout paths,
-provider details, and delivery authorization are not worker-brief fields.
+Every delegated brief uses `SUBAGENTS`, disables recursion, and forbids delivery,
+peer communication, scope expansion, and topology decisions. Read-only workers
+use `allowed_writes: ["none"]`; writable workers list owned paths. Reviewers may
+inspect evidence but have no validation actions. Physical worktrees, checkout
+paths, provider details, and delivery authorization are not brief fields.
 
-Workers discover details through allowed paths and request a contract revision
-before expanding scope. They do not create PRs, push, merge, publish, deploy,
-reroute, or spawn descendants by default. A writable result reports the
-canonical candidate facts; it does not authorize delivery.
+Workers discover through allowed paths and request a contract revision before
+expanding scope. They do not create PRs, push, merge, publish, deploy, reroute,
+or spawn descendants by default. A writable result reports candidate facts; it
+does not authorize delivery.

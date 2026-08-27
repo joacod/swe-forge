@@ -1,78 +1,74 @@
 # Agent Instructions
 
-Use the repository normally unless the user explicitly requests SWE Forge.
+## Default
 
-## SWE Forge
+Use the repository normally. Do not load or execute SWE Forge unless the user explicitly:
 
-SWE Forge is an optional advanced software-engineering workflow defined in:
+- says `Use SWE Forge` or `Follow SWE Forge`;
+- references `SWE-FORGE.md`; or
+- invokes `/swe-forge` or a harness equivalent.
 
-`SWE-FORGE.md`
+When activated, read `SWE-FORGE.md` and the ticket workflow. Load only the
+role, contract, and policy sources that the ticket needs.
 
-Do not automatically load or execute SWE Forge.
+## Core maintenance rule
 
-Activate it only when the user explicitly:
+Optimize for the user path: one focused idea or ticket to one reviewable PR.
 
-- says "Use SWE Forge"
-- says "Follow SWE Forge"
-- references `SWE-FORGE.md`
-- invokes a harness-specific SWE Forge command such as `/swe-forge`
+Every mandatory step, tool call, state field, validation, contract, and rule
+must justify its cost with a concrete improvement in correctness, safety, or
+recovery. Prefer removing ceremony over making ceremony faster.
 
-When activated, read `SWE-FORGE.md` and follow the workflow it defines.
+Human PR review is the final boundary: SWE Forge adds useful confidence; it does
+not need to prove the change perfect before delivery. Keep public UX about user
+intent and orchestration mechanics internal.
+
+Keep Forge opinionated for this repository and author. Stay harness-agnostic
+where that has real value, but do not add abstractions for hypothetical
+consumers. Forkability is fine.
 
 ## Maintaining SWE Forge
 
-When changing this repository itself:
-
-- Run state is ephemeral internal implementation state. Only the current
-  schema is supported; reject obsolete state rather than migrating it. Update
-  producers, consumers, validation, adapters, and fixtures atomically. Do not
-  add compatibility shims, legacy fallbacks, or duplicate compatibility fields
-  without a concrete current need. Keep one canonical owner; retain derived
-  projections only for a real recovery purpose.
-- Optimize for one ticket to one reviewable delivery: one run owns one
-  writable delivery checkout. Native subagents are bounded helpers; do not
-  introduce a writable-execution scheduling feature, worker worktrees, external
-  execution providers, fleet or scheduler layers, or cross-ticket
-  orchestration.
-- Preserve root/orchestrator authority, bounded task-specific worker context,
-  no peer-to-peer worker communication, proportional worker results, compact
-  root-accepted dependency digests, conservative read-only fan-out/fan-in, and
-  stage-triggered minimal policy loading. Add deterministic enforcement only
-  where the risk/reward is clear.
+- Support only the current run-state schema. Change producers, consumers,
+  validators, adapters, and fixtures together. Reject obsolete state; do not
+  add compatibility shims or duplicate fields without a current need.
+- Optimize for one ticket, one reviewable delivery, one writable delivery
+  checkout. Native subagents are bounded helpers. Do not add writable-worker
+  scheduling, worker worktrees, external execution providers, fleet or
+  scheduler layers, or cross-ticket orchestration.
+- Preserve root/orchestrator authority, bounded worker context, no peer
+  communication, proportional results, compact accepted dependency digests,
+  conservative read-only fan-out/fan-in, and stage-triggered policy loading.
+  Add deterministic enforcement only when the risk/reward is clear.
 - Prefer deletion, consolidation, canonical ownership, small deterministic
-  guards, and low-risk changes over new orchestration/state/message
-  frameworks, telemetry, benchmarks, speculative abstractions, or unneeded
-  compatibility machinery. Detailed contracts and policies remain canonical
-  in `SWE-FORGE.md` and `.swe-forge/`.
+  guards, and low-risk changes over new state, message, telemetry, benchmark,
+  speculative abstraction, or compatibility machinery. Detailed contracts and
+  policies remain canonical in `SWE-FORGE.md` and `.swe-forge/`.
 - Before changing canonical workflow behavior, contracts, policies, routing,
-  delegation semantics, or harness integration boundaries, read
-  `docs/architecture.md`. For adapter work, also read
-  `docs/adding-a-harness.md`, `.swe-forge/adapters/README.md`, and the target
-  adapter README.
-- Keep the canonical workflow harness-agnostic. Canonical routing selects
-  topology; adapters demonstrate and realize capabilities but do not choose a
-  topology because a host exposes a native primitive.
-- Keep harness-native APIs, paths, lifecycle hooks, approval models,
-  task/subagent mechanisms, configuration, and host syntax inside adapters.
-  Before changing canonical code for a host feature, map it to an existing
-  semantic capability first; adapter-only translation is the default.
-- If a core change is genuinely required, add the smallest harness-neutral
-  semantic contract that is useful without the requesting harness. Do not
-  introduce harness-name conditionals into canonical workflow semantics or
-  user-facing Forge behavior solely to expose one host primitive.
-- Capability asymmetry is valid and does not require parity work elsewhere.
-  Adding a harness must not change existing harness behavior unless an
-  independently justified canonical contract changes.
+  delegation, or harness boundaries, read `docs/architecture.md`. For adapter
+  work, also read `docs/adding-a-harness.md`, `.swe-forge/adapters/README.md`,
+  and the target adapter README.
+- Keep canonical routing harness-agnostic: it selects topology; adapters
+  translate host capabilities without selecting topology.
+- Keep harness APIs, paths, lifecycle hooks, approvals, task mechanisms,
+  configuration, and syntax in adapters. Map host features to existing
+  semantic capabilities first; adapter-only translation is the default.
+- If a core change is necessary, add the smallest harness-neutral semantic
+  contract useful without the requesting harness. Do not add harness-name
+  branches to canonical behavior or user-facing Forge behavior.
+- Capability asymmetry is valid. Adding a harness must not change existing
+  behavior unless an independent canonical contract requires it.
 
-## Installation Requests
+## Installation requests
 
-Installation is separate from workflow activation. When the user asks to
-install SWE Forge for a harness, read `docs/installation.md` and that adapter's
-README. Installation always means a user-level harness installation linked to
-the stable SWE Forge checkout; only the harness name is needed.
+Installation is a user-level link to the stable SWE Forge checkout, not workflow
+activation or project configuration. For an installation request, read
+`docs/installation.md` and the target adapter README, then use:
 
-- Use `scripts/swe-forge install <harness>` and then the matching `verify` command.
-- Project-specific harness configuration is separate from SWE Forge installation
-  and must not be confused with it.
-- Do not overwrite or merge conflicting harness configuration without showing
-  the user the conflict first.
+```text
+scripts/swe-forge install <harness>
+scripts/swe-forge verify <harness>
+```
+
+Show conflicting harness configuration before changing it. Do not merge or
+overwrite it.

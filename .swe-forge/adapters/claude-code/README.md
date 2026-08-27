@@ -1,33 +1,27 @@
 # Claude Code Adapter
 
-Claude Code is an experimental adapter. Installation structure is covered by
-fixtures; that is not live behavioral validation.
+Claude Code is an experimental adapter. Installer fixtures cover structure;
+that is not live behavioral validation.
 
-Claude reads `CLAUDE.md`, so the repository's bridge remains only:
+Claude reads `CLAUDE.md`, so the repository bridge stays:
 
 ```markdown
 @AGENTS.md
 ```
 
-Do not copy the Forge workflow into `CLAUDE.md`.
+Do not copy Forge workflow into `CLAUDE.md`.
 
-## Explicit skill
+## Skill and native workers
 
 The installer links `skills/swe-forge/SKILL.md` to
-`~/.claude/skills/swe-forge/SKILL.md`. Its
-`disable-model-invocation: true` setting requires an explicit `/swe-forge`;
-natural-language `Use SWE Forge` also remains valid. The skill is a thin loader
-for the user-level canonical support tree and preserves raw arguments. The
-canonical bootstrap invokes the shared parser once when the host supplies no
-normalized facts.
+`~/.claude/skills/swe-forge/SKILL.md`. `disable-model-invocation: true`
+requires explicit `/swe-forge`; natural-language `Use SWE Forge` also works.
+The skill only loads the user-level support tree and preserves raw arguments.
 
-## Native subagents
-
-A thin `.claude/agents/` bridge may load a canonical role when useful. Before
-launch, create and validate the canonical JSON worker brief and pass it
-unchanged with the role and result/review contract. Read-only roles receive no
-write tools; writable scope comes from the task contract. Native writes are
-sequential in one delivery checkout; the root owns integration and delivery.
+A thin `.claude/agents/` bridge may load a canonical role. Validate and pass the
+canonical JSON worker brief unchanged with the role and result/review contract.
+Read-only roles receive no write tools; writable tasks are bounded and
+sequential in one checkout. Root owns integration and delivery.
 
 ## Installed projection
 
@@ -36,7 +30,7 @@ sequential in one delivery checkout; the root owns integration and delivery.
 ~/.claude/swe-forge/{AGENTS.md,SWE-FORGE.md,.swe-forge/}
 ```
 
-Project-specific Claude configuration is not changed. See
+Project-specific Claude configuration is unchanged. See
 [shared adapter behavior](../README.md).
 
 References:

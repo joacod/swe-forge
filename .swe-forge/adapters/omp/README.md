@@ -1,8 +1,8 @@
 # OMP Adapter
 
-OMP is an experimental adapter using its user-level prompt, profile, and
-runtime-extension surfaces. It forwards canonical worker briefs and results;
-it does not replace OMP's native task executor or choose topology.
+OMP is an experimental adapter using user-level prompts, profiles, and a
+runtime extension. It forwards canonical briefs/results and does not replace
+the native task executor or choose topology.
 
 ## Installation
 
@@ -11,9 +11,9 @@ scripts/swe-forge install omp
 scripts/swe-forge verify omp
 ```
 
-The installer links the prompt, runtime extension, three confined agent
-profiles, and canonical support under `~/.omp/agent/`. It does not change OMP
-settings, models, credentials, permissions, or project configuration.
+The installer links the prompt, runtime extension, three confined profiles, and
+canonical support under `~/.omp/agent/`. It does not change OMP settings,
+models, credentials, permissions, or project configuration.
 
 ## Invocation and capability
 
@@ -22,46 +22,41 @@ settings, models, credentials, permissions, or project configuration.
 /swe-forge guided <ticket>
 ```
 
-The prompt passes `$ARGUMENTS` unchanged; the shared invocation parser owns
-the `guided` delivery modifier and leaves topology selection to the canonical
-workflow. Ordinary prompts do not activate the bridge.
+The prompt passes `$ARGUMENTS` unchanged; the shared parser owns `guided` and
+the canonical workflow owns routing. Ordinary prompts do not activate Forge.
 
-For an explicit invocation, the extension observes the native `task` tool,
-batch shape, per-item `outputSchema`/`schemaMode`, source, confined
-profiles, and canonical validators. Presence alone is not capability. When
-canonical routing selects `SUBAGENTS`, it:
+At explicit invocation, the extension observes native `task`, batch shape,
+per-item `outputSchema`/`schemaMode`, source, confined profiles, and canonical
+validators. Presence is not capability. When routing selects `SUBAGENTS`, it:
 
-1. resolves active state through `swe-forge-state`;
-2. re-observes capability at the delegation boundary;
-3. validates and inspects each canonical JSON worker brief and its task ID;
-4. passes the unchanged brief to the native task;
+1. resolves active state;
+2. re-observes capability at delegation;
+3. validates and inspects each canonical JSON brief and task ID;
+4. passes the unchanged brief to `task`;
 5. maps profile/write facts to the confined OMP profile; and
-6. requests the canonical result JSON Schema with `schemaMode: strict`, then
-   validates the returned JSON directly.
+6. requests strict canonical result JSON Schema and validates returned JSON.
 
-The extension uses OMP middleware around the native task tool; it does not
-implement child sessions, scheduling, or task lifecycle. Read-only tasks may
-form one logical batch; OMP decides whether ready items run concurrently or
-sequentially. More than one writable item is rejected because canonical
-materialization and acceptance are sequential.
+The extension uses middleware around `task`; it does not implement child
+sessions, scheduling, or lifecycle. Read-only tasks may form one logical batch;
+OMP controls ready-item scheduling. More than one writable item is rejected
+because materialization and acceptance are sequential.
 
 | Profile | Tools | Result |
 | --- | --- | --- |
 | `swe-forge-read-only` | `read`, `grep`, `glob`, `yield` | `READ_ONLY` |
-| `swe-forge-writable` | read tools plus `edit`, `write`, `bash`, `yield` | `WRITABLE` |
+| `swe-forge-writable` | read tools, `edit`, `write`, `bash`, `yield` | `WRITABLE` |
 | `swe-forge-reviewer` | `read`, `grep`, `glob`, `yield` | `REVIEW` |
 
-Profiles set `spawns: []` and `blocking: true`. Review and repair use the
-canonical review/brief contracts; the adapter adds no ticket or policy prose.
+Profiles set `spawns: []` and `blocking: true`. Review and repair use canonical
+contracts; the adapter adds no ticket or policy prose.
 
 ## Boundaries and evidence
 
-Writable results are materialized and validated in the canonical delivery
-checkout. Private worktrees, sandboxes, overlays, and containers are host
-details, never Forge state. Missing, inactive, stale, obsolete, or
-incompatible capability/state uses visible `SOLO`/sequential fallback. The
-adapter does not implement context preservation, compaction, retry, or
-restoration.
+Materialize and validate writable results in the canonical checkout. Private
+worktrees, sandboxes, overlays, and containers are host details. Missing,
+inactive, stale, obsolete, or incompatible capability/state uses visible
+`SOLO`/sequential fallback. The adapter does not own context preservation,
+compaction, retry, or restoration.
 
 References:
 
@@ -73,5 +68,5 @@ References:
 - https://omp.sh/docs/approvals
 - https://omp.sh/docs/hooks
 
-The observed local OMP CLI is `18.0.4`; projection and runtime checks are
-adapter evidence, not a change to its Experimental tier.
+Observed local OMP CLI: `18.0.4`. Projection/runtime checks are adapter evidence,
+not a support-tier change.

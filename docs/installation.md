@@ -1,11 +1,12 @@
 # Installation
 
-SWE Forge is a harness-agnostic coding workflow with a portable canonical
-repository. Keep one stable checkout as the source of truth and install the
-requested harness projection as links back to that checkout. Projects are
-repositories SWE Forge operates on; SWE Forge is not installed into them.
-Installation availability is separate from the support tier and real harness
-validation recorded in the compatibility snapshot.
+SWE Forge is a harness-agnostic workflow with a portable canonical repository.
+Keep one stable checkout as source of truth and install user-level harness
+projections as links to it. Projects are operated on, not installed into.
+Installation availability, support tier, and real-harness validation are
+separate.
+
+## Commands
 
 The dependency-free installer uses the user's home directory and handles one
 harness per invocation:
@@ -20,33 +21,26 @@ scripts/swe-forge update <harness>
 scripts/swe-forge uninstall <harness>
 ```
 
-The canonical worker communication validators use Python 3's standard library;
-install Python 3 when using delegated workers (SOLO remains available without
-it). Installable harness names are
-`opencode`, `omp`, `claude`, `codex`, `cursor`, and `pi`. Installation is
-link-based, so a reviewed update to this checkout is
-reflected in the installed projection. The user-level link model is the only
-supported installation path; it does not imply equal capabilities or real
-harness validation. See [compatibility](compatibility.md) for current tiers and
-evidence.
+Install Python 3 for delegated workers; `SOLO` does not need it. Harnesses are
+`opencode`, `omp`, `claude`, `codex`, `cursor`, and `pi`. Links reflect reviewed
+source changes. See [compatibility](compatibility.md) for tiers and evidence.
 
-## Recommended installation
+## Source checkout
 
-After the planned first alpha tag and release are published, keep a tagged
-source checkout at a stable path:
+After the planned first alpha is published, use a tagged stable checkout:
 
 ```bash
-# Use only after the v0.1.0-alpha.1 tag and release are published:
+# Only after the v0.1.0-alpha.1 tag and release are published:
 git clone --branch v0.1.0-alpha.1 --depth 1 \
   https://github.com/joacod/swe-forge.git ~/tools/swe-forge
 cd ~/tools/swe-forge
 ```
 
-Before publication, use a development clone without claiming that the tag is
-downloadable. A personal checkout may follow `main`, but public installations
-should use a release tag.
+Before publication, use a development clone; do not claim the tag is available.
+A personal checkout may follow `main`, but public installations should use a
+release tag.
 
-Install the harnesses you use explicitly:
+Install each desired harness explicitly:
 
 ```bash
 scripts/swe-forge install opencode
@@ -58,14 +52,10 @@ scripts/swe-forge install pi
 ```
 
 The installer does not modify harness settings, permissions, models,
-credentials, or other personal configuration. A harness may still support
-project-specific configuration; that configuration is separate from the SWE
-Forge installation.
+credentials, or personal/project configuration. Harness project configuration is
+separate.
 
-## Harness locations
-
-Each projection points to the stable checkout while keeping the harness entry
-at its normal user-level location:
+## Projection locations
 
 | Harness | Entry points | Canonical support link |
 | --- | --- | --- |
@@ -76,39 +66,29 @@ at its normal user-level location:
 | Cursor | `~/.agents/skills/swe-forge/` | `~/.agents/swe-forge/` |
 | Pi | `~/.pi/agent/prompts/`, `~/.pi/agent/extensions/` | `~/.pi/agent/swe-forge/` |
 
-Codex and Cursor intentionally share the Agent Skill projection. Install each
-harness only when it is needed; there is no multi-harness install command.
+Codex and Cursor share the Agent Skill projection. There is no multi-harness
+install command.
 
-### OMP native SUBAGENTS bridge
+### OMP native `SUBAGENTS`
 
-The OMP adapter installs a source-linked runtime extension and three confined
-user-level agent profiles in addition to the `/swe-forge` prompt. The extension
-uses OMP's native `task` tool, per-task `outputSchema`/strict structured output,
-and `task.batch`; it does not require a separate SWE Forge subagent executor
-package.
+The OMP adapter also links its runtime extension, prompt, three confined
+profiles, and canonical support. It uses OMP's native `task`, per-task
+`outputSchema`/strict output, and `task.batch`; no separate worker executor is
+needed.
 
-Read-only native workers may batch when canonical routing permits it. Writable
-delegated results are materialized into and accepted against the canonical
-delivery candidate sequentially; the adapter/runtime may serialize worker
-execution when its host requires it. Missing or incompatible runtime
-capabilities use the visible `SOLO`/sequential fallback. OMP delegated
-sessions are headless, so profile confinement and canonical root-owned delivery
-authorization—not an interactive approval prompt—are the safety boundary.
+Read-only workers may batch when canonical routing permits. Writable results are
+materialized and accepted sequentially in the canonical checkout. Missing or
+incompatible capabilities use visible `SOLO`/sequential fallback. OMP delegated
+sessions are headless; profile confinement and root-owned delivery authorization
+remain the boundary, not an interactive approval prompt. The adapter does not
+change OMP settings or project configuration. See the [OMP adapter](../.swe-forge/adapters/omp/README.md).
 
-The adapter does not modify OMP settings, models, credentials, permissions, or
-project configuration. See the [OMP adapter reference](../.swe-forge/adapters/omp/README.md)
-for the current API boundary and lifecycle limitations.
+### Optional Pi `SUBAGENTS`
 
-### Optional Pi SUBAGENTS capability
-
-The standard Pi bridge is sufficient for normal SWE Forge usage. The optional
-`swe_forge_subagent` package only adds the bounded child-agent capability used
-when canonical routing selects `SUBAGENTS`; without it, SWE Forge keeps its
-SOLO/sequential fallback. The main installer does not install this executable
-extension or make it a hidden dependency.
-
-The package is not published to npm yet. Until then, use a local source-path
-installation. A fresh setup needs both repositories:
+The standard Pi bridge works without the optional `swe_forge_subagent` package.
+The package adds bounded child-agent capability when routing selects
+`SUBAGENTS`; otherwise Forge uses `SOLO`/sequential. The main installer does
+not install it. It is not published to npm; use a reviewed local source path:
 
 ```bash
 SWE_FORGE_DIR="$HOME/tools/swe-forge"
@@ -126,62 +106,53 @@ git clone https://github.com/joacod/swe-forge-pi-subagents.git "$SUBAGENTS_DIR"
 pi install "$SUBAGENTS_DIR"
 ```
 
-If SWE Forge is already cloned and installed, skip its clone and installer
-command. If only the optional package is missing, clone that repository, run
-`npm ci` inside it, and run `pi install /absolute/path/to/swe-forge-pi-subagents`.
-The package requires Node.js `>=22.19.0`; review it before trusting a Pi
-package because packages run with the user's full permissions.
+If Forge is already cloned and installed, skip its clone and installer. If only
+the package is missing, clone it, run `npm ci`, and install
+`pi install /absolute/path/to/swe-forge-pi-subagents`. It requires Node.js
+`>=22.19.0`; review it before trusting a package with full user permissions.
 
-Restart Pi or run `/reload` after installation. Confirm the optional package
-with:
+Restart Pi or run `/reload`, then check:
 
 ```bash
 pi list
 ```
 
-When an npm release becomes available, replace the package clone and local-path
-install with:
+When an npm release exists, use:
 
 ```bash
 pi install npm:swe-forge-pi-subagents@<version>
 ```
 
-The main SWE Forge installation remains required because the optional package
-reads the canonical support root from `~/.pi/agent/swe-forge/`.
+The main Forge installation remains required because the package reads
+`~/.pi/agent/swe-forge/`.
 
-## Lifecycle commands
+## Lifecycle and manifests
 
-`version` reports the release version, source commit, and source-tree state.
-`status` reports the source, harness, managed manifest, paths, and verification
-result. `doctor` adds remediation-oriented diagnostics.
-
-Use `--dry-run` with `install` or `update` to perform preflight and conflict
-checks without creating a lock, link, directory, or manifest:
+`version` reports release, source commit, and tree state. `status` reports
+source, harness, managed paths, and verification; `doctor` adds remediation.
+Use `--dry-run` with `install` or `update` for preflight/conflict checks without
+creating a lock, link, directory, or manifest:
 
 ```bash
 scripts/swe-forge install opencode --dry-run
 scripts/swe-forge update opencode --dry-run
 ```
 
-Each successful installation records an exact managed manifest under
-`~/.swe-forge-install-state/<harness>.tsv`. The manifest records the source
-revision and every managed link. `update` restores missing links, relinks an
-unchanged managed link when its source projection changes, removes stale
-managed links, and refuses modified or ambiguous entries. `uninstall` removes
-only links that still match the recorded target and refuses modified entries.
-Shared canonical support links remain while another installed harness owns the
-same path.
+Successful installation records an exact manifest at
+`~/.swe-forge-install-state/<harness>.tsv`, including source revision and every
+managed link. `update` restores missing links, relinks changed source
+projections, removes stale managed links, and refuses modified or ambiguous
+entries. `uninstall` removes only links matching the manifest and refuses
+modified entries. Shared support links remain while another harness owns them.
 
-An installation without a current manifest can still be inspected with
-`verify`, `status`, and `doctor`. `update` and `uninstall` refuse it until the
-installation is reviewed and recreated. Obsolete project or copied
-installations from earlier pre-alpha versions are not managed by the current
-installer; review those files manually before recreating a supported
-installation.
+Without a current manifest, `verify`, `status`, and `doctor` can inspect an
+installation; `update` and `uninstall` refuse it until recreated. Obsolete
+pre-alpha project or copied installations are not managed; review them before
+recreating a supported installation.
 
-## Verification and first use
+## Verify and first use
 
-Installation verifies automatically. It can also be run later:
+Installation verifies automatically and can be repeated:
 
 ```bash
 scripts/swe-forge verify opencode
@@ -192,47 +163,44 @@ scripts/swe-forge verify cursor
 scripts/swe-forge verify pi
 ```
 
-Verification checks the canonical files, source links, harness locations,
-adapter references, and dangling links. After a successful filesystem check,
-remember that projection validation is not real harness validation. For an
-adapter you intend to exercise, run a small explicit harness invocation:
+Verification checks canonical files, source links, locations, adapter
+references, and dangling links. It is projection evidence, not real harness
+validation. For a harness you will exercise, run a small explicit invocation:
 
 ```text
 /swe-forge <small test ticket>
 ```
 
-For Codex, invoke the installed skill explicitly:
+For Codex:
 
 ```text
 $swe-forge <small test ticket>
 ```
 
-Ordinary prompts continue to behave normally; SWE Forge remains explicitly
-invoked.
+Ordinary prompts remain ordinary.
 
-## Updating the source and installed projections
+## Update
 
-For a development checkout, review and fetch source changes manually. For a
-pinned public installation, choose and review a newer release tag first:
+For development, fetch and review source changes manually. For a pinned public
+installation, review a newer release tag first:
 
-1. update the stable source checkout explicitly
-2. run `scripts/swe-forge version`
-3. run `status`, `doctor`, and `verify <harness>` for each installation
-4. run `scripts/swe-forge update <harness>`
-5. review changes to activation, contracts, policies, and adapters
-6. run the repository's structural and documentation checks
+1. update the stable source checkout;
+2. run `scripts/swe-forge version`;
+3. run `status`, `doctor`, and `verify <harness>`;
+4. run `scripts/swe-forge update <harness>`; and
+5. review activation, contracts, policies, and adapter changes.
 
-`update` never fetches, switches branches, or publishes changes. Keep temporary
-run state outside the repository or under ignored `.swe-forge/runs/`.
+`update` never fetches, switches branches, or publishes. Keep temporary run
+state outside the repository or under ignored `.swe-forge/runs/`.
 
 ## Filesystem safety
 
-The installer rejects symlinked directories beneath the user home hierarchy,
-serializes cooperating installs with a home-level lock, and rolls back links
-and directories created by a failed run. It does not remove or restore
-pre-existing entries. Conflicts stop before any installation link is written.
+The installer rejects symlinked directories beneath the user home, serializes
+cooperating installs with a home-level lock, and rolls back links/directories it
+created after failure. It does not remove or restore pre-existing entries;
+conflicts stop before links are written.
 
-Portable POSIX shell cannot provide descriptor-relative no-follow operations, so
-do not install into a hierarchy concurrently controlled by an untrusted
-process. A stale `.swe-forge-install.lock` may be removed only after confirming
-that no installation is active.
+Portable POSIX shell cannot provide descriptor-relative no-follow operations.
+Do not install under a hierarchy concurrently controlled by an untrusted
+process. Remove a stale `.swe-forge-install.lock` only after confirming no
+installation is active.

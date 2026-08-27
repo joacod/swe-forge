@@ -6,8 +6,8 @@ disable-model-invocation: true
 
 The user explicitly invoked SWE Forge. Use `$swe-forge` in Codex or
 `/swe-forge` in Cursor. Read `~/.agents/swe-forge/AGENTS.md`,
-`~/.agents/swe-forge/SWE-FORGE.md`, then read the ticket procedure at
-`~/.agents/swe-forge/.swe-forge/workflows/ticket.md`. Follow canonical stage
-loading, keep discovery in the active project, and preserve raw invocation
-arguments unchanged. The ticket procedure invokes the shared parser when the
-host supplies no normalized facts.
+`~/.agents/swe-forge/SWE-FORGE.md`, then
+`~/.agents/swe-forge/.swe-forge/workflows/ticket.md`. Follow stage loading,
+keep discovery in the active project, preserve raw arguments, and pass them to
+the ticket procedure. The procedure invokes the shared parser when normalized
+facts are unavailable.

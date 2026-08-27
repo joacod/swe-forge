@@ -15,9 +15,9 @@ scripts/swe-forge install cursor
 ```
 
 The skill disables implicit invocation where supported; Codex also uses
-`agents/openai.yaml`. Users invoke `$swe-forge` in Codex or `/swe-forge` in
-Cursor. Native launches use the validated canonical worker briefing; the
-shared skill does not construct fields. See [shared adapter behavior](../../README.md).
+`agents/openai.yaml`. Invoke `$swe-forge` in Codex or `/swe-forge` in Cursor.
+Native launches receive the validated canonical brief; the skill does not build
+it. See [shared adapter behavior](../../README.md).
 
 References:
 

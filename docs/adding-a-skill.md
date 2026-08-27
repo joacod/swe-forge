@@ -1,105 +1,57 @@
-# Adding An Optional Specialist Skill
+# Adding an Optional Specialist Skill
 
-SWE Forge can use domain-specific skills without making them part of the
-canonical workflow. This is the right extension point for reusable guidance
-that is valuable for some tickets but would add noise or maintenance cost to
-ordinary work.
+Use a specialist skill for reusable guidance that helps a class of tickets but
+would add noise or maintenance cost to ordinary work. It is optional and never
+changes canonical authority.
 
-## Use A Skill, Role, Or Delivery Helper?
+## Choose the extension
 
-Choose the smallest extension that fits:
+- **Skill:** optional domain guidance, references, audits, or checks.
+- **Role:** repeated responsibility with bounded ownership and structured result.
+- **Delivery helper:** one explicitly authorized action such as `git-commit`,
+  `git-push`, or `git-pr`.
 
-- **Specialist skill:** optional domain guidance, references, audits, or
-  validation steps for a class of tickets.
-- **Role:** a repeated workflow responsibility with bounded ownership and a
-  structured result, such as independent review or security analysis.
-- **Delivery helper:** one explicitly authorized repository action, such as
-  `git-commit`, `git-push`, or `git-pr`.
+Do not turn a useful prompt into a role or command. Existing roles, contracts,
+and policies remain authoritative.
 
-A specialist skill must not become a new role or delivery command merely
-because it has a useful prompt. Existing roles, contracts, and policies remain
-the source of authority.
+## Keep it optional
 
-## Keep It Optional
+Expose a skill only through explicit invocation or an installed local bundle.
+Do not make the default loader discover catalogs, download bodies, or load every
+reference. Keep the entry point and required references together.
 
-A skill should be available on demand through a harness-native, explicit
-invocation or an already-installed local bundle. Do not make the default SWE
-Forge loader discover arbitrary skill catalogs, download remote skill bodies,
-or load every specialist reference into every ticket.
-
-When a skill is adopted, document a small descriptor containing:
+Document:
 
 ```yaml
 id: <stable name>
-purpose: <bounded problem it helps solve>
+purpose: <bounded problem>
 use_when:
   - <observable ticket signal>
 not_for:
-  - <nearby ticket that should stay on the normal path>
-source: <maintained local bundle or user-provided external source>
+  - <nearby ticket for the normal path>
+source: <maintained local bundle or user-provided source>
 dependencies:
-  - <references, scripts, or assets required by the entry point>
+  - <references, scripts, or assets>
 expected_output: <advice, audit, implementation, or review evidence>
 ```
 
-Keep the entry point and its references together. A skill that depends on
-scripts or a reference tree is a bundle, not a single Markdown file that can be
-copied safely in isolation.
+## Use in a ticket
 
-## Use It In A Ticket
+1. preserve the user's reference and inspect the repository first;
+2. select only on user request or a clear declared trigger whose benefit exceeds
+   context cost;
+3. read only the entry point and needed references;
+4. record source, decision, and reason in the transient spec; and
+5. keep scope, validation, review, and delivery under normal Forge contracts.
 
-The orchestrator should:
+If an optional skill is unavailable, continue and record the limitation. Ask
+only when it is required or its absence changes behavior, compatibility, safety,
+or acceptance. Inspect and classify skill-command side effects before use; a
+skill cannot waive checks or authorize external work.
 
-1. preserve the user's skill reference and inspect repository facts first
-2. select the skill only when the user requested it or its declared trigger
-   clearly matches and the expected benefit justifies the extra context
-3. read only the entry point and material needed for the current ticket
-4. record the source, selection decision, and reason in the transient working
-   spec
-5. keep implementation scope, validation, review, and delivery authorization
-   under the normal Forge contracts
+## Promotion
 
-If a skill is unavailable, proceed without it when it is optional and record
-the limitation. Ask for a decision when the skill is required or its absence
-would change behavior, compatibility, safety, or acceptance.
-
-Skill-provided commands are not automatically trusted validation. Inspect their
-side effects and classify them before running them. A skill can recommend a
-check; it cannot waive a required repository check or authorize external work.
-
-## Examples From This Ticket
-
-These are useful external candidates, not SWE Forge dependencies or bundled
-canonical files:
-
-- [`tdd`](https://github.com/mattpocock/skills/blob/main/skills/engineering/tdd/SKILL.md)
-  fits explicit test-first, red-green-refactor, or integration-test requests.
-  Its `tests.md` and `mocking.md` references are part of the bundle and must be
-  read when needed; it should not make TDD mandatory for ordinary tickets.
-- [`refactor-design-patterns`](https://github.com/joacod/skills/blob/main/skills/refactor-design-patterns/SKILL.md)
-  fits pattern-selection and incremental refactor design questions. It should
-  be loaded only when the ticket has a real design pressure; it should not add
-  pattern ceremony to a simple change.
-- [`ui-design-token-refactor`](https://github.com/joacod/skills/blob/main/skills/ui-design-token-refactor/SKILL.md)
-  fits UI styling, CSS, Tailwind, and design-token work. Its referenced
-  architecture material and audit tooling should be treated as part of the
-  bundle and used only when the repository has that surface.
-
-The skills can later be exposed through the user's preferred harness or
-selected explicitly by a ticket without changing the default workflow. They
-should be promoted into a maintained Forge artifact only if representative
-work demonstrates a repeatable benefit.
-
-## Promotion Checklist
-
-Before adding permanent files, a registry entry, a new role, or a canonical
-policy, compare representative tickets with and without the skill. Look for:
-
-- fewer requirement misses or regressions
-- better targeted validation or review findings
-- lower human correction cost
-- acceptable context, setup, and maintenance overhead
-
-If the evidence is not clear, keep the skill external and on demand. SWE Forge
-should grow capabilities from demonstrated needs rather than accumulate
-one-off prompts.
+Before adding a permanent file, registry entry, role, or policy, compare real
+representative tickets with and without the skill. Promote only when it reduces
+misses or human correction, improves evidence/review, and justifies context,
+setup, and maintenance cost. Otherwise keep it external and on demand.

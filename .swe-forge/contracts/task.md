@@ -1,8 +1,8 @@
 # Task Contract
 
 Create this contract before delegated work. It defines one bounded task; the
-root remains responsible for the canonical delivery candidate, integration, and
-acceptance. A host may execute the worker privately.
+root owns the canonical delivery candidate, integration, and acceptance. A host
+may run the worker privately.
 
 ## Template
 
@@ -72,35 +72,39 @@ risk: low | medium | high | critical
 expected_output: [<implementation/evidence/result fields>]
 ```
 
-## Required semantics
+## Semantics
 
-The root selects the objective, owner, dependencies, repository context, scope,
-acceptance, testing decision, validation, risk, and expected output. Writable
-tasks additionally need `write_access`, `checkout_baseline`, and
-`authorization`; `working_spec_ref` is a temporary reference or `none`.
-`delegation.allowed` is false by default. If enabled, define descendant limits
-and roles. Authorization for one action never implies another.
+The root selects objective, owner, dependencies, repository context, scope,
+acceptance, testing, validation, risk, and expected output. Writable tasks also
+need `write_access`, `checkout_baseline`, and `authorization`.
+`working_spec_ref` is temporary or `none`; delegation is false by default.
+Descendant limits and roles are required when enabled. One action's
+authorization never implies another.
 
-The task contract does not own live topology, delivery mode, or run state. The
-root copies current routing facts and accepted dependency data into the
-canonical worker brief at launch. Do not copy full state or transcripts into a
-task.
+The contract does not own live topology, delivery mode, or run state. The root
+copies current routing and accepted dependency facts into the worker brief; do
+not copy full state or transcripts into a task.
 
 ## Rules
 
 - one task has one accountable owner and non-overlapping writable scope;
 - dependencies are satisfied before execution;
-- workers discover through allowed reads and request a contract revision before
-  expanding scope;
-- writable results are materialized and validated in the canonical delivery
-  candidate before sequential acceptance;
-- validation entries state requirement and side effects;
+- workers use allowed reads and request a contract revision before expanding
+  scope;
+- writable results are materialized and validated in the canonical candidate
+  before sequential acceptance;
+- validation states requirement and side effects;
 - workers do not push, create PRs, merge, publish, deploy, reroute, or recurse
   unless explicitly authorized and bounded; and
-- the orchestrator validates the returned result against this contract.
+- the root validates the returned result against this contract.
 
 Immediately before launch, create and validate one canonical JSON worker brief
-with `../tools/swe-forge-worker-brief validate --brief FILE`. The brief and
-`contracts/result.md` or `contracts/review.md` are the worker's bounded context.
+with:
+
+```text
+../tools/swe-forge-worker-brief validate --brief FILE
+```
+
+Pass the unchanged brief with `contracts/result.md` or `contracts/review.md`.
 The complete task, run state, transcript, exploration, and unrelated delivery
 metadata remain root-owned.

@@ -1,176 +1,122 @@
 # Adding a Harness
 
-Add a harness adapter only when the harness provides a feature that improves
-discovery, explicit invocation, delegation, permissions, isolation, or runtime
-integration. Natural-language activation through `AGENTS.md` is always the
-fallback.
+Add an adapter only when a harness improves discovery, explicit invocation,
+delegation, permissions, isolation, or runtime integration. Natural-language
+activation through `AGENTS.md` remains the fallback.
 
-SWE Forge is harness-agnostic: the canonical workflow owns semantics and an
-adapter translates them onto the host's native mechanisms. Adapters may expose
-a smaller or different capability set with safe canonical fallbacks. A new
-adapter starts as Experimental by default; it does not need to reproduce every
-other adapter's capabilities before it can be useful.
+The canonical workflow owns semantics; the adapter translates host mechanisms.
+Adapters may expose fewer or different capabilities with safe fallbacks. New
+adapters start `Experimental`; parity with other adapters is not required.
 
-## Research Current Documentation
+## Research first
 
-Before writing adapter files, verify the harness's current official guidance
-for:
+Check the harness's current official documentation for:
 
-- user-level instruction-file discovery and precedence
-- custom commands or slash commands
-- skills or reusable instruction support
-- native subagents, background workers, or teams
-- permission and tool restrictions
-- runtime configuration and capability mapping
-- worktree or session isolation
-- how external orchestration can launch the harness
+- user instruction discovery and precedence;
+- commands, skills, and reusable instructions;
+- native workers, teams, or background execution;
+- permission and tool restrictions;
+- runtime configuration and capability mapping;
+- worktree/session isolation; and
+- external orchestration.
 
-A harness may also support project-specific configuration; document that as a
-harness concern, not as another SWE Forge installation location.
+Record links and the date in the adapter README. Do not infer undocumented
+paths. Keep project-specific configuration as a harness concern, not another
+SWE Forge installation location.
 
-Record the documentation links and date in the adapter README. Do not rely on
-old examples or infer undocumented paths.
+## Adapter contents
 
-## Adapter Contents
-
-Use `.swe-forge/adapters/<harness>/` for harness-specific documentation and
-payloads. Register installable artifacts in
-`.swe-forge/adapters/registry.tsv` instead of adding harness branches to the
-installer. Each registry row declares the one user-level projection:
+Put payloads and docs in `.swe-forge/adapters/<harness>/`. Register each
+user-level projection in `.swe-forge/adapters/registry.tsv`:
 
 ```text
 harness | kind | source | destination | support
 ```
 
-Use `file` or `tree` for `kind`. `support` is the canonical support directory
-under the user's home. Do not add a second installation projection; harness
-project-specific configuration belongs outside this registry.
+Use `file` or `tree`; `support` is the canonical home-relative support path.
+Do not add a second projection. Prefer an existing shared projection where the
+harness supports that standard.
 
-Prefer an existing shared projection when the harness supports the same
-standard. For example, Codex and Cursor use the shared Agent Skill payload in
-`.swe-forge/adapters/shared/agent-skill/`; their adapter directories only
-provide compatibility documentation.
+An adapter may contain a short README, explicit loader, native role/runtime
+bridge, capability detection, permission mapping, isolation/fallback notes, and
+validation steps. Keep it subordinate to the canonical workflow: loaders name
+canonical files; bridges translate host mechanics only.
 
-An adapter may still contain:
+Runtime bridges consume semantic ports—state inspection/resolution,
+worker-brief inspection, and worker-result schema/validation. They must not
+parse or reconstruct canonical representations. Keep host profiles, allowlists,
+lifecycle APIs, and native result mechanics in the adapter.
 
-- a short discovery and installation README
-- an explicit command, skill, or prompt loader
-- optional native role or runtime bridges
-- capability detection and worker-profile mapping
-- permission and runtime configuration guidance
-- isolation and fallback notes
-- validation steps
+## Host primitives
 
-Keep the adapter smaller than and subordinate to the canonical workflow. A
-loader should say which canonical files to read, not reproduce their procedure;
-a runtime bridge may translate host mechanics when the harness needs more than
-a loader.
-
-Runtime bridges consume canonical machine-readable semantic ports instead of
-parsing or reconstructing canonical representations. Use the state tool's
-inspection/resolution JSON for run-state facts, the worker-brief inspection
-JSON for task/profile/write-access mapping, and the worker-result schema and
-validate commands for ordinary JSON results. Keep host profile names, tool
-allowlists, lifecycle APIs, and native result mechanics in the adapter.
-
-## Decide Where a New Host Primitive Belongs
-
-When a harness exposes a useful new primitive, use this small decision rule:
+When a host exposes a new primitive:
 
 ```text
-A new host primitive appears
+new host primitive
         |
-        v
-Does it implement an existing SWE Forge semantic capability?
-        |
-      yes --------------> implement it entirely in the adapter
+implements an existing Forge capability? -- yes -> adapter
         |
         no
-        v
-Does SWE Forge lack a semantic contract that is independently useful
-regardless of this harness?
         |
-      yes --------------> add the smallest harness-neutral contract
+missing a harness-neutral contract useful elsewhere? -- yes -> smallest core contract
         |
-       no ---------------> keep the behavior adapter-local
+        no -> keep it adapter-local
 ```
 
-Canonical routing still selects the topology. An adapter does not choose a
-workflow topology merely because its host exposes a native task or subagent
-primitive.
+Before adding core abstraction, confirm that it:
 
-Before adding a canonical abstraction, ask:
+1. expresses a missing Forge concept;
+2. remains useful without the requesting harness;
+3. can be implemented by another harness;
+4. hides host terminology; and
+5. leaves existing harness behavior unchanged.
 
-1. What SWE Forge semantic concept is missing?
-2. Would the concept still make sense if the requesting harness did not exist?
-3. Could another harness implement the same contract with a different
-   primitive?
-4. Does the abstraction avoid exposing the original host terminology?
-5. Does existing harness behavior remain unchanged?
+Otherwise keep it in the adapter. Do not create a generic plugin framework.
+Canonical routing still selects topology.
 
-If the answers are not convincing, keep the change in the adapter. Do not turn
-this decision rule into a generic plugin or extension framework.
+## Required work
 
-## Required Adapter Work
+1. project the workflow into the host's supported mechanism;
+2. pass untouched invocation arguments to the shared parser/bootstrap;
+3. declare or detect only demonstrated capabilities;
+4. use canonical semantics and fallbacks; and
+5. document tier and validation level honestly.
 
-Adding an adapter requires these bounded pieces, in this order:
+Projection/fixture checks are structural evidence, not real harness validation.
+Promote a tier only with actual use and maintenance evidence. Capability
+asymmetry is valid.
 
-1. project the canonical workflow into the host's supported extension mechanism;
-2. forward the host's untouched invocation arguments to the shared parser/bootstrap;
-3. declare or detect only capabilities the adapter actually demonstrates;
-4. use canonical semantics and documented fallbacks when a capability is absent;
-5. document the support tier and validation level honestly.
+## Activation and roles
 
-Projection and fixture checks are useful structural evidence, but they are not a
-substitute for exercising SWE Forge through the real harness. Promote an
-experimental adapter only when actual use and maintenance evidence warrant it;
-do not create parity work as a prerequisite for adding an adapter.
+Commands, skills, and native features must preserve explicit user activation.
+If a host cannot enforce user-only invocation, document natural-language
+activation rather than shipping an auto-discoverable loader.
 
-## Activation
+For native roles:
 
-Any command, skill, or native feature must preserve the mandatory explicit
-activation contract. It must not activate because a ticket is complex or the
-repository contains SWE Forge.
-
-If the harness cannot enforce user-only invocation, prefer documenting the
-natural-language path instead of shipping an auto-discoverable loader that
-could violate opt-in behavior.
-
-## Native Roles
-
-When native role registration is useful:
-
-- point the native prompt at one file under `.swe-forge/agents/`
-- set read-only permissions for research and review roles
-- grant write tools only to bounded implementation tasks
-- leave runtime selection to the harness
-- require the portable result or review contract in the output
+- point at one file under `.swe-forge/agents/`;
+- use read-only permissions for research/review;
+- grant write tools only to bounded implementation tasks;
+- leave runtime selection to the host; and
+- require the canonical result or review contract.
 
 Do not copy portable role instructions into native definitions.
 
 ## Validation
 
-The installer handles preflight, source-link verification, and
-`install`/`verify` for one explicitly selected harness at a time. There is
-intentionally no multi-harness install shortcut; callers can invoke the command
-once per desired harness.
-Test an adapter in a temporary fake home or controlled fixture:
+Test in a temporary fake home or controlled fixture:
 
-1. ordinary prompt does not activate Forge
-2. explicit natural-language invocation loads the canonical workflow
-3. native command or skill loads only when explicitly invoked
-4. role bridges resolve the canonical files
-5. permissions match the role's intended access
-6. runtime configuration contains no hardcoded private configuration
-7. unavailable optional tooling falls back cleanly
-8. the repository installer can install and verify the adapter in a temporary
-   home without overwriting collisions
+1. ordinary prompts do not activate Forge;
+2. explicit natural-language invocation loads the canonical workflow;
+3. explicit commands/skills load only when invoked;
+4. role bridges resolve canonical files;
+5. permissions match the role;
+6. runtime configuration has no private hardcoding;
+7. unavailable optional tooling falls back; and
+8. install/verify do not overwrite collisions.
 
-Record projection/fixture validation separately from real harness validation.
-In particular, a successful installer or generated skill fixture does not mean
-that the maintainer has behaviorally validated the harness. Update the adapter
-when official harness behavior changes, but do not change the canonical
-architecture to match one vendor's terminology or require feature parity with
-other harnesses. Capability asymmetry is valid: one harness must not define the
-requirements for another, and future adapters should implement only the semantic
-capabilities they can genuinely support.
+Record projection/fixture and real-harness validation separately. Update adapter
+docs when official behavior changes, but do not change canonical architecture
+for one vendor or require feature parity. The installer has one-harness-at-a-time
+preflight, source-link verification, and install/verify flow; there is no
+multi-harness shortcut.

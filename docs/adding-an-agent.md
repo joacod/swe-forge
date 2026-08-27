@@ -1,28 +1,20 @@
 # Adding an Agent
 
-The role catalog should stay small. Add a role only when repeated tickets show
-that a bounded specialization improves correctness, verification, or cost.
+Keep the role catalog small. Add a role only when repeated tickets show a
+bounded specialization improves correctness, verification, or cost.
 
-## Decide Whether a Role Is Needed
+## Need
 
-Before adding a role, check whether an existing role or the orchestrator can
-handle the work. Do not add a role for:
+Use an existing role or the orchestrator unless the new output is independently
+evaluable and needs distinct responsibility or permissions. Do not add a role
+for a one-off preference, vendor feature, tightly coupled task, speculative
+security/performance concern, or unevaluable output. Prefer a policy or
+workflow clarification when no new contract is needed.
 
-- a one-off preference
-- a vendor-specific feature
-- a task that is already tightly coupled to implementation
-- a speculative security or performance concern
-- a role whose output cannot be independently evaluated
+## Portable role
 
-Prefer a policy or workflow clarification when no distinct permission,
-responsibility, or output contract is needed.
-
-## Portable Role File
-
-Create `.swe-forge/agents/<role-name>.md` as harness-neutral Markdown. Do not
-add YAML frontmatter, provider model IDs, command syntax, or vendor permissions.
-
-Use this structure:
+Create `.swe-forge/agents/<role-name>.md` as harness-neutral Markdown without
+frontmatter, provider IDs, command syntax, or vendor permissions. State:
 
 ```markdown
 # Role Name
@@ -31,7 +23,7 @@ Use this structure:
 <one bounded purpose>
 
 ## Invocation
-<when the role is useful and when it is not>
+<when useful and when not>
 
 ## Permissions
 <read-only by default or explicit write conditions>
@@ -48,17 +40,12 @@ Use this structure:
 <structured result or review contract and required evidence>
 ```
 
-The role must say what it owns, what it must not do, and how the orchestrator
-can evaluate its result.
+Say what the role owns, forbids, and how the root evaluates its result.
 
-## Permission Defaults
+## Projection
 
+Keep native bridges under the target adapter. They load the portable role and
+select host permissions; they do not copy its body or require a vendor model.
 Use read-only defaults for research, architecture, review, security, and
-performance roles. A writable role must receive one bounded task contract and
-must report all touched files and validation.
-
-## Harness Projection
-
-Add native bridges only under the appropriate adapter. A bridge should load the
-portable role file and select harness-specific permissions. It must not copy the
-role body or make a vendor model mandatory.
+performance. A writable role needs one bounded task contract and reports all
+touched files and validation.

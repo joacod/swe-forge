@@ -1,64 +1,41 @@
 # Adding a Workflow
 
-The repository implements one general ticket workflow with `SOLO` and
-`SUBAGENTS` execution choices. Add another workflow only when real tickets
-demonstrate that a distinct lifecycle and acceptance strategy is worth
-maintaining.
+SWE Forge has one general ticket workflow with `SOLO` and `SUBAGENTS` choices.
+Add another only when real tickets show that a distinct lifecycle and
+Acceptance strategy is worth maintaining.
 
-## Location and Invocation
+## Location and invocation
 
-Create:
+Create `.swe-forge/workflows/<workflow-name>.md`. The entry point remains
+explicit natural language. A future adapter command must load the workflow,
+not copy it.
 
-```text
-.swe-forge/workflows/<workflow-name>.md
-```
+## Required content
 
-The universal entry point remains explicit natural language. Future adapters may
-expose a command such as `/swe-forge <workflow-name>`, but the command must load
-the workflow file rather than copy it.
+Define only what differs:
 
-## Required Content
+- purpose and use case;
+- required inputs and ticket authority;
+- phases and decisions;
+- consumed artifacts/contracts;
+- routing differences;
+- testing and verification evidence for the canonical gate;
+- failure/recovery boundaries; and
+- workflow-specific report fields, if any.
 
-A workflow should define:
+Keep it proportional. Do not import product-management ceremony, unrestricted
+agent conversation, or unjustified role requirements.
 
-- purpose and when to use it;
-- required inputs and original-ticket authority;
-- phases and decision points;
-- artifacts and contracts it consumes;
-- routing differences from the general ticket workflow;
-- test and verification evidence to feed the canonical gate;
-- failure and recovery boundaries; and
-- workflow-specific report additions, if any.
+## Reuse and review
 
-Keep the workflow proportional. Do not import product-management ceremony,
-unrestricted agent conversations, or role requirements that the ticket does not
-justify.
+Reuse `.swe-forge/contracts/` and `.swe-forge/policies/`. Override a policy only
+for a concrete workflow need and keep general ticket behavior unchanged.
 
-## Reuse Canonical Contracts and Policies
+Before adding roles, commands, or state, exercise focused conformance scenarios
+and repository checks. Add durable ceremony only when it protects required
+behavior or safety.
 
-Reuse `.swe-forge/contracts/` for tasks, results, reviews, and run state.
-Reuse `.swe-forge/policies/` for routing, delegation, verification, and
-recovery unless the new workflow has a concrete reason to override one of them.
-
-If a policy must change for one workflow, document the narrower scope and keep
-general ticket behavior unchanged.
-
-## Validate Before Ceremony
-
-Before adding roles, commands, or persistent state, validate the workflow with
-focused conformance scenarios and repository checks. Add durable ceremony only
-when it protects a required behavior or safety boundary.
-
-## Review Checklist
-
-- activation remains explicitly user-controlled;
-- the original ticket remains authoritative;
-- `SOLO` and `SUBAGENTS` rules remain safe;
-- concurrent mutation of the canonical delivery candidate is forbidden;
-- workers return structured results with canonical delivery identity, scope, and
-  validation evidence; physical worker execution details are host-private;
-- verification and any fresh review feed the canonical Acceptance Gate and are
-  proportional and real;
-- adapters remain subordinate integration layers and do not redefine canonical
-  workflow semantics; and
-- examples and conformance coverage explain when the workflow should not be used.
+Preserve explicit activation, ticket authority, safe `SOLO`/`SUBAGENTS` rules,
+sequential canonical writes, structured worker results, proportional evidence,
+the canonical Acceptance Gate, and subordinate adapters. Document when the
+workflow should not be used.
