@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:standalone": "bun run scripts/build-standalone.ts",
     "check:dependencies": "bun run scripts/check-dependencies.ts",
     "test": "bun test --pass-with-no-tests",
     "typecheck": "tsc --noEmit"

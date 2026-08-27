@@ -16,8 +16,12 @@ scripts/swe-forge verify <harness>
 The source-checkout wrapper requires Bun and delegates to the canonical
 TypeScript installer at `src/install/cli.ts`.
 
-`v0.1.0-alpha.1` is planned, not yet published; use a development checkout
-until then.
+For artifact development, `bun run build:standalone` creates
+`build/standalone/swe-forge`, a Bun executable carrying a deterministic embedded
+release payload. Run `build/standalone/swe-forge payload inspect` to inspect its
+embedded paths. It is not yet the public installation path: source-checkout
+installation remains authoritative. `v0.1.0-alpha.1` is planned, not yet
+published; use a development checkout until then.
 
 Invoke it with a ticket:
 

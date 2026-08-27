@@ -30,6 +30,7 @@ coverage/
 dist/
 build/
 out/
+*.bun-build
 .cache/
 .turbo/
 __pycache__/
