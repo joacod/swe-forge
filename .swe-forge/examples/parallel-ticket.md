@@ -57,10 +57,10 @@ claiming delegation.
 
 ## Handoff
 
-Before launch, render and validate `worker-brief-input/v1`. The implementation
-brief contains only its objective, allowed scope, acceptance, validation,
-permissions, and accepted dependency digest. It does not contain the root
-transcript or full research results. The result is materialized and validated in
+Before launch, create and validate one canonical JSON worker brief. The
+implementation brief contains only its objective, allowed scope, acceptance,
+validation, permissions, and accepted dependency digest. It does not contain
+the root transcript or full research results. The JSON result is validated in
 the canonical delivery checkout before root acceptance.
 
 The root then runs final validation once, performs one fresh review of the same

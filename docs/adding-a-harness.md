@@ -69,8 +69,8 @@ a loader.
 Runtime bridges consume canonical machine-readable semantic ports instead of
 parsing or reconstructing canonical representations. Use the state tool's
 inspection/resolution JSON for run-state facts, the worker-brief inspection
-JSON for task/profile/write-access mapping, and the worker-result schema/encode
-commands for structured ordinary results. Keep host profile names, tool
+JSON for task/profile/write-access mapping, and the worker-result schema and
+validate commands for ordinary JSON results. Keep host profile names, tool
 allowlists, lifecycle APIs, and native result mechanics in the adapter.
 
 ## Decide Where a New Host Primitive Belongs

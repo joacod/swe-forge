@@ -39,30 +39,36 @@ import { pathToFileURL } from "node:url";
 const root = process.argv[2];
 const fixtureCwd = process.argv[3];
 const modulePath = path.join(root, ".swe-forge", "adapters", "pi", "extensions", "swe-forge-runtime.ts");
-const workerBriefTool = path.join(root, ".swe-forge", "tools", "swe-forge-worker-brief");
 const stateTool = path.join(root, ".swe-forge", "tools", "swe-forge-state");
 const { default: extension } = await import(pathToFileURL(modulePath).href);
 
-function renderWorkerBriefing({ taskId, role, writeAccess, allowedRead, allowedWrite }) {
-  const inputPath = path.join(fixtureCwd, "brief-inputs", `${taskId}.input`);
-  const records = [
-    "worker-brief-input/v1",
-    `task\tid\t${taskId}`,
-    `task\towner_role\t${role}`,
-    "task\tdepth\t1",
-    `task\tobjective\tBounded ${taskId} worker objective.`,
-    `task\twrite_access\t${writeAccess}`,
-    "task\tacceptance\tThe worker stays within the generated briefing scope.",
-    "task\tinstruction\tAGENTS.md",
-    `task\tallowed_read\t${allowedRead}`,
-    ...(allowedWrite ? [`task\tallowed_write\t${allowedWrite}`] : []),
-    "task\texpected_output\tstructured result evidence",
-    "task\tvalidation\tscripts/test-swe-forge-briefing\trequired\talways\tlocal-only",
-    "state\trouting.current\tSUBAGENTS",
-  ];
-  fs.mkdirSync(path.dirname(inputPath), { recursive: true });
-  fs.writeFileSync(inputPath, records.join("\n") + "\n");
-  return execFileSync(workerBriefTool, ["render", "--input", inputPath], { encoding: "utf8" });
+function makeWorkerBriefing({ taskId, role, writeAccess, allowedRead, allowedWrite }) {
+  const profile = role === "reviewer" ? "REVIEW" : writeAccess === "read-write" ? "WRITABLE" : "READ_ONLY";
+  const contract = profile === "REVIEW" ? ".swe-forge/contracts/review.md" : ".swe-forge/contracts/result.md";
+  const allowedActions = profile === "REVIEW" ? ["read"] : profile === "WRITABLE" ? ["read", "edit", "validation"] : ["read", "validation"];
+  return JSON.stringify({
+    worker_briefing: {
+      schema: "worker-brief/v1",
+      task_id: taskId,
+      worker: { role, mode: "delegated_worker", depth: 1, recursive_delegation: false },
+      objective: `Bounded ${taskId} worker objective.`,
+      acceptance: ["The worker stays within the generated briefing scope."],
+      repository: {
+        instructions: ["AGENTS.md"],
+        allowed_reads: [allowedRead],
+        allowed_writes: allowedWrite ? [allowedWrite] : ["none"],
+      },
+      architecture_decisions: [],
+      validation: [{ command: "scripts/test-swe-forge-briefing", requirement: "required", condition: "always", side_effects: "local-only" }],
+      permissions: {
+        write_access: writeAccess,
+        topology: "SUBAGENTS",
+        allowed_actions: allowedActions,
+        forbidden_actions: ["delivery", "recursive delegation", "peer communication", "scope expansion", "topology decisions"],
+      },
+      return: { profile, contract, expected_output: ["structured result evidence"] },
+    },
+  }, null, 2);
 }
 
 function writeRuntimeState(filePath, options = {}) {
@@ -285,10 +291,10 @@ const capabilityDetails = {
   compatibilityErrors: [],
 };
 await subagentHandlers.get("tool_result")({ toolName: "swe_forge_subagent", input: capabilitiesInput, details: capabilityDetails, isError: false }, subagentContext);
-const workerBriefingContract = renderWorkerBriefing({ taskId: "reader-check", role: "reader", writeAccess: "read-only", allowedRead: "src/parser.ts#parseRecord" });
+const workerBriefingContract = makeWorkerBriefing({ taskId: "reader-check", role: "reader", writeAccess: "read-only", allowedRead: "src/parser.ts#parseRecord" });
 const runInput = { action: "run", role: "reader", workerBriefing: workerBriefingContract, expectedOutputContract: "result", profile: "READ_ONLY" };
 if (await subagentHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: runInput }, subagentContext)) throw new Error("valid delegated run was blocked");
-const invalidBriefRun = await subagentHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: { ...runInput, workerBriefing: workerBriefingContract.replace(/^  objective:.*$/m, "") } }, subagentContext);
+const invalidBriefRun = await subagentHandlers.get("tool_call")({ toolName: "swe_forge_subagent", input: { ...runInput, workerBriefing: workerBriefingContract.replace(/^    "objective":.*\n/m, "") } }, subagentContext);
 if (!invalidBriefRun?.block || !invalidBriefRun.reason.includes("Canonical worker briefing validation failed")) throw new Error("invalid briefing was accepted");
 
 writeRuntimeState(subagentState, { runId: "solo-run", current: "SOLO", preferred: "SOLO", updatedAt: "2051-01-01T00:00:00Z" });

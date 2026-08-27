@@ -45,11 +45,11 @@ waves for small work.
 
 ## Launch and handoff
 
-Immediately before launch, render and validate `worker-brief-input/v1` with
-`../tools/swe-forge-worker-brief`. Pass the unchanged projection with the
-selected role and result/review contract. The task and run state remain
-root-owned; do not pass transcripts, full history, full diffs, or unrelated
-policy prose.
+Immediately before launch, create the canonical JSON worker brief and validate
+it with `../tools/swe-forge-worker-brief validate --brief FILE`. Pass the
+unchanged brief with the selected role and result/review contract. The task and
+run state remain root-owned; do not pass transcripts, full history, full diffs,
+or unrelated policy prose.
 
 After task A is accepted, the root may derive a concise B-specific
 `dependency_digest` in B's existing briefing. It may contain only accepted

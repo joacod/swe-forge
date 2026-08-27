@@ -12,7 +12,7 @@ the schema.
 
 ## Machine surface
 
-Adapters use the dependency-free semantic ports rather than parsing YAML:
+Adapters use the canonical semantic ports rather than parsing YAML:
 
 ```text
 swe-forge-state inspect --state FILE|DIRECTORY --checkout PATH

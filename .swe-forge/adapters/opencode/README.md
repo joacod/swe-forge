@@ -25,10 +25,11 @@ explicit draft request and plain `/git-pr` remains normal/open.
 
 ## Native subagents
 
-When routing selects `SUBAGENTS`, render and validate the canonical worker brief
-with `../../tools/swe-forge-worker-brief` and pass it unchanged with the role
-and result/review contract. Writable workers in one delivery checkout run
-sequentially; the root owns materialization, integration, and delivery.
+When routing selects `SUBAGENTS`, create and validate the canonical JSON worker
+brief with `../../tools/swe-forge-worker-brief validate --brief FILE` and pass
+it unchanged with the role and result/review contract. Writable workers in one
+delivery checkout run sequentially; the root owns materialization, integration,
+and delivery.
 
 A custom `.opencode/agents/` entry should be a thin host bridge, for example:
 

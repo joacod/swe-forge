@@ -388,7 +388,7 @@ async function validateWorkerBriefing(pi: any, briefing: string, signal?: AbortS
 	let directory: string | undefined;
 	try {
 		directory = fs.mkdtempSync(path.join(os.tmpdir(), "swe-forge-worker-brief-"));
-		const briefPath = path.join(directory, "worker-brief.yaml");
+		const briefPath = path.join(directory, "worker-brief.json");
 		fs.writeFileSync(briefPath, briefing, { encoding: "utf8", mode: 0o600 });
 		const result = await pi.exec(validator, ["validate", "--brief", briefPath], { signal, timeout: 5000 });
 		if (result?.code !== 0) {
@@ -468,7 +468,7 @@ function subagentCapabilityPrompt(observation: SubagentToolObservation, run: Act
 		"Canonical routing owns whether to use this shared-checkout capability; use it only for one bounded SUBAGENTS task.",
 		"Call action=capabilities first and require the requested role and READ_ONLY/WRITABLE profile before action=run.",
 		"With UNKNOWN topology, capabilities is discovery only: persist matching active schema-v5 state with routing.current: SUBAGENTS before action=run, then renegotiate.",
-		"Pass only the canonical worker_briefing projection to action=run. Missing or incompatible capability falls back to SOLO/sequential.",
+		"Pass only the canonical worker-brief/v1 JSON object to action=run. Missing or incompatible capability falls back to SOLO/sequential.",
 	].join("\n");
 }
 
@@ -720,7 +720,7 @@ export default function sweForgeRuntime(pi: any) {
 		if (typeof input.workerBriefing !== "string" || input.workerBriefing.trim().length === 0) {
 			return {
 				block: true,
-				reason: "A non-empty workerBriefing worker_briefing/v1 projection is required for subagent execution.",
+				reason: "A non-empty workerBriefing worker-brief/v1 JSON object is required for subagent execution.",
 			};
 		}
 		if (input.expectedOutputContract !== "result" && input.expectedOutputContract !== "review") {
@@ -730,7 +730,7 @@ export default function sweForgeRuntime(pi: any) {
 		if (briefingError) {
 			return {
 				block: true,
-				reason: `Canonical worker briefing validation failed: ${briefingError}. Use the renderer or the SOLO/sequential fallback.`,
+				reason: `Canonical worker briefing validation failed: ${briefingError}. Use a valid canonical brief or the SOLO/sequential fallback.`,
 			};
 		}
 		return undefined;

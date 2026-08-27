@@ -23,7 +23,7 @@ Shared references:
   delivery, acceptance, and load map;
 - [`workflows/ticket.md`](../workflows/ticket.md): procedure;
 - [`tools/swe-forge-invocation`](../tools/swe-forge-invocation): parser;
-- [`contracts/worker-brief.md`](../contracts/worker-brief.md): worker projection;
+- [`contracts/worker-brief.md`](../contracts/worker-brief.md): worker brief;
 - [`policies/delegation.md`](../policies/delegation.md): worker boundaries;
 - [`policies/verification.md`](../policies/verification.md): quality gates;
 - [`policies/evidence.md`](../policies/evidence.md): candidate evidence; and

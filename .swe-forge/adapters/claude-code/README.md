@@ -24,9 +24,9 @@ normalized facts.
 ## Native subagents
 
 A thin `.claude/agents/` bridge may load a canonical role when useful. Before
-launch, render and validate the canonical worker brief and pass it unchanged
-with the role and result/review contract. Read-only roles receive no write
-tools; writable scope comes from the task contract. Native writes are
+launch, create and validate the canonical JSON worker brief and pass it
+unchanged with the role and result/review contract. Read-only roles receive no
+write tools; writable scope comes from the task contract. Native writes are
 sequential in one delivery checkout; the root owns integration and delivery.
 
 ## Installed projection

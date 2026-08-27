@@ -74,8 +74,8 @@ support-tier commitment:
 | Capability | Result | Boundary |
 | --- | --- | --- |
 | Native shared-checkout `SUBAGENTS` | Proven | Automatic routing recorded `routing.preferred: SUBAGENTS` and `routing.current: SUBAGENTS`, along with native capability evidence. OMP emitted native task preparation and validation lifecycle records. |
-| Canonical worker briefs | Proven | The two-item read-only batch and the single writable worker used validated `worker_briefing/v1` projections; assignments remained bounded. |
-| Strict structured results | Proven | OMP returned caller-sourced strict structured data and the adapter recorded canonical `worker-result/v1` validation for every result. |
+| Canonical worker briefs | Proven | The two-item read-only batch and the single writable worker used validated canonical JSON briefs; assignments remained bounded. |
+| Strict structured results | Proven | OMP returned caller-sourced strict JSON data and the adapter recorded canonical `worker-result/v1` validation for every result. |
 | Read-only fan-out/fan-in | Proven | Two real workers completed in one native batch; root consumption remained centralized. |
 | Shared-checkout writer safety | Proven for the tested boundary | One real native writable worker changed only a temporary Git fixture; a two-writer native batch was refused before launch. |
 | Capability-unavailable fallback | Proven | A fresh OMP process with `task` disabled reported the missing native capability and visible `SUBAGENTS` to `SOLO`/sequential fallback. |

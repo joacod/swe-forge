@@ -1,97 +1,115 @@
-# Worker Briefing Projection
+# Worker Briefing Contract
 
-This is the worker-facing projection, not a second task contract. The root
-owns the task contract and run state; the canonical renderer owns projection
-shape and mechanical permissions.
+The worker brief is the one canonical worker-facing assignment. The root owns
+the task contract and run state, then creates this bounded JSON object
+immediately before launch. There is no second input record set or re-render step.
 
-## Renderer
+## Validation and adapter port
 
-Use immediately before launch:
+Use the portable tool to validate the object before launch:
 
 ```text
-.swe-forge/tools/swe-forge-worker-brief render --input FILE|- [--output FILE]
-.swe-forge/tools/swe-forge-worker-brief validate --brief FILE|- [--input FILE|-]
+.swe-forge/tools/swe-forge-worker-brief validate --brief FILE|-
 .swe-forge/tools/swe-forge-worker-brief inspect --brief FILE|-
 ```
 
-The transient `worker-brief-input/v1` records supply root-selected task,
-routing, validation, and dependency facts. The tool derives
-`worker_briefing/v1`, profile, permissions, recursion defaults, contract, and
-inclusion/omission rules. Validate the output and pass it unchanged with the
-canonical role and result/review contract. Do not pass full state, transcripts,
-exploration history, or pasted repository files.
+`validate` checks the complete shape and the permission/profile relationships.
+`inspect` performs the same validation and emits only `task_id`, `profile`, and
+`write_access` for a host adapter. Neither command decides scope, acceptance,
+dependency relevance, routing, or delivery. The root must pass the validated
+JSON unchanged to the worker.
 
-`REVIEW` is read-only and receives supplied evidence; it does not grant tests,
-formatters, linters, builds, or validation actions. The renderer does not decide
-scope, acceptance, dependency relevance, routing, or delivery.
+JSON is intentionally both the native structured form and the text fallback:
+hosts without structured-output support receive the same concise JSON text and
+must return the result fields in `contracts/result.md`. Do not introduce a
+host-specific alternate encoding.
 
-## Projection shape
+## Canonical shape
 
-```yaml
-worker_briefing:
-  schema: worker-brief/v1
-  task_id: <assigned task>
-  worker:
-    role: <canonical role>
-    mode: delegated_worker
-    depth: <depth from root>
-    recursive_delegation: false
-  objective: <one bounded objective>
-  acceptance: [<relevant checkable criteria>]
-  repository:
-    instructions: [<relevant instruction paths>]
-    allowed_reads: [<paths, symbols, or command scope>]
-    allowed_writes: [<paths or none>]
-  architecture_decisions: [<task-relevant decisions>]
-  dependencies:
-    completed:
-      - task_id: <accepted dependency>
-        dependency_digest:
-          accepted_decisions: []
-          relevant_facts: []
-          changed_interfaces: []
-          paths_symbols: []
-          authoritative_assumptions: []
-          validation_facts: []
-          unresolved_risks: []
-          source_refs: []
-    pending: [<dependency or none>]
-  validation:
-    - command: <assigned check>
-      requirement: required | conditional | informational
-      condition: <observable condition>
-      side_effects: local-only | external-read | external-write | destructive
-  permissions:
-    write_access: read-only | read-write
-    topology: SUBAGENTS
-    allowed_actions: [<derived actions>]
-    forbidden_actions: [<derived prohibitions>]
-  return:
-    profile: READ_ONLY | WRITABLE | REVIEW
-    contract: <canonical result or review contract>
-    expected_output: [<fields the root consumes>]
+```json
+{
+  "worker_briefing": {
+    "schema": "worker-brief/v1",
+    "task_id": "<assigned task>",
+    "worker": {
+      "role": "<canonical role>",
+      "mode": "delegated_worker",
+      "depth": 1,
+      "recursive_delegation": false
+    },
+    "objective": "<one bounded objective>",
+    "acceptance": ["<relevant checkable criterion>"],
+    "repository": {
+      "instructions": ["<relevant instruction path>"],
+      "allowed_reads": ["<path, symbol, or command scope>"],
+      "allowed_writes": ["<path or none>"]
+    },
+    "architecture_decisions": ["<task-relevant decision>"],
+    "dependencies": {
+      "completed": [
+        {
+          "task_id": "<accepted dependency>",
+          "dependency_digest": {
+            "accepted_decisions": ["<accepted fact>"],
+            "relevant_facts": ["<fact the worker needs>"],
+            "changed_interfaces": ["<interface>"],
+            "paths_symbols": ["<path or symbol>"],
+            "authoritative_assumptions": ["<assumption>"],
+            "validation_facts": ["<relevant check>"],
+            "unresolved_risks": ["<relevant risk>"],
+            "source_refs": ["<accepted result or evidence reference>"]
+          }
+        }
+      ],
+      "pending": ["<dependency>"]
+    },
+    "validation": [
+      {
+        "command": "<assigned check>",
+        "requirement": "required | conditional | informational",
+        "condition": "<observable condition>",
+        "side_effects": "local-only | external-read | external-write | destructive"
+      }
+    ],
+    "permissions": {
+      "write_access": "read-only | read-write",
+      "topology": "SUBAGENTS",
+      "allowed_actions": ["<derived actions>"],
+      "forbidden_actions": ["<derived prohibitions>"]
+    },
+    "return": {
+      "profile": "READ_ONLY | WRITABLE | REVIEW",
+      "contract": "<canonical result or review contract>",
+      "expected_output": ["<fields the root consumes>"]
+    }
+  }
+}
 ```
 
-## Root-selected content and dependency digests
+`dependencies` is omitted when there are no dependency facts. Empty digest
+categories are omitted, and every completed digest includes a non-empty
+`source_refs` list pointing to the accepted result or evidence. A completed
+dependency is included only after the root has accepted its result and selected
+the facts relevant to this task; the brief cannot turn a pending or unaccepted
+result into an accepted fact.
 
-The root supplies objective, acceptance, scope, repository pointers, relevant
-architecture, validation, result fields, and the decision to delegate. The
-renderer copies or checks these values; it cannot grant authority.
+The profile and actions are derived from the role and write access:
 
-A completed dependency must be `done` with an accepted result before the root
-adds its digest. The digest is transient launch context, not a peer message or
-persistent handoff. Include only accepted facts B needs: decisions, interfaces,
-paths/symbols, assumptions, validation facts, risks, and source references.
-Omit reasoning, exploration, unrelated findings, full logs/diffs, and delivery
-metadata. It cannot expand scope, permissions, authority, or dependencies.
+| Worker | Profile | Allowed actions | Contract |
+| --- | --- | --- | --- |
+| read-only ordinary worker | `READ_ONLY` | `read`, `validation` | `result.md` |
+| read-write worker | `WRITABLE` | `read`, `edit`, `validation` | `result.md` |
+| reviewer | `REVIEW` | `read` | `review.md` |
 
-| Worker | Include | Omit |
-| --- | --- | --- |
-| Read-only | common fields, read-only permissions, selected contract | writes, checkout/delivery state |
-| Review | initial review focus, ticket context, read-only permissions, evidence | edits, validation actions, unrelated criteria, transcript |
-| Read-write | common fields, allowed writes, candidate permissions, writable contract | delivery actions, physical host details, unrelated state |
+Every delegated brief uses `SUBAGENTS`, disables recursive delegation, and
+forbids delivery, recursive delegation, peer communication, scope expansion,
+and topology decisions. Reviewers may inspect assigned validation evidence but
+are not granted validation actions. Read-only workers use
+`allowed_writes: ["none"]`.
+Read-write workers list their owned paths. Physical worktrees, checkout paths,
+provider details, and delivery authorization are not worker-brief fields.
 
 Workers discover details through allowed paths and request a contract revision
 before expanding scope. They do not create PRs, push, merge, publish, deploy,
-reroute, redo root discovery, or spawn descendants by default. A repair worker
-receives a focused writable task, not a second review assignment.
+reroute, or spawn descendants by default. A writable result reports the
+canonical candidate facts; it does not authorize delivery.

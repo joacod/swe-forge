@@ -57,9 +57,10 @@ hooks. They must not redefine routing, contracts, evidence, delivery, or
 acceptance. A missing capability uses the canonical safe fallback.
 
 The portable tools expose narrow semantic ports: state inspection and active
-selection, worker-brief rendering/inspection, and worker-result schemas and
-encoding. Adapters consume those ports instead of parsing or reconstructing
-canonical representations.
+selection, worker-brief validation/inspection, and worker-result schemas and
+validation. The worker communication tools use only Python 3's standard
+library to parse JSON; they do not maintain a second serialization. Adapters consume those
+ports instead of parsing or reconstructing canonical representations.
 
 ## Shared candidate boundary
 

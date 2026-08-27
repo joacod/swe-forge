@@ -36,7 +36,6 @@ import { pathToFileURL } from "node:url";
 const root = process.argv[2];
 const tmp = process.argv[3];
 const modulePath = path.join(root, ".swe-forge", "adapters", "omp", "extensions", "swe-forge-runtime.ts");
-const briefTool = path.join(root, ".swe-forge", "tools", "swe-forge-worker-brief");
 const stateTool = path.join(root, ".swe-forge", "tools", "swe-forge-state");
 const profileSource = path.join(root, ".swe-forge", "adapters", "omp", "agents");
 const checkout = root;
@@ -84,25 +83,34 @@ function makeState(name, current = "SUBAGENTS", runId = name) {
   ]);
   return path.join(stateDir, "run-state.yaml");
 }
-function renderBrief(taskId, role, writeAccess = "read-only", allowedWrite) {
-  const input = path.join(tmp, `${taskId}.input`);
-  const records = [
-    "worker-brief-input/v1",
-    `task\tid\t${taskId}`,
-    `task\towner_role\t${role}`,
-    "task\tdepth\t1",
-    `task\tobjective\tBounded ${taskId} objective.`,
-    `task\twrite_access\t${writeAccess}`,
-    "task\tacceptance\tThe worker stays within the generated briefing scope.",
-    "task\tinstruction\tAGENTS.md",
-    "task\tallowed_read\tscripts/test-swe-forge-omp",
-    ...(allowedWrite ? [`task\tallowed_write\t${allowedWrite}`] : []),
-    "task\texpected_output\tstructured result evidence",
-    "task\tvalidation\tscripts/test-swe-forge-omp\trequired\talways\tlocal-only",
-    "state\trouting.current\tSUBAGENTS",
-  ];
-  fs.writeFileSync(input, `${records.join("\n")}\n`);
-  return run(briefTool, ["render", "--input", input]);
+function makeBrief(taskId, role, writeAccess = "read-only", allowedWrite) {
+  const allowedWrites = allowedWrite ? [allowedWrite] : ["none"];
+  const profile = role === "reviewer" ? "REVIEW" : writeAccess === "read-write" ? "WRITABLE" : "READ_ONLY";
+  const contract = profile === "REVIEW" ? ".swe-forge/contracts/review.md" : ".swe-forge/contracts/result.md";
+  const allowedActions = profile === "REVIEW" ? ["read"] : profile === "WRITABLE" ? ["read", "edit", "validation"] : ["read", "validation"];
+  return JSON.stringify({
+    worker_briefing: {
+      schema: "worker-brief/v1",
+      task_id: taskId,
+      worker: { role, mode: "delegated_worker", depth: 1, recursive_delegation: false },
+      objective: `Bounded ${taskId} objective.`,
+      acceptance: ["The worker stays within the generated briefing scope."],
+      repository: {
+        instructions: ["AGENTS.md"],
+        allowed_reads: ["scripts/test-swe-forge-omp"],
+        allowed_writes: allowedWrites,
+      },
+      architecture_decisions: [],
+      validation: [{ command: "scripts/test-swe-forge-omp", requirement: "required", condition: "always", side_effects: "local-only" }],
+      permissions: {
+        write_access: writeAccess,
+        topology: "SUBAGENTS",
+        allowed_actions: allowedActions,
+        forbidden_actions: ["delivery", "recursive delegation", "peer communication", "scope expansion", "topology decisions"],
+      },
+      return: { profile, contract, expected_output: ["structured result evidence"] },
+    },
+  });
 }
 function validReadOnlyResult(taskId) {
   return {
@@ -111,8 +119,6 @@ function validReadOnlyResult(taskId) {
     TASK_ID: taskId,
     FINDINGS: ["The native bridge returned the bounded finding."],
     EVIDENCE: [".swe-forge/adapters/omp/extensions/swe-forge-runtime.ts"],
-    RISKS: null,
-    RECOMMENDED_ACTION: null,
   };
 }
 function makePi(agentDir, taskDescription = "Native task supports context tasks outputSchema schemaMode.", tools = ["task"]) {
@@ -172,7 +178,7 @@ assert(discovery.before.systemPrompt[1].includes("discovery only"), "pre-state c
 assert(discovery.call?.block && discovery.call.reason.includes("no active"), "missing run-state did not preserve safe fallback");
 
 const statePath = makeState("valid-state");
-const brief = renderBrief("reader-check", "researcher");
+const brief = makeBrief("reader-check", "researcher");
 const validInput = {
   context: "root transcript must not reach the child",
   tasks: [{ name: "reader-check", agent: "swe-forge-read-only", task: brief }],
@@ -190,7 +196,7 @@ const validResult = await initial.handlers.get("tool_result")({
 }, { cwd: checkout });
 assert(!validResult?.isError, "valid canonical worker result was rejected");
 assert(validResult?.details?.sweForge?.status === "valid", "canonical result validation evidence was not returned");
-const reviewBrief = renderBrief("review-check", "reviewer");
+const reviewBrief = makeBrief("review-check", "reviewer");
 const reviewPrepared = await prepare(initial, statePath, {
   name: "review-check", agent: "swe-forge-reviewer", task: reviewBrief,
 }, ordinaryEvent());
@@ -203,7 +209,7 @@ const reviewResult = await initial.handlers.get("tool_result")({
 assert(reviewResult?.details?.sweForge?.status === "valid", "strict REVIEW transport was not accepted");
 
 // Independent read-only workers may use one native batch.
-const briefTwo = renderBrief("reader-two", "researcher");
+const briefTwo = makeBrief("reader-two", "researcher");
 const batched = await prepare(initial, statePath, {
   context: "discard this root transcript",
   tasks: [
@@ -215,8 +221,8 @@ assert(!batched.call?.block, `read-only native batch was blocked: ${batched.call
 assert(batched.call.input.tasks.length === 2, "read-only batch was not forwarded to native task");
 
 // Writable shared-checkout workers are always sequential.
-const writeBrief = renderBrief("writer-one", "implementer", "read-write", ".swe-forge/adapters/omp/extensions/swe-forge-runtime.ts");
-const writeBriefTwo = renderBrief("writer-two", "implementer", "read-write", ".swe-forge/adapters/omp/agents");
+const writeBrief = makeBrief("writer-one", "implementer", "read-write", ".swe-forge/adapters/omp/extensions/swe-forge-runtime.ts");
+const writeBriefTwo = makeBrief("writer-two", "implementer", "read-write", ".swe-forge/adapters/omp/agents");
 const writableBatch = await prepare(initial, statePath, {
   context: "bounded",
   tasks: [

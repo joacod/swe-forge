@@ -1,7 +1,7 @@
 # OMP Adapter
 
 OMP is an experimental adapter using its user-level prompt, profile, and
-runtime-extension surfaces. It translates canonical worker briefs and results;
+runtime-extension surfaces. It forwards canonical worker briefs and results;
 it does not replace OMP's native task executor or choose topology.
 
 ## Installation
@@ -33,11 +33,11 @@ canonical routing selects `SUBAGENTS`, it:
 
 1. resolves active state through `swe-forge-state`;
 2. re-observes capability at the delegation boundary;
-3. inspects each `worker_briefing/v1` and its task ID;
-4. passes the unchanged projection to the native task;
+3. validates and inspects each canonical JSON worker brief and its task ID;
+4. passes the unchanged brief to the native task;
 5. maps profile/write facts to the confined OMP profile; and
-6. requests the canonical result schema with `schemaMode: strict`, then uses
-   canonical encode/validation.
+6. requests the canonical result JSON Schema with `schemaMode: strict`, then
+   validates the returned JSON directly.
 
 The extension uses OMP middleware around the native task tool; it does not
 implement child sessions, scheduling, or task lifecycle. Read-only tasks may
