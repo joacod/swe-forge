@@ -43,6 +43,8 @@ loads delivery before writing, validates the completed slice, and stops at the
 GUIDED human pause. `go` authorizes the reviewed local commit only; it does not
 authorize push, PR creation, or merge.
 
-A final report distinguishes passed, skipped, and unavailable checks. If the
-change is trivial and localized, the workflow may record why independent review
-was skipped. It never claims acceptance from code inspection alone.
+A final report uses the [compact contract in `SWE-FORGE.md`](../../SWE-FORGE.md): it names
+meaningful validation and mentions skipped or unavailable checks only when they
+matter. If the change is trivial and localized, the workflow may record why
+independent review was skipped. It never claims acceptance from code inspection
+alone.
