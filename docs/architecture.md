@@ -54,8 +54,8 @@ not redefine routing, contracts, evidence, delivery, or acceptance. Missing
 capabilities use the canonical fallback.
 
 Portable tools expose narrow ports for state inspection/selection, worker-brief
-validation/inspection, and worker-result schemas/validation. They use only
-Python 3's standard library for JSON and do not maintain another serialization.
+validation/inspection, and worker-result schemas/validation. Bun is the runtime
+for the typed TypeScript ports; they do not maintain another serialization.
 Adapters consume these ports rather than parsing canonical representations.
 
 ## Candidate and state
