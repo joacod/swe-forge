@@ -70,6 +70,7 @@ interface ProcessResult {
 
 const USAGE = `Usage:
   swe-forge version
+  swe-forge --version
   swe-forge install <harness> [options]
   swe-forge verify <harness>
   swe-forge status <harness>
@@ -79,9 +80,8 @@ const USAGE = `Usage:
 
 Options:
   --dry-run           Plan install/update without writing anything.
-
 Installations link the selected harness projection and canonical support tree
-back to this SWE Forge checkout under the user's home directory.
+back to this SWE Forge source payload under the user's home directory.
 `;
 
 
@@ -172,7 +172,7 @@ export class Installer {
   }
 
   private executeUnsafe(args: readonly string[]): number {
-    if (args.length === 1 && args[0] === "version") {
+    if (args.length === 1 && (args[0] === "version" || args[0] === "--version")) {
       this.printVersion();
       return 0;
     }
@@ -595,10 +595,11 @@ export class Installer {
     return commit.length === 0 ? "unknown" : commit;
   }
 
-  private sourceTreeState(): "clean" | "dirty" {
+  private sourceTreeState(): "clean" | "dirty" | "unknown" {
     if (this.source.mode === "release") return "clean";
     const diff = runCommand(["git", "-C", this.source.realRoot, "diff", "--quiet", "--ignore-submodules", "--"]);
-    if (diff.exitCode !== 0) return "dirty";
+    if (diff.exitCode === 1) return "dirty";
+    if (diff.exitCode !== 0) return "unknown";
     const status = runCommand([
       "git",
       "-C",
@@ -607,7 +608,8 @@ export class Installer {
       "--porcelain=v1",
       "--untracked-files=all",
     ]);
-    return status.exitCode === 0 && stripTrailingNewlines(status.stdout).length === 0 ? "clean" : "dirty";
+    if (status.exitCode !== 0) return "unknown";
+    return stripTrailingNewlines(status.stdout).length === 0 ? "clean" : "dirty";
   }
 
   private printVersion(): void {

@@ -236,6 +236,10 @@ test("compiled executable reports embedded version and runs canonical ports afte
     expect(version.stdout).toContain(`SWE Forge version: ${expectedVersion}\n`);
     expect(version.stdout).not.toContain(root);
     expect(version.stderr).toBe("");
+    const versionFlag = run([relocated, "--version"], fixture, env);
+    expect(versionFlag.exitCode).toBe(0);
+    expect(versionFlag.stdout).toBe(version.stdout);
+    expect(versionFlag.stderr).toBe("");
 
     const embeddedVersion = run([relocated, "payload", "read", "VERSION"], fixture, env);
     expect(embeddedVersion.exitCode).toBe(0);
@@ -248,11 +252,14 @@ test("compiled executable reports embedded version and runs canonical ports afte
     const inspected = JSON.parse(inspection.stdout) as {
       readonly embedded: boolean;
       readonly version: string;
+      readonly payload_sha256: string;
       readonly asset_count: number;
       readonly assets: readonly { readonly path: string; readonly bytes: number }[];
     };
     expect(inspected.embedded).toBe(true);
     expect(inspected.version).toBe(expectedVersion);
+    expect(inspected.payload_sha256).toBe(built.payloadSha256);
+    expect(inspected.payload_sha256).toMatch(/^[0-9a-f]{64}$/u);
     expect(inspected.asset_count).toBe(assetPaths().length);
     expect(inspected.assets.map((asset) => asset.path)).toEqual([...assetPaths()]);
     expect(inspected.assets.every((asset) => asset.bytes > 0)).toBe(true);

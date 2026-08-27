@@ -1,7 +1,7 @@
 name: CI
 
-# Pull requests provide pre-merge confidence. Main and release pushes reuse
-# the same lean canonical check; release tags add release-readiness validation.
+# Pull requests provide pre-merge canonical confidence. Main, release, and
+# manual runs also build and clean-room test the supported standalone targets.
 on:
   push:
     branches:
@@ -36,6 +36,8 @@ jobs:
 
       - name: Check dependency policy
         run: bun run check:dependencies
+      - name: Audit Bun package contents
+        run: bun run check:package
 
       - name: Type-check TypeScript
         run: bun run typecheck
@@ -67,3 +69,42 @@ jobs:
       - name: Check release commit formatting
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: git diff --check HEAD^..HEAD
+
+  standalone:
+    if: ${{ github.event_name != 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: bun-darwin-arm64
+            platform: darwin
+            architecture: arm64
+          - runner: ubuntu-24.04
+            target: bun-linux-x64
+            platform: linux
+            architecture: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check release consistency
+        run: ./scripts/check-release prepare
+
+      - name: Build standalone release artifact
+        run: bun run build:release -- --target ${{ matrix.target }}
+
+      - name: Run clean-room standalone validation
+        run: |
+          version=$(awk 'NR == 1 { print; exit }' VERSION)
+          artifact="build/releases/v${version}/swe-forge-v${version}-${{ matrix.platform }}-${{ matrix.architecture }}"
+          bun run scripts/test-standalone-release.ts "$artifact"

@@ -85,14 +85,38 @@ continuation, candidate-bound validation/review, and PR facts—not a workflow
 log. The host owns context preservation, compaction, retries, and restoration;
 recovery re-reads state and actual Git/evidence.
 
-## Installation
+## Installation and release ownership
 
 The adapter registry is the installation source of truth. Source-checkout
-installation supplies the checkout as both logical and real source. A standalone
-release validates and materializes its embedded payload under the managed
-`versions/<version>/canonical` path, activates global `current`, and passes
-`current/canonical` as the logical source plus the version directory as the
-real validation source to the same installer. Harness manifests own projections;
-they never own release activation or persist a direct version target. Installation
-never installs the adapter catalog or changes project configuration. Adapter
-docs contain host syntax and observed capability evidence only.
+installation supplies the reviewed checkout as both logical and real source.
+A standalone executable validates its embedded inventory and materializes one
+immutable release at `versions/<version>/canonical`, then atomically activates
+the user-level `current` symlink. It passes `current/canonical` as the logical
+source and the version directory as the real validation source to the same
+installer.
+
+Harness-local adapters own their projections and manifests. They never activate
+canonical releases or persist a direct `versions/<version>` target. The global
+`current` release is shared by every installed harness, so standalone `update`
+activates once and reconciles every managed manifest. Installation never
+changes project configuration.
+
+## Release artifact boundary
+
+The release builder uses the tracked canonical inventory, `VERSION`, a pinned
+Bun toolchain, and an explicit target. Each artifact has a versioned
+platform/architecture filename, a JSON metadata sidecar, and a standard
+SHA-256 sidecar. The metadata records the embedded canonical payload identity
+and asset count; `payload inspect` exposes the same identity at runtime.
+
+The payload inventory is deterministic for a given checkout. Bun's compiled
+runtime may still produce different binary bytes between builds, so artifact
+SHA-256 values identify a specific build rather than promising bit-for-bit
+reproducibility. Standalone installation and update do not contact a package
+registry or release service. Cross-target builds may download Bun's target
+runtime as a maintainer build-time input; that network access is not present in
+the standalone executable.
+
+The optional Bun global package exposes the source-checkout wrapper, not a
+platform binary. It requires Bun, ships only the audited source payload, and
+has no install-time download or runtime npm dependency.

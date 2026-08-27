@@ -1,36 +1,36 @@
 # SWE Forge
 
-SWE Forge is an opt-in, harness-agnostic workflow that turns one focused
-coding ticket into one evidence-backed, reviewable PR. It owns one writable
+SWE Forge is an opt-in, harness-agnostic workflow that takes one focused
+coding ticket to one evidence-backed, reviewable outcome. It owns one writable
 delivery checkout and never merges automatically.
 
-## Use
+## Install
 
-### Standalone release executable
+### Standalone executable
 
-A compiled release executable carries the canonical workflow, adapters, and
-runtime tools. It does not need a repository checkout, Bun, Node.js, or Python
-to install or run the installed canonical tools:
+Release executables carry the canonical workflow, adapters, and portable tools.
+They need no repository checkout, Bun, Node.js, or Python at runtime:
 
 ```sh
+./swe-forge --version
 ./swe-forge install <harness>
 ./swe-forge verify <harness>
 ./swe-forge update
 ```
 
-`install` validates the embedded payload, publishes its immutable version under
-the XDG data root (or `$HOME/.local/share`), activates the global
-`swe-forge/current` pointer, and installs the selected harness projection.
-`update` activates the release represented by the running executable and
-reconciles every managed harness manifest. Harness projections and manifests
-always target `swe-forge/current/canonical`; they never store a direct
-`versions/<version>` target.
+`install` validates the embedded payload, stores its immutable version under the
+user data root, activates the global `swe-forge/current` release, and installs
+one harness projection. `update` activates the release in the running
+executable and reconciles every managed harness. It never downloads a release
+or updates over the network.
 
-### Source checkout
+The release flow targets macOS arm64 and Linux x64 (glibc); an artifact is
+distributable only after its native clean-room gate passes. Windows and other
+architectures are not claimed.
 
-The source-checkout wrapper is intentionally checkout-oriented. It requires
-Bun and delegates to the canonical TypeScript installer at
-`src/install/cli.ts`:
+### Source-checkout developer mode
+
+The checkout wrapper requires Bun and runs the reviewed TypeScript source:
 
 ```sh
 scripts/swe-forge install <harness>
@@ -38,31 +38,36 @@ scripts/swe-forge verify <harness>
 scripts/swe-forge update <harness>
 ```
 
-Source-checkout updates remain per-harness. They do not activate managed
-standalone releases.
+Checkout updates are per-harness and do not activate managed standalone
+releases. Runtime package dependencies remain zero.
 
-For artifact development, `bun run build:standalone` creates
-`build/standalone/swe-forge`, a Bun executable carrying a deterministic
-embedded release payload. `./swe-forge payload materialize --activate` is the
-low-level payload publication command; it does not install harness projections.
-`v0.1.0-alpha.1` is planned, not yet published; use a development checkout
-until the separate release publication task completes.
+### Bun global package
 
-Invoke it with a ticket:
+Package metadata is prepared for a future `bun add --global swe-forge` install.
+That entry point intentionally runs source-checkout mode and therefore requires
+Bun; standalone executables do not. This step does not publish the package.
+
+## Develop
+
+Maintainers need Bun for tests, validation, and builds:
+
+```sh
+bun install --frozen-lockfile
+bun run typecheck
+bun test
+bun run build:release -- --target bun-darwin-arm64 --allow-dirty
+```
+
+Release artifacts include a versioned filename, embedded payload identity, and
+SHA-256 sidecar. Run the clean-room check against the generated artifact before
+manual publication.
+
+Invoke Forge with a ticket:
 
 ```text
 /swe-forge <ticket>
-```
-
-PR delivery and automatic topology are the defaults. Use `guided` when a human
-pause is wanted:
-
-```text
 /swe-forge guided <ticket>
 ```
-
-Forge adds proportional validation and one fresh review when warranted. Human
-PR review remains the final boundary.
 
 ## Details
 

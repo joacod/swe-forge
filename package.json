@@ -1,11 +1,48 @@
 {
   "name": "swe-forge",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.1",
+  "description": "An opt-in, harness-agnostic workflow for one reviewable coding ticket.",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joacod/swe-forge.git"
+  },
+  "bin": {
+    "swe-forge": "scripts/swe-forge"
+  },
+  "files": [
+    "AGENTS.md",
+    "SWE-FORGE.md",
+    "VERSION",
+    ".swe-forge/agents/",
+    ".swe-forge/conformance/",
+    ".swe-forge/contracts/",
+    ".swe-forge/examples/",
+    ".swe-forge/policies/",
+    ".swe-forge/tools/",
+    ".swe-forge/workflows/",
+    ".swe-forge/adapters/registry.tsv",
+    ".swe-forge/adapters/claude-code/skills/swe-forge/",
+    ".swe-forge/adapters/omp/agents/",
+    ".swe-forge/adapters/omp/extensions/swe-forge-runtime.ts",
+    ".swe-forge/adapters/omp/prompts/swe-forge.md",
+    ".swe-forge/adapters/opencode/commands/",
+    ".swe-forge/adapters/pi/extensions/swe-forge-runtime.ts",
+    ".swe-forge/adapters/pi/prompts/",
+    ".swe-forge/adapters/shared/agent-skill/swe-forge/",
+    "src/",
+    "scripts/swe-forge"
+  ],
+  "engines": {
+    "bun": ">=1.4.0"
+  },
   "scripts": {
     "build:standalone": "bun run scripts/build-standalone.ts",
+    "build:release": "bun run scripts/build-release.ts",
     "check:dependencies": "bun run scripts/check-dependencies.ts",
+    "check:package": "bun run scripts/check-package.ts",
+    "check:release": "./scripts/check-release prepare",
     "test": "bun test --pass-with-no-tests",
     "typecheck": "tsc --noEmit"
   },

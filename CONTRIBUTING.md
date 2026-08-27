@@ -10,7 +10,8 @@ Install [Bun](https://bun.sh/) before running repository tools. The public
 `scripts/swe-forge` command is a thin source-checkout wrapper around the
 canonical TypeScript installer at `src/install/cli.ts`; Bun is also the runtime
 for the typed validation coordinator, internal canonical tools, and tests.
-Runtime package dependencies remain zero.
+Standalone release users do not need Bun, Node.js, or Python after receiving a
+validated executable. Runtime package dependencies remain zero.
 
 ## Before editing
 
@@ -32,9 +33,10 @@ Run from the project root. No arguments keeps the full fixture bundle:
 ```sh
 bun install --frozen-lockfile
 bun run check:dependencies
+bun run check:package
 bun run typecheck
 bun test
-./scripts/swe-forge version
+./scripts/swe-forge --version
 ./scripts/test-swe-forge
 ./scripts/validate-swe-forge core
 ./scripts/validate-swe-forge installer
@@ -47,8 +49,9 @@ Use `./scripts/swe-forge` for source-checkout ergonomics or invoke
 Use `--list` or `--plan` to inspect selection. Groups are `core`, `invocation`,
 `evidence`, `installer`, `pi`, `omp`, `workers`, and `release`; `full` selects
 all non-release groups. Automatic PR CI uses the focused canonical groups
-`core invocation installer workers` on Ubuntu rather than every harness or
-operating system. Version tags additionally run `release` readiness. Use
+`core invocation installer workers` on Ubuntu. Main pushes, release tags, and
+manual runs also use the standalone matrix on native macOS arm64 and Linux x64,
+including release consistency, artifact, checksum, and clean-room checks. Use
 `full` for high-risk cross-cutting work or explicit complete validation; use
 `release` for release preparation. `git diff --check` is separate.
 
