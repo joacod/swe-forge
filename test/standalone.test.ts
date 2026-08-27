@@ -6,6 +6,8 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -151,7 +153,7 @@ test("embedded payload boundary reads only its declared assets", async () => {
 
 test("compiled executable reports embedded version and runs canonical ports after relocation", async () => {
   const built = await buildStandalone();
-  const fixture = mkdtempSync(join(tmpdir(), "swe-forge-standalone-relocation-"));
+  const fixture = mkdtempSync(join(realpathSync(tmpdir()), "swe-forge-standalone-relocation-"));
   const releaseRoot = join(fixture, "release");
   const relocated = join(releaseRoot, "swe-forge");
   const home = join(fixture, "home");
@@ -164,6 +166,7 @@ test("compiled executable reports embedded version and runs canonical ports afte
     HOME: home,
     PATH: process.env.PATH ?? "",
     TMPDIR: fixture,
+    XDG_DATA_HOME: join(fixture, "data"),
   };
   try {
     expect(readdirSync(fixture).sort()).toEqual(["home", "release"]);
@@ -194,6 +197,15 @@ test("compiled executable reports embedded version and runs canonical ports afte
     expect(inspected.asset_count).toBe(assetPaths().length);
     expect(inspected.assets.map((asset) => asset.path)).toEqual([...assetPaths()]);
     expect(inspected.assets.every((asset) => asset.bytes > 0)).toBe(true);
+
+    const materialized = run([relocated, "payload", "materialize", "--activate"], fixture, env);
+    expect(materialized.exitCode).toBe(0);
+    expect(materialized.stdout).toContain(`release version: ${expectedVersion}\n`);
+    expect(materialized.stdout).toContain("current:");
+    expect(materialized.stderr).toBe("");
+    expect(readlinkSync(join(fixture, "data", "swe-forge", "current"))).toBe(
+      `versions/${expectedVersion}`,
+    );
 
     const read = run([relocated, "payload", "read", "SWE-FORGE.md"], fixture, env);
     expect(read.exitCode).toBe(0);

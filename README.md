@@ -23,6 +23,11 @@ embedded paths. It is not yet the public installation path: source-checkout
 installation remains authoritative. `v0.1.0-alpha.1` is planned, not yet
 published; use a development checkout until then.
 
+`build/standalone/swe-forge payload materialize --activate` publishes that
+embedded canonical payload under the XDG data root (or `$HOME/.local/share`)
+and switches its managed `current` pointer. It does not install harness
+projections.
+
 Invoke it with a ticket:
 
 ```text

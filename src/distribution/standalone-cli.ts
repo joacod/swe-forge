@@ -1,4 +1,5 @@
 import type { EmbeddedPayload } from "./embedded-payload";
+import { materializeEmbeddedRelease } from "./managed-payload";
 import { runEvidenceCli } from "../core/evidence/cli";
 import { runWorkerBriefCli } from "../core/worker/brief-cli";
 import { runWorkerResultCli } from "../core/worker/result-cli";
@@ -9,7 +10,7 @@ const USAGE = `Usage:
   swe-forge version
   swe-forge payload [inspect]
   swe-forge payload read PATH
-  swe-forge internal invocation [ARGS...]
+  swe-forge payload materialize [--activate]
   swe-forge internal state [ARGS...]
   swe-forge internal gate [ARGS...]
   swe-forge internal worker-brief [ARGS...]
@@ -66,6 +67,26 @@ async function readPayloadAsset(payload: EmbeddedPayload, path: string): Promise
   return 0;
 }
 
+async function materializePayload(payload: EmbeddedPayload, args: readonly string[]): Promise<number> {
+  let activate = false;
+  for (const arg of args) {
+    if (arg === "--activate") {
+      if (activate) return fail("payload materialize accepts --activate at most once");
+      activate = true;
+      continue;
+    }
+    return fail(`unknown payload materialize option: ${arg}`);
+  }
+
+  const result = await materializeEmbeddedRelease(payload, { activate });
+  process.stdout.write(`release version: ${result.version}\n`);
+  process.stdout.write(`${result.published ? "published" : "reused"}: ${result.versionPath}\n`);
+  process.stdout.write(`canonical: ${result.canonicalPath}\n`);
+  if (result.activated) process.stdout.write(`current: ${result.layout.current}\n`);
+  else if (result.activeVersion !== undefined) process.stdout.write(`current: unchanged (${result.activeVersion})\n`);
+  return 0;
+}
+
 async function runInternal(args: readonly string[]): Promise<number> {
   const name = args[0];
   if (name === undefined) return fail("internal requires a command");
@@ -94,7 +115,10 @@ export async function runStandaloneCli(
         if (args[1] === "read" && args.length === 3) {
           return await readPayloadAsset(payload, args[2]!);
         }
-        return fail("use payload [inspect] or payload read PATH");
+        if (args[1] === "materialize") {
+          return await materializePayload(payload, args.slice(2));
+        }
+        return fail("use payload [inspect], payload read PATH, or payload materialize [--activate]");
       case "internal":
         return await runInternal(args.slice(1));
       default:
