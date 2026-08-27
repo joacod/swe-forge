@@ -1,1016 +1,365 @@
 #!/bin/sh
-
-# Dependency-free schema and validator for canonical worker results.
-# The result contract is harness-neutral; this tool owns only its executable
-# ordinary-profile boundary and leaves review validation to its dedicated
-# contract.
-
 set -eu
 
-PROGRAM=${0##*/}
-TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-worker-result.XXXXXX")
-
-cleanup() {
-  rm -rf "$TMP_ROOT"
-}
-trap cleanup EXIT HUP INT TERM
-
-fail() {
-  printf 'FAIL: %s\n' "$*" >&2
+# Keep the workflow shell-based; use the standard JSON parser only for this
+# boundary, where shell/awk cannot safely reject duplicate or escaped values.
+if ! command -v python3 >/dev/null 2>&1; then
+  printf '%s\n' 'FAIL: swe-forge-worker-result requires python3' >&2
   exit 1
-}
+fi
 
-usage() {
-  cat <<'EOF'
-Usage:
-  swe-forge-worker-result schema [--profile PROFILE] [--role ROLE] \
-    [--task-id ID] [--format json|json-schema]
-  swe-forge-worker-result encode --profile PROFILE --task-id ID \
-    --input FILE|-
-  swe-forge-worker-result validate --profile PROFILE [--role ROLE] \
+exec 3<&0
+exec python3 - "$@" <<'PY'
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Optional
+
+MAX_BYTES = 256 * 1024
+TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+SHA = re.compile(r"^[0-9A-Fa-f]{40}$")
+COMMON = {"RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION"}
+WRITABLE = {
+    *COMMON,
+    "BASE_SHA",
+    "HEAD_SHA",
+    "BRANCH",
+    "FILES_CHANGED",
+    "GIT_STATE",
+    "DELIVERABLE_COMMITS",
+    "VALIDATION",
+    "SCOPE_EXCEPTIONS",
+}
+VALIDATION_FIELDS = {"command", "requirement", "condition", "applies", "result", "evidence"}
+
+
+def usage() -> None:
+    print(
+        """Usage:
+  swe-forge-worker-result schema --profile PROFILE [--task-id ID]
+  swe-forge-worker-result validate --profile READ_ONLY|WRITABLE \\
     [--task-id ID] --result FILE|-
 
-`schema` writes the machine-readable worker-result/v1 profile map. Without a
-profile it describes ordinary and review result ownership. With a profile it
-writes only that profile. `--format json-schema` projects the strict
-structured-output object shape for a profile and binds ordinary results to the
-supplied task ID. `--role reviewer` selects the REVIEW profile and cannot be
-combined with an ordinary result profile.
+schema emits the direct JSON Schema for one canonical result profile.
+validate accepts that same JSON object from a file or stdin. JSON is also the
+text fallback for hosts without native structured-output support; no second
+encoding is used.
+""",
+    )
 
-`encode` accepts one strict structured JSON ordinary result and writes the
-canonical line-oriented worker-result/v1 representation. It rejects malformed,
-unsafe, profile-mismatched, or task-mismatched input.
 
-`validate` accepts the ordinary READ_ONLY or WRITABLE result profiles and
-returns a non-zero status for malformed, profile-mismatched, or role-
-incompatible results. Review results use contracts/review.md.
-EOF
-}
+def fail(message: str) -> None:
+    print(f"FAIL: {message}", file=sys.stderr)
+    raise SystemExit(1)
 
-schema_all() {
-  cat <<'EOF'
-{
-  "schema": "worker-result/v1",
-  "format": "line-oriented-text",
-  "profiles": {
-    "READ_ONLY": {
-      "contract": ".swe-forge/contracts/result.md",
-      "validation": "swe-forge-worker-result validate --profile READ_ONLY",
-      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
-      "required_sections": ["FINDINGS", "EVIDENCE"],
-      "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
-      "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH"],
-      "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
-    },
-    "WRITABLE": {
-      "contract": ".swe-forge/contracts/result.md",
-      "validation": "swe-forge-worker-result validate --profile WRITABLE",
-      "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH"],
-      "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
-      "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
-      "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
-    },
-    "REVIEW": {
-      "contract": ".swe-forge/contracts/review.md",
-      "validation": "review contract acceptance and blocking matrix",
-      "representation": "review result"
+
+def duplicate_free_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate object key: {key}")
+        result[key] = value
+    return result
+
+
+def reject_constant(value):
+    raise ValueError(f"invalid JSON constant: {value}")
+
+
+def load_json(source: str):
+    try:
+        raw = os.fdopen(3, "rb").read() if source == "-" else Path(source).read_bytes()
+    except OSError as error:
+        fail(f"result file could not be read: {error}")
+    if len(raw) > MAX_BYTES:
+        fail("worker result exceeds the canonical size limit")
+    try:
+        return json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=duplicate_free_object,
+            parse_constant=reject_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        fail(f"result is not valid unambiguous JSON: {error}")
+
+
+def object_with_keys(value, label: str, required, optional=()):
+    if not isinstance(value, dict):
+        fail(f"{label} must be an object")
+    allowed = set(required) | set(optional)
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        fail(f"{label} contains unknown field: {unknown[0]}")
+    missing = [key for key in required if key not in value]
+    if missing:
+        fail(f"{label} is missing {missing[0]}")
+    return value
+
+
+def safe_string(value, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        fail(f"{label} must be a non-empty string")
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        fail(f"{label} contains a control character")
+    return value
+
+
+def enum(value, choices, label: str) -> str:
+    if not isinstance(value, str) or value not in choices:
+        fail(f"invalid {label}: {value}")
+    return value
+
+
+def required_string_array(value, label: str):
+    if not isinstance(value, list) or not value:
+        fail(f"{label} must contain at least one item")
+    return [safe_string(item, f"{label} item") for item in value]
+
+
+def optional_string_array(value, label: str) -> None:
+    if value is None:
+        return
+    required_string_array(value, label)
+
+
+def validate_validation(records, status: str):
+    if not isinstance(records, list) or not records:
+        fail("VALIDATION must contain at least one record")
+    for index, value in enumerate(records, 1):
+        record = object_with_keys(value, f"VALIDATION[{index}]", VALIDATION_FIELDS)
+        safe_string(record["command"], f"VALIDATION[{index}].command")
+        enum(record["requirement"], {"required", "conditional", "informational"}, f"VALIDATION[{index}].requirement")
+        safe_string(record["condition"], f"VALIDATION[{index}].condition")
+        if not isinstance(record["applies"], bool):
+            fail(f"VALIDATION[{index}].applies must be boolean")
+        result = enum(
+            record["result"],
+            {"passed", "failed", "unavailable", "not-applicable"},
+            f"VALIDATION[{index}].result",
+        )
+        safe_string(record["evidence"], f"VALIDATION[{index}].evidence")
+        requirement = record["requirement"]
+        applies = record["applies"]
+        if requirement == "required" and not applies:
+            fail("required validation must apply")
+        if requirement == "conditional" and not applies and result != "not-applicable":
+            fail("non-applicable conditional validation must be not-applicable")
+        if status == "DONE" and requirement == "required" and result != "passed":
+            fail(f"DONE result has a non-passing required validation: {record['command']}")
+        if status == "DONE" and requirement == "conditional" and applies and result != "passed":
+            fail(f"DONE result has a non-passing applicable validation: {record['command']}")
+        yield requirement, applies, result, record["command"]
+
+
+def validate_result(document, expected_profile: str, expected_task: Optional[str]):
+    if not isinstance(document, dict):
+        fail("result must be a JSON object")
+    allowed = COMMON if expected_profile == "READ_ONLY" else WRITABLE
+    unknown = sorted(set(document) - allowed)
+    if unknown:
+        fail(f"result contains unknown or profile-incompatible field: {unknown[0]}")
+    for name in ("RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE"):
+        if name not in document:
+            fail(f"result is missing {name}")
+    if document["RESULT_PROFILE"] != expected_profile:
+        fail("result profile does not match expected profile")
+    task_id = safe_string(document["TASK_ID"], "TASK_ID")
+    if not TASK_ID.fullmatch(task_id):
+        fail("TASK_ID contains unsupported characters")
+    if expected_task is not None and task_id != expected_task:
+        fail("TASK_ID does not match the requested task")
+    status = enum(document["STATUS"], {"DONE", "BLOCKED", "FAILED"}, "STATUS")
+    required_string_array(document["FINDINGS"], "FINDINGS")
+    required_string_array(document["EVIDENCE"], "EVIDENCE")
+    if "RISKS" in document:
+        optional_string_array(document["RISKS"], "RISKS")
+    if "RECOMMENDED_ACTION" in document:
+        optional_string_array(document["RECOMMENDED_ACTION"], "RECOMMENDED_ACTION")
+    if status in {"BLOCKED", "FAILED"}:
+        if "RECOMMENDED_ACTION" not in document or not isinstance(document["RECOMMENDED_ACTION"], list) or not document["RECOMMENDED_ACTION"]:
+            fail(f"{status} result must include RECOMMENDED_ACTION")
+
+    if expected_profile == "READ_ONLY":
+        return task_id, status
+
+    for name in ("BASE_SHA", "HEAD_SHA", "BRANCH", "FILES_CHANGED", "GIT_STATE", "VALIDATION"):
+        if name not in document:
+            fail(f"result is missing {name}")
+    base_sha = safe_string(document["BASE_SHA"], "BASE_SHA")
+    head_sha = safe_string(document["HEAD_SHA"], "HEAD_SHA")
+    safe_string(document["BRANCH"], "BRANCH")
+    if not SHA.fullmatch(base_sha):
+        fail("BASE_SHA must be a full 40-character SHA")
+    if head_sha != "none" and not SHA.fullmatch(head_sha):
+        fail("HEAD_SHA must be a full 40-character SHA or none")
+    changed = required_string_array(document["FILES_CHANGED"], "FILES_CHANGED")
+    required_string_array(document["GIT_STATE"], "GIT_STATE")
+    list(validate_validation(document["VALIDATION"], status))
+    for path in changed:
+        if path == "none" and status == "DONE":
+            fail("DONE WRITABLE result cannot report no changed files")
+        if path != "none" and path.startswith("/"):
+            fail("FILES_CHANGED paths must be repository-relative")
+        if path != "none" and (path == ".." or path.startswith("../") or "/../" in path):
+            fail("FILES_CHANGED paths may not escape the repository")
+    for name in ("DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"):
+        if name in document:
+            optional_string_array(document[name], name)
+    return task_id, status
+
+
+def string_array_schema(minimum=1):
+    schema = {"type": "array", "items": {"type": "string", "minLength": 1}}
+    if minimum is not None:
+        schema["minItems"] = minimum
+    return schema
+
+
+def nullable_array_schema():
+    return {"anyOf": [string_array_schema(1), {"type": "null"}]}
+
+
+def result_schema(profile: str, task_id: Optional[str]):
+    common_properties = {
+        "RESULT_PROFILE": {"type": "string", "enum": [profile]},
+        "STATUS": {"type": "string", "enum": ["DONE", "BLOCKED", "FAILED"]},
+        "TASK_ID": {"type": "string", "const": task_id} if task_id is not None else {"type": "string"},
+        "FINDINGS": string_array_schema(1),
+        "EVIDENCE": string_array_schema(1),
+        "RISKS": nullable_array_schema(),
+        "RECOMMENDED_ACTION": nullable_array_schema(),
     }
-  },
-  "role_rules": {
-    "reviewer": {
-      "profile": "REVIEW",
-      "contract": ".swe-forge/contracts/review.md"
-    }
-  }
-}
-EOF
-}
-
-schema_profile() {
-  case "$1" in
-    READ_ONLY)
-      cat <<'EOF'
-{
-  "schema": "worker-result/v1",
-  "format": "line-oriented-text",
-  "profile": "READ_ONLY",
-  "contract": ".swe-forge/contracts/result.md",
-  "validation": "swe-forge-worker-result validate --profile READ_ONLY",
-  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID"],
-  "required_sections": ["FINDINGS", "EVIDENCE"],
-  "optional_sections": ["RISKS", "RECOMMENDED_ACTION"],
-  "forbidden_scalars": ["BASE_SHA", "HEAD_SHA", "BRANCH"],
-  "forbidden_sections": ["FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"]
-}
-EOF
-      ;;
-    WRITABLE)
-      cat <<'EOF'
-{
-  "schema": "worker-result/v1",
-  "format": "line-oriented-text",
-  "profile": "WRITABLE",
-  "contract": ".swe-forge/contracts/result.md",
-  "validation": "swe-forge-worker-result validate --profile WRITABLE",
-  "required_scalars": ["RESULT_PROFILE", "STATUS", "TASK_ID", "BASE_SHA", "HEAD_SHA", "BRANCH"],
-  "required_sections": ["FINDINGS", "EVIDENCE", "FILES_CHANGED", "GIT_STATE", "VALIDATION"],
-  "optional_sections": ["RISKS", "RECOMMENDED_ACTION", "DELIVERABLE_COMMITS", "SCOPE_EXCEPTIONS"],
-  "validation_fields": ["command", "requirement", "condition", "applies", "result", "evidence"]
-}
-EOF
-      ;;
-    REVIEW)
-      cat <<'EOF'
-{
-  "schema": "worker-result/v1",
-  "format": "review-result",
-  "profile": "REVIEW",
-  "contract": ".swe-forge/contracts/review.md",
-  "validation": "review contract acceptance and blocking matrix",
-  "representation": "review result"
-}
-EOF
-      ;;
-    *) fail "unknown result profile: $1" ;;
-  esac
-}
-
-schema_json_schema() {
-  profile=$1
-  task_id=$2
-  case "$profile" in READ_ONLY|WRITABLE|REVIEW) ;; *) fail "unknown result profile: $profile" ;; esac
-  if [ "$profile" != REVIEW ]; then
-    case "$task_id" in ''|*[!A-Za-z0-9._-]*) fail 'json-schema task ID contains unsupported characters' ;; esac
-  fi
-  case "$profile" in
-    READ_ONLY)
-      cat <<EOF
-{
-  "type": "object",
-  "properties": {
-    "RESULT_PROFILE": {"type": "string", "enum": ["READ_ONLY"]},
-    "STATUS": {"type": "string", "enum": ["DONE", "BLOCKED", "FAILED"]},
-    "TASK_ID": {"type": "string", "const": "$task_id"},
-    "FINDINGS": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "EVIDENCE": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "RISKS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
-    "RECOMMENDED_ACTION": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
-  },
-  "required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION"],
-  "additionalProperties": false
-}
-EOF
-      ;;
-    WRITABLE)
-      cat <<EOF
-{
-  "type": "object",
-  "properties": {
-    "RESULT_PROFILE": {"type": "string", "enum": ["WRITABLE"]},
-    "STATUS": {"type": "string", "enum": ["DONE", "BLOCKED", "FAILED"]},
-    "TASK_ID": {"type": "string", "const": "$task_id"},
-    "FINDINGS": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "EVIDENCE": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "RISKS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
-    "RECOMMENDED_ACTION": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
-    "BASE_SHA": {"type": "string", "pattern": "^[0-9A-Fa-f]{40}$"},
-    "HEAD_SHA": {"anyOf": [{"type": "string", "pattern": "^[0-9A-Fa-f]{40}$"}, {"type": "string", "const": "none"}]},
-    "BRANCH": {"type": "string", "minLength": 1},
-    "FILES_CHANGED": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "GIT_STATE": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "DELIVERABLE_COMMITS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]},
-    "VALIDATION": {
-      "type": "array",
-      "items": {
+    required = ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE"]
+    schema = {
         "type": "object",
-        "properties": {
-          "command": {"type": "string", "minLength": 1},
-          "requirement": {"type": "string", "enum": ["required", "conditional", "informational"]},
-          "condition": {"type": "string", "minLength": 1},
-          "applies": {"type": "boolean"},
-          "result": {"type": "string", "enum": ["passed", "failed", "unavailable", "not-applicable"]},
-          "evidence": {"type": "string", "minLength": 1}
-        },
-        "required": ["command", "requirement", "condition", "applies", "result", "evidence"],
-        "additionalProperties": false
-      },
-      "minItems": 1
-    },
-    "SCOPE_EXCEPTIONS": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
-  },
-  "required": ["RESULT_PROFILE", "STATUS", "TASK_ID", "FINDINGS", "EVIDENCE", "RISKS", "RECOMMENDED_ACTION", "BASE_SHA", "HEAD_SHA", "BRANCH", "FILES_CHANGED", "GIT_STATE", "DELIVERABLE_COMMITS", "VALIDATION", "SCOPE_EXCEPTIONS"],
-  "additionalProperties": false
-}
-EOF
-      ;;
-    REVIEW)
-      cat <<'EOF'
-{
-  "type": "object",
-  "properties": {
-    "status": {"type": "string", "enum": ["PASS", "CHANGES_REQUIRED"]},
-    "scope": {"type": "object", "additionalProperties": true},
-    "review_focus": {"type": "object", "additionalProperties": true},
-    "findings": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
-    "deferred_followups": {"type": "array", "items": {"type": "object", "additionalProperties": true}}
-  },
-  "required": ["status", "scope", "review_focus", "findings", "deferred_followups"],
-  "additionalProperties": false
-}
-EOF
-      ;;
-  esac
-}
-
-validate_result_file() {
-  expected_profile=$1
-  expected_role=$2
-  expected_task=$3
-  result_file=$4
-  summary=$TMP_ROOT/summary
-
-  if ! awk -v expected_profile="$expected_profile" \
-    -v expected_role="$expected_role" -v expected_task="$expected_task" '
-    function fail(message) {
-      failed = 1
-      print "FAIL: " message > "/dev/stderr"
-      exit 1
+        "properties": common_properties,
+        "required": required,
+        "additionalProperties": False,
     }
-    function trim(value) {
-      sub(/^[[:space:]]+/, "", value)
-      sub(/[[:space:]]+$/, "", value)
-      return value
-    }
-    function require_scalar(name, label) {
-      if (!(name in scalar)) fail("missing " label)
-    }
-    function start_section(name) {
-      if (!(name in allowed_sections)) fail("unknown result section: " name)
-      if (name in seen_section) fail("duplicate result section: " name)
-      seen_section[name] = 1
-      section = name
-    }
-    function add_list_item(value) {
-      value = trim(value)
-      if (value == "") fail("empty item in " section)
-      list_count[section]++
-      list_value[section, list_count[section]] = value
-    }
-    function add_validation_command(value,    field) {
-      value = trim(value)
-      sub(/^command:[[:space:]]*/, "", value)
-      value = trim(value)
-      if (value == "") fail("validation command may not be empty")
-      validation_count++
-      field = "command"
-      validation_value[validation_count, field] = value
-      validation_seen[validation_count, field] = 1
-    }
-    function add_validation_field(line,    field, value) {
-      if (validation_count == 0) fail("validation fields require a command item")
-      field = line
-      sub(/:.*/, "", field)
-      value = line
-      sub(/^[^:]*:[[:space:]]*/, "", value)
-      value = trim(value)
-      if (field != "requirement" && field != "condition" && field != "applies" && field != "result" && field != "evidence") {
-        fail("unknown validation field: " field)
-      }
-      if (value == "") fail("validation field may not be empty: " field)
-      if (validation_seen[validation_count, field]) fail("duplicate validation field: " field)
-      validation_seen[validation_count, field] = 1
-      validation_value[validation_count, field] = value
-    }
-    function valid_sha(value, label) {
-      if (value !~ /^[0-9A-Fa-f]+$/ || length(value) != 40) fail(label " must be a full 40-character SHA")
-    }
-    function validate_validation_record(record_index,    field, requirement, applies, result) {
-      for (field_name in required_validation_fields) {
-        if (!validation_seen[record_index, field_name]) fail("validation record is missing " field_name)
-      }
-      requirement = validation_value[record_index, "requirement"]
-      applies = validation_value[record_index, "applies"]
-      result = validation_value[record_index, "result"]
-      if (requirement != "required" && requirement != "conditional" && requirement != "informational") {
-        fail("invalid validation requirement: " requirement)
-      }
-      if (applies != "true" && applies != "false") fail("invalid validation applies value: " applies)
-      if (result != "passed" && result != "failed" && result != "unavailable" && result != "not-applicable") {
-        fail("invalid validation result: " result)
-      }
-      if (requirement == "required" && applies != "true") fail("required validation must apply")
-      if (requirement == "conditional" && applies == "false" && result != "not-applicable") {
-        fail("conditional validation that does not apply must be not-applicable")
-      }
-      if (status == "DONE" && requirement == "required" && result != "passed") {
-        fail("DONE result has a non-passing required validation: " validation_value[record_index, "command"])
-      }
-      if (status == "DONE" && requirement == "conditional" && applies == "true" && result != "passed") {
-        fail("DONE result has a non-passing applicable validation: " validation_value[record_index, "command"])
-      }
-    }
-    BEGIN {
-      allowed_scalar_names["RESULT_PROFILE"] = 1
-      allowed_scalar_names["STATUS"] = 1
-      allowed_scalar_names["TASK_ID"] = 1
-      allowed_scalar_names["BASE_SHA"] = 1
-      allowed_scalar_names["HEAD_SHA"] = 1
-      allowed_scalar_names["BRANCH"] = 1
-      allowed_section_names[1] = "FINDINGS"
-      allowed_section_names[2] = "EVIDENCE"
-      allowed_section_names[3] = "RISKS"
-      allowed_section_names[4] = "RECOMMENDED_ACTION"
-      allowed_section_names[5] = "FILES_CHANGED"
-      allowed_section_names[6] = "GIT_STATE"
-      allowed_section_names[7] = "DELIVERABLE_COMMITS"
-      allowed_section_names[8] = "VALIDATION"
-      allowed_section_names[9] = "SCOPE_EXCEPTIONS"
-      for (i = 1; i <= 9; i++) allowed_sections[allowed_section_names[i]] = 1
-      required_validation_fields["command"] = 1
-      required_validation_fields["requirement"] = 1
-      required_validation_fields["condition"] = 1
-      required_validation_fields["applies"] = 1
-      required_validation_fields["result"] = 1
-      required_validation_fields["evidence"] = 1
-    }
-    {
-      line = $0
-      if (index(line, "\r")) fail("result contains a carriage return")
-      if (index(line, sprintf("%c", 9))) fail("result values may not contain tabs")
-      sub(/^[[:space:]]+/, "", line)
-      sub(/[[:space:]]+$/, "", line)
-      if (line == "") next
-
-      if (section == "VALIDATION" && line !~ /^-[[:space:]]+/ && line ~ /^[a-z_]+:/) {
-        add_validation_field(line)
-        next
-      }
-      if (line ~ /^-[[:space:]]+/) {
-        item = line
-        sub(/^-[[:space:]]+/, "", item)
-        if (section == "") fail("list item is outside a result section")
-        if (section == "VALIDATION") {
-          if (item !~ /^command:[[:space:]]*/) fail("validation items must begin with command")
-          add_validation_command(item)
-        } else add_list_item(item)
-        next
-      }
-      if (line !~ /^[A-Z_]+:/) fail("malformed result line: " line)
-      name = line
-      sub(/:.*/, "", name)
-      value = line
-      sub(/^[^:]*:[[:space:]]*/, "", value)
-      value = trim(value)
-      if (value == "") {
-        start_section(name)
-        next
-      }
-      if (!(name in allowed_scalar_names)) fail("unknown result field: " name)
-      if (name in scalar) fail("duplicate result field: " name)
-      scalar[name] = value
-      section = ""
-    }
-    END {
-      if (failed) exit 1
-      require_scalar("RESULT_PROFILE", "RESULT_PROFILE")
-      require_scalar("STATUS", "STATUS")
-      require_scalar("TASK_ID", "TASK_ID")
-      profile = scalar["RESULT_PROFILE"]
-      status = scalar["STATUS"]
-      task_id = scalar["TASK_ID"]
-      if (profile != "READ_ONLY" && profile != "WRITABLE") fail("ordinary validator does not support profile: " profile)
-      if (profile != expected_profile) fail("result profile does not match expected profile: " profile)
-      if (expected_role == "reviewer") fail("reviewer results require the REVIEW profile and contracts/review.md")
-      if (task_id !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/) fail("TASK_ID contains unsupported characters")
-      if (expected_task != "" && task_id != expected_task) fail("TASK_ID does not match the requested task")
-      if (status != "DONE" && status != "BLOCKED" && status != "FAILED") fail("invalid STATUS: " status)
-      if (!seen_section["FINDINGS"] || list_count["FINDINGS"] == 0) fail("FINDINGS must contain at least one item")
-      if (!seen_section["EVIDENCE"] || list_count["EVIDENCE"] == 0) fail("EVIDENCE must contain at least one item")
-      for (section_name in seen_section) {
-        if (section_name != "VALIDATION" && list_count[section_name] == 0) fail(section_name " must contain at least one item")
-      }
-      if ((status == "BLOCKED" || status == "FAILED") && (!seen_section["RECOMMENDED_ACTION"] || list_count["RECOMMENDED_ACTION"] == 0)) {
-        fail(status " result must include RECOMMENDED_ACTION")
-      }
-
-      if (profile == "READ_ONLY") {
-        for (scalar_name in scalar) {
-          if (scalar_name == "BASE_SHA" || scalar_name == "HEAD_SHA" || scalar_name == "BRANCH") {
-            fail("READ_ONLY result contains implementation field: " scalar_name)
-          }
+    if profile == "WRITABLE":
+        validation_item = {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "minLength": 1},
+                "requirement": {"type": "string", "enum": ["required", "conditional", "informational"]},
+                "condition": {"type": "string", "minLength": 1},
+                "applies": {"type": "boolean"},
+                "result": {"type": "string", "enum": ["passed", "failed", "unavailable", "not-applicable"]},
+                "evidence": {"type": "string", "minLength": 1},
+            },
+            "required": ["command", "requirement", "condition", "applies", "result", "evidence"],
+            "additionalProperties": False,
         }
-        for (section_name in seen_section) {
-          if (section_name == "FILES_CHANGED" || section_name == "GIT_STATE" || section_name == "DELIVERABLE_COMMITS" || section_name == "VALIDATION" || section_name == "SCOPE_EXCEPTIONS") {
-            fail("READ_ONLY result contains implementation section: " section_name)
-          }
+        schema["properties"].update(
+            {
+                "BASE_SHA": {"type": "string", "pattern": SHA.pattern},
+                "HEAD_SHA": {"anyOf": [{"type": "string", "pattern": SHA.pattern}, {"type": "string", "const": "none"}]},
+                "BRANCH": {"type": "string", "minLength": 1},
+                "FILES_CHANGED": string_array_schema(1),
+                "GIT_STATE": string_array_schema(1),
+                "DELIVERABLE_COMMITS": nullable_array_schema(),
+                "VALIDATION": {"type": "array", "items": validation_item, "minItems": 1},
+                "SCOPE_EXCEPTIONS": nullable_array_schema(),
+            }
+        )
+        schema["required"] += ["BASE_SHA", "HEAD_SHA", "BRANCH", "FILES_CHANGED", "GIT_STATE", "VALIDATION"]
+    elif profile == "REVIEW":
+        schema = {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["PASS", "CHANGES_REQUIRED"]},
+                "scope": {"type": "object", "additionalProperties": True},
+                "review_focus": {"type": "object", "additionalProperties": True},
+                "findings": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+                "deferred_followups": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+            },
+            "required": ["status", "scope", "review_focus", "findings", "deferred_followups"],
+            "additionalProperties": False,
         }
-      } else {
-        require_scalar("BASE_SHA", "BASE_SHA")
-        require_scalar("HEAD_SHA", "HEAD_SHA")
-        require_scalar("BRANCH", "BRANCH")
-        valid_sha(scalar["BASE_SHA"], "BASE_SHA")
-        if (scalar["HEAD_SHA"] != "none") valid_sha(scalar["HEAD_SHA"], "HEAD_SHA")
-        if (!seen_section["FILES_CHANGED"] || list_count["FILES_CHANGED"] == 0) fail("FILES_CHANGED must contain at least one item")
-        if (!seen_section["GIT_STATE"] || list_count["GIT_STATE"] == 0) fail("GIT_STATE must contain at least one item")
-        if (!seen_section["VALIDATION"] || validation_count == 0) fail("VALIDATION must contain at least one record")
-        for (i = 1; i <= list_count["FILES_CHANGED"]; i++) {
-          path = list_value["FILES_CHANGED", i]
-          if (path == "none" && status == "DONE") fail("DONE WRITABLE result cannot report no changed files")
-          if (path != "none" && path ~ /^\//) fail("FILES_CHANGED paths must be repository-relative")
-          if (path != "none" && (path == ".." || path ~ /^\.\.\// || path ~ /\/\.\.\//)) fail("FILES_CHANGED paths may not escape the repository")
-        }
-        for (i = 1; i <= validation_count; i++) validate_validation_record(i)
-      }
-      printf "%s\t%s\t%s\n", profile, status, task_id
-    }
-  ' "$result_file" >"$summary"; then
-    exit 1
-  fi
+    elif profile != "READ_ONLY":
+        fail(f"unknown result profile: {profile}")
+    return schema
 
-  IFS=$(printf '\t') read -r result_profile result_status result_task <"$summary"
-  printf '{"schema":"worker-result/v1","valid":true,"profile":"%s","status":"%s","task_id":"%s"}\n' \
-    "$result_profile" "$result_status" "$result_task"
-}
 
-schema_command() {
-  profile=
-  role=
-  task_id=
-  format=json
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --profile)
-        [ "$#" -ge 2 ] || fail '--profile requires a value'
-        profile=$2
-        shift 2
-        ;;
-      --role)
-        [ "$#" -ge 2 ] || fail '--role requires a value'
-        role=$2
-        shift 2
-        ;;
-      --task-id|--task)
-        [ "$#" -ge 2 ] || fail '--task-id requires a value'
-        task_id=$2
-        shift 2
-        ;;
-      --format)
-        [ "$#" -ge 2 ] || fail '--format requires a value'
-        case "$2" in json|json-schema) format=$2 ;; *) fail 'schema format must be json or json-schema' ;; esac
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      *) fail "unknown schema option: $1" ;;
-    esac
-  done
-  case "$role" in
-    '') ;;
-    reviewer)
-      [ -z "$profile" ] || [ "$profile" = REVIEW ] || fail 'reviewer requires the REVIEW profile'
-      profile=REVIEW
-      ;;
-    *)
-      case "$role" in *[!A-Za-z0-9_-]*) fail 'role contains unsupported characters' ;; esac
-      ;;
-  esac
-  if [ "$format" = json-schema ]; then
-    [ -n "$profile" ] || fail 'json-schema format requires --profile'
-    if [ "$profile" = REVIEW ]; then
-      [ -z "$task_id" ] || fail 'REVIEW json-schema does not accept --task-id'
-    else
-      [ -n "$task_id" ] || fail 'ordinary json-schema requires --task-id'
-    fi
-    schema_json_schema "$profile" "$task_id"
-  elif [ -n "$profile" ]; then
-    schema_profile "$profile"
-  else
-    schema_all
-  fi
-}
+def parse_options(arguments, command: str):
+    profile = None
+    task_id = None
+    result = None
+    index = 0
+    while index < len(arguments):
+        option = arguments[index]
+        if option in {"--profile", "--task-id", "--task", "--result"}:
+            if index + 1 >= len(arguments):
+                fail(f"{option} requires a value")
+            value = arguments[index + 1]
+            if option == "--profile":
+                profile = value
+            elif option in {"--task-id", "--task"}:
+                task_id = value
+            else:
+                if result is not None:
+                    fail("result input was specified more than once")
+                result = value
+            index += 2
+            continue
+        if command == "validate" and not option.startswith("-"):
+            if result is not None:
+                fail("result input was specified more than once")
+            result = option
+            index += 1
+            continue
+        if option in {"-h", "--help"}:
+            usage()
+            raise SystemExit(0)
+        fail(f"unknown {command} option: {option}")
+    return profile, task_id, result
 
-encode_json_input() {
-  expected_profile=$1
-  expected_task=$2
-  source=$3
-  input_file=$TMP_ROOT/structured-input
-  if [ "$source" = - ]; then
-    cat >"$input_file"
-  else
-    [ -f "$source" ] || fail "structured input file does not exist: $source"
-    cp "$source" "$input_file"
-  fi
-  input_size=$(wc -c <"$input_file")
-  input_size=$(printf '%s' "$input_size" | tr -d '[:space:]')
-  case "$input_size" in ''|*[!0-9]*) fail 'structured input size is invalid' ;; esac
-  [ "$input_size" -le 262144 ] || fail 'structured input exceeds the canonical size limit'
 
-  LC_ALL=C awk -v expected_profile="$expected_profile" -v expected_task="$expected_task" '
-    function fail(message) {
-      print "FAIL: " message > "/dev/stderr"
-      failed = 1
-      exit 1
-    }
-    function trim(value) {
-      sub(/^[[:space:]]+/, "", value)
-      sub(/[[:space:]]+$/, "", value)
-      return value
-    }
-    function is_control(value,    i, c) {
-      if (value == tab || value == newline || value == carriage_return ||
-          value == backspace || value == form_feed || value == delete_char) return 1
-      for (i = 1; i < 32; i++) {
-        c = sprintf("%c", i)
-        if (value == c) return 1
-      }
-      return 0
-    }
-    function require_text(value, label) {
-      if (value == "" || trim(value) == "" || is_control(value)) fail(label " must be a non-empty safe string")
-    }
-    function skip_ws() {
-      while (pos <= length(json) && (substr(json, pos, 1) == " " ||
-          substr(json, pos, 1) == tab || substr(json, pos, 1) == newline ||
-          substr(json, pos, 1) == carriage_return)) pos++
-    }
-    function expect_char(expected, label,    actual) {
-      skip_ws()
-      actual = substr(json, pos, 1)
-      if (actual != expected) fail("expected " label)
-      pos++
-    }
-    function hex_digit(value) {
-      if (value >= "0" && value <= "9") return value + 0
-      if (value >= "a" && value <= "f") return 9 + index("abcdef", value)
-      if (value >= "A" && value <= "F") return 9 + index("ABCDEF", value)
-      return -1
-    }
-    function utf8(code,    first, second, third) {
-      if (code < 128) return sprintf("%c", code)
-      if (code < 2048) {
-        first = 192 + int(code / 64)
-        second = 128 + (code % 64)
-        return sprintf("%c%c", first, second)
-      }
-      if (code < 65536) {
-        first = 224 + int(code / 4096)
-        second = 128 + (int(code / 64) % 64)
-        third = 128 + (code % 64)
-        return sprintf("%c%c%c", first, second, third)
-      }
-      first = 240 + int(code / 262144)
-      second = 128 + (int(code / 4096) % 64)
-      third = 128 + (int(code / 64) % 64)
-      return sprintf("%c%c%c%c", first, second, third, 128 + (code % 64))
-    }
-    function parse_unicode(    i, digit, code, c) {
-      code = 0
-      for (i = 1; i <= 4; i++) {
-        c = substr(json, pos, 1)
-        digit = hex_digit(c)
-        if (digit < 0) fail("invalid unicode escape")
-        code = code * 16 + digit
-        pos++
-      }
-      if (code < 32 || code == 127) fail("structured result contains a control character")
-      if (code >= 55296 && code <= 57343) fail("surrogate unicode escapes are unsupported")
-      parsed_string = parsed_string utf8(code)
-    }
-    function parse_string(    c, esc) {
-      skip_ws()
-      if (substr(json, pos, 1) != quote) fail("expected JSON string")
-      pos++
-      parsed_string = ""
-      while (pos <= length(json)) {
-        c = substr(json, pos, 1)
-        if (c == quote) {
-          pos++
-          return
-        }
-        if (c == newline || c == carriage_return || is_control(c)) {
-          fail("structured result string contains a control character")
-        }
-        if (c == backslash) {
-          pos++
-          esc = substr(json, pos, 1)
-          if (esc == quote || esc == backslash || esc == slash) {
-            parsed_string = parsed_string esc
-            pos++
-          } else if (esc == "u") {
-            pos++
-            parse_unicode()
-          } else {
-            fail("unsupported or unsafe JSON string escape")
-          }
-        } else {
-          parsed_string = parsed_string c
-          pos++
-        }
-      }
-      fail("unterminated JSON string")
-    }
-    function parse_boolean() {
-      skip_ws()
-      if (substr(json, pos, 4) == "true") {
-        parsed_boolean = "true"
-        pos += 4
-      } else if (substr(json, pos, 5) == "false") {
-        parsed_boolean = "false"
-        pos += 5
-      } else {
-        fail("expected JSON boolean")
-      }
-    }
-    function parse_literal(value) {
-      skip_ws()
-      if (substr(json, pos, length(value)) != value) fail("invalid JSON literal")
-      pos += length(value)
-    }
-    function parse_string_field(name) {
-      parse_string()
-      scalar[name] = parsed_string
-    }
-    function parse_string_array(name, allow_null,    c, count) {
-      skip_ws()
-      if (substr(json, pos, 4) == "null") {
-        if (!allow_null) fail(name " may not be null")
-        pos += 4
-        array_state[name] = "null"
-        array_count[name] = 0
+def main():
+    arguments = sys.argv[1:]
+    if not arguments:
+        usage()
+        raise SystemExit(2)
+    if arguments[0] in {"-h", "--help"}:
+        usage()
         return
-      }
-      expect_char("[", name " array")
-      array_state[name] = "array"
-      array_count[name] = 0
-      skip_ws()
-      if (substr(json, pos, 1) == "]") {
-        pos++
+    command = arguments[0]
+    if command not in {"schema", "validate"}:
+        fail(f"unknown operation: {command}")
+    profile, task_id, result = parse_options(arguments[1:], command)
+    if not isinstance(profile, str) or profile not in {"READ_ONLY", "WRITABLE", "REVIEW"}:
+        fail("a valid --profile is required")
+    if task_id is not None and not TASK_ID.fullmatch(task_id):
+        fail("task ID contains unsupported characters")
+    if command == "schema":
+        if profile == "REVIEW" and task_id is not None:
+            fail("REVIEW schema does not accept --task-id")
+        if profile != "REVIEW" and task_id is None:
+            fail("ordinary schema requires --task-id")
+        print(json.dumps(result_schema(profile, task_id), indent=2))
         return
-      }
-      while (1) {
-        parse_string()
-        require_text(parsed_string, name " item")
-        count = ++array_count[name]
-        array_value[name, count] = parsed_string
-        skip_ws()
-        c = substr(json, pos, 1)
-        if (c == ",") {
-          pos++
-          continue
-        }
-        if (c == "]") {
-          pos++
-          return
-        }
-        fail("malformed " name " array")
-      }
-    }
-    function parse_validation_object(record_number,    c, key) {
-      expect_char("{", "validation object")
-      skip_ws()
-      if (substr(json, pos, 1) == "}") fail("validation object may not be empty")
-      while (1) {
-        parse_string()
-        key = parsed_string
-        if (validation_seen[record_number, key]) fail("duplicate validation field: " key)
-        validation_seen[record_number, key] = 1
-        expect_char(":", "validation field separator")
-        if (key == "applies") {
-          parse_boolean()
-          validation_value[record_number, key] = parsed_boolean
-        } else if (key == "command" || key == "requirement" || key == "condition" ||
-                   key == "result" || key == "evidence") {
-          parse_string()
-          require_text(parsed_string, "validation " key)
-          validation_value[record_number, key] = parsed_string
-        } else {
-          fail("unknown validation field: " key)
-        }
-        skip_ws()
-        c = substr(json, pos, 1)
-        if (c == ",") {
-          pos++
-          continue
-        }
-        if (c == "}") {
-          pos++
-          break
-        }
-        fail("malformed validation object")
-      }
-      for (key in required_validation_fields) {
-        if (!validation_seen[record_number, key]) fail("validation record is missing " key)
-      }
-    }
-    function parse_validation_array(    c, record_number) {
-      expect_char("[", "VALIDATION array")
-      array_state["VALIDATION"] = "array"
-      validation_count = 0
-      skip_ws()
-      if (substr(json, pos, 1) == "]") {
-        pos++
-        return
-      }
-      while (1) {
-        record_number = ++validation_count
-        parse_validation_object(record_number)
-        skip_ws()
-        c = substr(json, pos, 1)
-        if (c == ",") {
-          pos++
-          continue
-        }
-        if (c == "]") {
-          pos++
-          return
-        }
-        fail("malformed VALIDATION array")
-      }
-    }
-    function parse_root(    c, key) {
-      expect_char("{", "structured result object")
-      skip_ws()
-      if (substr(json, pos, 1) == "}") fail("structured result object is empty")
-      while (1) {
-        parse_string()
-        key = parsed_string
-        if (root_seen[key]) fail("duplicate result field: " key)
-        root_seen[key] = 1
-        expect_char(":", "result field separator")
-        if (key in scalar_fields) {
-          parse_string_field(key)
-        } else if (key in array_fields) {
-          parse_string_array(key, 1)
-        } else if (key == "FINDINGS" || key == "EVIDENCE") {
-          parse_string_array(key, 0)
-        } else if (key == "VALIDATION" && expected_profile == "WRITABLE") {
-          parse_validation_array()
-        } else {
-          fail("unknown or profile-incompatible result field: " key)
-        }
-        skip_ws()
-        c = substr(json, pos, 1)
-        if (c == ",") {
-          pos++
-          continue
-        }
-        if (c == "}") {
-          pos++
-          return
-        }
-        fail("malformed structured result object")
-      }
-    }
-    function require_field(name) {
-      if (!root_seen[name]) fail("missing structured result field: " name)
-    }
-    function require_array(name) {
-      require_field(name)
-      if (array_state[name] != "array" || array_count[name] == 0) fail(name " must contain at least one item")
-    }
-    function optional_array(name) {
-      require_field(name)
-      if (array_state[name] != "array" && array_state[name] != "null") fail(name " must be an array or null")
-    }
-    function valid_sha(value, label) {
-      if (value !~ /^[0-9A-Fa-f]{40}$/) fail(label " must be a full 40-character SHA")
-    }
-    function validate_result(    i, item, requirement, applies, result, name) {
-      require_field("RESULT_PROFILE")
-      require_field("STATUS")
-      require_field("TASK_ID")
-      require_text(scalar["RESULT_PROFILE"], "RESULT_PROFILE")
-      require_text(scalar["STATUS"], "STATUS")
-      require_text(scalar["TASK_ID"], "TASK_ID")
-      if (scalar["RESULT_PROFILE"] != expected_profile) fail("result profile does not match expected profile")
-      if (scalar["TASK_ID"] !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/) fail("TASK_ID contains unsupported characters")
-      if (scalar["TASK_ID"] != expected_task) fail("TASK_ID does not match the requested task")
-      if (scalar["STATUS"] != "DONE" && scalar["STATUS"] != "BLOCKED" && scalar["STATUS"] != "FAILED") fail("invalid STATUS")
-      require_array("FINDINGS")
-      require_array("EVIDENCE")
-      optional_array("RISKS")
-      optional_array("RECOMMENDED_ACTION")
-      if (scalar["STATUS"] == "BLOCKED" || scalar["STATUS"] == "FAILED") {
-        if (array_state["RECOMMENDED_ACTION"] != "array" || array_count["RECOMMENDED_ACTION"] == 0) {
-          fail(scalar["STATUS"] " result must include RECOMMENDED_ACTION")
-        }
-      }
-      if (expected_profile == "WRITABLE") {
-        require_field("BASE_SHA")
-        require_field("HEAD_SHA")
-        require_field("BRANCH")
-        require_text(scalar["BRANCH"], "BRANCH")
-        require_text(scalar["BASE_SHA"], "BASE_SHA")
-        require_text(scalar["HEAD_SHA"], "HEAD_SHA")
-        require_text(scalar["BRANCH"], "BRANCH")
-        valid_sha(scalar["BASE_SHA"], "BASE_SHA")
-        if (scalar["HEAD_SHA"] != "none") valid_sha(scalar["HEAD_SHA"], "HEAD_SHA")
-        require_array("FILES_CHANGED")
-        require_array("GIT_STATE")
-        require_field("VALIDATION")
-        if (array_state["VALIDATION"] != "array" || validation_count == 0) fail("VALIDATION must contain at least one record")
-        require_field("DELIVERABLE_COMMITS")
-        require_field("SCOPE_EXCEPTIONS")
-        optional_array("DELIVERABLE_COMMITS")
-        optional_array("SCOPE_EXCEPTIONS")
-        for (i = 1; i <= array_count["FILES_CHANGED"]; i++) {
-          item = array_value["FILES_CHANGED", i]
-          if (item == "none" && scalar["STATUS"] == "DONE") fail("DONE WRITABLE result cannot report no changed files")
-          if (item != "none" && item ~ /^\//) fail("FILES_CHANGED paths must be repository-relative")
-          if (item != "none" && (item == ".." || item ~ /^\.\.\// || item ~ /\/\.\.\//)) fail("FILES_CHANGED paths may not escape the repository")
-        }
-        for (i = 1; i <= validation_count; i++) {
-          requirement = validation_value[i, "requirement"]
-          applies = validation_value[i, "applies"]
-          result = validation_value[i, "result"]
-          if (requirement != "required" && requirement != "conditional" && requirement != "informational") fail("invalid validation requirement")
-          if (applies != "true" && applies != "false") fail("invalid validation applies value")
-          if (result != "passed" && result != "failed" && result != "unavailable" && result != "not-applicable") fail("invalid validation result")
-          if (requirement == "required" && applies != "true") fail("required validation must apply")
-          if (requirement == "conditional" && applies == "false" && result != "not-applicable") fail("non-applicable conditional validation must be not-applicable")
-          if (scalar["STATUS"] == "DONE" && requirement == "required" && result != "passed") fail("DONE result has a non-passing required validation")
-          if (scalar["STATUS"] == "DONE" && requirement == "conditional" && applies == "true" && result != "passed") fail("DONE result has a non-passing applicable validation")
-        }
-      }
-    }
-    function emit_scalar(name) {
-      print name ": " scalar[name]
-    }
-    function emit_array(name,    i) {
-      if (array_state[name] != "array" || array_count[name] == 0) return
-      print name ":"
-      for (i = 1; i <= array_count[name]; i++) print "- " array_value[name, i]
-    }
-    function emit_validation(    i) {
-      print "VALIDATION:"
-      for (i = 1; i <= validation_count; i++) {
-        print "- command: " validation_value[i, "command"]
-        print "  requirement: " validation_value[i, "requirement"]
-        print "  condition: " validation_value[i, "condition"]
-        print "  applies: " validation_value[i, "applies"]
-        print "  result: " validation_value[i, "result"]
-        print "  evidence: " validation_value[i, "evidence"]
-      }
-    }
-    function emit_result() {
-      emit_scalar("RESULT_PROFILE")
-      emit_scalar("STATUS")
-      emit_scalar("TASK_ID")
-      if (expected_profile == "WRITABLE") {
-        emit_scalar("BASE_SHA")
-        emit_scalar("HEAD_SHA")
-        emit_scalar("BRANCH")
-        emit_array("FILES_CHANGED")
-        emit_array("GIT_STATE")
-        emit_validation()
-        emit_array("DELIVERABLE_COMMITS")
-        emit_array("SCOPE_EXCEPTIONS")
-      }
-      emit_array("FINDINGS")
-      emit_array("EVIDENCE")
-      emit_array("RISKS")
-      emit_array("RECOMMENDED_ACTION")
-    }
-    BEGIN {
-      pos = 1
-      failed = 0
-      quote = sprintf("%c", 34)
-      backslash = sprintf("%c", 92)
-      slash = sprintf("%c", 47)
-      tab = sprintf("%c", 9)
-      newline = sprintf("%c", 10)
-      carriage_return = sprintf("%c", 13)
-      form_feed = sprintf("%c", 12)
-      backspace = sprintf("%c", 8)
-      delete_char = sprintf("%c", 127)
-      scalar_fields["RESULT_PROFILE"] = 1
-      scalar_fields["STATUS"] = 1
-      scalar_fields["TASK_ID"] = 1
-      array_fields["RISKS"] = 1
-      array_fields["RECOMMENDED_ACTION"] = 1
-      if (expected_profile == "WRITABLE") {
-        scalar_fields["BASE_SHA"] = 1
-        scalar_fields["HEAD_SHA"] = 1
-        scalar_fields["BRANCH"] = 1
-        array_fields["FILES_CHANGED"] = 1
-        array_fields["GIT_STATE"] = 1
-        array_fields["DELIVERABLE_COMMITS"] = 1
-        array_fields["SCOPE_EXCEPTIONS"] = 1
-        required_validation_fields["command"] = 1
-        required_validation_fields["requirement"] = 1
-        required_validation_fields["condition"] = 1
-        required_validation_fields["applies"] = 1
-        required_validation_fields["result"] = 1
-        required_validation_fields["evidence"] = 1
-      }
-    }
-    { json = json $0 newline }
-    END {
-      if (failed) exit 1
-      parse_root()
-      skip_ws()
-      if (pos <= length(json)) fail("trailing data after structured result object")
-      validate_result()
-      emit_result()
-    }
-  ' "$input_file"
-}
+    if profile == "REVIEW":
+        fail("REVIEW results use contracts/review.md; validate its dedicated contract")
+    if result is None:
+        fail("validate requires --result FILE|-")
+    document = load_json(result)
+    task_id_value, status = validate_result(document, profile, task_id)
+    print(
+        json.dumps(
+            {
+                "schema": "worker-result/v1",
+                "valid": True,
+                "profile": profile,
+                "status": status,
+                "task_id": task_id_value,
+            },
+            separators=(",", ":"),
+        )
+    )
 
-encode_command() {
-  profile=
-  task_id=
-  input_arg=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --profile) [ "$#" -ge 2 ] || fail '--profile requires a value'; profile=$2; shift 2 ;;
-      --task-id|--task) [ "$#" -ge 2 ] || fail '--task-id requires a value'; task_id=$2; shift 2 ;;
-      --input) [ "$#" -ge 2 ] || fail '--input requires a file or -'; input_arg=$2; shift 2 ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown encode option: $1" ;;
-    esac
-  done
-  case "$profile" in READ_ONLY|WRITABLE) ;; REVIEW) fail 'REVIEW results do not use ordinary encoding' ;; *) fail 'encode requires READ_ONLY or WRITABLE profile' ;; esac
-  case "$task_id" in ''|*[!A-Za-z0-9._-]*) fail 'task ID contains unsupported characters' ;; esac
-  [ -n "$input_arg" ] || fail 'encode requires --input FILE|-'
-  encode_json_input "$profile" "$task_id" "$input_arg"
-}
 
-validate_command() {
-  profile=
-  role=
-  task_id=
-  result_arg=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --profile)
-        [ "$#" -ge 2 ] || fail '--profile requires a value'
-        profile=$2
-        shift 2
-        ;;
-      --role)
-        [ "$#" -ge 2 ] || fail '--role requires a value'
-        role=$2
-        shift 2
-        ;;
-      --task-id|--task)
-        [ "$#" -ge 2 ] || fail '--task-id requires a value'
-        task_id=$2
-        shift 2
-        ;;
-      --result|--input)
-        [ "$#" -ge 2 ] || fail '--result requires a file or -'
-        [ -z "$result_arg" ] || fail 'result input was specified more than once'
-        result_arg=$2
-        shift 2
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      -*) fail "unknown validate option: $1" ;;
-      *)
-        [ -z "$result_arg" ] || fail 'result input was specified more than once'
-        result_arg=$1
-        shift
-        ;;
-    esac
-  done
-  [ -n "$profile" ] || fail 'validate requires --profile'
-  case "$profile" in
-    READ_ONLY|WRITABLE) ;;
-    REVIEW) fail 'REVIEW results require contracts/review.md and its acceptance contract' ;;
-    *) fail "unknown result profile: $profile" ;;
-  esac
-  case "$role" in
-    '') ;;
-    reviewer) fail 'reviewer results require the REVIEW profile and contracts/review.md' ;;
-    *[!A-Za-z0-9_-]*) fail 'role contains unsupported characters' ;;
-  esac
-  case "$task_id" in
-    '') ;;
-    *[!A-Za-z0-9._-]*) fail 'task ID contains unsupported characters' ;;
-  esac
-  [ -n "$result_arg" ] || fail 'validate requires --result FILE|-'
-
-  result_file=$TMP_ROOT/result
-  if [ "$result_arg" = "-" ]; then
-    cat >"$result_file"
-  else
-    [ -f "$result_arg" ] || fail "result file does not exist: $result_arg"
-    cp "$result_arg" "$result_file"
-  fi
-  validate_result_file "$profile" "$role" "$task_id" "$result_file"
-}
-
-[ "$#" -gt 0 ] || { usage >&2; exit 2; }
-command=$1
-shift
-case "$command" in
-  schema) schema_command "$@" ;;
-  encode) encode_command "$@" ;;
-  validate) validate_command "$@" ;;
-  -h|--help) usage ;;
-  *) fail "unknown operation: $command" ;;
-esac
+if __name__ == "__main__":
+    main()
+PY

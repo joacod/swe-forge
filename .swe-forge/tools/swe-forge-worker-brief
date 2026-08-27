@@ -1,566 +1,334 @@
 #!/bin/sh
-
-# Canonical worker-brief/v1 renderer and structural validator.
-# The input is a transient, tab-separated worker-brief-input/v1 record set. It
-# keeps semantic task data, current routing facts, and selected dependency
-# digests without introducing a persistence format.
-
 set -eu
 
-TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/swe-forge-worker-brief.XXXXXX")
-cleanup() { rm -rf "$TMP_ROOT"; }
-trap cleanup EXIT HUP INT TERM
-
-fail() {
-  printf 'FAIL: %s\n' "$*" >&2
+# Keep the workflow shell-based; use the standard JSON parser only for this
+# boundary, where shell/awk cannot safely reject duplicate or escaped values.
+if ! command -v python3 >/dev/null 2>&1; then
+  printf '%s\n' 'FAIL: swe-forge-worker-brief requires python3' >&2
   exit 1
-}
+fi
 
-usage() {
-  cat <<'EOF'
-Usage:
-  swe-forge-worker-brief render --input FILE|- [--output FILE]
-  swe-forge-worker-brief validate --brief FILE|- [--input FILE|-]
+exec 3<&0
+exec python3 - "$@" <<'PY'
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+MAX_BYTES = 256 * 1024
+TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+DIGEST_CATEGORIES = {
+    "accepted_decisions",
+    "relevant_facts",
+    "changed_interfaces",
+    "paths_symbols",
+    "authoritative_assumptions",
+    "validation_facts",
+    "unresolved_risks",
+    "source_refs",
+}
+FORBIDDEN_ACTIONS = [
+    "delivery",
+    "recursive delegation",
+    "peer communication",
+    "scope expansion",
+    "topology decisions",
+]
+
+
+def usage() -> None:
+    print(
+        """Usage:
+  swe-forge-worker-brief validate --brief FILE|-
   swe-forge-worker-brief inspect --brief FILE|-
 
-`render` accepts one transient worker-brief-input/v1 record set and writes a
-canonical YAML worker_briefing projection to stdout or --output. `validate`
-checks a generated projection structurally. When --input is supplied, it also
-re-renders the input and rejects any non-canonical, scope-expanding, or
-permission-changing projection. `inspect` structurally validates a projection
-and emits the small semantic port needed by a host adapter.
+The brief is one canonical worker_briefing/v1 JSON object. Validate it before
+launch and pass the same JSON text to the worker. inspect validates the brief
+and emits the small task/profile/write-access port used by host adapters.
+""",
+    )
 
-Input records are tab-separated and use these forms:
-  worker-brief-input/v1
-  task      <field> <value>
-  task      validation <command> <requirement> <condition> <side_effects>
-  state     routing.current <topology>
-  state     dependency <task_id> <status> <accepted_result_ref>
-  digest    <task_id> <category> <selected dependency fact>
 
-Repeated task fields provide ordered lists. Values may not contain tabs or
-newlines. For a reviewer task, validation records identify evidence supplied
-for inspection; they do not grant permission to execute checks. The tool owns
-the projection grammar and profile selection.
-EOF
-}
+def fail(message: str) -> None:
+    print(f"FAIL: {message}", file=sys.stderr)
+    raise SystemExit(1)
 
-copy_input() {
-  source=$1
-  destination=$2
-  if [ "$source" = - ]; then
-    cat >"$destination"
-  else
-    [ -f "$source" ] || fail "input file does not exist: $source"
-    cp "$source" "$destination"
-  fi
-}
 
-render_input() {
-  input=$1
-  output=$2
-  awk -F '\t' '
-    function fatal(message) {
-      print "FAIL: " message > "/dev/stderr"
-      exit 1
-    }
-    function clean(value,    result) {
-      result = value
-      if (index(result, "\r") || index(result, "\n")) fatal("input values may not contain control characters")
-      sub(/^[[:space:]]+/, "", result)
-      sub(/[[:space:]]+$/, "", result)
-      if (result == "") fatal("input values may not be empty")
-      return result
-    }
-    function set_scalar(key, value) {
-      if (key in scalar) fatal("duplicate input field: " key)
-      scalar[key] = clean(value)
-    }
-    function add_list(key, value) {
-      list_count[key]++
-      list[key, list_count[key]] = clean(value)
-    }
-    function add_digest(task_id, category, value,    key) {
-      key = task_id SUBSEP category
-      if (!(task_id in digest_task_seen)) {
-        digest_task_seen[task_id] = 1
-        digest_task[++digest_task_count] = task_id
-      }
-      digest_count[key]++
-      digest[key, digest_count[key]] = clean(value)
-    }
-    function require_scalar(key, label) {
-      if (!(key in scalar) || scalar[key] == "") fatal("missing " label)
-      return scalar[key]
-    }
-    function list_contains(key, value,    i) {
-      for (i = 1; i <= list_count[key]; i++) if (list[key, i] == value) return 1
-      return 0
-    }
-    function valid_requirement(value) {
-      if (value != "required" && value != "conditional" && value != "informational") fatal("invalid validation requirement: " value)
-    }
-    function valid_side_effect(value) {
-      if (value != "local-only" && value != "external-read" && value != "external-write" && value != "destructive") fatal("invalid validation side effect: " value)
-    }
-    function valid_dependency_status(value) {
-      if (value != "pending" && value != "ready" && value != "running" && value != "blocked" && value != "done" && value != "failed" && value != "skipped") fatal("invalid dependency status: " value)
-    }
-    function yaml_quote(value,    result, quote) {
-      result = value
-      quote = sprintf("%c", 39)
-      gsub(quote, quote quote, result)
-      return quote result quote
-    }
-    function indent(level) { return sprintf("%*s", level, "") }
-    function print_list(level, label, key,    i) {
-      if (list_count[key] == 0) { print indent(level) label ": []"; return }
-      print indent(level) label ":"
-      for (i = 1; i <= list_count[key]; i++) print indent(level + 2) "- " yaml_quote(list[key, i])
-    }
-    function require_digest_category(category) {
-      if (category != "accepted_decisions" && category != "relevant_facts" && category != "changed_interfaces" && category != "paths_symbols" && category != "authoritative_assumptions" && category != "validation_facts" && category != "unresolved_risks" && category != "source_refs") fatal("invalid dependency digest category: " category)
-    }
-    function validate_input(    access, top, i, id, status, ref, key, parts, category) {
-      if (!header_seen) fatal("input is missing worker-brief-input/v1 header")
-      require_scalar("task.id", "task id")
-      require_scalar("task.owner_role", "task owner role")
-      require_scalar("task.depth", "task depth")
-      require_scalar("task.objective", "task objective")
-      access = require_scalar("task.write_access", "task write_access")
-      if (access != "read-only" && access != "read-write") fatal("task write_access must be read-only or read-write")
-      if (scalar["task.depth"] !~ /^[0-9]+$/ || scalar["task.depth"] < 1) fatal("task depth must be a positive integer")
-      if (list_count["task.acceptance"] == 0) fatal("task acceptance must contain at least one criterion")
-      if (list_count["task.allowed_read"] == 0) fatal("task allowed_read must contain at least one scope")
-      if (access == "read-only" && list_count["task.allowed_write"] > 0) fatal("read-only task cannot declare allowed writes")
-      if (access == "read-write" && list_count["task.allowed_write"] == 0) fatal("writable task must declare allowed writes")
-      if (list_count["task.expected_output"] == 0) fatal("task expected_output must contain at least one field")
-      if (validation_count == 0) fatal("task validation must contain at least one check")
-      for (i = 1; i <= validation_count; i++) {
-        if (validation_command[i] == "") fatal("validation command may not be empty")
-        valid_requirement(validation_requirement[i])
-        if (validation_condition[i] == "") fatal("validation condition may not be empty")
-        valid_side_effect(validation_side_effects[i])
-      }
-      for (i = 1; i <= list_count["task.allowed_write"]; i++) {
-        if (list["task.allowed_write", i] == "none" || list_contains("task.forbidden_scope", list["task.allowed_write", i])) fatal("task allowed write expands into forbidden scope")
-      }
-      top = require_scalar("state.routing.current", "current topology")
-      if (top != "SUBAGENTS") fatal("delegated worker briefing requires SUBAGENTS routing")
-      for (i = 1; i <= task_dependency_count; i++) {
-        id = task_dependency[i]
-        if (!(id in dependency_status)) fatal("missing canonical state for dependency: " id)
-        status = dependency_status[id]
-        ref = dependency_ref[id]
-        valid_dependency_status(status)
-        if (status == "done") {
-          if (ref == "" || ref == "none" || ref == "NONE") fatal("completed dependency lacks accepted result evidence: " id)
-        } else if (ref != "" && ref != "none" && ref != "NONE") fatal("non-completed dependency has accepted result evidence: " id)
-      }
-      for (i = 1; i <= dependency_state_count; i++) {
-        id = dependency_state_id[i]
-        if (!list_contains("task.dependencies", id)) fatal("canonical state contains an undeclared dependency: " id)
-      }
-      for (i = 1; i <= digest_task_count; i++) {
-        id = digest_task[i]
-        if (!list_contains("task.dependencies", id)) fatal("dependency digest is outside the canonical task dependencies: " id)
-        if (dependency_status[id] != "done" || dependency_ref[id] == "" || dependency_ref[id] == "none" || dependency_ref[id] == "NONE") fatal("dependency digest requires accepted result evidence: " id)
-      }
-      for (key in digest_count) {
-        split(key, parts, SUBSEP)
-        category = parts[2]
-        require_digest_category(category)
-      }
-      if (scalar["task.owner_role"] == "reviewer" && access != "read-only") fatal("review worker must be read-only")
-    }
-    function emit_input(    i, id, access, profile, contract, pending_count, any_digest, key, parts, category, has_digest) {
-      access = scalar["task.write_access"]
-      if (scalar["task.owner_role"] == "reviewer") profile = "REVIEW"
-      else if (access == "read-only") profile = "READ_ONLY"
-      else profile = "WRITABLE"
-      if (profile == "REVIEW") contract = ".swe-forge/contracts/review.md"
-      else contract = ".swe-forge/contracts/result.md"
+def duplicate_free_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate object key: {key}")
+        result[key] = value
+    return result
 
-      print "worker_briefing:"
-      print "  schema: worker-brief/v1"
-      print "  task_id: " yaml_quote(scalar["task.id"])
-      print "  worker:"
-      print "    role: " yaml_quote(scalar["task.owner_role"])
-      print "    mode: delegated_worker"
-      print "    depth: " scalar["task.depth"]
-      print "    recursive_delegation: false"
-      print "  objective: " yaml_quote(scalar["task.objective"])
-      print "  acceptance:"
-      for (i = 1; i <= list_count["task.acceptance"]; i++) print "    - " yaml_quote(list["task.acceptance", i])
-      print "  repository:"
-      print_list(4, "instructions", "task.instruction")
-      print_list(4, "allowed_reads", "task.allowed_read")
-      if (access == "read-only") {
-        print "    allowed_writes:"
-        print "      - " yaml_quote("none")
-      } else print_list(4, "allowed_writes", "task.allowed_write")
-      print_list(2, "architecture_decisions", "task.architecture_decision")
 
-      any_digest = 0
-      for (i = 1; i <= digest_task_count; i++) {
-        id = digest_task[i]
-        for (key in digest_count) {
-          split(key, parts, SUBSEP)
-          if (parts[1] == id && digest_count[key] > 0) any_digest = 1
-        }
-      }
-      pending_count = 0
-      for (i = 1; i <= task_dependency_count; i++) if (dependency_status[task_dependency[i]] != "done") pending_id[++pending_count] = task_dependency[i]
-      if (any_digest || pending_count > 0) {
-        print "  dependencies:"
-        if (any_digest) {
-          print "    completed:"
-          for (i = 1; i <= task_dependency_count; i++) {
-            id = task_dependency[i]
-            if (dependency_status[id] != "done") continue
-            has_digest = 0
-            for (key in digest_count) {
-              split(key, parts, SUBSEP)
-              if (parts[1] == id && digest_count[key] > 0) has_digest = 1
-            }
-            if (!has_digest) continue
-            print "      - task_id: " yaml_quote(id)
-            print "        dependency_digest:"
-            for (category_index = 1; category_index <= 8; category_index++) {
-              category = digest_categories[category_index]
-              key = id SUBSEP category
-              if (digest_count[key] == 0) continue
-              print "          " category ":"
-              for (j = 1; j <= digest_count[key]; j++) print "            - " yaml_quote(digest[key, j])
-            }
-          }
-        }
-        if (pending_count > 0) {
-          print "    pending:"
-          for (i = 1; i <= pending_count; i++) print "      - " yaml_quote(pending_id[i])
-        }
-      }
+def reject_constant(value):
+    raise ValueError(f"invalid JSON constant: {value}")
 
-      print "  validation:"
-      for (i = 1; i <= validation_count; i++) {
-        print "    - command: " yaml_quote(validation_command[i])
-        print "      requirement: " validation_requirement[i]
-        print "      condition: " yaml_quote(validation_condition[i])
-        print "      side_effects: " validation_side_effects[i]
-      }
-      print "  permissions:"
-      print "    write_access: " access
-      print "    topology: SUBAGENTS"
-      print "    allowed_actions:"
-      print "      - read"
-      if (access == "read-write") print "      - edit"
-      # Reviewers inspect supplied validation evidence but do not execute checks.
-      if (profile != "REVIEW") print "      - validation"
-      print "    forbidden_actions:"
-      print "      - delivery"
-      print "      - recursive delegation"
-      print "      - peer communication"
-      print "      - scope expansion"
-      print "      - topology decisions"
-      print "  return:"
-      print "    profile: " profile
-      print "    contract: " contract
-      print_list(4, "expected_output", "task.expected_output")
-    }
-    BEGIN {
-      header_seen = 0
-      validation_count = 0
-      task_dependency_count = 0
-      dependency_state_count = 0
-      digest_task_count = 0
-      digest_categories[1] = "accepted_decisions"
-      digest_categories[2] = "relevant_facts"
-      digest_categories[3] = "changed_interfaces"
-      digest_categories[4] = "paths_symbols"
-      digest_categories[5] = "authoritative_assumptions"
-      digest_categories[6] = "validation_facts"
-      digest_categories[7] = "unresolved_risks"
-      digest_categories[8] = "source_refs"
-    }
-    FNR == 1 {
-      if ($0 != "worker-brief-input/v1") fatal("input must start with worker-brief-input/v1")
-      header_seen = 1
-      next
-    }
-    /^[[:space:]]*$/ || /^[[:space:]]*#/ { next }
-    {
-      if ($1 == "task") {
-        if ($2 == "validation") {
-          if (NF != 6) fatal("task validation record requires command, requirement, condition, and side effects")
-          validation_command[++validation_count] = clean($3)
-          validation_requirement[validation_count] = clean($4)
-          validation_condition[validation_count] = clean($5)
-          validation_side_effects[validation_count] = clean($6)
-        } else if ($2 == "dependency") {
-          if (NF != 3) fatal("task dependency record requires one task id")
-          id = clean($3)
-          if (list_contains("task.dependencies", id)) fatal("duplicate task dependency: " id)
-          task_dependency[++task_dependency_count] = id
-          list["task.dependencies", task_dependency_count] = id
-          list_count["task.dependencies"] = task_dependency_count
-        } else if ($2 == "acceptance" || $2 == "instruction" || $2 == "allowed_read" || $2 == "allowed_write" || $2 == "architecture_decision" || $2 == "forbidden_scope" || $2 == "expected_output") {
-          if (NF != 3) fatal("task list record requires one value: " $2)
-          add_list("task." $2, $3)
-        } else if ($2 == "id" || $2 == "owner_role" || $2 == "depth" || $2 == "objective" || $2 == "write_access") {
-          if (NF != 3) fatal("task scalar record requires one value: " $2)
-          set_scalar("task." $2, $3)
-        } else fatal("unknown task input field: " $2)
-      } else if ($1 == "state") {
-        if ($2 == "dependency") {
-          if (NF != 5) fatal("state dependency record requires task id, status, and accepted result reference")
-          id = clean($3)
-          if (id in dependency_status) fatal("duplicate canonical state dependency: " id)
-          dependency_state_id[++dependency_state_count] = id
-          dependency_status[id] = clean($4)
-          dependency_ref[id] = clean($5)
-        } else if ($2 == "routing.current") {
-          if (NF != 3) fatal("state scalar record requires one value: routing.current")
-          set_scalar("state.routing.current", $3)
-        } else fatal("unknown state input field: " $2)
-      } else if ($1 == "digest") {
-        if (NF != 4) fatal("digest record requires task id, category, and selected value")
-        add_digest(clean($2), clean($3), $4)
-      } else fatal("unknown worker-brief input record: " $1)
-    }
-    END { validate_input(); emit_input() }
-  ' "$input" >"$output"
-}
 
-structural_validate() {
-  brief=$1
-  awk '
-    function fatal(message) { print "FAIL: " message > "/dev/stderr"; exit 1 }
-    function unquote(value,    result) {
-      result = value
-      if (result ~ /^\047/ && result ~ /\047$/) { sub(/^\047/, "", result); sub(/\047$/, "", result); gsub(/\047\047/, "\047", result) }
-      return result
-    }
-    function scalar(line,    value) { value = line; sub(/^[^:]*:[[:space:]]*/, "", value); return unquote(value) }
-    function required(flag, label) { if (!flag) fatal("brief is missing " label) }
-    {
-      if ($0 == "worker_briefing:") root = 1
-      if ($0 == "  schema: worker-brief/v1") schema = 1
-      if ($0 ~ /^  task_id:[[:space:]]+/) { task_id = scalar($0); task_id_seen = (task_id != "") }
-      if ($0 == "  worker:") worker = 1
-      if ($0 ~ /^    role:[[:space:]]+/) { role = scalar($0); role_seen = (role != "") }
-      if ($0 == "    mode: delegated_worker") mode = 1
-      if ($0 ~ /^    depth:[[:space:]]+[0-9]+$/) depth = 1
-      if ($0 == "    recursive_delegation: false") recursive = 1
-      if ($0 ~ /^  objective:[[:space:]]+/) { objective = scalar($0); objective_seen = (objective != "") }
-      if ($0 == "  acceptance:" || $0 ~ /^  acceptance: \[\]$/) { acceptance_seen = 1; acceptance_section = 1 }
-      if (acceptance_section && $0 ~ /^    - /) acceptance_count++
-      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  acceptance:") acceptance_section = 0
-      if ($0 == "  repository:") { repository = 1; repository_section = 1 }
-      if ($0 == "    instructions:" || $0 ~ /^    instructions: \[\]$/) instructions = 1
-      if ($0 == "    allowed_reads:" || $0 ~ /^    allowed_reads: \[\]$/) allowed_reads = 1
-      if ($0 == "    allowed_writes:" || $0 ~ /^    allowed_writes: \[\]$/) { allowed_writes_seen = 1; allowed_writes_section = 1 }
-      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  repository:") allowed_writes_section = 0
-      if ($0 == "  architecture_decisions:" || $0 ~ /^  architecture_decisions: \[\]$/) architecture = 1
-      if ($0 == "  validation:") { validation_seen = 1; validation_section = 1 }
-      if (validation_section && $0 ~ /^    - command: /) validation_count++
-      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  validation:") validation_section = 0
-      if ($0 == "  permissions:") permissions = 1
-      if ($0 ~ /^    write_access:[[:space:]]+/) write_access = scalar($0)
-      if ($0 ~ /^    topology:[[:space:]]+/) topology = scalar($0)
-      if ($0 == "    allowed_actions:") { allowed_actions = 1; allowed_actions_section = 1 }
-      if ($0 == "    forbidden_actions:") { forbidden_actions = 1; forbidden_actions_section = 1; allowed_actions_section = 0 }
-      if ($0 ~ /^  [A-Za-z_]+:/) { allowed_actions_section = 0; forbidden_actions_section = 0 }
-      if ($0 ~ /^    [A-Za-z_]+:/ && $0 != "    allowed_actions:" && $0 != "    forbidden_actions:") { allowed_actions_section = 0; forbidden_actions_section = 0 }
-      if (allowed_actions_section && $0 == "      - read") { read_action = 1; allowed_action_count++ }
-      if (allowed_actions_section && $0 == "      - edit") { edit_action = 1; allowed_action_count++ }
-      if (allowed_actions_section && $0 == "      - validation") { validation_action = 1; allowed_action_count++ }
-      if (forbidden_actions_section && $0 == "      - delivery") { forbidden_delivery = 1; forbidden_action_count++ }
-      if (forbidden_actions_section && $0 == "      - recursive delegation") { forbidden_recursion = 1; forbidden_action_count++ }
-      if (forbidden_actions_section && $0 == "      - peer communication") { forbidden_peer = 1; forbidden_action_count++ }
-      if (forbidden_actions_section && $0 == "      - scope expansion") { forbidden_scope = 1; forbidden_action_count++ }
-      if (forbidden_actions_section && $0 == "      - topology decisions") { forbidden_topology = 1; forbidden_action_count++ }
-      if ($0 == "  return:") result = 1
-      if ($0 ~ /^    profile:[[:space:]]+/) profile = scalar($0)
-      if ($0 ~ /^    contract:[[:space:]]+/) contract = scalar($0)
-      if ($0 == "    expected_output:" || $0 ~ /^    expected_output: \[\]$/) { expected_output = 1; expected_output_section = 1 }
-      if ($0 ~ /^    [A-Za-z_]+:/ && $0 != "    expected_output:") expected_output_section = 0
-      if (expected_output_section && $0 ~ /^      - /) expected_output_items++
-      if ($0 == "  dependencies:") { dependencies_seen = 1; dependencies_section = 1 }
-      if (dependencies_section && $0 ~ /^    (completed|pending):/) dependency_child = 1
-      if ($0 ~ /^  [A-Za-z_]+:/ && $0 != "  dependencies:") dependencies_section = 0
-      if ($0 ~ /^      - / && allowed_writes_section && $0 ~ /none/) repository_none_write = 1
-      if ($0 ~ /^      - / && allowed_writes_section && $0 !~ /none/) repository_non_none_write = 1
-    }
-    END {
-      required(root, "worker_briefing root")
-      required(schema, "schema worker-brief/v1")
-      required(task_id_seen, "task_id")
-      required(worker, "worker")
-      required(role_seen, "worker role")
-      required(mode, "delegated_worker mode")
-      required(depth, "worker depth")
-      required(recursive, "recursive_delegation: false")
-      required(objective_seen, "objective")
-      required(acceptance_seen && acceptance_count > 0, "acceptance")
-      required(repository, "repository")
-      required(instructions, "repository.instructions")
-      required(allowed_reads, "repository.allowed_reads")
-      required(allowed_writes_seen, "repository.allowed_writes")
-      required(architecture, "architecture_decisions")
-      required(validation_seen && validation_count > 0, "validation")
-      required(permissions, "permissions")
-      required(allowed_actions, "permissions.allowed_actions")
-      required(write_access == "read-only" || write_access == "read-write", "valid write_access")
-      required(topology == "SUBAGENTS", "delegated topology")
-      required(result, "return")
-      required(profile == "READ_ONLY" || profile == "WRITABLE" || profile == "REVIEW", "return.profile")
-      required(expected_output && expected_output_items > 0, "return.expected_output")
-      required(forbidden_actions, "permissions.forbidden_actions")
-      required(read_action, "read permission")
-      if (profile != "REVIEW") required(validation_action, "validation permission")
-      required(forbidden_action_count == 5 && forbidden_delivery && forbidden_recursion && forbidden_peer && forbidden_scope && forbidden_topology, "canonical forbidden permissions")
-      if (profile == "REVIEW") {
-        required(role == "reviewer", "reviewer role for REVIEW profile")
-        required(write_access == "read-only", "read-only profile permissions")
-        required(!edit_action && !validation_action && allowed_action_count == 1, "review-only allowed actions")
-        required(repository_none_write && !repository_non_none_write, "read-only allowed_writes")
-      } else if (profile == "READ_ONLY") {
-        required(write_access == "read-only", "read-only profile permissions")
-        required(!edit_action && allowed_action_count == 2, "read-only allowed actions")
-        required(repository_none_write && !repository_non_none_write, "read-only allowed_writes")
-      } else {
-        required(write_access == "read-write", "writable profile permissions")
-        required(edit_action && allowed_action_count == 3, "writable allowed actions")
-        required(!repository_none_write, "writable allowed_writes")
-      }
-      if (profile == "READ_ONLY" || profile == "WRITABLE") required(contract == ".swe-forge/contracts/result.md", "result.md contract reference")
-      if (profile == "REVIEW") required(contract == ".swe-forge/contracts/review.md", "review.md contract reference")
-      if (dependencies_seen) required(dependency_child, "valid dependency inclusion")
-      print "PASS: worker briefing is structurally valid"
-    }
-  ' "$brief"
-}
+def load_json(source: str):
+    try:
+        raw = os.fdopen(3, "rb").read() if source == "-" else Path(source).read_bytes()
+    except OSError as error:
+        fail(f"brief file could not be read: {error}")
+    if len(raw) > MAX_BYTES:
+        fail("worker briefing exceeds the canonical size limit")
+    try:
+        text = raw.decode("utf-8")
+        return json.loads(
+            text,
+            object_pairs_hook=duplicate_free_object,
+            parse_constant=reject_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        fail(f"brief is not valid unambiguous JSON: {error}")
 
-json_quote() {
-  awk -v value="$1" '
-    BEGIN {
-      quote = sprintf("%c", 34)
-      backslash = sprintf("%c", 92)
-      tab = sprintf("%c", 9)
-      newline = sprintf("%c", 10)
-      carriage_return = sprintf("%c", 13)
-      form_feed = sprintf("%c", 12)
-      backspace = sprintf("%c", 8)
-      printf "%s", quote
-      for (i = 1; i <= length(value); i++) {
-        c = substr(value, i, 1)
-        if (c == quote) printf "%s", backslash quote
-        else if (c == backslash) printf "%s", backslash backslash
-        else if (c == tab) printf "%s", backslash "t"
-        else if (c == newline) printf "%s", backslash "n"
-        else if (c == carriage_return) printf "%s", backslash "r"
-        else if (c == form_feed) printf "%s", backslash "f"
-        else if (c == backspace) printf "%s", backslash "b"
-        else printf "%s", c
-      }
-      printf "%s\n", quote
-    }
-  '
-}
 
-brief_scalar() {
-  awk -v pattern="$1" '
-    function unquote(value) {
-      if (value ~ /^\047/ && value ~ /\047$/) {
-        sub(/^\047/, "", value)
-        sub(/\047$/, "", value)
-        gsub(/\047\047/, "\047", value)
-      }
-      return value
-    }
-    $0 ~ pattern {
-      value = $0
-      sub(/^[^:]*:[[:space:]]*/, "", value)
-      print unquote(value)
-      exit
-    }
-  ' "$2"
-}
+def object_with_keys(value, label: str, required, optional=()):
+    if not isinstance(value, dict):
+        fail(f"{label} must be an object")
+    allowed = set(required) | set(optional)
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        fail(f"{label} contains unknown field: {unknown[0]}")
+    missing = [key for key in required if key not in value]
+    if missing:
+        fail(f"{label} is missing {missing[0]}")
+    return value
 
-inspect_command() {
-  brief_arg=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --brief) [ "$#" -ge 2 ] || fail '--brief requires a file or -'; brief_arg=$2; shift 2 ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown inspect option: $1" ;;
-    esac
-  done
-  [ -n "$brief_arg" ] || fail 'inspect requires --brief'
-  brief_file=$TMP_ROOT/inspect-brief
-  copy_input "$brief_arg" "$brief_file"
-  structural_validate "$brief_file" >/dev/null || fail 'worker briefing failed structural validation'
-  task_id=$(brief_scalar '^  task_id:[[:space:]]' "$brief_file")
-  profile=$(brief_scalar '^    profile:[[:space:]]' "$brief_file")
-  write_access=$(brief_scalar '^    write_access:[[:space:]]' "$brief_file")
-  case "$profile" in READ_ONLY|WRITABLE|REVIEW) ;; *) fail 'worker briefing has an invalid result profile' ;; esac
-  case "$write_access" in read-only|read-write) ;; *) fail 'worker briefing has an invalid write access value' ;; esac
-  printf '{"schema":"worker-brief/v1","valid":true,"task_id":%s,"profile":%s,"write_access":%s}\n' \
-    "$(json_quote "$task_id")" "$(json_quote "$profile")" "$(json_quote "$write_access")"
-}
 
-render_command() {
-  input_arg=
-  output_arg=-
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --input) [ "$#" -ge 2 ] || fail '--input requires a file or -'; input_arg=$2; shift 2 ;;
-      --output) [ "$#" -ge 2 ] || fail '--output requires a file'; output_arg=$2; shift 2 ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown render option: $1" ;;
-    esac
-  done
-  [ -n "$input_arg" ] || fail 'render requires --input'
-  input_file=$TMP_ROOT/input
-  copy_input "$input_arg" "$input_file"
-  rendered=$TMP_ROOT/rendered
-  render_input "$input_file" "$rendered" || fail 'worker-brief input is invalid'
-  structural_validate "$rendered" >/dev/null || fail 'renderer produced an invalid worker briefing'
-  if [ "$output_arg" = - ]; then cat "$rendered"; else cp "$rendered" "$output_arg"; fi
-}
+def safe_string(value, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        fail(f"{label} must be a non-empty string")
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        fail(f"{label} contains a control character")
+    return value
 
-validate_command() {
-  brief_arg=
-  input_arg=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --brief) [ "$#" -ge 2 ] || fail '--brief requires a file or -'; brief_arg=$2; shift 2 ;;
-      --input) [ "$#" -ge 2 ] || fail '--input requires a file or -'; input_arg=$2; shift 2 ;;
-      -h|--help) usage; exit 0 ;;
-      *) fail "unknown validate option: $1" ;;
-    esac
-  done
-  [ -n "$brief_arg" ] || fail 'validate requires --brief'
-  brief_file=$TMP_ROOT/brief
-  copy_input "$brief_arg" "$brief_file"
-  structural_validate "$brief_file" >/dev/null || fail 'worker briefing failed structural validation'
-  if [ -n "$input_arg" ]; then
-    input_file=$TMP_ROOT/input
-    copy_input "$input_arg" "$input_file"
-    expected=$TMP_ROOT/expected
-    render_input "$input_file" "$expected" || fail 'worker-brief input is invalid'
-    cmp -s "$brief_file" "$expected" || fail 'worker briefing is not the deterministic projection of the supplied task and routing facts'
-  fi
-  printf 'PASS: worker briefing validated\n'
-}
 
-[ "$#" -gt 0 ] || { usage >&2; exit 2; }
-command=$1
-shift
-case "$command" in
-  render) render_command "$@" ;;
-  validate) validate_command "$@" ;;
-  inspect) inspect_command "$@" ;;
-  -h|--help) usage ;;
-  *) fail "unknown operation: $command" ;;
-esac
+def string_list(value, label: str, minimum=0):
+    if not isinstance(value, list):
+        fail(f"{label} must be an array")
+    if len(value) < minimum:
+        fail(f"{label} must contain at least one item")
+    return [safe_string(item, f"{label} item") for item in value]
+
+
+def action_set(value, expected, label: str) -> None:
+    if len(value) != len(set(value)) or set(value) != set(expected):
+        fail(f"{label} do not match the canonical worker boundary")
+
+
+def validate_dependencies(value) -> None:
+    dependencies = object_with_keys(value, "dependencies", (), ("completed", "pending"))
+    if not dependencies:
+        fail("dependencies must contain completed or pending entries")
+    seen = set()
+    completed = dependencies.get("completed", [])
+    if not isinstance(completed, list):
+        fail("dependencies.completed must be an array")
+    for index, item in enumerate(completed, 1):
+        entry = object_with_keys(
+            item,
+            f"dependencies.completed[{index}]",
+            ("task_id", "dependency_digest"),
+        )
+        task_id = safe_string(entry["task_id"], f"dependencies.completed[{index}].task_id")
+        if not TASK_ID.fullmatch(task_id):
+            fail(f"dependency task ID contains unsupported characters: {task_id}")
+        if task_id in seen:
+            fail(f"duplicate dependency task: {task_id}")
+        seen.add(task_id)
+        digest = object_with_keys(
+            entry["dependency_digest"],
+            f"dependencies.completed[{index}].dependency_digest",
+            (),
+            DIGEST_CATEGORIES,
+        )
+        if not digest:
+            fail(f"dependencies.completed[{index}] has an empty dependency digest")
+        if "source_refs" not in digest:
+            fail(f"dependencies.completed[{index}] must include source_refs")
+        for category, facts in digest.items():
+            string_list(facts, f"dependency digest {category}", 1)
+
+    pending = dependencies.get("pending", [])
+    if not isinstance(pending, list):
+        fail("dependencies.pending must be an array")
+    for index, item in enumerate(pending, 1):
+        task_id = safe_string(item, f"dependencies.pending[{index}]")
+        if not TASK_ID.fullmatch(task_id):
+            fail(f"dependency task ID contains unsupported characters: {task_id}")
+        if task_id in seen:
+            fail(f"dependency appears more than once: {task_id}")
+        seen.add(task_id)
+    if not seen:
+        fail("dependencies must contain a completed or pending dependency")
+
+
+def validate_brief(document):
+    outer = object_with_keys(document, "brief", ("worker_briefing",))
+    brief = object_with_keys(
+        outer["worker_briefing"],
+        "worker_briefing",
+        (
+            "schema",
+            "task_id",
+            "worker",
+            "objective",
+            "acceptance",
+            "repository",
+            "architecture_decisions",
+            "validation",
+            "permissions",
+            "return",
+        ),
+        ("dependencies",),
+    )
+    if brief["schema"] != "worker-brief/v1":
+        fail("schema must be worker-brief/v1")
+
+    task_id = safe_string(brief["task_id"], "task_id")
+    if not TASK_ID.fullmatch(task_id):
+        fail("task_id contains unsupported characters")
+
+    worker = object_with_keys(
+        brief["worker"],
+        "worker",
+        ("role", "mode", "depth", "recursive_delegation"),
+    )
+    role = safe_string(worker["role"], "worker.role")
+    if worker["mode"] != "delegated_worker":
+        fail("worker.mode must be delegated_worker")
+    if not isinstance(worker["depth"], int) or isinstance(worker["depth"], bool) or worker["depth"] < 1:
+        fail("worker.depth must be a positive integer")
+    if worker["recursive_delegation"] is not False:
+        fail("worker.recursive_delegation must be false")
+
+    safe_string(brief["objective"], "objective")
+    string_list(brief["acceptance"], "acceptance", 1)
+
+    repository = object_with_keys(
+        brief["repository"],
+        "repository",
+        ("instructions", "allowed_reads", "allowed_writes"),
+    )
+    string_list(repository["instructions"], "repository.instructions")
+    string_list(repository["allowed_reads"], "repository.allowed_reads", 1)
+    writes = string_list(repository["allowed_writes"], "repository.allowed_writes", 1)
+
+    decisions = string_list(brief["architecture_decisions"], "architecture_decisions")
+    del decisions  # The validation above is intentional; the values remain root-selected.
+
+    validation = brief["validation"]
+    if not isinstance(validation, list) or not validation:
+        fail("validation must contain at least one check")
+    for index, item in enumerate(validation, 1):
+        check = object_with_keys(
+            item,
+            f"validation[{index}]",
+            ("command", "requirement", "condition", "side_effects"),
+        )
+        safe_string(check["command"], f"validation[{index}].command")
+        if not isinstance(check["requirement"], str) or check["requirement"] not in {"required", "conditional", "informational"}:
+            fail(f"invalid validation requirement: {check['requirement']}")
+        safe_string(check["condition"], f"validation[{index}].condition")
+        if not isinstance(check["side_effects"], str) or check["side_effects"] not in {"local-only", "external-read", "external-write", "destructive"}:
+            fail(f"invalid validation side effect: {check['side_effects']}")
+
+    permissions = object_with_keys(
+        brief["permissions"],
+        "permissions",
+        ("write_access", "topology", "allowed_actions", "forbidden_actions"),
+    )
+    write_access = permissions["write_access"]
+    if not isinstance(write_access, str) or write_access not in {"read-only", "read-write"}:
+        fail("permissions.write_access must be read-only or read-write")
+    if permissions["topology"] != "SUBAGENTS":
+        fail("permissions.topology must be SUBAGENTS")
+    allowed_actions = string_list(permissions["allowed_actions"], "permissions.allowed_actions", 1)
+    forbidden_actions = string_list(permissions["forbidden_actions"], "permissions.forbidden_actions", 1)
+    action_set(forbidden_actions, FORBIDDEN_ACTIONS, "permissions.forbidden_actions")
+
+    if write_access == "read-only":
+        if writes != ["none"]:
+            fail("read-only workers must have allowed_writes [none]")
+    else:
+        if "none" in writes:
+            fail("read-write workers may not have an allowed write named none")
+        if not writes:
+            fail("read-write workers must declare an allowed write")
+
+    result = object_with_keys(brief["return"], "return", ("profile", "contract", "expected_output"))
+    profile = result["profile"]
+    if not isinstance(profile, str) or profile not in {"READ_ONLY", "WRITABLE", "REVIEW"}:
+        fail(f"invalid return.profile: {profile}")
+    string_list(result["expected_output"], "return.expected_output", 1)
+
+    if role == "reviewer":
+        if write_access != "read-only" or profile != "REVIEW":
+            fail("review workers must be read-only and use the REVIEW profile")
+        if result["contract"] != ".swe-forge/contracts/review.md":
+            fail("REVIEW workers must use contracts/review.md")
+        action_set(allowed_actions, ["read"], "review workers' allowed actions")
+    elif write_access == "read-only":
+        if profile != "READ_ONLY":
+            fail("read-only workers must use the READ_ONLY profile")
+        if result["contract"] != ".swe-forge/contracts/result.md":
+            fail("ordinary workers must use contracts/result.md")
+        action_set(allowed_actions, ["read", "validation"], "read-only ordinary workers' allowed actions")
+    else:
+        if profile != "WRITABLE":
+            fail("read-write workers must use the WRITABLE profile")
+        if result["contract"] != ".swe-forge/contracts/result.md":
+            fail("ordinary workers must use contracts/result.md")
+        action_set(allowed_actions, ["read", "edit", "validation"], "read-write workers' allowed actions")
+
+    if "dependencies" in brief:
+        validate_dependencies(brief["dependencies"])
+    return brief, task_id, profile, write_access
+
+
+def brief_path(arguments):
+    if len(arguments) == 1 and arguments[0] in {"-h", "--help"}:
+        usage()
+        raise SystemExit(0)
+    if len(arguments) != 2 or arguments[0] != "--brief":
+        fail("use --brief FILE|-")
+    return arguments[1]
+
+
+def main():
+    arguments = sys.argv[1:]
+    if not arguments:
+        usage()
+        raise SystemExit(2)
+    if arguments[0] in {"-h", "--help"}:
+        usage()
+        return
+    command = arguments[0]
+    if command not in {"validate", "inspect"}:
+        fail(f"unknown operation: {command}")
+    source = brief_path(arguments[1:])
+    brief, task_id, profile, write_access = validate_brief(load_json(source))
+    if command == "validate":
+        print("PASS: worker briefing validated")
+        return
+    print(
+        json.dumps(
+            {
+                "schema": "worker-brief/v1",
+                "valid": True,
+                "task_id": task_id,
+                "profile": profile,
+                "write_access": write_access,
+            },
+            separators=(",", ":"),
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
+PY

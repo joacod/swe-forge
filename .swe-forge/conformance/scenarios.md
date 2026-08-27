@@ -45,12 +45,12 @@ scenario records the observable outcome rather than repeating its procedure.
 
 | Scenario | Required outcome | Owner |
 | --- | --- | --- |
-| Bounded worker | Use the canonical `worker-brief-input/v1` renderer and pass only its validated projection. | worker-brief |
+| Bounded worker | Create one canonical JSON worker brief, validate it, and pass it unchanged. | worker-brief |
 | Read-only result | Use `READ_ONLY` with status, task identity, concise findings, and precise evidence; omit irrelevant Git/delivery fields. | result |
 | Writable result | Use `WRITABLE` with canonical candidate identity, changed paths, Git, and assigned validation evidence. | result |
 | Review result | Use `review.md` and `REVIEW`, not an implementation profile. | review/result |
 | Profile mismatch | Reject incomplete or incompatible results; do not fill fields from memory. | result |
-| Dependent handoff | After accepted A, derive a compact B-specific `dependency_digest`; omit transcripts and unrelated material. | worker-brief |
+| Dependent handoff | After accepted A, derive a compact B-specific `dependency_digest` in the JSON brief; omit transcripts and unrelated material. | worker-brief |
 
 ## Verification and review
 

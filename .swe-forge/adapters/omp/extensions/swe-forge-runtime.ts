@@ -7,7 +7,7 @@ const INVOCATION_MARKER = "The user explicitly invoked SWE Forge through omp.";
 const RAW_ARGUMENTS_MARKER = "Raw invocation arguments:";
 const CAPABILITY_MARKER = "[SWE-FORGE OMP NATIVE SUBAGENT CAPABILITY]";
 const WORKER_CONTEXT =
-	"SWE Forge delegated task execution. The task assignment is the canonical worker_briefing/v1 projection. Do not infer routing, scope, permissions, or delivery authority from this context.";
+	"SWE Forge delegated task execution. The task assignment is the canonical worker-brief/v1 JSON object. Do not infer routing, scope, permissions, or delivery authority from this context.";
 const PROFILE_TO_RESULT = {
 	"swe-forge-read-only": "READ_ONLY",
 	"swe-forge-writable": "WRITABLE",
@@ -360,8 +360,8 @@ function capabilityPrompt(observation: CapabilityObservation, run: ActiveRun | u
 		lines.push(
 			"For a selected shared-checkout SUBAGENTS run, use the native `task` tool, not a SWE Forge executor clone.",
 			"Use agent=swe-forge-read-only for READ_ONLY, agent=swe-forge-writable for WRITABLE, and agent=swe-forge-reviewer for REVIEW.",
-			"Pass the validated canonical worker_briefing/v1 projection unchanged as each native task item's `task` assignment.",
-			"The adapter supplies the translated canonical worker-result JSON Schema with schemaMode=strict and validates the returned result canonically.",
+			"Pass the validated canonical worker-brief/v1 JSON object unchanged as each native task item's `task` assignment.",
+			"The adapter supplies the canonical worker-result JSON Schema with schemaMode=strict and validates the returned JSON directly.",
 			"Submit independent read-only questions in one logical native task batch; OMP/the host runtime chooses whether ready items execute concurrently or sequentially.",
 			"Writable results must be materialized into and validated against the canonical delivery checkout before sequential acceptance; private host execution paths are not Forge state.",
 			"Headless workers have no interactive approval boundary; rely on the confined profile, bounded brief, no task recursion, and root-owned delivery authorization.",
@@ -443,7 +443,7 @@ async function inspectBrief(
 	let directory: string | undefined;
 	try {
 		directory = fs.mkdtempSync(path.join(os.tmpdir(), "swe-forge-omp-brief-"));
-		const filePath = path.join(directory, "worker-brief.yaml");
+		const filePath = path.join(directory, "worker-brief.json");
 		fs.writeFileSync(filePath, briefing, { encoding: "utf8", mode: 0o600 });
 		const result = await executeCanonicalJson(pi, inspector, ["inspect", "--brief", filePath]);
 		if (!result.ok || !isRecord(result.value)) return { ok: false, detail: result.detail };
@@ -469,28 +469,16 @@ async function validateResult(
 ): Promise<{ ok: boolean; detail: string }> {
 	const structured = JSON.stringify(data);
 	if (structured === undefined) return { ok: false, detail: "native structured data is not JSON-serializable" };
-	const encoder = canonicalToolPath(pi, "swe-forge-worker-result");
+	if (Buffer.byteLength(structured, "utf8") > MAX_RESULT_BYTES) {
+		return { ok: false, detail: "canonical worker result exceeded the adapter result limit" };
+	}
+	const validator = canonicalToolPath(pi, "swe-forge-worker-result");
 	let directory: string | undefined;
 	try {
 		directory = fs.mkdtempSync(path.join(os.tmpdir(), "swe-forge-omp-result-"));
-		const inputPath = path.join(directory, "structured-result.json");
-		fs.writeFileSync(inputPath, structured, { encoding: "utf8", mode: 0o600 });
-		const encoded = await executeCanonical(pi, encoder, [
-			"encode",
-			"--profile",
-			profile,
-			"--task-id",
-			taskId,
-			"--input",
-			inputPath,
-		]);
-		if (!encoded.ok) return { ok: false, detail: encoded.detail };
-		if (Buffer.byteLength(encoded.stdout, "utf8") > MAX_RESULT_BYTES) {
-			return { ok: false, detail: "canonical worker result exceeded the adapter result limit" };
-		}
-		const resultPath = path.join(directory, "worker-result.txt");
-		fs.writeFileSync(resultPath, encoded.stdout, { encoding: "utf8", mode: 0o600 });
-		const validation = await executeCanonical(pi, encoder, [
+		const resultPath = path.join(directory, "worker-result.json");
+		fs.writeFileSync(resultPath, structured, { encoding: "utf8", mode: 0o600 });
+		const validation = await executeCanonical(pi, validator, [
 			"validate",
 			"--profile",
 			profile,
@@ -501,7 +489,7 @@ async function validateResult(
 		]);
 		return { ok: validation.ok, detail: validation.detail };
 	} catch (error) {
-		return { ok: false, detail: cleanReason(error, "canonical worker result encoder failed") };
+		return { ok: false, detail: cleanReason(error, "canonical worker result validator failed") };
 	} finally {
 		if (directory) {
 			try {
@@ -529,7 +517,7 @@ async function structuredSchemaFor(
 	profile: ResultProfile,
 	taskId: string,
 ): Promise<Record<string, unknown> | undefined> {
-	const args = ["schema", "--profile", profile, "--format", "json-schema"];
+	const args = ["schema", "--profile", profile];
 	if (profile !== "REVIEW") args.push("--task-id", taskId);
 	const result = await executeCanonicalJson(pi, canonicalToolPath(pi, "swe-forge-worker-result"), args);
 	if (!result.ok || !isRecord(result.value)) return undefined;

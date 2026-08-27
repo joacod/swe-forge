@@ -82,8 +82,9 @@ tasks additionally need `write_access`, `checkout_baseline`, and
 and roles. Authorization for one action never implies another.
 
 The task contract does not own live topology, delivery mode, or run state. The
-root renders current routing facts and accepted dependency data into the
-worker briefing at launch. Do not copy full state or transcripts into a task.
+root copies current routing facts and accepted dependency data into the
+canonical worker brief at launch. Do not copy full state or transcripts into a
+task.
 
 ## Rules
 
@@ -98,8 +99,8 @@ worker briefing at launch. Do not copy full state or transcripts into a task.
   unless explicitly authorized and bounded; and
 - the orchestrator validates the returned result against this contract.
 
-Immediately before launch, render and validate a `worker-brief-input/v1` record
-with `../tools/swe-forge-worker-brief`; its projection and
-`contracts/result.md` or `contracts/review.md` are the worker's bounded
-context. The complete task, run state, transcript, exploration, and unrelated
-delivery metadata remain root-owned.
+Immediately before launch, create and validate one canonical JSON worker brief
+with `../tools/swe-forge-worker-brief validate --brief FILE`. The brief and
+`contracts/result.md` or `contracts/review.md` are the worker's bounded context.
+The complete task, run state, transcript, exploration, and unrelated delivery
+metadata remain root-owned.

@@ -78,11 +78,11 @@ will reduce root coordination. Load `policies/delegation.md`, the relevant
 role, and task/result/review contracts before assigning work. Keep ownership
 non-overlapping and writes sequential in the canonical delivery candidate.
 
-For each delegated task, create the bounded task contract. At launch, render
-and validate a transient `worker-brief-input/v1` record with
-`.swe-forge/tools/swe-forge-worker-brief`, then pass the validated projection
-unchanged with the canonical role and result contract. The projection, not a
-transcript or full run state, is the worker context.
+For each delegated task, create the bounded task contract. At launch, create
+one canonical JSON worker brief and validate it with
+`.swe-forge/tools/swe-forge-worker-brief validate --brief FILE`, then pass the
+validated brief unchanged with the canonical role and result contract. The
+brief, not a transcript or full run state, is the worker context.
 
 ### 6. Route
 

@@ -20,8 +20,11 @@ scripts/swe-forge update <harness>
 scripts/swe-forge uninstall <harness>
 ```
 
-Installable harness names are `opencode`, `omp`, `claude`, `codex`, `cursor`,
-and `pi`. Installation is link-based, so a reviewed update to this checkout is
+The canonical worker communication validators use Python 3's standard library;
+install Python 3 when using delegated workers (SOLO remains available without
+it). Installable harness names are
+`opencode`, `omp`, `claude`, `codex`, `cursor`, and `pi`. Installation is
+link-based, so a reviewed update to this checkout is
 reflected in the installed projection. The user-level link model is the only
 supported installation path; it does not imply equal capabilities or real
 harness validation. See [compatibility](compatibility.md) for current tiers and

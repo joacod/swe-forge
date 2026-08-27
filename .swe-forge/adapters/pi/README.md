@@ -51,12 +51,12 @@ The extension:
 - reads only the bounded canonical continuation projection;
 - refreshes that projection through Pi's `before_agent_start` and its host lifecycle hooks;
 - maps exact active-PR `merged` shorthand to `/git-sync merged`; and
-- passes the root-rendered, validated worker briefing unchanged in
+- passes the root-created, validated worker brief unchanged in
   `workerBriefing`.
 
 It does not choose topology, reconstruct canonical state, or import/install the
 optional worker package. It gates native workers to canonical `SUBAGENTS`,
-checks their role/profile/result, and leaves returned data to normal root
+checks their role/profile/brief, and leaves returned data to normal root
 acceptance. A host-private worker environment is not Forge state or result
 metadata; writable results are materialized and validated in the canonical
 delivery checkout.
