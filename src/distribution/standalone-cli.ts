@@ -18,6 +18,7 @@ import { runStateCli } from "../state-cli";
 const USAGE = `Usage:
   swe-forge version
   swe-forge --version
+  swe-forge install HARNESS [--dry-run]
   swe-forge verify HARNESS
   swe-forge status HARNESS
   swe-forge doctor HARNESS

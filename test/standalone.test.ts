@@ -241,6 +241,14 @@ test("compiled executable reports embedded version and runs canonical ports afte
     expect(versionFlag.stdout).toBe(version.stdout);
     expect(versionFlag.stderr).toBe("");
 
+    const help = run([relocated, "--help"], fixture, env);
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("  swe-forge install HARNESS [--dry-run]\n");
+    expect(help.stdout).toContain("  swe-forge version\n");
+    expect(help.stdout).toContain("  swe-forge verify HARNESS\n");
+    expect(help.stdout).toContain("  swe-forge update [--dry-run]\n");
+    expect(help.stdout).toContain("Installation and update activate this executable's validated release globally.\n");
+    expect(help.stderr).toBe("");
     const embeddedVersion = run([relocated, "payload", "read", "VERSION"], fixture, env);
     expect(embeddedVersion.exitCode).toBe(0);
     expect(embeddedVersion.stdout).toBe(readFileSync(join(root, "VERSION"), "utf8"));
